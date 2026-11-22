@@ -17,6 +17,7 @@ import styled from 'styled-components'
 import {
   ledgerAccent,
   ledgerAccentSubtle,
+  ledgerHairline,
   ledgerHairlineStrong,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
@@ -27,6 +28,7 @@ import { pathKeys } from '@/shared/router'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import { SectionHintText } from './actors/actors.styles'
 
 export type WarDeclarationRole = 'INITIATOR' | 'TARGET'
 
@@ -181,6 +183,9 @@ export function DetailWarDeclaration({
           </S.SectionSubtitle>
         )}
       </S.SectionHeader>
+      <SectionHintText>
+        누가 어느 나라에 전쟁을 선포했는지 개전 주체(선포국)와 상대국(대상국)을 구분해 기록합니다.
+      </SectionHintText>
 
       {event.parentEvent && (
         <ParentWarBanner>
@@ -461,12 +466,10 @@ const ParentWarBanner = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
-  margin-bottom: 10px;
-  padding: 8px 12px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+  margin-bottom: 4px;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
   font-size: 12.5px;
 `
 
@@ -503,20 +506,19 @@ const ParentWarOverviewLink = styled(Link)`
 const DeclarationBoard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.02)'};
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 12px 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
 `
 
 const DeclarationGrid = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(130px, 0.85fr) auto minmax(0, 1fr);
   align-items: stretch;
-  gap: 8px;
+  gap: 10px;
 
   @media (max-width: 680px) {
     grid-template-columns: minmax(0, 1fr);
@@ -527,17 +529,12 @@ const DeclarationLane = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid
     ${({ theme, $dragOver }) =>
       $dragOver ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
   background: ${({ theme, $dragOver }) =>
-    $dragOver
-      ? ledgerAccentSubtle(theme.mode)
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.02)'
-        : 'rgba(255,255,255,0.75)'};
+    $dragOver ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   transition: border-color 0.14s, background 0.14s;
 `
 
@@ -633,11 +630,18 @@ const DeclarationCenterNode = styled.div`
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 8px 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  padding: 4px 12px;
+  border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-right: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
   text-align: center;
+
+  @media (max-width: 680px) {
+    border-left: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    border-right: 0;
+    align-items: flex-start;
+    text-align: left;
+  }
 `
 
 const DeclarationCenterKicker = styled.span`
@@ -659,8 +663,8 @@ const QuickAssignBar = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 8px;
-  padding-top: 8px;
-  border-top: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  padding-top: 10px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const QuickAssignLabel = styled.span`
@@ -687,8 +691,8 @@ const QuickAssignChip = styled.span`
   gap: 5px;
   padding: 2px 8px;
   border-radius: ${RADIUS.PILL};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -717,9 +721,9 @@ const QuickAssignBtn = styled.button<{ $initiator: boolean }>`
 
 const QuickAssignMoreBtn = styled.button`
   ${buttonReset}
-  padding: 2px 8px;
+  padding: 2px 9px;
   border-radius: ${RADIUS.PILL};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   font-size: 11.5px;
   font-weight: 600;
   color: ${metaText};

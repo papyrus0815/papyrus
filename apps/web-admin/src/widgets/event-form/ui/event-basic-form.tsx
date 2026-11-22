@@ -313,6 +313,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const {
     title,
     setTitle,
+    subtitle,
+    setSubtitle,
     description,
     setDescription,
     startDate,
@@ -386,6 +388,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const loadedImagesRef = useRef<LoadedEventImage[] | null>(null)
   const loadedHasCoordinatesRef = useRef(false)
   const loadedHasLocationNoteRef = useRef(false)
+  const loadedHasSubtitleRef = useRef(false)
 
   // ===== 사건 종류(신규 등록 전용) =====
   // 단일(전투·회담·조약 체결) / 묶음(전쟁·위기 — 전개는 하위 사건). 편집 모드의 전환은 상세의
@@ -1141,6 +1144,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         if (cancelled) return
 
         setTitle(event.title)
+        const loadedSubtitle = (event as { subtitle?: string | null }).subtitle
+        loadedHasSubtitleRef.current = Boolean(loadedSubtitle?.trim())
+        setSubtitle(loadedSubtitle || '')
         setDescription(event.description || '')
 
         // 저장된 정밀도를 되살린다 — 없으면(null) 서버 규약대로 day
@@ -1235,6 +1241,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     () =>
       JSON.stringify([
         title,
+        subtitle,
         description,
         startDate,
         startTime,
@@ -1260,6 +1267,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       ]),
     [
       title,
+      subtitle,
       description,
       startDate,
       startTime,
@@ -1302,6 +1310,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const buildDraftSnapshot = useCallback(
     (): EventDraftSnapshot => ({
       title,
+      subtitle,
       description,
       startDate,
       startTime,
@@ -1325,6 +1334,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     }),
     [
       title,
+      subtitle,
       description,
       startDate,
       startTime,
@@ -1372,6 +1382,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     const draft = envelope.data
     playClickSound()
     setTitle(draft.title ?? '')
+    setSubtitle(draft.subtitle ?? '')
     setDescription(draft.description ?? '')
     setStartDate(draft.startDate ?? '')
     setStartTime(draft.startTime ?? '')
@@ -1529,9 +1540,13 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       const includeLocationNote =
         Boolean(locationNote.trim()) ||
         (isEditMode && loadedHasLocationNoteRef.current)
+      const includeSubtitle =
+        Boolean(subtitle.trim()) ||
+        (isEditMode && loadedHasSubtitleRef.current)
 
       const eventData = buildEventSubmitData({
         title: title.trim(),
+        subtitle: includeSubtitle ? subtitle.trim() || null : undefined,
         description: description.trim(),
         startDate,
         startTime,
@@ -1821,6 +1836,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       <BasicInfoSection
         title={title}
         setTitle={setTitle}
+        subtitle={subtitle}
+        setSubtitle={setSubtitle}
         description={description}
         setDescription={setDescription}
         startDate={startDate}
@@ -2530,6 +2547,9 @@ function parentCandidateDescription(
   candidate: EventLinkCandidate,
 ): string | undefined {
   const parts: string[] = []
+  if (candidate.subtitle?.trim()) {
+    parts.push(candidate.subtitle.trim())
+  }
   if (candidate.startDate) {
     parts.push(
       formatDateRange(

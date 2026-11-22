@@ -66,6 +66,7 @@ export class EventPrismaRepository implements EventRepository {
     const event = await this.prisma.event.create({
       data: {
         title: data.title,
+        subtitle: data.subtitle,
         description: data.description,
         startDate: data.startDate,
         startDatePrecision: data.startDatePrecision ?? undefined,
@@ -129,6 +130,7 @@ export class EventPrismaRepository implements EventRepository {
       where: { id },
       data: {
         title: data.title,
+        subtitle: data.subtitle,
         description: data.description,
         startDate: data.startDate,
         startDatePrecision: data.startDatePrecision !== undefined ? data.startDatePrecision : undefined,
@@ -197,6 +199,7 @@ export class EventPrismaRepository implements EventRepository {
     return new Event({
       id: event.id,
       title: event.title,
+      subtitle: event.subtitle,
       description: event.description,
       startDate: event.startDate,
       startDatePrecision: event.startDatePrecision ?? undefined,

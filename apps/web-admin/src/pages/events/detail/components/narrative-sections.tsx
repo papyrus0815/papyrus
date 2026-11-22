@@ -807,7 +807,7 @@ const RowActionBtn = styled.button<{ $danger?: boolean }>`
   }
 `
 
-/** 단락 본문 — 섹션 리드 문단과 **같은 좌측 기준선·같은 가독폭**. */
+/** 단락 본문 — 섹션 리드 문단과 같은 좌측 기준선·전체 폭을 사용. */
 const SectionBodyHost = styled.div`
   ${S.longFormEditAffordance}
   ${S.proseTableBreakout}
@@ -815,16 +815,10 @@ const SectionBodyHost = styled.div`
   font-size: 15.5px;
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};
-  max-width: ${S.PROSE_WIDTH}px;
 
   /* 목차에서 소제목으로 왔을 때 화면 맨 위에 붙지 않게 — 단락 앵커와 같은 여백 */
   h1, h2, h3, h4, h5, h6 {
     scroll-margin-top: 24px;
-  }
-
-  /* 표가 든 단락만 풀어 표는 문서 열 전체로 — 글줄은 Main의 규칙이 여전히 720에 묶는다(전체 폭 지면) */
-  &:has(table) {
-    max-width: none;
   }
 `
 

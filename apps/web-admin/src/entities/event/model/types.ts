@@ -164,6 +164,8 @@ export interface EventVisuals {
 export interface HistoricalEvent {
   id: string
   title: string
+  /** 부제 · 이칭·작전명 (선택 단문) */
+  subtitle?: string | null
   /** 등록 시각(ISO) — '등록순' 정렬(SORT_OPTIONS.CREATED)의 유일한 근거. transformer가 매핑한다. */
   createdAt?: string | null
   /**

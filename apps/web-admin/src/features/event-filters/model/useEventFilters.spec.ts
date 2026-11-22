@@ -318,6 +318,7 @@ describe('useEventFilters — 대륙 술어', () => {
 describe('useEventFilters — 키워드 술어', () => {
   const target = event('target', {
     title: '베르됭 전투',
+    subtitle: '팔켄하인의 출혈 작전 (Unternehmen Gericht)',
     description: '서부전선의 소모전',
     keywords: ['참호전'],
     location: '프랑스 뫼즈',
@@ -325,6 +326,7 @@ describe('useEventFilters — 키워드 술어', () => {
 
   it.each([
     ['제목', '베르됭'],
+    ['부제·이칭(subtitle)', '출혈 작전'],
     ['설명', '소모전'],
     ['키워드', '참호전'],
     ['장소(location)', '뫼즈'],

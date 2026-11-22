@@ -16,6 +16,7 @@ type DatePrecision = 'year' | 'month' | 'day'
  */
 export const BASIC_INFO_FORM_INITIAL = {
   title: '',
+  subtitle: '',
   description: '',
   startDate: '',
   startTime: '',
@@ -53,6 +54,7 @@ export interface BasicInfoInitialOverrides {
 export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
   const initial = BASIC_INFO_FORM_INITIAL
   const [title, setTitle] = useState<string>(initial.title)
+  const [subtitle, setSubtitle] = useState<string>(initial.subtitle)
   const [description, setDescription] = useState<string>(initial.description)
   const [startDate, setStartDate] = useState<string>(initial.startDate)
   const [startTime, setStartTime] = useState<string>(initial.startTime)
@@ -96,6 +98,7 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
    */
   const reset = useCallback((options?: BasicInfoResetOptions) => {
     setTitle(initial.title)
+    setSubtitle(initial.subtitle)
     setDescription(initial.description)
     setStartDate(initial.startDate)
     setStartTime(initial.startTime)
@@ -165,6 +168,7 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
   return {
     // 상태
     title,
+    subtitle,
     description,
     startDate,
     startTime,
@@ -185,6 +189,7 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
 
     // 세터
     setTitle,
+    setSubtitle,
     setDescription,
     setStartDate,
     setStartTime,

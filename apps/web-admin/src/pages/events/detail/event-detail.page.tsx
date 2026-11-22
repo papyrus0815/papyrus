@@ -39,6 +39,7 @@ import { pathKeys } from '@/shared/router'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 
 import { CollectionDevelopment } from './components/collection-development'
+import { SectionHintText } from './components/actors/actors.styles'
 import { CollectionWholeTextNotice } from './components/collection-whole-text-notice'
 import { CountryInfoModal } from './components/country-info-modal'
 import { DetailActors } from './components/detail-actors'
@@ -388,6 +389,8 @@ function EventDetailContent({
   )
   /** 묶음 '전체 글' 안내의 '요약 쓰기'로 연 요약 입력칸 — 빈 요약 자리표시는 안내가 대신 든다 */
   const [summaryOpen, setSummaryOpen] = useState(false)
+  /** 장부 '+ 부제 · 이칭'으로 연 히어로 부제 입력 */
+  const [subtitleOpen, setSubtitleOpen] = useState(false)
   /** 장부 '+ 원어 사건명'으로 연 히어로 입력 */
   const [originalTitleOpen, setOriginalTitleOpen] = useState(false)
   /** 휴지통 사건 — 읽기만 한다. 쓰기 안내·댓글은 세우지 않는다(댓글 API는 지운 사건에 404) */
@@ -1029,6 +1032,8 @@ function EventDetailContent({
                   />
                 )
               }
+              subtitleOpen={subtitleOpen}
+              onSubtitleClose={() => setSubtitleOpen(false)}
               originalTitleOpen={originalTitleOpen}
               onOriginalTitleClose={() => setOriginalTitleOpen(false)}
             />
@@ -1389,6 +1394,9 @@ function EventDetailContent({
                   <S.SectionHeader>
                     <S.SectionTitle>댓글</S.SectionTitle>
                   </S.SectionHeader>
+                  <SectionHintText>
+                    이 사건 기록의 사료 출처, 보완 의견, 편집 논의를 남깁니다.
+                  </SectionHintText>
                   {event.parentEvent ? (
                     // 하위 사건은 자체 댓글 스레드가 없다 — 논의가 이어지는 상위 사건 댓글로 유도.
                     // 분기 기준은 *생존* 상위(parentEvent 객체) — 상위가 소프트삭제되면 스칼라
@@ -1418,7 +1426,13 @@ function EventDetailContent({
                 onCountryClick={onCountryClick}
                 foldedCount={trashedView ? 0 : folded.length}
                 onJump={jumpToSection}
+                onAddSubtitle={trashedView ? undefined : () => setSubtitleOpen(true)}
                 onAddOriginalTitle={trashedView ? undefined : () => setOriginalTitleOpen(true)}
+                onAddPrimaryImage={
+                  trashedView || (event.eventImages?.length ?? 0) > 0
+                    ? undefined
+                    : () => revealSection('appendix')
+                }
                 relatedCount={relatedCount}
                 departmentCount={departmentCount}
               />
@@ -1498,13 +1512,26 @@ const ActorLinkExtrasHeader = styled.div`
   }
 `
 
-/** 아직 연결하지 않은 기관·단체 항목 — 용도 설명과 함께 세로 원장 줄로 가지런히 배치 */
+/** 아직 연결하지 않은 기관·단체 항목 — 넓은 화면에서는 다단 원장 열로 나란히 배치 */
 const ActorLinkExtras = styled.div`
   display: flex;
   flex-direction: column;
 
   &:empty {
     display: none;
+  }
+
+  @container eventdetail (min-width: 1180px) {
+    &:has(> :nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 0 28px;
+      align-items: stretch;
+
+      > :nth-child(-n + 3) {
+        border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+      }
+    }
   }
 `
 

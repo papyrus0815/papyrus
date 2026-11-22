@@ -970,6 +970,15 @@ const Rows = styled.ul`
   display: flex;
   flex-direction: column;
   border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  @container eventdetail (min-width: 1240px) {
+    &:has(> li:nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 28px;
+      align-items: start;
+    }
+  }
 `
 
 const Row = styled.li`
@@ -1047,6 +1056,7 @@ const NameLink = styled(Link)`
 
 const Meta = styled.div`
   font-size: 12.5px;
+  line-height: 1.55;
   font-variant-numeric: tabular-nums;
   color: ${metaText};
 `

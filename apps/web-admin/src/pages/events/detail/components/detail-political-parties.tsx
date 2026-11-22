@@ -587,6 +587,15 @@ const Rows = styled.ul`
   display: flex;
   flex-direction: column;
   border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  @container eventdetail (min-width: 1240px) {
+    &:has(> li:nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 28px;
+      align-items: start;
+    }
+  }
 `
 
 const PartyLedgerRow = styled.li<{ $brandColor: string }>`

@@ -6,7 +6,10 @@ import { fireEvent, screen, within } from '@testing-library/react'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 
-import { BasicInfoSection } from './basic-info-section'
+import {
+  BasicInfoSection,
+  extractDetachableSubtitleFromTitle,
+} from './basic-info-section'
 
 jest.mock('@/pages/events/utils/event-create.utils', () => ({
   getImageUrl: (url: string) => url,
@@ -1748,5 +1751,44 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
       screen.getByRole('button', { name: '분야 및 세부 분야 펼치기' }),
     )
     expect(screen.getByTestId('type-slot-content')).toBeInTheDocument()
+  })
+
+  it('부제 입력창은 항상 열려 있으며, 사건명의 괄호·대시 문구를 버튼 한 번으로 부제로 분리할 수 있고 순수 연도 괄호는 제안하지 않는다', () => {
+    expect(
+      extractDetachableSubtitleFromTitle('총통 지령 제21호(바르바로사 작전) 하달'),
+    ).toEqual({
+      mainTitle: '총통 지령 제21호 하달',
+      detachedSubtitle: '바르바로사 작전',
+    })
+    expect(
+      extractDetachableSubtitleFromTitle('제2차 세계대전 동부전선 — 독소전쟁'),
+    ).toEqual({
+      mainTitle: '제2차 세계대전 동부전선',
+      detachedSubtitle: '독소전쟁',
+    })
+    expect(extractDetachableSubtitleFromTitle('칼레 해전 (1588년)')).toBeNull()
+
+    const setTitle = jest.fn()
+    const setSubtitle = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          title: '제2차 세계대전 동부전선 (독소전쟁)',
+          subtitle: '',
+          setTitle,
+          setSubtitle,
+        })}
+      />,
+    )
+
+    expect(screen.getByLabelText('부제 · 이칭·작전명')).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '‘독소전쟁’을(를) 부제로 분리' }),
+    )
+
+    expect(setTitle).toHaveBeenCalledWith('제2차 세계대전 동부전선')
+    expect(setSubtitle).toHaveBeenCalledWith('독소전쟁')
   })
 })

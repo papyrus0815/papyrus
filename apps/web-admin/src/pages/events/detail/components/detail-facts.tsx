@@ -15,10 +15,10 @@
  *
  * 문서 구성(섹션별 단락 수)은 목차가 맡는다 — 이 패널 아래에 있다.
  */
-import { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiMapPin } from 'react-icons/fi'
+import { FiCalendar, FiChevronDown, FiGlobe, FiImage, FiMapPin, FiPlus, FiRefreshCw, FiType } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -28,6 +28,7 @@ import {
   RADIUS,
   ledgerAccent,
   ledgerHairline,
+  ledgerHairlineStrong,
 } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
@@ -41,6 +42,7 @@ import { getEventOverview } from '@/shared/api/event-overview'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { formatObservationValue } from '@/entities/evidence/lib/format-observation'
 import { pathKeys } from '@/shared/router'
+import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
 import { type EventDetail, eventObservationsQueryOptions } from '../use-event-detail'
@@ -76,8 +78,12 @@ interface DetailFactsProps {
    * 개요 탭에서 '인물 4명'(참여 탭)을 누르면 앵커가 없어 아무 일도 없었다. 없으면 같은 탭 안 스크롤만.
    */
   onJump?: (anchorId: string) => void
+  /** 부제·이칭이 비었을 때의 진입점 — 주면 '+ 부제 · 이칭'이 선다 */
+  onAddSubtitle?: () => void
   /** 원어 사건명이 비었을 때의 진입점 — 주면 위치 줄 아래 '+ 원어 사건명'이 선다 */
   onAddOriginalTitle?: () => void
+  /** 대표 이미지가 비었을 때의 진입점 */
+  onAddPrimaryImage?: () => void
   /** 연결된 관련 사건(인과·배경·동시대) 건수 */
   relatedCount?: number
   /** 연결된 국가 기관(부처·위원회) 건수 */
@@ -107,18 +113,16 @@ export function DetailFacts({
   onCountryClick,
   foldedCount,
   onJump,
+  onAddSubtitle,
   onAddOriginalTitle,
+  onAddPrimaryImage,
   relatedCount = 0,
   departmentCount = 0,
 }: DetailFactsProps) {
   const jumpTo = (anchorId: string) => (onJump ? onJump(anchorId) : scrollToAnchor(anchorId))
-  /**
-   * 휴대폰 폭에선 사실 행을 접어 둔다 — 결과·진영 같은 긴 문장이 펼쳐진 채 탭 위에 서서 크림 전쟁은 장부만 439px,
-   * 탭이 1,082px까지 밀렸다. 연도·날짜·위치·수장 링크는 그대로 두고 행만 '사실 N개 보기'로 연다(넓은 폭은 무관).
-   */
   const [factsOpen, setFactsOpen] = useState(false)
   const [seriesModalOpen, setSeriesModalOpen] = useState(false)
-  /** 위치 — 글(이름·설명)과 지도 핀(대표 한 점). 핀은 위도·경도가 짝으로 있을 때만 */
+  const [originalDateOpen, setOriginalDateOpen] = useState(false)
   const [locationModalOpen, setLocationModalOpen] = useState(false)
   const locationText = event.location?.trim() ?? ''
   const locationPoint: LatLng | null =
@@ -235,6 +239,73 @@ export function DetailFacts({
     (event.childEvents?.length ?? 0) + (event.extraChildren?.length ?? 0)
   const personCount = event.relatedPersons?.length ?? 0
   const treaties = event.treaties ?? []
+  const hasOriginalDate = Boolean(
+    event.startCalendar || event.startDateOriginal || event.endCalendar || event.endDateOriginal,
+  )
+
+  const metaAddItems = useMemo<PopoverMenuEntry[]>(() => {
+    const items: PopoverMenuEntry[] = []
+    if (!locationText && !locationPoint) {
+      items.push({
+        id: 'add-location',
+        label: '위치 지정 (장소명 · 지도 핀)',
+        icon: <FiMapPin size={13} />,
+        onSelect: () => setLocationModalOpen(true),
+      })
+    }
+    if (onAddSubtitle && !event.subtitle?.trim()) {
+      items.push({
+        id: 'add-subtitle',
+        label: '부제 · 이칭 추가',
+        icon: <FiType size={13} />,
+        onSelect: onAddSubtitle,
+      })
+    }
+    if (onAddOriginalTitle && !event.originalTitle?.trim()) {
+      items.push({
+        id: 'add-original-title',
+        label: '원어 사건명 추가',
+        icon: <FiGlobe size={13} />,
+        onSelect: onAddOriginalTitle,
+      })
+    }
+    if (!hasOriginalDate && !originalDateOpen) {
+      items.push({
+        id: 'add-original-date',
+        label: '원 사료 날짜 추가 (음력·구력)',
+        icon: <FiCalendar size={13} />,
+        onSelect: () => setOriginalDateOpen(true),
+      })
+    }
+    if (!event.seriesId) {
+      items.push({
+        id: 'add-series',
+        label: '정기 시리즈 · 회차 연결',
+        icon: <FiRefreshCw size={13} />,
+        onSelect: () => setSeriesModalOpen(true),
+      })
+    }
+    if (onAddPrimaryImage) {
+      items.push({
+        id: 'add-primary-image',
+        label: '대표 이미지 추가',
+        icon: <FiImage size={13} />,
+        onSelect: onAddPrimaryImage,
+      })
+    }
+    return items
+  }, [
+    locationText,
+    locationPoint,
+    onAddSubtitle,
+    event.subtitle,
+    onAddOriginalTitle,
+    event.originalTitle,
+    hasOriginalDate,
+    originalDateOpen,
+    event.seriesId,
+    onAddPrimaryImage,
+  ])
 
   return (
     <Panel aria-label="사건 개요">
@@ -250,19 +321,21 @@ export function DetailFacts({
           startDatePrecision={event.startDatePrecision}
           endDate={event.endDate}
           endDatePrecision={event.endDatePrecision}
-          // 사건은 정밀도 컬럼이 있다 — 연도만 아는 사건을 '1월 1일'로 두지 않게
           allowPartial
           onSave={(patch) => onPatch(patch)}
         />
       </DateLine>
-      <OriginalDateSlot>
-        <OriginalDateLine event={event} onPatch={onPatch} />
-      </OriginalDateSlot>
+      {(hasOriginalDate || originalDateOpen) && (
+        <OriginalDateSlot>
+          <OriginalDateLine
+            event={event}
+            onPatch={onPatch}
+            open={originalDateOpen}
+            hideEmptyTrigger
+          />
+        </OriginalDateSlot>
+      )}
 
-      {/*
-        * 위치 — 비어 있으면 '위치 추가'가 지도 모달을 연다. 글이 있으면 글은 그 자리에서 고치고,
-        * 옆 '지도'로 핀을 꽂거나 옮긴다. 핀이 있으면 'Google 지도'로 바로 확인.
-        */}
       {locationText || locationPoint ? (
         <LocationLine title={locationText} data-filled="true">
           <PinIcon aria-hidden data-pinned={locationPoint ? 'true' : undefined}>
@@ -272,7 +345,6 @@ export function DetailFacts({
             {locationText ? (
               <InlineText
                 value={event.location ?? ''}
-                /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
                 onSave={(next) => onPatch({ location: next.trim() })}
                 placeholder="위치 이름"
                 label="위치"
@@ -280,7 +352,6 @@ export function DetailFacts({
             ) : (
               <span>{formatCoordinate(locationPoint as LatLng)}</span>
             )}
-            {/* 위치 메모 — 장소 이름과 따로, 작게(두 줄까지, 전체는 마우스를 올리면) */}
             {(() => {
               const eventCity = (event as { city?: CityWithHistoricalNames | null }).city
               const cityLabel = formatHistoricalCityName(eventCity, year)
@@ -306,21 +377,12 @@ export function DetailFacts({
           </LocationText>
         </LocationLine>
       ) : childPinCount > 0 ? (
-        /* 묶음은 대개 자기 위치가 없다(프랑스 혁명) — 그 자리에 하위 핀을 모은 지도로 가는 길. 자기 위치는 옆 '+' */
         <ChildMapLine>
           <ChildMapLink to={{ search: '?tab=survey&sv=map' }}>
             <FiMapPin aria-hidden /> 하위 {childPinCount}곳 · 지도 보기
           </ChildMapLink>
-          <AddLine type="button" onClick={() => setLocationModalOpen(true)} title="이 사건 자체의 위치">
-            + 이 사건 위치
-          </AddLine>
         </ChildMapLine>
-      ) : (
-        <AddLine type="button" onClick={() => setLocationModalOpen(true)}>
-          <FiMapPin aria-hidden /> 위치 추가
-        </AddLine>
-      )}
-      {/* 핀을 꽂은 보람이 보이게 — 작은 지도, 누르면 큰 지도(위치 모달) */}
+      ) : null}
       {locationPoint && (
         <MiniMapButton
           type="button"
@@ -348,17 +410,6 @@ export function DetailFacts({
             setLocationModalOpen(false)
           }}
         />
-      )}
-
-      {onAddOriginalTitle && !event.originalTitle?.trim() && (
-        <AddLine type="button" onClick={onAddOriginalTitle}>
-          + 원어 사건명
-        </AddLine>
-      )}
-      {!event.seriesId && (
-        <AddLine type="button" onClick={() => setSeriesModalOpen(true)}>
-          + 정기 시리즈·회차 연결
-        </AddLine>
       )}
       {seriesModalOpen && (
         <EventSeriesLinkModal
@@ -555,10 +606,29 @@ export function DetailFacts({
         )}
       </Rows>
 
-      {foldedCount > 0 && (
-        <FoldedNote type="button" onClick={() => jumpTo('fill-in')}>
-          비어 있는 항목 {foldedCount}개 · 채우기
-        </FoldedNote>
+      {(metaAddItems.length > 0 || foldedCount > 0) && (
+        <FactsFooterRow>
+          {metaAddItems.length > 0 && (
+            <PopoverMenu
+              items={metaAddItems}
+              align="left"
+              minWidth={210}
+              ariaLabel="부가 메타 정보 추가"
+              renderTrigger={({ ref, isOpen, toggle }) => (
+                <MetaAddTrigger ref={ref} type="button" $active={isOpen} onClick={toggle}>
+                  <FiPlus size={12} aria-hidden />
+                  <span>메타 항목 추가</span>
+                  <FiChevronDown size={11} aria-hidden />
+                </MetaAddTrigger>
+              )}
+            />
+          )}
+          {foldedCount > 0 && (
+            <FoldedNote type="button" onClick={() => jumpTo('fill-in')}>
+              비어 있는 섹션 {foldedCount}개
+            </FoldedNote>
+          )}
+        </FactsFooterRow>
       )}
     </Panel>
   )
@@ -1002,32 +1072,47 @@ const JumpButton = styled.button`
   }
 `
 
-/**
- * 빈 섹션 안내 — 예전 장부의 '—' 다섯 칸이 하던 일('여기는 아직 비었다')을 한 줄로.
- * 사실 행보다 한 단 흐리게, 누르면 본문 끝 '더 채울 수 있는 것'으로.
- */
-/** 비어 있는 값의 추가 동작 — 위치 줄의 빈 상태('위치 추가')와 같은 무게 */
-const AddLine = styled.button`
-  align-self: flex-start;
-  padding: 2px 0;
-  border: none;
+const FactsFooterRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 8px;
+
+  @container eventdetail (max-width: 919px) {
+    order: 11;
+    flex-basis: 100%;
+    margin-top: 2px;
+  }
+`
+
+const MetaAddTrigger = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
   background: transparent;
   font: inherit;
-  font-size: 13px;
-  /* 흐리게(opacity .85) 두었더니 라이트에서 3.60:1 — metaText 그대로가 AA 하한이다 */
-  color: ${metaText};
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
   cursor: pointer;
+  transition: color ${MOTION.fast}, border-color ${MOTION.fast};
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
   &:focus-visible {
-    opacity: 1;
-    outline: 2px solid currentColor;
-    outline-offset: 2px;
-    border-radius: 2px;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    ${focusRing}
   }
 `
 
@@ -1059,17 +1144,6 @@ const FactsToggle = styled.button`
 `
 
 const FoldedNote = styled.button`
-  align-self: flex-start;
-  margin-top: 6px;
-
-  /* 한 줄에서는 위치 줄의 오른쪽 끝 — 띠 아래 한 줄을 따로 먹지 않게 */
-  @container eventdetail (max-width: 919px) {
-    align-self: center;
-    margin-top: 0;
-    margin-left: auto;
-  }
-
-  /* 휴대폰 폭에선 위치 줄 옆에 안 들어가 한 줄을 따로 먹었다 — 같은 버튼이 개요 끝 '더 채울 수 있는 것'에 있다 */
   @container eventdetail (max-width: 639px) {
     display: none;
   }

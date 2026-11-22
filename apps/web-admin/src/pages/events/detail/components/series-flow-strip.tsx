@@ -178,10 +178,10 @@ export function SeriesFlowStrip({ event, onPatch }: SeriesFlowStripProps) {
             <span>
               중간 결번 감지:{' '}
               {intermediateGaps
-                .map((g) =>
-                  g.fromEdition === g.toEdition
-                    ? `제${g.fromEdition}차`
-                    : `제${g.fromEdition}~${g.toEdition}차(${g.count}건)`,
+                .map((gapItem) =>
+                  gapItem.fromEdition === gapItem.toEdition
+                    ? `제${gapItem.fromEdition}차`
+                    : `제${gapItem.fromEdition}~${gapItem.toEdition}차(${gapItem.count}건)`,
                 )
                 .join(', ')}{' '}
               미등록
@@ -299,14 +299,14 @@ export function EventSeriesLinkModal({
   useEffect(() => {
     // 사건명에서 '제43차' 같은 회차 숫자를 초기 추론 (아직 비어 있을 때만)
     if (!event.seriesId && !editionInput) {
-      const m = event.title.match(/제\s*(\d{1,3})\s*차/)
-      if (m) setEditionInput(m[1])
+      const editionMatch = event.title.match(/제\s*(\d{1,3})\s*차/)
+      if (editionMatch) setEditionInput(editionMatch[1])
     }
   }, [event.seriesId, event.title, editionInput])
 
   useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => {
-      if (ev.key === 'Escape' && !createSeriesOpen) onClose()
+    const onKey = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key === 'Escape' && !createSeriesOpen) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -314,19 +314,19 @@ export function EventSeriesLinkModal({
 
   const filteredSeries = useMemo(() => {
     const all = seriesQuery.data ?? []
-    const q = searchQuery.trim().toLowerCase()
-    if (!q) return all
+    const queryText = searchQuery.trim().toLowerCase()
+    if (!queryText) return all
     return all.filter(
       (item) =>
-        item.title.toLowerCase().includes(q) ||
-        (item.shortTitle?.toLowerCase().includes(q) ?? false) ||
-        (item.organization?.name.toLowerCase().includes(q) ?? false) ||
-        (item.organization?.shortName?.toLowerCase().includes(q) ?? false),
+        item.title.toLowerCase().includes(queryText) ||
+        (item.shortTitle?.toLowerCase().includes(queryText) ?? false) ||
+        (item.organization?.name.toLowerCase().includes(queryText) ?? false) ||
+        (item.organization?.shortName?.toLowerCase().includes(queryText) ?? false),
     )
   }, [seriesQuery.data, searchQuery])
 
   const selectedSeries: EventSeriesItem | undefined = useMemo(
-    () => (seriesQuery.data ?? []).find((s) => s.id === selectedSeriesId),
+    () => (seriesQuery.data ?? []).find((seriesItem) => seriesItem.id === selectedSeriesId),
     [seriesQuery.data, selectedSeriesId],
   )
 
@@ -360,7 +360,7 @@ export function EventSeriesLinkModal({
 
   return createPortal(
     <ModalOverlay onClick={onClose}>
-      <ModalCard onClick={(e) => e.stopPropagation()}>
+      <ModalCard onClick={(clickEvent) => clickEvent.stopPropagation()}>
         <ModalHeader>
           <ModalTitle>정기 회의·행사 시리즈 연결</ModalTitle>
           <ModalClose type="button" onClick={onClose} aria-label="닫기">
@@ -382,7 +382,7 @@ export function EventSeriesLinkModal({
             <SearchInput
               type="search"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(changeEvent) => setSearchQuery(changeEvent.target.value)}
               placeholder="시리즈명 또는 기구명 검색 (예: 아세안, APEC, 쿼드, WTO)…"
             />
             <SeriesListBox>
@@ -446,7 +446,7 @@ export function EventSeriesLinkModal({
                     min={1}
                     max={9999}
                     value={editionInput}
-                    onChange={(e) => setEditionInput(e.target.value)}
+                    onChange={(changeEvent) => setEditionInput(changeEvent.target.value)}
                     placeholder="예: 43 (특별회의면 비움)"
                   />
                 </FieldGroup>
@@ -456,7 +456,7 @@ export function EventSeriesLinkModal({
                   </FieldLabel>
                   <SmallInput
                     value={editionLabelInput}
-                    onChange={(e) => setEditionLabelInput(e.target.value)}
+                    onChange={(changeEvent) => setEditionLabelInput(changeEvent.target.value)}
                     placeholder="예: 제44·45차, 특별 정상회의"
                   />
                 </FieldGroup>
@@ -508,17 +508,18 @@ export function EventSeriesLinkModal({
 
 const Strip = styled.nav`
   margin: 12px 0 4px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid
+  padding: 10px 0;
+  border-top: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.24)'
-        : 'rgba(79, 70, 229, 0.16)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.07)'
-      : 'rgba(79, 70, 229, 0.035)'};
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(20, 19, 34, 0.12)'};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(20, 19, 34, 0.12)'};
+  background: transparent;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -675,10 +676,13 @@ const ForecastRow = styled.div<{
   align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  background: ${({ theme, $tone }) =>
-    toneColors($tone, theme.mode === 'dark').bg};
+  padding: 8px 0 2px;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(20, 19, 34, 0.08)'};
+  background: transparent;
 `
 
 const ForecastLeft = styled.div`
@@ -822,13 +826,9 @@ const MissingGapBar = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 5px 10px;
-  border-radius: 7px;
-  border: 1px dashed rgba(245, 158, 11, 0.42);
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(245, 158, 11, 0.08)'
-      : 'rgba(245, 158, 11, 0.06)'};
+  padding: 6px 0 2px;
+  border-top: 1px dashed rgba(245, 158, 11, 0.42);
+  background: transparent;
   font-size: 11.5px;
   font-weight: 600;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#b45309')};

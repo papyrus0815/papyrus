@@ -689,7 +689,7 @@ export function DetailActors({
               })}
               {delegationCollapsible &&
                 (delegationOpen || delegates.length > shownDelegates.length) && (
-                  <li>
+                  <li data-more>
                     <DelegationMore
                       type="button"
                       aria-expanded={delegationOpen}
@@ -1011,7 +1011,9 @@ export function DetailActors({
                           })}
                         </SideColumns>
                       ) : (
-                        <CountryList>{countryRows.map((row) => renderCountryRow(row))}</CountryList>
+                        <CountryList data-manage={manageMode || undefined}>
+                          {countryRows.map((row) => renderCountryRow(row))}
+                        </CountryList>
                       ))}
                   </ActorSectionBody>
                 </ActorSectionCard>
@@ -1175,7 +1177,7 @@ export function DetailActors({
                           })}
                         </SideColumns>
                       ) : (
-                        <PersonList>
+                        <PersonList data-manage={manageMode || undefined}>
                           {(personsCollapsed
                             ? listedPersons.slice(0, PERSON_PREVIEW_COUNT)
                             : listedPersons

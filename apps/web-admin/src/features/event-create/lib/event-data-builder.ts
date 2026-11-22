@@ -89,6 +89,7 @@ export interface NormalizedMilitaryEventResponse {
  */
 export const buildEventSubmitData = (params: {
   title: string
+  subtitle?: string | null
   description: string
   startDate: string
   startTime: string
@@ -171,6 +172,7 @@ export const buildEventSubmitData = (params: {
 
   return {
     title: params.title,
+    ...(params.subtitle !== undefined && { subtitle: params.subtitle }),
     description: params.description || undefined,
     startDate: params.startTime
       ? `${params.startDate}T${params.startTime}:00.000Z`
@@ -252,7 +254,7 @@ export const buildEventSubmitData = (params: {
         : undefined, // 기존 사건을 하위 사건으로 연결
     keywords:
       params.keywords && params.keywords.length > 0
-        ? params.keywords.filter((k) => k.trim())
+        ? params.keywords.filter((keyword) => keyword.trim())
         : undefined,
   }
 }

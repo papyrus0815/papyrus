@@ -54,6 +54,7 @@ export interface RelationDraft {
 export interface LinkCandidate extends PickerEvent {
   id: string
   title: string
+  subtitle?: string | null
   dateLabel: string | null
   /** '같은 상위의 사건' · '‘프랑스 혁명’의 하위' */
   membership: string | null
@@ -372,7 +373,13 @@ export function RelatedLinkModal({
                             <span className="main">
                               <span className="title">{candidate.title}</span>
                               <span className="sub">
-                                {[when ? `이 사건 ${when}` : null, candidate.membership].filter(Boolean).join(' · ')}
+                                {[
+                                  candidate.subtitle?.trim() || null,
+                                  when ? `이 사건 ${when}` : null,
+                                  candidate.membership,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
                                 {candidate.sharedKeywords?.length ? (
                                   <span className="keywords"> · 키워드 {candidate.sharedKeywords.slice(0, 3).join('·')}</span>
                                 ) : null}

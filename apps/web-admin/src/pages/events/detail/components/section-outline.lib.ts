@@ -32,14 +32,50 @@ export const FOLDABLE_SECTIONS: ReadonlyArray<{
   id: FoldableSectionId
   label: string
   fillLabel: string
+  hint: string
 }> = [
-  { id: 'background', label: '배경', fillLabel: '배경 쓰기' },
-  { id: 'narrative', label: '전개', fillLabel: '전개 쓰기' },
-  { id: 'aftermath', label: '여파', fillLabel: '여파 쓰기' },
-  { id: 'actors', label: '참여 행위자', fillLabel: '참여 인물·국가' },
-  { id: 'treaties', label: '조약', fillLabel: '조약 연결' },
-  { id: 'network', label: '연관', fillLabel: '상위·하위·관련 사건' },
-  { id: 'appendix', label: '이미지', fillLabel: '이미지 추가' },
+  {
+    id: 'background',
+    label: '배경',
+    fillLabel: '배경 쓰기',
+    hint: '사건이 일어나게 된 원인, 구조적 맥락, 직전 정세를 기록합니다.',
+  },
+  {
+    id: 'narrative',
+    label: '전개',
+    fillLabel: '전개 쓰기',
+    hint: '사건의 발단·전환점·결말이 흘러간 경과를 시간순 단락으로 기록합니다.',
+  },
+  {
+    id: 'aftermath',
+    label: '여파',
+    fillLabel: '여파 쓰기',
+    hint: '사건 직후의 결과와 제도·국제질서·후속 사건에 미친 영향을 기록합니다.',
+  },
+  {
+    id: 'actors',
+    label: '참여 행위자',
+    fillLabel: '참여 인물·국가',
+    hint: '이 사건에 직접 관여한 국가와 주요 인물을 역할과 함께 연결합니다.',
+  },
+  {
+    id: 'treaties',
+    label: '조약',
+    fillLabel: '조약 연결',
+    hint: '이 사건에서 체결·비준·파기된 조약을 만들거나 연결합니다.',
+  },
+  {
+    id: 'network',
+    label: '연관',
+    fillLabel: '상위·하위·관련 사건',
+    hint: '소속 상위 사건, 하위 사건, 인과·전후 관련 사건을 연결합니다.',
+  },
+  {
+    id: 'appendix',
+    label: '이미지',
+    fillLabel: '이미지 추가',
+    hint: '사건 관련 지도·사진·사료 이미지를 캡션과 함께 등록합니다.',
+  },
 ]
 
 /** 판정에 필요한 사건 필드만 — 테스트가 EventDetail 전체를 만들 필요가 없게. */

@@ -392,7 +392,7 @@ export const SiblingNav = styled.nav`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  max-width: 880px;
+  width: 100%;
   margin-top: 6px;
 
   @media (max-width: 560px) {
@@ -534,35 +534,40 @@ export const AddReasonBtn = styled(RemoveChildBtn)`
   }
 `
 
-/** 하위 사건 리스트 — 시간순 단일 칼럼(2열 그리드 폐기, 시간축과 읽기 순서 정합). */
+/** 하위·관련 사건 리스트 — 넓은 지면에서는 2단 평면 원장 격자로 펼쳐 세로 스크롤을 줄인다. */
 export const ChildList = styled.ol`
   list-style: none;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+
+  @container eventdetail (min-width: 1280px) {
+    &:has(> li:nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 28px;
+      align-items: start;
+    }
+  }
 `
 
-/** 하위 사건 행 — UnifiedCard 직역: 카드 박스 대신 행 사이 헤어라인 +
-    hover/focus 시에만 뜨는 인셋 라운드 워시(중성 — 카테고리 신호는 킥커
-    디스크 한 채널로 한정). */
+/** 하위 사건 행 — 카드 박스 대신 행 아래 헤어라인 + hover/focus 인셋 라운드 워시. */
 export const ChildRow = styled.li`
   position: relative;
   display: block;
   padding: 12px 8px;
   border-radius: 8px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.07)'};
   transition: background 0.18s ease;
 
   /* 연결 지도와 함께 가리킴 — 지도 마디에 올리면 이 줄이 진해진다 */
   &[data-hot] {
     background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
-  }
-
-  /* 형제 행 사이 헤어라인 — 카드 박스 대신 리스트 구분선. 첫 행은 무선. */
-  & + & {
-    border-top: 1px solid
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.06)'
-          : 'rgba(15,23,42,0.07)'};
   }
 
   /* 행 하이라이트 — 지속 서피스가 아니라 hover/focus 시에만 뜨는 라운드 워시.
@@ -965,7 +970,7 @@ export const SiblingStrip = styled.nav`
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
-  max-width: 880px;
+  width: 100%;
   padding-left: 30px;
 `
 

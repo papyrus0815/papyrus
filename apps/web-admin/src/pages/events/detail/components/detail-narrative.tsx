@@ -1,14 +1,16 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
+import { ledgerAccent, ledgerHairlineStrong } from '@/entities/event/ui/ledger-tokens'
 
 import { type UpdateEventDto } from '@/shared/api/events'
 import { confirm } from '@/shared/ui/confirm-dialog'
 
 import * as S from '../styles'
 import { type EventDetail, type EventDetailSection } from '../use-event-detail'
+import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
 import { InlineRichText } from './inline'
 import {
   AddSectionButton,
@@ -28,7 +30,7 @@ import {
   type SectionRow,
   syncRowsWithServer,
 } from './narrative-sections'
-import { CollapseEndBar, CollapseHeaderToggle, HeaderTextAction, useSectionCollapse } from './section-collapse'
+import { CollapseEndBar, CollapseHeaderToggle, useSectionCollapse } from './section-collapse'
 
 interface DetailNarrativeProps {
   event: EventDetail
@@ -339,16 +341,29 @@ export function DetailNarrative({
             {backgroundRows.length > 0 && (
               <S.SectionSubtitle>{backgroundRows.length}단락</S.SectionSubtitle>
             )}
-            {backgroundFold.canCollapse && (
-              <S.SectionActions>
+            <S.SectionActions>
+              {backgroundFold.canCollapse && (
                 <CollapseHeaderToggle
                   collapsed={backgroundFold.collapsed}
                   bodyId="background-body"
                   onToggle={() => backgroundFold.setCollapsed((prev) => !prev)}
                 />
-              </S.SectionActions>
-            )}
+              )}
+              <HeaderControlBtn
+                type="button"
+                onClick={() => {
+                  backgroundFold.setCollapsed(false)
+                  background.add()
+                }}
+              >
+                <FiPlus size={13} aria-hidden />
+                단락 추가
+              </HeaderControlBtn>
+            </S.SectionActions>
           </S.SectionHeader>
+          <SectionHintText>
+            사건이 일어나게 된 원인, 구조적 맥락, 직전 정세를 요약과 단락으로 기록합니다.
+          </SectionHintText>
           <div id="background-body">
           {/* 요약 본문은 타임라인의 첫 마디 — 번호 단락과 한 선에 꿴다 */}
           <NarrativeSectionList
@@ -394,14 +409,15 @@ export function DetailNarrative({
             onExpand={() => backgroundFold.setCollapsed(false)}
             onCollapseFromEnd={backgroundFold.collapseFromEnd}
           />
-          <AddSectionButton
-            onClick={() => {
-              /* 새 단락은 제목 입력이 열린 채 뜬다 — 줄인 채로 두면 그 입력이 안 보인다 */
-              backgroundFold.setCollapsed(false)
-              background.add()
-            }}
-            label="배경 단락 추가"
-          />
+          {backgroundRows.length >= 2 && !backgroundFold.collapsed && (
+            <AddSectionButton
+              onClick={() => {
+                backgroundFold.setCollapsed(false)
+                background.add()
+              }}
+              label="다음 배경 단락 이어 추가"
+            />
+          )}
         </S.Section>
       )}
 
@@ -415,9 +431,9 @@ export function DetailNarrative({
               <li key={row.key}>{row.title.trim() || '제목 없는 단락'}</li>
             ))}
           </StrayList>
-          <HeaderTextAction type="button" onClick={moveStrayToBackground}>
+          <HeaderControlBtn type="button" onClick={moveStrayToBackground}>
             모두 배경으로 옮기기
-          </HeaderTextAction>
+          </HeaderControlBtn>
         </StrayNotice>
       )}
       {/* 묶음 사건 — 전개는 하위 사건(배경과 여파 사이의 같은 자리) */}
@@ -431,32 +447,41 @@ export function DetailNarrative({
             {narrativeRows.length > 0 && (
               <S.SectionSubtitle>{narrativeRows.length}단락</S.SectionSubtitle>
             )}
-            {(canSplit || narrativeFold.canCollapse) && (
-              <S.SectionActions>
-                {narrativeFold.canCollapse && (
-                  <CollapseHeaderToggle
-                    collapsed={narrativeFold.collapsed}
-                    bodyId="narrative-body"
-                    onToggle={() => narrativeFold.setCollapsed((prev) => !prev)}
-                    collapsedLabel="본문 펼치기"
-                    expandedLabel="제목만 보기"
-                  />
-                )}
-                {/* 전개가 여러 국면으로 커지면 묶음 사건이 되어 국면마다 하위 사건이 된다 */}
-                {canSplit && (
-                  <HeaderTextAction type="button" onClick={onRequestSplit} data-prominent={narrativeRows.length >= 5 || undefined}>
-                    하위 사건으로 나누기
-                  </HeaderTextAction>
-                )}
-              </S.SectionActions>
-            )}
+            <S.SectionActions>
+              {narrativeFold.canCollapse && (
+                <CollapseHeaderToggle
+                  collapsed={narrativeFold.collapsed}
+                  bodyId="narrative-body"
+                  onToggle={() => narrativeFold.setCollapsed((prev) => !prev)}
+                  collapsedLabel="본문 펼치기"
+                  expandedLabel="제목만 보기"
+                />
+              )}
+              {canSplit && (
+                <HeaderControlBtn
+                  type="button"
+                  onClick={onRequestSplit}
+                  $active={narrativeRows.length >= 5}
+                >
+                  하위 사건으로 나누기
+                </HeaderControlBtn>
+              )}
+              <HeaderControlBtn
+                type="button"
+                onClick={() => {
+                  narrativeFold.setCollapsed(false)
+                  narrative.add()
+                }}
+              >
+                <FiPlus size={13} aria-hidden />
+                단락 추가
+              </HeaderControlBtn>
+            </S.SectionActions>
           </S.SectionHeader>
+          <SectionHintText>
+            사건이 시작되어 흘러간 경과와 주요 전환점·결말을 시간순 단락으로 기록합니다.
+          </SectionHintText>
           {narrativeRows.length === 0 ? (
-            /*
-             * 빈 전개 — 배경·여파의 빈 안내(기울임 한 줄, 누르면 쓰기)와 같은 모양으로.
-             * 예전엔 세 섹션이 세 모양이었다: 배경=기울임 안내, 전개=📖 점선 상자 +
-             * "아래 버튼을 누르세요", 여파=기울임 안내만. 누르면 첫 단락이 열린다.
-             */
             <EmptyLead type="button" onClick={narrative.add}>
               사건이 어떻게 흘러갔는지 — 단락을 나눠 차례로 (발단 · 전환점 · 결말)
             </EmptyLead>
@@ -491,13 +516,15 @@ export function DetailNarrative({
             onExpand={() => narrativeFold.setCollapsed(false)}
             onCollapseFromEnd={narrativeFold.collapseFromEnd}
           />
-          <AddSectionButton
-            onClick={() => {
-              narrativeFold.setCollapsed(false)
-              narrative.add()
-            }}
-            label="전개 단락 추가"
-          />
+          {narrativeRows.length >= 2 && !narrativeFold.collapsed && (
+            <AddSectionButton
+              onClick={() => {
+                narrativeFold.setCollapsed(false)
+                narrative.add()
+              }}
+              label="다음 전개 단락 이어 추가"
+            />
+          )}
         </S.Section>
       )}
 
@@ -509,16 +536,29 @@ export function DetailNarrative({
             {aftermathRows.length > 0 && (
               <S.SectionSubtitle>{aftermathRows.length}단락</S.SectionSubtitle>
             )}
-            {aftermathFold.canCollapse && (
-              <S.SectionActions>
+            <S.SectionActions>
+              {aftermathFold.canCollapse && (
                 <CollapseHeaderToggle
                   collapsed={aftermathFold.collapsed}
                   bodyId="aftermath-body"
                   onToggle={() => aftermathFold.setCollapsed((prev) => !prev)}
                 />
-              </S.SectionActions>
-            )}
+              )}
+              <HeaderControlBtn
+                type="button"
+                onClick={() => {
+                  aftermathFold.setCollapsed(false)
+                  aftermath.add()
+                }}
+              >
+                <FiPlus size={13} aria-hidden />
+                단락 추가
+              </HeaderControlBtn>
+            </S.SectionActions>
           </S.SectionHeader>
+          <SectionHintText>
+            사건 직후의 결과와 제도·국제질서·후속 사건에 미친 영향을 기록합니다.
+          </SectionHintText>
           {/* 요약 본문은 타임라인의 첫 마디 — 번호 단락과 한 선에 꿴다 */}
           <div id="aftermath-body">
           <NarrativeSectionList
@@ -563,13 +603,15 @@ export function DetailNarrative({
             onExpand={() => aftermathFold.setCollapsed(false)}
             onCollapseFromEnd={aftermathFold.collapseFromEnd}
           />
-          <AddSectionButton
-            onClick={() => {
-              aftermathFold.setCollapsed(false)
-              aftermath.add()
-            }}
-            label="여파 단락 추가"
-          />
+          {aftermathRows.length >= 2 && !aftermathFold.collapsed && (
+            <AddSectionButton
+              onClick={() => {
+                aftermathFold.setCollapsed(false)
+                aftermath.add()
+              }}
+              label="다음 여파 단락 이어 추가"
+            />
+          )}
         </S.Section>
       )}
     </>
@@ -599,10 +641,11 @@ const StrayNotice = styled.div`
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  max-width: ${S.PROSE_WIDTH}px;
-  padding: 12px 14px;
-  border: 1px solid ${({ theme }) => theme.colors.error};
-  border-radius: 8px;
+  padding: 10px 0 12px 14px;
+  border-left: 3px solid ${({ theme }) => theme.colors.error};
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
   font-size: 13.5px;
   line-height: 1.6;
   color: ${({ theme }) => theme.colors.text.primary};

@@ -45,6 +45,7 @@ import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
 
 interface DetailPowerProps {
   event: EventDetail
@@ -87,10 +88,6 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
 
   const [accessionPickerOpen, setAccessionPickerOpen] = useState(false)
   const [electionPickerOpen, setElectionPickerOpen] = useState(false)
-  const [showAllAccessionCandidates, setShowAllAccessionCandidates] = useState(false)
-  const [showAllElectionCandidates, setShowAllElectionCandidates] = useState(false)
-  const shouldShowPower = expectPower || accessions.length > 0 || elections.length > 0
-  const CANDIDATE_CHIP_CAP = 4
 
   const refreshEvent = () => void queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
 
@@ -98,18 +95,9 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
   const { data: accessionCandidates = [], isLoading: accessionCandidatesLoading } = useQuery({
     queryKey: [...eventKeys.detail(event.id), 'accession-candidates'],
     queryFn: () => getEventAccessionCandidates(event.id),
-    enabled:
-      accessionPickerOpen ||
-      (shouldShowPower && (event.relatedPersons?.length ?? 0) > 0),
+    enabled: accessionPickerOpen,
     staleTime: 30_000,
   })
-
-  const unlinkedAccessionCandidates = useMemo(() => {
-    const linkedIds = new Set(accessions.map((record) => record.recordId))
-    return accessionCandidates.filter(
-      (candidate) => !linkedIds.has(candidate.recordId) && !candidate.accessionEventId,
-    )
-  }, [accessionCandidates, accessions])
 
   const setAccessionMutation = useMutation({
     mutationFn: async ({ record, eventId }: { record: EventAccession; eventId: string | null }) => {
@@ -161,14 +149,10 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
   const { data: allElections = [], isLoading: electionsLoading } = useQuery({
     queryKey: ['elections', 'event-link-candidates'],
     queryFn: () => getElections(),
-    enabled: electionPickerOpen || (shouldShowPower && eventYear != null),
+    enabled: electionPickerOpen,
     staleTime: 60_000,
   })
 
-  /*
-   * 후보 — 이 사건의 관련국 선거를 먼저, 그 안에서 사건 연도에 가까운 순. 예전엔 연도만 봐서 다른 나라 선거가 섞여 올랐다.
-   * 다른 사건에 이미 연결된 선거는 그 사실을 적는다 — 한 선거는 사건 하나만 가리켜, 고르면 그 사건에서 떨어져 이리 온다.
-   */
   const relatedCountryKeys = useMemo(
     () =>
       new Set([
@@ -177,26 +161,6 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
       ]),
     [event.relatedCountries, event.relatedHistoricalCountries],
   )
-  const recommendedElections = useMemo(() => {
-    if (eventYear == null) return []
-    const linked = new Set(elections.map((election) => election.id))
-    const isRelatedCountry = (election: (typeof allElections)[number]) =>
-      (election.countryId != null && relatedCountryKeys.has(`C:${election.countryId}`)) ||
-      (election.historicalCountryId != null && relatedCountryKeys.has(`H:${election.historicalCountryId}`))
-    return allElections
-      .filter((election) => {
-        if (linked.has(election.id)) return false
-        if (election.event && !election.event.deletedAt) return false
-        const pollYear = parseIsoDateParts(election.pollDate)?.year ?? null
-        if (pollYear == null || Math.abs(pollYear - eventYear) > 2) return false
-        return relatedCountryKeys.size === 0 || isRelatedCountry(election)
-      })
-      .sort((left, right) => {
-        const leftYear = parseIsoDateParts(left.pollDate)?.year ?? eventYear
-        const rightYear = parseIsoDateParts(right.pollDate)?.year ?? eventYear
-        return Math.abs(leftYear - eventYear) - Math.abs(rightYear - eventYear)
-      })
-  }, [allElections, elections, eventYear, relatedCountryKeys])
   const electionOptions = useMemo(() => {
     const linked = new Set(elections.map((election) => election.id))
     const yearOf = (iso: string) => parseIsoDateParts(iso)?.year ?? null
@@ -273,7 +237,20 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
     <S.Section id="power">
       <S.SectionHeader>
         <S.SectionTitle>권력 교체·선거</S.SectionTitle>
+        <S.SectionActions>
+          <HeaderControlBtn type="button" onClick={() => setAccessionPickerOpen(true)}>
+            <FiPlus size={13} aria-hidden />
+            취임·즉위 연결
+          </HeaderControlBtn>
+          <HeaderControlBtn type="button" onClick={() => setElectionPickerOpen(true)}>
+            <FiPlus size={13} aria-hidden />
+            선거 연결
+          </HeaderControlBtn>
+        </S.SectionActions>
       </S.SectionHeader>
+      <SectionHintText>
+        이 사건으로 일어난 통치자·수반의 권력 승계(취임·즉위)와 관련 선거 결과를 연결합니다.
+      </SectionHintText>
 
       {accessions.length > 0 && (
         <Rows aria-label="취임·즉위">
@@ -308,95 +285,6 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
           정당별 결과가 여기 모입니다.
         </S.HelperText>
       )}
-
-      {unlinkedAccessionCandidates.length > 0 && (
-        <CandidateRecommendBar aria-label="추천 취임·즉위 후보">
-          <CandidateRecommendLabel>
-            참여 인물의 취임·즉위 후보 원클릭 연결
-          </CandidateRecommendLabel>
-          <CandidateRecommendChips>
-            {(showAllAccessionCandidates
-              ? unlinkedAccessionCandidates
-              : unlinkedAccessionCandidates.slice(0, CANDIDATE_CHIP_CAP)
-            ).map((candidate) => {
-              const span = spanLabel(candidate.startYear, candidate.endYear)
-              return (
-                <CandidateChipBtn
-                  key={candidate.recordId}
-                  type="button"
-                  disabled={setAccessionMutation.isPending}
-                  onClick={() =>
-                    setAccessionMutation.mutate({ record: candidate, eventId: event.id })
-                  }
-                >
-                  <CandidateChipSub>{candidate.isMonarchical ? '즉위' : '취임'}</CandidateChipSub>
-                  <strong>{candidate.regnalName ?? candidate.personName}</strong>
-                  {candidate.title && <span>· {candidate.title}</span>}
-                  {span && <CandidateChipSub>({span})</CandidateChipSub>}
-                  <CandidateChipPlus>+ 연결</CandidateChipPlus>
-                </CandidateChipBtn>
-              )
-            })}
-            {unlinkedAccessionCandidates.length > CANDIDATE_CHIP_CAP && (
-              <CandidateMoreBtn
-                type="button"
-                onClick={() => setShowAllAccessionCandidates((previous) => !previous)}
-              >
-                {showAllAccessionCandidates
-                  ? '접기'
-                  : `+${unlinkedAccessionCandidates.length - CANDIDATE_CHIP_CAP}건 더 보기`}
-              </CandidateMoreBtn>
-            )}
-          </CandidateRecommendChips>
-        </CandidateRecommendBar>
-      )}
-
-      {recommendedElections.length > 0 && (
-        <CandidateRecommendBar aria-label="추천 선거 후보">
-          <CandidateRecommendLabel>
-            동시대·참여국 추천 선거 원클릭 연결
-          </CandidateRecommendLabel>
-          <CandidateRecommendChips>
-            {(showAllElectionCandidates
-              ? recommendedElections
-              : recommendedElections.slice(0, CANDIDATE_CHIP_CAP)
-            ).map((electionCandidate) => (
-              <CandidateChipBtn
-                key={electionCandidate.id}
-                type="button"
-                disabled={setElectionMutation.isPending}
-                onClick={() => void pickElection(electionCandidate.id)}
-              >
-                <CandidateChipSub>선거</CandidateChipSub>
-                <strong>{electionCandidate.name}</strong>
-                {electionCandidate.pollDate && (
-                  <CandidateChipSub>({electionCandidate.pollDate.slice(0, 10)})</CandidateChipSub>
-                )}
-                <CandidateChipPlus>+ 연결</CandidateChipPlus>
-              </CandidateChipBtn>
-            ))}
-            {recommendedElections.length > CANDIDATE_CHIP_CAP && (
-              <CandidateMoreBtn
-                type="button"
-                onClick={() => setShowAllElectionCandidates((previous) => !previous)}
-              >
-                {showAllElectionCandidates
-                  ? '접기'
-                  : `+${recommendedElections.length - CANDIDATE_CHIP_CAP}건 더 보기`}
-              </CandidateMoreBtn>
-            )}
-          </CandidateRecommendChips>
-        </CandidateRecommendBar>
-      )}
-
-      <Actions>
-        <ActionButton type="button" onClick={() => setAccessionPickerOpen(true)}>
-          <FiPlus size={14} /> 취임·즉위 연결
-        </ActionButton>
-        <ActionButton type="button" onClick={() => setElectionPickerOpen(true)}>
-          <FiPlus size={14} /> 선거 연결
-        </ActionButton>
-      </Actions>
 
       <SelectModal
         isOpen={accessionPickerOpen}
@@ -755,17 +643,13 @@ const HandoverSlot = styled.div<{ $role: 'predecessor' | 'successor' }>`
   flex-direction: column;
   justify-content: center;
   gap: 4px;
-  padding: 9px 12px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid
     ${({ theme, $role }) =>
       $role === 'successor'
-        ? ledgerHairlineStrong(theme.mode)
-        : theme.colors.border};
-  background: ${({ theme, $role }) =>
-    $role === 'successor'
-      ? `${theme.colors.accent}09`
-      : theme.colors.background.secondary};
+        ? ledgerAccent(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
+  background: transparent;
 `
 
 const HandoverRoleTag = styled.span<{ $highlight?: boolean }>`
@@ -773,7 +657,7 @@ const HandoverRoleTag = styled.span<{ $highlight?: boolean }>`
   font-weight: 700;
   letter-spacing: 0.02em;
   color: ${({ theme, $highlight }) =>
-    $highlight ? theme.colors.accent : metaText};
+    $highlight ? ledgerAccent(theme.mode) : metaText};
 `
 
 const HandoverBody = styled.div`
@@ -796,7 +680,7 @@ const HandoverEventBadge = styled.span`
   padding: 1px 7px;
   border-radius: ${RADIUS.PILL};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: transparent;
   font-size: 10.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -808,89 +692,6 @@ const HandoverCountrySub = styled.span`
   font-weight: 600;
   color: ${metaText};
   white-space: nowrap;
-`
-
-const CandidateRecommendBar = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
-`
-
-const CandidateRecommendLabel = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${metaText};
-`
-
-const CandidateRecommendChips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-const CandidateChipBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: ${RADIUS.PILL};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: border-color 0.14s, background 0.14s;
-
-  &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.accent};
-    background: ${({ theme }) => `${theme.colors.accent}0e`};
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: default;
-  }
-`
-
-const CandidateChipSub = styled.span`
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: ${metaText};
-`
-
-const CandidateChipPlus = styled.span`
-  margin-left: 2px;
-  font-size: 11px;
-  font-weight: 700;
-  /* theme.colors.accent는 이 면에서 2.4:1 — 강조색은 ledgerAccent */
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const CandidateMoreBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 9px;
-  border-radius: ${RADIUS.PILL};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${metaText};
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.accent};
-  }
 `
 
 const buttonReset = `
@@ -1027,33 +828,6 @@ const Swatch = styled.span`
   width: 8px;
   height: 8px;
   border-radius: 2px;
-`
-
-const Actions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-`
-
-const ActionButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.SM};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.secondary};
-  }
 `
 
 const PickerNote = styled.p`

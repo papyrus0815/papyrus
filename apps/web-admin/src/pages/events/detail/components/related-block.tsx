@@ -241,6 +241,7 @@ export function RelatedBlock({
           ...startFieldsOf(candidate),
           id: candidate.id,
           title: candidate.title,
+          subtitle: candidate.subtitle ?? null,
           dateLabel: candidateDateLabel(candidate),
           membership: sameParent
             ? '같은 상위의 사건'

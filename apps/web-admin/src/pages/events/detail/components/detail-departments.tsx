@@ -869,6 +869,16 @@ const Rows = styled.ul`
   padding: 0;
   display: flex;
   flex-direction: column;
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+
+  @container eventdetail (min-width: 1240px) {
+    &:has(> li:nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 28px;
+      align-items: start;
+    }
+  }
 `
 
 const Row = styled.li`
@@ -878,14 +888,6 @@ const Row = styled.li`
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-
-  &:first-child {
-    padding-top: 4px;
-  }
-
-  &:last-child {
-    border-bottom: none;
-  }
 `
 
 const Body = styled.div`
@@ -975,5 +977,6 @@ const RoleBadge = styled.button`
 
 const Meta = styled.div`
   font-size: 13px;
+  line-height: 1.55;
   color: ${metaText};
 `

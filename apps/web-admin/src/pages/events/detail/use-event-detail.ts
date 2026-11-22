@@ -181,6 +181,8 @@ export interface EventDetailCabinetEvent {
 export interface EventDetail {
   id: string
   title: string
+  /** 부제 · 이칭·작전명 — 사건명을 짧게 유지하고 통칭·작전명·핵심 의의를 한 줄로 기록 */
+  subtitle?: string | null
   /** 원어 사건명 — Siebenjähriger Krieg · 壬辰倭亂 */
   originalTitle?: string | null
   /** 원 사료 역법·원문 날짜 — 구조화 날짜(startDate)는 그레고리력 환산값 */

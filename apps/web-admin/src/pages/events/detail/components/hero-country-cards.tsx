@@ -423,10 +423,16 @@ export function HeroCountryCards({
   )
 }
 
-/* ── styled — 선 없이 면으로 ── */
+/* ── styled — 본문과 동일한 평면 hairline 원장 톤 ── */
 
 const fill = (mode: string, light: number, dark: number) =>
   mode === 'dark' ? `rgba(255,255,255,${dark})` : `rgba(15,23,42,${light})`
+
+const hairline = (mode: string) =>
+  mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.09)'
+
+const hairlineStrong = (mode: string) =>
+  mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.15)'
 
 const Wrap = styled.div`
   --hero-neutral: #94a3b8;
@@ -447,8 +453,8 @@ const Legend = styled.span`
 const SideTotal = styled.span`
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 13.5px;
+  font-weight: 750;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
 `
@@ -457,19 +463,17 @@ const SideTotal = styled.span`
 const Columns = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
-  gap: 12px;
+  gap: 14px 24px;
 
-  /* 휴대폰 폭 — 진영을 나란히(한 열씩 쌓으면 진영 카드만 한 화면) */
   @media (max-width: 639px) {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 8px;
+    gap: 10px 14px;
   }
 `
 
 const Column = styled.div<{ $rest: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 6px;
   min-width: 0;
   grid-column: ${({ $rest }) => ($rest ? '1 / -1' : 'auto')};
 `
@@ -478,12 +482,11 @@ const ColumnHead = styled.div<{ $color: string | null }>`
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 10px;
-  border-radius: 10px;
-  background: ${({ $color, theme }) =>
-    $color
-      ? `color-mix(in srgb, ${$color} ${theme.mode === 'dark' ? 18 : 10}%, transparent)`
-      : fill(theme.mode, 0.035, 0.045)};
+  padding: 6px 2px 7px;
+  border-top: ${({ $color, theme }) =>
+    $color ? `2.5px solid ${$color}` : `1.5px solid ${hairlineStrong(theme.mode)}`};
+  border-bottom: 1px solid ${({ theme }) => hairline(theme.mode)};
+  background: transparent;
 
   .name {
     min-width: 0;
@@ -496,31 +499,29 @@ const ColumnHead = styled.div<{ $color: string | null }>`
   }
   .count {
     flex-shrink: 0;
-    font-size: 12px;
+    font-size: 11.5px;
     font-variant-numeric: tabular-nums;
     color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-
-  @media (max-width: 639px) {
-    padding: 5px 10px;
   }
 `
 
 const Dot = styled.span`
   flex-shrink: 0;
-  width: 9px;
-  height: 9px;
-  border-radius: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
 `
 
 const Outcome = styled.span`
   flex-shrink: 0;
-  padding: 1px 8px;
+  padding: 0 7px;
   border-radius: 999px;
-  font-size: 11px;
+  border: 1px solid ${({ theme }) => hairlineStrong(theme.mode)};
+  font-size: 10.5px;
   font-weight: 700;
+  line-height: 18px;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)')};
+  background: transparent;
   cursor: ${({ title }) => (title ? 'help' : 'default')};
 `
 
@@ -528,57 +529,53 @@ const ColumnCards = styled.div<{ $rest: boolean }>`
   display: grid;
   align-items: start;
   grid-template-columns: ${({ $rest }) => ($rest ? 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))' : 'minmax(0, 1fr)')};
-  gap: 6px;
+  gap: ${({ $rest }) => ($rest ? '0 18px' : '0')};
 `
 
 const FlatGrid = styled.div`
   display: grid;
   align-items: start;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  gap: 0 20px;
+  border-top: 1px solid ${({ theme }) => hairlineStrong(theme.mode)};
 
   @media (max-width: 639px) {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0 12px;
   }
 `
 
-/** 국가 카드 — 누르면 국가 정보 모달(새 탭 열기는 링크 그대로) */
+/** 국가 행 — 배경 면 박스 대신 가벼운 평면 hairline 원장 줄 */
 const Card = styled(Link)`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 7px 4px;
+  border-bottom: 1px solid ${({ theme }) => hairline(theme.mode)};
   text-decoration: none;
   color: inherit;
-  background: ${({ theme }) => fill(theme.mode, 0.03, 0.04)};
+  background: transparent;
   transition: background 0.12s;
 
   &:hover {
-    background: ${({ theme }) => fill(theme.mode, 0.06, 0.07)};
+    background: ${({ theme }) => fill(theme.mode, 0.03, 0.04)};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 1px;
+    outline-offset: -1px;
   }
 
-  /*
-   * 휴대폰 폭 — 카드를 낮춘다. 히어로의 참여국 카드가 190px을 먹어 본문(탭)이 첫 화면 끝으로 밀렸다
-   * (2026-11-14 실측: 독소전쟁 390px에서 탭 y=758/844). 당시 수장 줄은 여기서 빼고(아래 '당시 수장 비교' 링크와
-   * 참여 탭에 있다) 이름·배역만 남긴다.
-   */
   @media (max-width: 639px) {
     gap: 3px;
-    padding: 7px 10px;
-    border-radius: 10px;
+    padding: 6px 2px;
   }
 `
 
 const CardHead = styled.span`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 `
 
@@ -588,14 +585,15 @@ const Emblem = styled.span<{ $historical: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  font-size: 13px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => hairline(theme.mode)};
+  font-size: 12.5px;
   font-weight: 700;
   font-style: ${({ $historical }) => ($historical ? 'italic' : 'normal')};
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => fill(theme.mode, 0.06, 0.08)};
+  background: ${({ theme }) => fill(theme.mode, 0.03, 0.05)};
 `
 
 const CardName = styled.span`
@@ -603,7 +601,7 @@ const CardName = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 650;
   color: ${({ theme }) => theme.colors.text.primary};
 `
@@ -612,27 +610,30 @@ const CardTags = styled.span`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
+  gap: 3px 6px;
+  padding-left: 29px;
 `
 
 const Tag = styled.span<{ $strong?: boolean }>`
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid ${({ theme, $strong }) => ($strong ? hairlineStrong(theme.mode) : hairline(theme.mode))};
+  font-size: 10.5px;
   font-weight: 650;
-  line-height: 18px;
+  line-height: 17px;
   color: ${({ theme, $strong }) => ($strong ? theme.colors.text.primary : theme.colors.text.secondary)};
-  background: ${({ theme, $strong }) => ($strong ? fill(theme.mode, 0.09, 0.12) : fill(theme.mode, 0.05, 0.07))};
+  background: transparent;
 `
 
-/** 당시 국가원수 — 나라 이름 아래 한 줄. 이름만 진하게, 직함·시점은 한 단 흐리게 */
+/** 당시 국가원수 — 나라 이름 아래 한 줄 */
 const HeadsLine = styled.span`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 5px;
   min-width: 0;
-  font-size: 12.5px;
+  padding-left: 29px;
+  font-size: 12px;
   line-height: 1.4;
   color: ${({ theme }) => theme.colors.text.secondary};
 
@@ -641,7 +642,7 @@ const HeadsLine = styled.span`
     color: ${({ theme }) => theme.colors.text.primary};
   }
   .meta {
-    font-size: 11.5px;
+    font-size: 11px;
     font-variant-numeric: tabular-nums;
     color: ${metaText};
   }
@@ -649,7 +650,6 @@ const HeadsLine = styled.span`
     color: ${metaText};
   }
 
-  /* 휴대폰 폭에선 뺀다(Card 주석) */
   @media (max-width: 639px) {
     display: none;
   }
@@ -665,19 +665,19 @@ const VisuallyHidden = styled.span`
 `
 
 const Period = styled.span`
-  font-size: 11.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-/** 대표 수치 — 이름 오른쪽. 기준 지표가 아니면 지표 이름을 작게 앞에 */
+/** 대표 수치 — 이름 오른쪽 */
 const FigureValue = styled.span`
   margin-left: auto;
   flex-shrink: 0;
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -689,10 +689,11 @@ const FigureValue = styled.span`
   }
 `
 
-/** 규모 막대 — 같은 지표끼리 최댓값 대비, 진영 색 */
+/** 규모 막대 */
 const Share = styled.span`
   display: block;
-  height: 4px;
+  height: 3px;
+  margin-left: 29px;
   border-radius: 2px;
   background: ${({ theme }) => fill(theme.mode, 0.06, 0.08)};
   overflow: hidden;
@@ -706,31 +707,24 @@ const Share = styled.span`
 `
 
 const MoreCard = styled.a`
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-height: 40px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 12.5px;
+  gap: 3px;
+  padding: 7px 4px;
+  border-bottom: 1px solid ${({ theme }) => hairline(theme.mode)};
+  font-size: 12px;
   font-weight: 650;
   text-decoration: none;
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => fill(theme.mode, 0.03, 0.04)};
+  background: transparent;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => fill(theme.mode, 0.06, 0.07)};
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
   svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  @media (max-width: 639px) {
-    min-height: 30px;
-    padding: 4px 10px;
-    border-radius: 10px;
+    width: 13px;
+    height: 13px;
   }
 `

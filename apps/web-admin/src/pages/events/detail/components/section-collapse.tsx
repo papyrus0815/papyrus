@@ -12,6 +12,7 @@ import styled from 'styled-components'
 
 import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
 
+import { HeaderControlBtn } from './actors/actors.styles'
 import { LONG_BACKGROUND_CHARS } from './narrative-sections.lib'
 import { REVEAL_ANCHOR_EVENT, scrollToAnchor } from './scroll-to-anchor'
 
@@ -71,9 +72,16 @@ export function CollapseHeaderToggle({
   expandedLabel?: string
 }) {
   return (
-    <HeaderTextAction type="button" aria-expanded={!collapsed} aria-controls={bodyId} onClick={onToggle}>
+    <HeaderControlBtn
+      type="button"
+      aria-expanded={!collapsed}
+      aria-controls={bodyId}
+      $active={collapsed}
+      onClick={onToggle}
+    >
+      {collapsed ? <FiChevronDown size={13} aria-hidden /> : <FiChevronUp size={13} aria-hidden />}
       {collapsed ? collapsedLabel : expandedLabel}
-    </HeaderTextAction>
+    </HeaderControlBtn>
   )
 }
 

@@ -32,12 +32,14 @@ import {
   officeHoldingTimelineKey,
 } from '@/shared/api/sovereign-reigns'
 import { pathKeys } from '@/shared/router'
+import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 import { notify } from '@/shared/ui/toast'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
+import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
 import { ChronologicalFlow } from './chronological-flow'
 import {
   AccessionBody,
@@ -70,7 +72,6 @@ import {
   FoldLevels,
   FoldedList,
   FoldedRun,
-  GatherButton,
   Grab,
   GroupPromptCancel,
   GroupPromptForm,
@@ -80,7 +81,6 @@ import {
   NestedSteps,
   NextStep,
   NextStepNode,
-  NextStepTools,
   NoBreak,
   Node,
   NodeCol,
@@ -176,7 +176,6 @@ import {
   phaseReach,
 } from './event-phase.lib'
 import { REVEAL_MISSING_ANCHOR_EVENT } from './scroll-to-anchor'
-import { HeaderTextAction } from './section-collapse'
 
 const LazyEventRegisterModal = lazy(() =>
   import('@/widgets/event-form/ui/event-register-modal').then((module) => ({
@@ -1609,6 +1608,56 @@ export function CollectionDevelopment({
     // applyFoldLevel은 매 렌더 새로 만들어지는 setter 조합 — 사건마다 한 번만 돈다(autoFoldFor)
   }, [overview, event.id, totalCount, allChapterKeys, foldableIds, urlView])
 
+  const developmentMenuItems = useMemo<PopoverMenuEntry[]>(() => {
+    const entries: PopoverMenuEntry[] = [
+      {
+        id: 'gather-existing',
+        label: '기존 사건 모으기',
+        icon: <FiLink2 size={13} />,
+        onSelect: onGatherExisting,
+      },
+    ]
+    if (directCount > 1) {
+      entries.push({
+        id: 'edit-chapters',
+        label: chapters.length > 0 ? `국면(목차) 편집 (${chapters.length})` : '국면(목차) 나누기',
+        icon: <FiBookOpen size={13} />,
+        onSelect: () => setChapterEditorOpen(true),
+      })
+    }
+    if (allOwned.length > 0) {
+      entries.push({
+        id: 'select-regroup',
+        label: '하위 사건 골라서 묶기',
+        icon: <FiLayers size={13} />,
+        checked: selecting,
+        onSelect: () => {
+          if (selecting) stopSelecting()
+          else setSelecting(true)
+        },
+      })
+    }
+    if (accessions.length > 0) {
+      entries.push({ type: 'divider', id: 'div-accessions' })
+      entries.push({
+        id: 'toggle-accessions',
+        label: `국가원수 즉위·취임 표지 (${accessions.length})`,
+        icon: <FiAward size={13} />,
+        checked: showAccessions,
+        onSelect: () => setShowAccessions((shown) => !shown),
+      })
+    }
+    return entries
+  }, [
+    accessions.length,
+    allOwned.length,
+    chapters.length,
+    directCount,
+    onGatherExisting,
+    selecting,
+    showAccessions,
+  ])
+
   return (
     <DevelopmentSection id="narrative" aria-busy={busy} ref={sectionRef}>
       {/* 끌기 미리보기 칩 — 화면 밖에 두고 setDragImage로만 쓴다 */}
@@ -1616,7 +1665,6 @@ export function CollectionDevelopment({
       <DevelopmentHeader ref={headerRef}>
         <S.SectionTitle>전개</S.SectionTitle>
         <DevelopmentSubtitle>
-          {/* 토막마다 통째로 — 390px에서 '그 아래까지 / 39건'처럼 숫자 앞에서 꺾였다 */}
           {directCount === 0 ? (
             '하위 사건으로 기록'
           ) : (
@@ -1637,76 +1685,89 @@ export function CollectionDevelopment({
             </CoveredRange>
           )}
         </DevelopmentSubtitle>
-        {/*
-         * 머리에는 '보기' 한 묶음만 — 전부 · 국면만 · 묶음만 · 시간순. 예전엔 국면 편집·즉위 표지까지 6개가 같은
-         * 글자 단추로 두 줄을 채워, 보기를 바꾸는 것과 고치는 것이 갈리지 않았다. 고치는 단추는 목록 끝 줄로.
-         */}
-        {(foldableIds.length > 0 ||
-          allChapterKeys.length > 0 ||
-          totalCount > directCount) && (
+        {directCount > 0 && (
           <S.SectionActions>
-            {/* 국면·묶음을 하나씩 접어 단계에 맞지 않으면 어느 단추도 켜지지 않는다 — 그 상태를 말한다 */}
-            {!chronological && foldLevel === null && <PartialFold>일부 접힘</PartialFold>}
-            <FoldLevels role="group" aria-label="전개 보기">
-              {(
-                [
-                  ['events', '전부'],
-                  ...(allChapterKeys.length > 0
-                    ? [['chapters', '국면만']]
-                    : []),
-                  ...(foldableIds.length > 0
-                    ? [['collections', '묶음만']]
-                    : []),
-                ] as Array<[FoldLevel, string]>
-              ).map(([level, label]) => (
-                <HeaderTextAction
-                  key={level}
-                  type="button"
-                  aria-pressed={!chronological && foldLevel === level}
-                  data-active={
-                    (!chronological && foldLevel === level) || undefined
-                  }
-                  onClick={() => chooseLevel(level)}
-                >
-                  {label}
-                </HeaderTextAction>
-              ))}
-              {totalCount > directCount && (
-                <HeaderTextAction
-                  type="button"
-                  aria-pressed={chronological}
-                  data-active={chronological || undefined}
-                  onClick={() => {
-                    const next = !chronological
-                    setChronological(next)
-                    writeView(next ? 'chrono' : VIEW_OF_LEVEL[foldLevel ?? 'events'])
-                  }}
-                  title="묶음을 풀고 하위 전부를 시간 순서로 — 국면은 사건마다 자기 날짜로"
-                >
-                  시간순
-                </HeaderTextAction>
-              )}
-            </FoldLevels>
+            {(foldableIds.length > 0 ||
+              allChapterKeys.length > 0 ||
+              totalCount > directCount) && (
+              <>
+                {!chronological && foldLevel === null && <PartialFold>일부 접힘</PartialFold>}
+                <FoldLevels role="group" aria-label="전개 보기">
+                  {(
+                    [
+                      ['events', '전부'],
+                      ...(allChapterKeys.length > 0
+                        ? [['chapters', '국면만']]
+                        : []),
+                      ...(foldableIds.length > 0
+                        ? [['collections', '묶음만']]
+                        : []),
+                    ] as Array<[FoldLevel, string]>
+                  ).map(([level, label]) => (
+                    <button
+                      key={level}
+                      type="button"
+                      aria-pressed={!chronological && foldLevel === level}
+                      data-active={
+                        (!chronological && foldLevel === level) || undefined
+                      }
+                      onClick={() => chooseLevel(level)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  {totalCount > directCount && (
+                    <button
+                      type="button"
+                      aria-pressed={chronological}
+                      data-active={chronological || undefined}
+                      onClick={() => {
+                        const next = !chronological
+                        setChronological(next)
+                        writeView(next ? 'chrono' : VIEW_OF_LEVEL[foldLevel ?? 'events'])
+                      }}
+                      title="묶음을 풀고 하위 전부를 시간 순서로 — 국면은 사건마다 자기 날짜로"
+                    >
+                      시간순
+                    </button>
+                  )}
+                </FoldLevels>
+              </>
+            )}
+            <HeaderControlBtn type="button" onClick={() => setCreateOpen(true)}>
+              <FiPlus size={13} aria-hidden />
+              하위 사건 추가
+            </HeaderControlBtn>
+            <PopoverMenu
+              size="md"
+              items={developmentMenuItems}
+              active={selecting || showAccessions}
+              ariaLabel="전개 구성 및 표시 설정"
+              title="기존 사건 모으기 · 국면 편집 · 골라서 묶기 · 즉위 표지"
+              minWidth={220}
+            />
           </S.SectionActions>
         )}
       </DevelopmentHeader>
+      <SectionHintText>
+        전투·회담·조약 같은 하위 사건들이 시간과 국면 순서로 쌓여 이 묶음 사건의 전개를 이룹니다.
+      </SectionHintText>
 
       {directCount === 0 ? (
         <Empty>
           <EmptyText>
-            아직 하위 사건이 없습니다. 묶음 사건의 전개는 전투·회담·조약 같은 일을 하위 사건으로
-            등록해 차례로 쌓습니다.
+            아직 하위 사건이 없습니다. 전투·회담·조약 같은 세부 사건을 등록하거나 이미 있는 사건을 모아 차례로 쌓습니다.
           </EmptyText>
           <EmptyActions>
-            <S.TabEmptyAction type="button" onClick={() => setCreateOpen(true)}>
-              <FiPlus aria-hidden />첫 하위 사건 등록
-            </S.TabEmptyAction>
-            <TextButton type="button" onClick={onGatherExisting}>
-              이미 있는 사건을 모으기
-            </TextButton>
-            <TextButton type="button" onClick={becomeSingle}>
-              하위 없이 쓸 사건이면 단일 사건으로
-            </TextButton>
+            <HeaderControlBtn type="button" onClick={() => setCreateOpen(true)}>
+              <FiPlus size={13} aria-hidden />첫 하위 사건 등록
+            </HeaderControlBtn>
+            <HeaderControlBtn type="button" onClick={onGatherExisting}>
+              <FiLink2 size={13} aria-hidden />기존 사건 모으기
+            </HeaderControlBtn>
+            <HeaderControlBtn type="button" onClick={becomeSingle}>
+              단일 사건으로 전환
+            </HeaderControlBtn>
           </EmptyActions>
         </Empty>
       ) : chronological ? (
@@ -1835,60 +1896,19 @@ export function CollectionDevelopment({
                   : null
               }
             />
-          ) : (
+          ) : directCount >= 3 ? (
             <NextStep>
               <AddChildRow type="button" onClick={() => setCreateOpen(true)}>
                 <NextStepNode aria-hidden>
                   <FiPlus />
                 </NextStepNode>
                 <AddChildText>
-                  <AddChildTitle>하위 사건 추가</AddChildTitle>
-                  <AddChildHint>{directCount + 1}번째 하위 사건 — 전투·회담·조약을 차례 끝에</AddChildHint>
+                  <AddChildTitle>다음 하위 사건 이어 추가</AddChildTitle>
+                  <AddChildHint>{directCount + 1}번째 하위 사건 — 전투·회담·조약을 차례 끝에 등록합니다</AddChildHint>
                 </AddChildText>
               </AddChildRow>
-              <NextStepTools>
-                {directCount > 1 && (
-                  <GatherButton
-                    type="button"
-                    onClick={() => setChapterEditorOpen(true)}
-                    title="이 사건을 시간으로 나눈 장(국면) — 사건이 아니라 목차라서 하위 사건 자리는 그대로"
-                  >
-                    <FiBookOpen aria-hidden />
-                    {chapters.length > 0
-                      ? `국면 편집 ${chapters.length}`
-                      : '국면 나누기'}
-                  </GatherButton>
-                )}
-                {accessions.length > 0 && (
-                  <GatherButton
-                    type="button"
-                    aria-pressed={showAccessions}
-                    onClick={() => setShowAccessions((shown) => !shown)}
-                  >
-                    <FiAward aria-hidden />
-                    {showAccessions
-                      ? `즉위 표지 숨기기 ${accessions.length}`
-                      : `즉위 표지 ${accessions.length}`}
-                  </GatherButton>
-                )}
-                {allOwned.length > 0 && (
-                  <GatherButton
-                    type="button"
-                    onClick={() => setSelecting(true)}
-                    /* 끌기 안내 — 예전엔 목록 끝 두 줄 문단이 '한 번 끌어 볼 때까지' 늘 섰다 */
-                    title="끌어서도 됩니다 — 날짜·제목 줄을 묶음 위에 놓으면 그 밑으로, 개별 사건 위에 놓으면 둘을 새 묶음으로. 접힌 묶음 위에 잠시 머무르면 펼쳐집니다"
-                  >
-                    <FiLayers aria-hidden />
-                    골라서 묶기
-                  </GatherButton>
-                )}
-                <GatherButton type="button" onClick={onGatherExisting}>
-                  <FiLink2 aria-hidden />
-                  기존 사건 모으기
-                </GatherButton>
-              </NextStepTools>
             </NextStep>
-          )}
+          ) : null}
         </Phases>
       )}
 

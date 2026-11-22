@@ -29,6 +29,7 @@ const DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 export interface EventDraftSnapshot {
   title: string
+  subtitle?: string
   description: string
   startDate: string
   startTime: string
@@ -77,6 +78,7 @@ export function hasEventDraftContent(
 ): boolean {
   if (!snapshot) return false
   if (snapshot.title?.trim()) return true
+  if (snapshot.subtitle?.trim()) return true
   if (snapshot.description?.trim()) return true
   if (snapshot.startDate) return true
   if (snapshot.endDate) return true

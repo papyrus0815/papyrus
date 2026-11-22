@@ -105,6 +105,15 @@ const Table = styled.div`
   display: flex;
   flex-direction: column;
   border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+
+  @container eventdetail (min-width: 1240px) {
+    &:has(> div:nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 28px;
+      align-items: start;
+    }
+  }
 `
 
 const Row = styled.div`

@@ -66,6 +66,9 @@ interface DetailHeroProps {
   onOpenKindGuide?: () => void
   /** 윗줄 맨 끝 — 사건 단위 동작 메뉴(⋯). 휴지통에 있는 사건이면 비운다 */
   menu?: ReactNode
+  /** 부제·이칭 입력을 연다(장부의 '+ 부제 · 이칭') — 비어 있으면 평소엔 자리를 두지 않는다 */
+  subtitleOpen?: boolean
+  onSubtitleClose?: () => void
   /** 원어 사건명 입력을 연다(장부의 '+ 원어 사건명') — 비어 있으면 평소엔 자리를 두지 않는다 */
   originalTitleOpen?: boolean
   onOriginalTitleClose?: () => void
@@ -107,6 +110,8 @@ export function DetailHero({
   onOpenMedia,
   onOpenKindGuide,
   menu,
+  subtitleOpen = false,
+  onSubtitleClose,
   originalTitleOpen = false,
   onOriginalTitleClose,
 }: DetailHeroProps) {
@@ -141,9 +146,10 @@ export function DetailHero({
 
   const kindLabel =
     event.kind === 'COLLECTION' ? (event.parentEvent ? '묶음 사건' : '최상위 사건') : '단일 사건'
+  const hasPrimaryImage = Boolean(onOpenMedia) && (event.eventImages?.length ?? 0) > 0
 
   return (
-    <S.Hero>
+    <S.Hero data-has-thumb={hasPrimaryImage || undefined}>
       <S.HeroTopRow>
         <BackLink to={pathKeys.events.root()} viewTransition aria-label="사건 목록">
           <FiArrowLeft aria-hidden />
@@ -238,6 +244,31 @@ export function DetailHero({
           hint="Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소"
         />
       </TitleHost>
+      {/* 부제 · 이칭·작전명 — 사건명을 짧은 고유명사로 유지하고 통칭·작전명·핵심 성격을 한 줄로 받친다.
+          비어 있으면 빈 자리를 세우지 않고 장부의 '+ 부제 · 이칭'으로 연다 */}
+      {(event.subtitle?.trim() || subtitleOpen) && (
+        <SubtitleHost
+          data-filled={event.subtitle?.trim() ? 'true' : undefined}
+          onBlur={(blurEvent) => {
+            if (blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) return
+            onSubtitleClose?.()
+          }}
+        >
+          <InlineText
+            value={event.subtitle ?? ''}
+            onSave={(next) => {
+              onPatch({ subtitle: next.trim() } as UpdateEventDto)
+              onSubtitleClose?.()
+            }}
+            placeholder="부제 · 이칭·작전명 (예: 바르바로사 작전 — 나치 독일의 소련 침공 지시)"
+            label="사건 부제 · 이칭"
+            as="span"
+            maxLength={150}
+            autoEdit={subtitleOpen && !event.subtitle?.trim()}
+            hint="Enter 저장 · 비우고 저장하면 부제 제거 · Esc 취소"
+          />
+        </SubtitleHost>
+      )}
       {/* 원어 사건명 — 제목 바로 밑 한 줄. 채운 사건이 없어(0/506) 빈 자리를 늘 세우면 모든 사건에
           흐린 '원어 사건명'이 서 있었다 — 비어 있으면 장부의 '+ 원어 사건명'으로 연다 */}
       {(event.originalTitle?.trim() || originalTitleOpen) && (
@@ -632,28 +663,26 @@ function HeroActors({
       {persons.length > 0 && (
         <Lineup>
           <PersonInline>
-            {persons.map((p, i) => {
-              const name = p.person
+            {persons.map((personEntry, personIndex) => {
+              const name = personEntry.person
                 ? getPersonDisplayName({
-                    name: p.person.name ?? '',
-                    surname: p.person.surname,
-                    middleName: p.person.middleName,
-                    nameDisplayOrder: p.person.nameDisplayOrder,
-                    country: p.person.country,
+                    name: personEntry.person.name ?? '',
+                    surname: personEntry.person.surname,
+                    middleName: personEntry.person.middleName,
+                    nameDisplayOrder: personEntry.person.nameDisplayOrder,
+                    country: personEntry.person.country,
                   }) || '미상'
                 : '미상'
-              const avatar = p.person?.profileImageUrl ?? undefined
-              const effectiveSideId = effectivePersonSide(p, countrySideByKey).sideId
+              const avatar = personEntry.person?.profileImageUrl ?? undefined
+              const effectiveSideId = effectivePersonSide(personEntry, countrySideByKey).sideId
               const sideInfo = effectiveSideId ? sideColorMap.get(effectiveSideId) : undefined
-              const tooltip = [sideInfo?.name, p.role].filter(Boolean).join(' · ') || undefined
+              const tooltip = [sideInfo?.name, personEntry.role].filter(Boolean).join(' · ') || undefined
               return (
-                // detail-actors와 동일하게 personId로 키잉 — 관계 행 id(p.id)는
-                // 저장 후 refetch에서 바뀌어 hero 행이 불필요하게 remount된다.
-                <span key={p.personId}>
+                <span key={personEntry.personId}>
                   <PersonInlineButton
                     type="button"
                     title={tooltip}
-                    onClick={() => onPersonClick(p.personId)}
+                    onClick={() => onPersonClick(personEntry.personId)}
                   >
                     <PersonAvatar $hasImage={Boolean(avatar)}>
                       {avatar ? (
@@ -669,7 +698,7 @@ function HeroActors({
                     {sideInfo && <PersonSideDot $color={sideInfo.color} aria-hidden />}
                     <PersonName>{name}</PersonName>
                   </PersonInlineButton>
-                  {i < persons.length - 1 && <PersonSep>·</PersonSep>}
+                  {personIndex < persons.length - 1 && <PersonSep>·</PersonSep>}
                 </span>
               )
             })}
@@ -837,7 +866,6 @@ const SummaryHost = styled.div`
   font-size: 16.5px;
   line-height: 1.65;
   color: ${({ theme }) => theme.colors.text.secondary};
-  max-width: ${S.PROSE_WIDTH}px;
 `
 
 /** 종류 표지 겸 '?' 안내 버튼 — 윗줄 끝. 상태(무슨 종류)와 길잡이(어떻게 바꾸나)를 한 버튼에 */
@@ -955,6 +983,35 @@ const ExtraParentBadge = styled.a`
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
     border-radius: ${RADIUS.FOCUS};
+  }
+`
+
+/**
+ * 부제 · 이칭·작전명 — 사건명 바로 아래 한 줄 표제 부제(단문).
+ */
+const SubtitleHost = styled.p`
+  margin: 4px 0 0;
+  font-size: clamp(15px, 1.5vw, 17px);
+  font-weight: 550;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  [data-edit-host] > span:first-child {
+    text-decoration-line: none;
+  }
+  [data-edit-host]:hover > span:first-child,
+  [data-edit-host]:focus-within > span:first-child {
+    text-decoration-line: underline;
+  }
+
+  &:not([data-filled]) {
+    opacity: 0.7;
+    font-size: 13.5px;
+
+    [data-empty='true'] {
+      font-style: normal;
+    }
   }
 `
 

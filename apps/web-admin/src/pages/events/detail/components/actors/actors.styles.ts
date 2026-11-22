@@ -467,6 +467,17 @@ export const SideCountryList = styled.ol<{ $restGrid?: boolean }>`
   padding: 0;
   display: flex;
   flex-direction: column;
+
+  ${SideGroup}[data-side-group='rest'] > & {
+    @container eventdetail (min-width: 1180px) {
+      &:has(> li:nth-child(2)) {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 28px;
+        align-items: start;
+      }
+    }
+  }
 `
 
 export const CountryList = styled.ol`
@@ -475,6 +486,15 @@ export const CountryList = styled.ol`
   padding: 0;
   display: flex;
   flex-direction: column;
+
+  @container eventdetail (min-width: 1280px) {
+    &:not([data-manage]):has(> li:nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 28px;
+      align-items: start;
+    }
+  }
 `
 
 export const PersonList = styled.ol`
@@ -483,6 +503,21 @@ export const PersonList = styled.ol`
   padding: 0;
   display: flex;
   flex-direction: column;
+
+  @container eventdetail (min-width: 1180px) {
+    &:not([data-manage]):has(> li:nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 28px;
+      align-items: start;
+    }
+  }
+
+  @container eventdetail (min-width: 1680px) {
+    &:not([data-manage]):has(> li:nth-child(6)) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
 `
 
 /* ─── Shared Row Controls (Clean Single-Row + ⋯ Consolidation) ─── */
@@ -638,6 +673,7 @@ export const CountryRow = styled.li<{ $dragOver?: boolean; $editing?: boolean; $
   display: flex;
   flex-direction: column;
   min-width: 0;
+  ${({ $editing }) => ($editing ? 'grid-column: 1 / -1;' : '')}
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: ${({ theme, $editing }) =>
     $editing ? ledgerSubtleFill(theme.mode) : 'transparent'};
@@ -840,6 +876,7 @@ export const FigureChip = styled.span`
 export const CountryRoleLine = styled.div<{ $hasContent: boolean }>`
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   padding-left: 31px;
   font-size: 13px;
   line-height: 1.56;
@@ -848,6 +885,7 @@ export const CountryRoleLine = styled.div<{ $hasContent: boolean }>`
 `
 
 export const CountryNoteLine = styled.div<{ $hasContent: boolean }>`
+  box-sizing: border-box;
   padding-left: 31px;
   font-size: 12px;
   line-height: 1.52;
@@ -878,6 +916,19 @@ export const DelegationList = styled.ol`
   display: flex;
   flex-direction: column;
   gap: 2px;
+
+  @container eventdetail (min-width: 1440px) {
+    &:has(> li:nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 2px 18px;
+      align-items: start;
+
+      > li[data-more] {
+        grid-column: 1 / -1;
+      }
+    }
+  }
 `
 
 export const DelegationMore = styled.button`
@@ -909,6 +960,7 @@ export const PersonRow = styled.li<{
   position: relative;
   display: block;
   min-width: 0;
+  ${({ $editing }) => ($editing ? 'grid-column: 1 / -1;' : '')}
   padding: ${({ $compact }) => ($compact ? '4px 6px' : '10px 6px')};
   border-radius: ${({ $compact }) => ($compact ? RADIUS.XS : '0')};
   border-bottom: ${({ $compact, theme }) =>
@@ -1032,6 +1084,7 @@ export const OfficeAtEvent = styled.span`
 `
 
 export const PersonRoleLine = styled.div<{ $compact?: boolean }>`
+  box-sizing: border-box;
   padding-left: ${({ $compact }) => ($compact ? '28px' : '31px')};
   font-size: 12.5px;
   line-height: 1.48;
@@ -1041,6 +1094,7 @@ export const PersonRoleLine = styled.div<{ $compact?: boolean }>`
 `
 
 export const PersonNoteLine = styled.div<{ $hasContent: boolean; $compact?: boolean }>`
+  box-sizing: border-box;
   padding-left: ${({ $compact }) => ($compact ? '28px' : '31px')};
   font-size: 13px;
   line-height: 1.56;
@@ -1346,6 +1400,7 @@ export const ClampHost = styled.div`
   position: relative;
   display: flex;
   flex-direction: column;
+  width: 100%;
 `
 
 export const FloatingMoreSlot = styled.div`

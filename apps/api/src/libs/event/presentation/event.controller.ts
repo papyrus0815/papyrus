@@ -589,6 +589,7 @@ export class EventController {
     return {
       id: event.id,
       title: event.title,
+      subtitle: event.subtitle ?? null,
       description: event.description,
       startDate: formatEventDate(event.startDate, event.startEra, event.startYear, event.startMonth, event.startDay),
       startDatePrecision: event.startDatePrecision ?? null,
@@ -1476,7 +1477,13 @@ export class EventController {
       where: {
         createdById: userId,
         deletedAt: null,
-        ...(term && { title: { contains: term } }),
+        ...(term && {
+          OR: [
+            { title: { contains: term } },
+            { subtitle: { contains: term } },
+            { originalTitle: { contains: term } },
+          ],
+        }),
         ...nearWhere,
         ...kindFilter,
       },
@@ -1491,6 +1498,7 @@ export class EventController {
       select: {
         id: true,
         title: true,
+        subtitle: true,
         startDate: true,
         startDatePrecision: true,
         endDate: true,
@@ -1542,6 +1550,7 @@ export class EventController {
       return {
         id: event.id,
         title: event.title,
+        subtitle: event.subtitle ?? null,
         startDate: event.startDate ? event.startDate.toISOString() : null,
         startDatePrecision: event.startDatePrecision,
         endDate: event.endDate ? event.endDate.toISOString() : null,
@@ -2789,6 +2798,7 @@ export class EventController {
         endYear: endParts?.year,
         endMonth: endParts?.month,
         endDay: endParts?.day,
+        subtitle: emptyToNull(dto.subtitle),
         originalTitle: emptyToNull(dto.originalTitle),
         startCalendar: dto.startCalendar,
         startDateOriginal: emptyToNull(dto.startDateOriginal),
@@ -2889,6 +2899,7 @@ export class EventController {
         endYear: endPartsU?.year,
         endMonth: endPartsU?.month,
         endDay: endPartsU?.day,
+        subtitle: emptyToNull(dto.subtitle),
         originalTitle: emptyToNull(dto.originalTitle),
         startCalendar: dto.startCalendar,
         startDateOriginal: emptyToNull(dto.startDateOriginal),

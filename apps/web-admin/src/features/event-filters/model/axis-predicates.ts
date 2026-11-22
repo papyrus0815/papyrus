@@ -36,6 +36,7 @@ import { eventSpansCentury, isCenturyUnknown } from './century-span'
 export interface FilterableEvent {
   id: string
   title?: string
+  subtitle?: string | null
   description?: string
   /** 분야 키(MILITARY…) */
   domain?: string | null
@@ -124,6 +125,7 @@ export interface FilterAxisContext {
 export function buildKeywordHaystack(event: FilterableEvent): string {
   return [
     event.title ?? '',
+    event.subtitle ?? '',
     event.description ?? '',
     event.location ?? '',
     event.seriesTitle ?? '',

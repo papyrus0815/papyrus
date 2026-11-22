@@ -32,7 +32,7 @@ export const NextStep = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
-  max-width: ${S.PROSE_WIDTH}px;
+  width: 100%;
   /* 구획 간격(22px)을 덜어 마지막 마디에 붙인다 — 떨어져 있으면 목록 밖의 별도 버튼으로 읽힌다 */
   margin-top: -14px;
 
@@ -191,7 +191,6 @@ export const Empty = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: ${S.PROSE_WIDTH}px;
 `
 
 export const EmptyText = styled.p`
@@ -248,7 +247,7 @@ export const Steps = styled.ol`
   flex-direction: column;
   /* 날짜 줄이 생략·가늘어져(같은 해·같은 날은 안 쓴다) 행이 가벼워진 만큼 한 단 더 좁힌다 */
   gap: 10px;
-  max-width: ${S.PROSE_WIDTH}px;
+  width: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -703,7 +702,7 @@ export const RootDrop = styled.div`
   position: sticky;
   top: calc(64px + var(--development-head, 0px));
   z-index: 6;
-  max-width: ${S.PROSE_WIDTH}px;
+  width: 100%;
   padding: 12px 14px;
   border-radius: ${RADIUS.MD};
   border: 2px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
@@ -754,9 +753,11 @@ export const GroupPromptForm = styled.form`
   align-items: center;
   gap: 6px 8px;
   margin-top: 6px;
-  padding: 8px 10px;
-  border-radius: ${RADIUS.SM};
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  padding: 8px 0 8px 10px;
+  border-left: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
 `
 
 export const GroupPromptText = styled.span`
@@ -815,7 +816,7 @@ export const Phases = styled.div`
   display: flex;
   flex-direction: column;
   gap: 28px;
-  max-width: ${S.PROSE_WIDTH}px;
+  width: 100%;
 `
 
 /**
@@ -981,16 +982,39 @@ export const PartialFold = styled.span`
   color: ${metaText};
 `
 
-/** 펼침 단계 — 고른 단계는 굵게 */
+/** 펼침 단계 — 세그먼트 전환 스위치 */
 export const FoldLevels = styled.span`
   display: inline-flex;
-  flex-wrap: wrap;
   align-items: center;
+  height: 34px;
+  padding: 2px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
   gap: 2px;
 
+  button {
+    height: 28px;
+    padding: 0 9px;
+    border-radius: 5px;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    cursor: pointer;
+    transition: background 0.14s, color 0.14s;
+  }
+
+  button:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
   [data-active] {
-    font-weight: 800;
+    font-weight: 700;
     color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
 `
 

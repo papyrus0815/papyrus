@@ -27,6 +27,18 @@ export class CreateEventDto {
   @IsNotEmpty()
   title!: string
 
+  @ApiProperty({
+    description:
+      '부제 · 이칭·작전명 — 사건명을 짧게 유지하고 통칭·작전명·핵심 의의를 한 줄로 기록. null·빈 문자열=비움',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(150)
+  subtitle?: string | null
+
   @ApiProperty({ description: '원어 사건명 — 당대·현지 이름(Siebenjähriger Krieg · 壬辰倭亂). null·빈 문자열=비움', required: false, nullable: true })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)

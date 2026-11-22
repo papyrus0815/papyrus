@@ -125,12 +125,55 @@ export interface RelatedEventsSlotProps {
 }
 
 /**
+ * 사건명 안에 '—' 또는 괄호로 이칭·작전명이 섞여 있으면 본 제목과 부제로 쪼갤 후보를 뽑는다.
+ * 순수 연도 표기('(1941)', '(1588년)')는 연도 추출 추천과 겹치므로 제외한다.
+ */
+export function extractDetachableSubtitleFromTitle(
+  rawTitle: string,
+): { mainTitle: string; detachedSubtitle: string } | null {
+  const trimmed = rawTitle.trim()
+  if (trimmed.length < 5) return null
+
+  const dashMatch = /^(.{2,}?)\s+[—–]\s+(.{2,})$/.exec(trimmed)
+  if (dashMatch) {
+    return {
+      mainTitle: dashMatch[1].trim(),
+      detachedSubtitle: dashMatch[2].trim().slice(0, 150),
+    }
+  }
+
+  const parenMatch = /^(.*?)\s*[（(]([^()（）]{2,120})[)）]\s*(.*)$/.exec(trimmed)
+  if (parenMatch) {
+    const inside = parenMatch[2].trim()
+    if (/^(?:기원전\s*|BC\s*)?\d{1,4}(?:\s*[~–-]\s*\d{1,4})?년?$/i.test(inside)) {
+      return null
+    }
+    const mergedMain = [parenMatch[1].trim(), parenMatch[3].trim()]
+      .filter(Boolean)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (mergedMain.length >= 2) {
+      return {
+        mainTitle: mergedMain,
+        detachedSubtitle: inside.slice(0, 150),
+      }
+    }
+  }
+
+  return null
+}
+
+/**
  * 이벤트 기본 정보 입력 섹션
  */
 interface BasicInfoSectionProps {
   // 기본 정보
   title: string
   setTitle: (value: string) => void
+  /** 부제 · 이칭·작전명 (선택 단문, 최대 150자) */
+  subtitle?: string
+  setSubtitle?: (value: string) => void
   description: string
   setDescription: (value: string) => void
   startDate: string
@@ -374,6 +417,8 @@ interface BasicInfoSectionProps {
 export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   title,
   setTitle,
+  subtitle = '',
+  setSubtitle,
   description,
   setDescription,
   startDate,
@@ -429,6 +474,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const isDark = theme.mode === 'dark'
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const subtitleInputRef = useRef<HTMLInputElement>(null)
+  const detachableSubtitle = useMemo(
+    () => (subtitle.trim() ? null : extractDetachableSubtitleFromTitle(title)),
+    [subtitle, title],
+  )
   const categoryButtonsRef = useRef<Array<HTMLButtonElement | null>>([])
   const selectedCategoryIndex = category ? EVENT_DOMAIN_ORDER.indexOf(category) : -1
   const categoryTabStop = selectedCategoryIndex >= 0 ? selectedCategoryIndex : 0
@@ -1328,6 +1378,53 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               <S.ErrorMessage id="event-form-title-error" role="alert">
                 {titleError}
               </S.ErrorMessage>
+            )}
+            {setSubtitle && (
+              <SubtitleFieldGroup>
+                <SubtitleAssistRow>
+                  <SubtitleFieldLabel htmlFor="event-form-subtitle">
+                    부제 · 이칭 <span>(선택 · 통칭·작전명·핵심 성격)</span>
+                  </SubtitleFieldLabel>
+                  {detachableSubtitle && (
+                    <SubtitleSplitBtn
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setTitle(detachableSubtitle.mainTitle)
+                        setSubtitle(detachableSubtitle.detachedSubtitle)
+                        requestAnimationFrame(() => subtitleInputRef.current?.focus())
+                      }}
+                    >
+                      ‘{detachableSubtitle.detachedSubtitle}’을(를) 부제로 분리
+                    </SubtitleSplitBtn>
+                  )}
+                </SubtitleAssistRow>
+                <SubtitleInputRow>
+                  <SubtitleInput
+                    ref={subtitleInputRef}
+                    id="event-form-subtitle"
+                    type="text"
+                    maxLength={150}
+                    placeholder="예: 바르바로사 작전 — 나치 독일의 소련 침공 지시"
+                    aria-label="부제 · 이칭·작전명"
+                    value={subtitle}
+                    onChange={(changeEvent) => setSubtitle(changeEvent.target.value)}
+                  />
+                  {subtitle && (
+                    <SubtitleClearBtn
+                      type="button"
+                      aria-label="부제 지우기"
+                      title="부제 지우기"
+                      onClick={() => {
+                        setSubtitle('')
+                        requestAnimationFrame(() => subtitleInputRef.current?.focus())
+                      }}
+                    >
+                      <FiX size={13} aria-hidden />
+                    </SubtitleClearBtn>
+                  )}
+                </SubtitleInputRow>
+              </SubtitleFieldGroup>
             )}
             {(titleSuggestionSlot ||
               titleYearSuggestion ||
@@ -5542,6 +5639,91 @@ const TitleInput = styled(S.Input)`
   padding: 0 14px;
   font-size: 15px;
   font-weight: 600;
+`
+
+const SubtitleFieldGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+`
+
+const SubtitleAssistRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+`
+
+const SubtitleFieldLabel = styled.label`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  letter-spacing: -0.01em;
+
+  span {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const SubtitleSplitBtn = styled.button`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    outline: none;
+  }
+`
+
+const SubtitleInputRow = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+`
+
+const SubtitleInput = styled(S.Input)`
+  height: 36px;
+  padding: 0 32px 0 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+`
+
+const SubtitleClearBtn = styled.button`
+  position: absolute;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const OverviewTextarea = styled(S.Textarea)`

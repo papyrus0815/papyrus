@@ -26,57 +26,26 @@ import {
 /* ───────────────────────── Width system ───────────────────────── */
 
 /**
- * 폭 체계 — **산문은 720에 고정하고, 넓은 블록만 양옆으로 튀어나온다**(breakout).
- *
- * 한글 산문은 15.5px에서 한 줄 약 46자 — 편하게 읽히는 35~50자 안이다. 화면이 넓다고 글줄을
- * 늘리면 1,800px에서 110자를 넘어 줄바꿈 추적이 무너진다. 반면 표·인물 목록·이미지는
- * 720에 갇혀 칸 안 글자가 서너 줄로 꺾이거나(표) 세로로만 길어졌다(인물 15명 2,600px).
- *
- * 그래서 문서 열을 '넓은 트랙'(720 + 좌우 여백 최대 160 = 1040)으로 잡고, 산문은 그
- * 가운데 720에, 넓은 블록은 트랙 전체에 놓는다. 여백은 **남는 폭만큼만** 생긴다 —
- * 1440px 화면(사이드바 포함)에서는 0이라 지금과 같고, 1920 이상에서 열린다.
- * 한쪽으로만 넓히면 산문 구간마다 장부와의 사이에 빈 띠가 생겨, 양옆 대칭으로 둔다.
- *
- * ⚠️ 여백은 새 컨테이너가 아니라 **지면 셸(eventdetail)의 cqi**로 계산한다. 문서 열에
- *    container-type을 걸면 contain: layout이 되어, 포털 없이 인라인으로 뜨는 모달들
- *    (인물·국가 선택 등)의 fixed 기준이 문서 열로 갇힌다(PageInner 주석과 같은 함정).
- *    2열일 때 문서 열 = 100cqi − 장부 − gap이므로 식이 닫힌다. 한 열일 때는 음수 → 0.
- */
-/**
- * 산문 가독폭 — 기업 상세 연혁(서술형 한 단 880)과 같은 값(2026-10-15).
- * 720이던 시절엔 전체 폭 지면 1920에서 글 오른쪽에 340px가 비었고, 편집기(880)와 읽기(720)의 줄바꿈이
- * 달라 편집을 열면 글이 다시 흘렀다. 읽기와 편집을 한 폭으로 맞춘다(한글 15.5px 기준 한 줄 약 56자).
+ * 전체 화면 폭 체계 — 사건 상세는 방대한 역사 기록·주체·관계·수치를 한눈에 다루는 작업 지면이므로
+ * 본문 열(`Main`)과 우측 사실 장부(`Aside`)가 뷰포트 전체 폭을 빈틈없이 쓴다.
  */
 export const PROSE_WIDTH = 880
-/**
- * 편집기 폭 — 읽기 산문과 같은 폭(편집을 열어도 줄바꿈이 그대로). 예전엔 상한이 없어 넓은 화면에서
- * 편집기가 문서 열 전체(1920 폭 실측 1,040px)로 퍼졌다 — 표가 든 단락은 읽기 상한(:has(table) 해제)까지 함께 풀려서.
- */
 export const EDITOR_WIDTH = PROSE_WIDTH
 export const BREAKOUT_MAX = 160
-const ASIDE_WIDTH = 312
-const COLUMN_GAP = 48
+const ASIDE_WIDTH = 'clamp(300px, 21cqi, 356px)'
+const COLUMN_GAP = 'clamp(24px, 2.2cqi, 36px)'
 
-/**
- * 넓은 블록의 한쪽 여백 — **이제 0**(2026-10-15 전체 폭 전환).
- *
- * 예전엔 문서 열이 720 산문 + 좌우 여백(최대 160)의 '넓은 트랙'이라 표·행위자·갤러리를 음수 여백으로
- * 양옆에 튀어나오게 했다. 전체 폭에서는 문서 열 자체가 넓고 산문은 **문단 단위로** 720에 묶이므로
- * (SectionBody·proseMeasure), 넓은 블록은 그냥 열 전체를 쓰면 된다. 소비처(행위자·갤러리·타임라인)의
- * breakout은 값이 0이 되어 '열 전체 폭'으로 그대로 동작한다 — 좌측 정렬이라 양옆 대칭 돌출은 쓰면 안 된다.
- */
 export const breakoutGutter = '0px'
 
-/** 산문 열(720) 안에 놓인 블록을 넓은 트랙 전체로 편다. */
+/** 전체 폭 지면에서 블록이 열 전체를 그대로 채운다. */
 export const breakout = css`
-  width: calc(100% + 2 * ${breakoutGutter});
+  width: 100%;
   max-width: none;
-  margin-inline: calc(-1 * ${breakoutGutter});
+  margin-inline: 0;
 `
 
 /**
- * 산문 가독폭 — 문단·목록·소제목·인용만 720에 묶고 표·그림은 열 전체를 쓴다.
- * 전체 폭 지면에서 글줄이 1,000px을 넘으면 줄바꿈 추적이 무너진다(한 줄 46자 → 70자 이상).
+ * 전체 화면 지면 — 개요·참여·진영·연관·자료 모든 탭의 문단과 표가 동일한 본문 열 전체 폭을 쓴다.
  */
 export const proseMeasure = css`
   p,
@@ -89,7 +58,7 @@ export const proseMeasure = css`
   h4,
   h5,
   h6 {
-    max-width: ${PROSE_WIDTH}px;
+    max-width: none;
   }
 `
 
@@ -138,15 +107,9 @@ export const Page = styled.div`
 export const PageInner = styled.div`
   container-type: inline-size;
   container-name: eventdetail;
-  /*
-   * **전체 폭**(2026-10-15 사용자 지시: "사건 상세도 기업 상세처럼 전체 화면을 사용").
-   * 2026-09-26의 '폭 고정 1136 + 가운데 정렬' 지시를 대체한다 — 기업 상세와 같은 지면 문법
-   * (가로 탭)으로 바꾸면서 폭도 맞춘다. 좌우 패딩은 기업 상세와 같은 clamp.
-   * 산문 가독폭(720)은 지면이 아니라 문단 단위로 지킨다(SectionBody·proseMeasure).
-   */
   width: 100%;
   margin: 0;
-  padding: 32px clamp(24px, 3vw, 56px) 96px;
+  padding: 28px clamp(20px, 2.2vw, 36px) 92px;
 
   @media (max-width: 768px) {
     /* 아래 104px — 좁은 화면엔 좌하단에 떠 있는 메뉴 버튼(전역)이 댓글 입력칸을 덮었다(390px 실측) */
@@ -197,23 +160,22 @@ export const Body = styled.div`
    * 사건인가"를 먼저 알아야 스크롤을 결정할 수 있다.
    */
   @container eventdetail (min-width: 920px) {
-    grid-template-columns: minmax(0, 1fr) ${ASIDE_WIDTH}px;
+    grid-template-columns: minmax(0, 1fr) ${ASIDE_WIDTH};
     grid-template-rows: auto auto 1fr;
     grid-template-areas:
       'hero aside'
       'tabs aside'
       'main aside';
-    /* 행 간격 — 히어로→탭은 붙어야 한 머리로 읽힌다(예전 36 + 히어로 아래 32 = 68px 공백) */
-    gap: 20px ${COLUMN_GAP}px;
+    gap: 20px ${COLUMN_GAP};
+    width: 100%;
+    max-width: none;
   }
 
   /*
-   * 넓은 탭(조망) — 장부는 히어로·탭 옆에 두고 그 아래 본문이 두 칸을 다 쓴다. 조망은 간트·표·막대 같은 대시보드라
-   * 문서 열 594px(1440 화면)로는 간트 축이 300px 남짓이었고 날짜 라벨 절반이 잘렸다. 지표 카드가 장부를 대신한다.
+   * 넓은 탭(조망) — 장부는 히어로·탭 옆에 두고 그 아래 본문이 두 칸을 다 쓴다.
    */
   &[data-wide] {
     @container eventdetail (min-width: 920px) {
-      /* 탭 줄도 두 칸 — 왼쪽 칸에만 걸면 스크롤할 때 오른쪽 빈 자리로 아래 간트가 비쳐 올라왔다 */
       grid-template-areas:
         'hero aside'
         'tabs tabs'
@@ -236,6 +198,8 @@ export const Aside = styled.aside`
   @container eventdetail (min-width: 920px) {
     position: sticky;
     top: 24px;
+    padding-left: 24px;
+    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
     /* 넓은 탭에선 히어로 옆에 머문다(아래 본문이 두 칸을 쓰므로 따라 내려오면 본문을 덮는다) */
     [data-wide] > & {
@@ -369,21 +333,12 @@ export const Main = styled.main`
     margin-inline: 0;
   }
 
-  /*
-   * 산문 가독폭 — 리치텍스트 본문은 문단 태그 없이 영역(role=region) 바로 아래 글이 놓이는 경우가 많아
-   * 문단 단위 제한(proseMeasure)만으로는 1,000px 넘게 퍼졌다(실측 1,016px). 편집 호스트째 720에 묶어
-   * 연필 버튼도 글 옆에 붙게 한다. 표가 든 본문만 풀어 표는 열 전체, 나머지 블록은 720.
-   */
+  p,
+  blockquote,
   [data-edit-host],
-  [role='region'] {
-    max-width: ${PROSE_WIDTH}px;
-  }
-  [data-edit-host]:has(table),
-  [role='region']:has(table) {
+  [role='region'],
+  [data-inline-editing] {
     max-width: none;
-  }
-  [role='region']:has(table) > :not(table):not(:has(table)) {
-    max-width: ${PROSE_WIDTH}px;
   }
 
   /*
@@ -398,14 +353,6 @@ export const Main = styled.main`
     color: inherit;
   }
 
-  /* 편집 중 — 편집기를 감싼 상자들의 읽기 상한(720)·해제(표)를 걷고, 편집기 자체를 연혁 폭에 묶는다 */
-  *:has([data-inline-editing]) {
-    max-width: none;
-  }
-  [data-inline-editing] {
-    max-width: ${EDITOR_WIDTH}px;
-  }
-
   @media (max-width: 768px) {
     gap: 44px;
   }
@@ -416,28 +363,29 @@ export const Main = styled.main`
 export const Hero = styled.section`
   grid-area: hero;
   min-width: 0;
-  /*
-   * 격자 — 상단 줄 / 대표 이미지 / 제목 묶음. 좁으면 이미지가 제목 위 배너, 문서 열이 880 이상이면
-   * (지면 1240 = 880 + 장부 312 + gap 48) 제목 묶음 오른쪽 340px 칸. 썸네일은 사건의 성격을 보여 주는
-   * 그림이라 첫 화면에 있어야 한다(예전엔 '자료' 탭 안에만 있었다).
-   */
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     'top'
-    'thumb'
     'text';
-  gap: 20px;
-  padding-bottom: 8px;
+  gap: 16px;
+  padding-bottom: 6px;
   width: 100%;
 
-  @container eventdetail (min-width: 1240px) {
-    grid-template-columns: minmax(0, 1fr) 340px;
+  &[data-has-thumb] {
     grid-template-areas:
-      'top top'
-      'text thumb';
-    gap: 20px 40px;
-    align-items: start;
+      'top'
+      'thumb'
+      'text';
+
+    @container eventdetail (min-width: 1180px) {
+      grid-template-columns: minmax(0, 1fr) clamp(280px, 24cqi, 360px);
+      grid-template-areas:
+        'top top'
+        'text thumb';
+      gap: 16px 32px;
+      align-items: start;
+    }
   }
 
   > :first-child {
@@ -1292,7 +1240,6 @@ export const TabEmptyHead = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-width: ${PROSE_WIDTH}px;
 `
 
 export const TabEmptyTitle = styled.h2`
@@ -1322,12 +1269,13 @@ export const TabEmptyAction = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   border-radius: ${RADIUS.SM};
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;

@@ -7,15 +7,20 @@ import { nestiaApiService } from './api.service'
 
 const api = functional
 
-// SDK 타입 re-export + sectionTitles 추가
+// SDK 타입 re-export + sectionTitles·subtitle 보강
 export type EventResponseDto = Awaited<
   ReturnType<typeof api.events.getEventById>
 > & {
   sectionTitles?: string[] // 추가된 필드
+  subtitle?: string | null
 }
 
-export type CreateEventDto = Parameters<typeof api.events.createEvent>[1]
-export type UpdateEventDto = Parameters<typeof api.events.updateEvent>[2]
+export type CreateEventDto = Parameters<typeof api.events.createEvent>[1] & {
+  subtitle?: string | null
+}
+export type UpdateEventDto = Parameters<typeof api.events.updateEvent>[2] & {
+  subtitle?: string | null
+}
 
 // 인증 토큰이 포함된 연결 사용 (POST/PUT/DELETE 시 401 방지)
 const getConnection = () => nestiaApiService.getConnection()
@@ -305,6 +310,7 @@ export async function getAllEventsExhaustive(
 export interface EventLinkCandidate {
   id: string
   title: string
+  subtitle?: string | null
   startDate?: string | null
   startDatePrecision?: string | null
   endDate?: string | null

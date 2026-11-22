@@ -20,6 +20,7 @@ import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
 import {
   type TerritoryParty,
   effectiveLabel,
@@ -249,7 +250,18 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
             {rows.length}줄{totalArea > 0 ? ` · 넘어간 땅 ${formatArea(totalArea)}` : ''}
           </S.SectionSubtitle>
         )}
+        {!readOnly && (
+          <S.SectionActions>
+            <HeaderControlBtn type="button" onClick={addRow}>
+              <FiPlus size={13} aria-hidden />
+              영토 이전 추가
+            </HeaderControlBtn>
+          </S.SectionActions>
+        )}
       </S.SectionHeader>
+      <SectionHintText>
+        이 사건으로 할양·병합·반환된 지역과 면적·인구 변동을 당사국별로 기록합니다.
+      </SectionHintText>
 
       {isLoading ? (
         <S.HelperText>영토 이전을 불러오는 중…</S.HelperText>
@@ -354,12 +366,6 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
         </>
       )}
 
-      {!readOnly && (
-        <AddButton type="button" onClick={addRow}>
-          <FiPlus aria-hidden /> 영토 이전 줄 더하기
-        </AddButton>
-      )}
-
       {editing && (
         <TerritoryTransferModal
           isOpen
@@ -379,13 +385,11 @@ const Summary = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 780px;
-  margin-bottom: 16px;
-  padding: 12px 14px;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.02)'};
+  margin-bottom: 12px;
+  padding: 12px 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
 `
 
 const FlowGrid = styled.div`
@@ -550,9 +554,9 @@ const GroupHead = styled.h3`
 `
 
 const GroupAddBtn = styled.button`
-  padding: 2px 8px;
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.PILL};
+  padding: 2px 9px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.XS};
   background: transparent;
   font: inherit;
   font-size: 11.5px;
@@ -655,31 +659,5 @@ const IconButton = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 1px;
-  }
-`
-
-const AddButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  align-self: flex-start;
-  margin-top: 10px;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
   }
 `

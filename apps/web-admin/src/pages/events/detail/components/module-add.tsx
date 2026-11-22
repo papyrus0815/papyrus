@@ -270,8 +270,16 @@ const MoreToggle = styled.button`
 const CardList = styled.div`
   display: flex;
   flex-direction: column;
-  max-width: 820px;
+  width: 100%;
   border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+
+  @container eventdetail (min-width: 1180px) {
+    &:has(> button:nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 28px;
+    }
+  }
 `
 
 const OptionRow = styled.button`

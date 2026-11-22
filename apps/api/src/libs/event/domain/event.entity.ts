@@ -15,6 +15,8 @@ export type CalendarSystemValue =
 export class Event {
   id!: string
   title!: string
+  /** 부제 · 이칭·작전명 — 사건명을 짧게 유지하고 통칭·작전명·핵심 의의를 한 줄로 적는다 */
+  subtitle?: string | null
   /** 원어 사건명 — Siebenjähriger Krieg · 壬辰倭亂 */
   originalTitle?: string | null
   description?: string | null

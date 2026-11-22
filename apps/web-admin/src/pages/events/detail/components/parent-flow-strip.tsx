@@ -207,18 +207,19 @@ export function ParentFlowStrip({ event }: { event: EventDetail }) {
 /* ── styled — 띠는 조용하게, 이 사건만 강조색 ── */
 
 const Strip = styled.nav`
-  margin: 14px 0 4px;
-  padding: 10px 12px 8px;
-  border-radius: 10px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(20,19,34,0.03)')};
+  margin: 12px 0 4px;
+  padding: 10px 0 8px;
+  border-top: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(20,19,34,0.1)')};
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(20,19,34,0.1)')};
+  background: transparent;
 
   /*
    * 휴대폰 폭 — 띠가 145px을 먹어 하위 사건의 탭이 첫 화면 끝(y=758/844)까지 밀렸다(2026-11-14 실측).
    * 자리 문장은 한 줄로 자르고(전체는 연관 탭 '소속' 줄에 있다) 축 끝 날짜는 뺀다 — 띠와 앞뒤 사건은 남긴다.
    */
   @container eventdetail (max-width: 639px) {
-    margin: 10px 0 2px;
-    padding: 8px 10px 6px;
+    margin: 8px 0 2px;
+    padding: 8px 0 6px;
   }
 `
 

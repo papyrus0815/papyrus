@@ -2,8 +2,7 @@
  * 원 사료 날짜 — 사료가 적은 역법·표기 그대로(장부 날짜 줄 아래).
  *
  * 장부 날짜는 그레고리력 환산값이라, 음력·율리우스력으로 적힌 사건(임진왜란·10월 혁명)은 사료와
- * 날짜가 어긋나 보였다. 원문을 함께 두면 '왜 날짜가 다른가'가 풀린다. 대부분의 사건엔 필요 없어
- * 비어 있으면 '원 사료 날짜' 추가 단추 하나만 둔다(빈 칸 두 개를 늘 세우지 않는다).
+ * 날짜가 어긋나 보였다. 원문을 함께 두면 '왜 날짜가 다른가'가 풀린다.
  */
 import { useState } from 'react'
 
@@ -11,7 +10,7 @@ import { FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { CALENDAR_OPTIONS, type CalendarSystem } from '@/entities/event/model/calendar-system'
-import { RADIUS } from '@/entities/event/ui/ledger-tokens'
+import { ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 
 import { type EventDetail } from '../use-event-detail'
@@ -20,14 +19,19 @@ import { InlineSelect, InlineText } from './inline'
 export function OriginalDateLine({
   event,
   onPatch,
+  open = false,
+  hideEmptyTrigger = false,
 }: {
   event: EventDetail
   onPatch: (patch: UpdateEventDto) => void
+  open?: boolean
+  hideEmptyTrigger?: boolean
 }) {
   const [adding, setAdding] = useState(false)
   const hasStart = Boolean(event.startCalendar || event.startDateOriginal)
   const hasEnd = Boolean(event.endCalendar || event.endDateOriginal)
-  if (!hasStart && !hasEnd && !adding) {
+  if (!hasStart && !hasEnd && !open && !adding) {
+    if (hideEmptyTrigger) return null
     return (
       <AddButton type="button" onClick={() => setAdding(true)}>
         <FiPlus aria-hidden />
@@ -85,7 +89,6 @@ function Part({
       <OriginalText>
         <InlineText
           value={original ?? ''}
-          /* 비우면 빈 문자열 — 서버가 null로 바꾼다 */
           onSave={(next) => onOriginal(next.trim())}
           placeholder="원문 표기 — 예: 선조 25년 4월 13일"
           label={`${label ?? ''} 원문 날짜`.trim()}
@@ -125,9 +128,9 @@ const Block = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 6px 10px;
-  border-radius: ${RADIUS.SM};
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(15,23,42,0.03)')};
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
   font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.secondary};
 `

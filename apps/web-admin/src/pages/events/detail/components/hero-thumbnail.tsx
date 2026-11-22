@@ -12,7 +12,7 @@
  */
 import { type DragEvent, useRef, useState } from 'react'
 
-import { FiImage, FiRefreshCw, FiUploadCloud } from 'react-icons/fi'
+import { FiImage, FiRefreshCw } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { ledgerAccent, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
@@ -109,23 +109,7 @@ export function HeroThumbnail({ event, onPatch, onOpenMedia }: HeroThumbnailProp
   )
 
   if (!primary) {
-    return (
-      <Slot>
-        <EmptyDrop
-          type="button"
-          onClick={pickFile}
-          disabled={uploading}
-          data-drag={dragOver || undefined}
-          {...dragHandlers}
-        >
-          <FiUploadCloud aria-hidden />
-          <EmptyText title="사건의 성격을 한눈에 — 지도·사진·문서 한 장(끌어다 놓아도 됩니다)">
-            <strong>{uploading ? '올리는 중…' : '대표 이미지 추가'}</strong>
-          </EmptyText>
-        </EmptyDrop>
-        {fileInput}
-      </Slot>
-    )
+    return null
   }
 
   const src = getUploadImageUrl(primary.imageUrl) || primary.imageUrl
@@ -304,72 +288,4 @@ const Caption = styled.p`
 const CaptionSource = styled.span`
   font-style: normal;
   opacity: 0.85;
-`
-
-/*
- * 빈 칸 — 작은 알약 한 개. 64px → 52px로 줄였어도 이미지 없는 사건마다 제목 위에 폭 전체 점선 상자가 서서
- * 첫 화면에서 제목보다 먼저 읽혔다. 설명('지도·사진·문서 한 장')은 마우스를 올리면. 넓은 지면은 그림이 설 자리만큼.
- */
-const EmptyDrop = styled.button`
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 4px 12px;
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: 999px;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  transition:
-    border-color 0.14s,
-    color 0.14s;
-
-  > svg {
-    flex-shrink: 0;
-    width: 15px;
-    height: 15px;
-  }
-
-  /* 넓은 지면에선 제목 옆 그림 자리 — 제목 묶음 높이만큼(빈 칸 때문에 탭이 내려가지 않게) */
-  @container eventdetail (min-width: 1240px) {
-    flex: 1;
-    align-self: stretch;
-    flex-direction: column;
-    justify-content: center;
-    border-radius: ${RADIUS.MD};
-    text-align: center;
-  }
-
-  &:hover:not(:disabled),
-  &[data-drag] {
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-  }
-  &:disabled {
-    cursor: progress;
-  }
-`
-
-const EmptyText = styled.span`
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-
-  strong {
-    font-size: 12.5px;
-    font-weight: 600;
-  }
-  span {
-    font-size: 12px;
-    line-height: 1.45;
-    color: ${metaText};
-  }
 `

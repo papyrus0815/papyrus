@@ -99,6 +99,7 @@ export const transformEventsFromApi = (
     return {
       id: evt.id,
       title: evt.title,
+      subtitle: (evt as { subtitle?: string | null }).subtitle ?? null,
       type: evt.type ?? null,
       domain: isEventDomainKey(evt.domain) ? evt.domain : 'OTHER',
       description: evt.description ?? '',

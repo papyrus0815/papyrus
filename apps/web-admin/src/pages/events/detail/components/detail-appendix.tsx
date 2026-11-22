@@ -20,6 +20,7 @@ import { notify } from '@/shared/ui/toast'
 import { metaText } from '@/pages/events/styles/theme'
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
 import { InlineText } from './inline'
 
 interface DetailAppendixProps {
@@ -73,9 +74,9 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
    */
   const images = (event.eventImages ?? [])
     .slice()
-    .sort((a, b) => {
-      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1
-      return (a.order ?? 0) - (b.order ?? 0)
+    .sort((left, right) => {
+      if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1
+      return (left.order ?? 0) - (right.order ?? 0)
     })
 
   /* 서버에 보낼 형태로 직렬화 — id 빠지고 imageUrl/caption/source/order/isPrimary만.
@@ -188,7 +189,7 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
    */
   const handleFiles = async (files: FileList | File[]) => {
     if (uploading) return
-    const list = Array.from(files).filter((f) => f.type.startsWith('image/'))
+    const list = Array.from(files).filter((fileItem) => fileItem.type.startsWith('image/'))
     if (list.length === 0) return
     setUploading(true)
     try {
@@ -197,10 +198,7 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
       for (const file of list) {
         try {
           const result = await uploadImage(file, 'events')
-          /* 상대 경로(/uploads/…)로 저장 — 표시는 getUploadImageUrl이 현재 서버에 맞춘다 */
           const url = toUploadStoragePath(result.url)
-          // 기존 이미지뿐 아니라 *이번 배치에서 이미 추가된* URL과의 중복도 차단.
-          // 예전 행은 절대 URL로 저장돼 있어 같은 꼴로 맞춰 비교한다.
           if (working.some((img) => toUploadStoragePath(img.imageUrl) === url)) {
             notify.error(`이미 추가된 이미지입니다: ${file.name}`)
             continue
@@ -213,12 +211,12 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
               caption: undefined,
               source: undefined,
               order: working.length,
-              isPrimary: working.length === 0, // 첫 이미지는 자동 primary
+              isPrimary: working.length === 0,
             },
           ]
           appended = true
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e)
+        } catch (uploadError) {
+          const msg = uploadError instanceof Error ? uploadError.message : String(uploadError)
           notify.error(`${file.name}: ${msg}`)
         }
       }
@@ -229,16 +227,11 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
     }
   }
 
-  /**
-   * 허용 URL 정책:
-   *  - 절대 URL: http:// 또는 https://. javascript:/data:/file: 등은 차단.
-   *  - 상대 경로: `/uploads/...` (서버 업로드 결과).
-   */
   function isAcceptableImageUrl(value: string): boolean {
     if (value.startsWith('/uploads/')) return true
     try {
-      const u = new URL(value)
-      return u.protocol === 'http:' || u.protocol === 'https:'
+      const parsedUrl = new URL(value)
+      return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:'
     } catch {
       return false
     }
@@ -251,34 +244,111 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
         {images.length > 0 && (
           <S.SectionSubtitle>{images.length}건</S.SectionSubtitle>
         )}
+        <S.SectionActions>
+          <HeaderControlBtn
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            <FiUploadCloud size={13} aria-hidden />
+            {uploading ? '업로드 중…' : '파일 업로드'}
+          </HeaderControlBtn>
+          <HeaderControlBtn
+            type="button"
+            $active={adding}
+            onClick={() => setAdding((previous) => !previous)}
+          >
+            <FiPlus size={13} aria-hidden />
+            URL로 추가
+          </HeaderControlBtn>
+        </S.SectionActions>
       </S.SectionHeader>
+      <SectionHintText>
+        사건과 관련된 지도·사진·사료 이미지를 등록하고 대표 이미지와 캡션·출처를 관리합니다.
+      </SectionHintText>
+
+      {adding && (
+        <AddForm>
+          <FormField>
+            <FormLabel htmlFor="img-url">이미지 URL</FormLabel>
+            <FormInput
+              id="img-url"
+              autoFocus
+              type="url"
+              value={draft.url}
+              onChange={(changeEvent) =>
+                setDraft((currentDraft) => ({ ...currentDraft, url: changeEvent.target.value }))
+              }
+              placeholder="https://…"
+            />
+          </FormField>
+          <FormField>
+            <FormLabel htmlFor="img-caption">캡션</FormLabel>
+            <FormInput
+              id="img-caption"
+              type="text"
+              value={draft.caption}
+              onChange={(changeEvent) =>
+                setDraft((currentDraft) => ({ ...currentDraft, caption: changeEvent.target.value }))
+              }
+              placeholder="짧은 설명"
+            />
+          </FormField>
+          <FormField>
+            <FormLabel htmlFor="img-source">출처</FormLabel>
+            <FormInput
+              id="img-source"
+              type="text"
+              value={draft.source}
+              onChange={(changeEvent) =>
+                setDraft((currentDraft) => ({ ...currentDraft, source: changeEvent.target.value }))
+              }
+              placeholder="출처 표기"
+            />
+          </FormField>
+          <FormActions>
+            <FormCancel
+              type="button"
+              onClick={() => {
+                setAdding(false)
+                setDraft({ url: '', caption: '', source: '' })
+              }}
+            >
+              취소
+            </FormCancel>
+            <FormSave type="button" onClick={addImage} disabled={!draft.url.trim()}>
+              추가
+            </FormSave>
+          </FormActions>
+        </AddForm>
+      )}
 
       {images.length === 0 && !adding && (
         <EmptyDropZone
           $dragOver={dragOver}
           onClick={() => fileInputRef.current?.click()}
-          onDragOver={(e) => {
+          onDragOver={(dragEvent) => {
             if (uploading) return
-            e.preventDefault()
+            dragEvent.preventDefault()
             if (!dragOver) setDragOver(true)
           }}
-          onDragLeave={(e) => {
-            const next = e.relatedTarget as Node | null
-            if (next && e.currentTarget.contains(next)) return
+          onDragLeave={(dragEvent) => {
+            const next = dragEvent.relatedTarget as Node | null
+            if (next && dragEvent.currentTarget.contains(next)) return
             setDragOver(false)
           }}
-          onDrop={(e) => {
-            e.preventDefault()
+          onDrop={(dropEvent) => {
+            dropEvent.preventDefault()
             setDragOver(false)
             if (uploading) return
-            const files = e.dataTransfer?.files
-            if (files && files.length > 0) handleFiles(files)
+            const files = dropEvent.dataTransfer?.files
+            if (files && files.length > 0) void handleFiles(files)
           }}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
+          onKeyDown={(keyEvent) => {
+            if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+              keyEvent.preventDefault()
               fileInputRef.current?.click()
             }
           }}
@@ -297,35 +367,30 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
         <Grid
           $dragOver={dragOver}
           $wide={images.length >= WIDE_GALLERY_MIN}
-          onDragOver={(e) => {
+          onDragOver={(dragEvent) => {
             if (uploading) return
-            e.preventDefault()
+            dragEvent.preventDefault()
             if (!dragOver) setDragOver(true)
           }}
-          onDragLeave={(e) => {
-            // Grid 내부 자식 사이에서 enter/leave 이벤트 노이즈가 있어 relatedTarget이
-            // Grid 안에 있으면 leave 무시.
-            const next = e.relatedTarget as Node | null
-            if (next && e.currentTarget.contains(next)) return
+          onDragLeave={(dragEvent) => {
+            const next = dragEvent.relatedTarget as Node | null
+            if (next && dragEvent.currentTarget.contains(next)) return
             setDragOver(false)
           }}
-          onDrop={(e) => {
-            e.preventDefault()
+          onDrop={(dropEvent) => {
+            dropEvent.preventDefault()
             setDragOver(false)
             if (uploading) return
-            const files = e.dataTransfer?.files
-            if (files && files.length > 0) handleFiles(files)
+            const files = dropEvent.dataTransfer?.files
+            if (files && files.length > 0) void handleFiles(files)
           }}
         >
           {images.map((image) => (
             <ImageCell key={image.id}>
               <ImageButton
                 type="button"
-                /* 캡션이 없으면 img alt가 비어 버튼에 이름이 없었다 */
                 aria-label={image.caption ? `${image.caption} 크게 보기` : '이미지 크게 보기'}
                 onClick={() => {
-                  // 썸네일과 동일하게 API origin을 붙여 정규화 — raw '/uploads/...'
-                  // 상대경로를 그대로 src에 넣으면 확대 시 web-admin origin 기준 404.
                   setLightbox({
                     src: getUploadImageUrl(image.imageUrl) || image.imageUrl,
                     caption: image.caption,
@@ -339,7 +404,7 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
                   decoding="async"
                 />
               </ImageButton>
-              <CaptionEdit onClick={(e) => e.stopPropagation()}>
+              <CaptionEdit onClick={(clickEvent) => clickEvent.stopPropagation()}>
                 <InlineText
                   value={image.caption ?? ''}
                   onSave={(next) => updateImageField(image.id, { caption: next })}
@@ -355,8 +420,8 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
               </CaptionEdit>
               <PrimaryToggle
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
+                onClick={(clickEvent) => {
+                  clickEvent.stopPropagation()
                   setPrimary(image.id)
                 }}
                 $active={image.isPrimary}
@@ -378,79 +443,14 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
         </Grid>
       )}
 
-      {adding ? (
-        <AddForm>
-          <FormField>
-            <FormLabel htmlFor="img-url">이미지 URL</FormLabel>
-            <FormInput
-              id="img-url"
-              autoFocus
-              type="url"
-              value={draft.url}
-              onChange={(e) => setDraft((s) => ({ ...s, url: e.target.value }))}
-              placeholder="https://…"
-            />
-          </FormField>
-          <FormField>
-            <FormLabel htmlFor="img-caption">캡션</FormLabel>
-            <FormInput
-              id="img-caption"
-              type="text"
-              value={draft.caption}
-              onChange={(e) => setDraft((s) => ({ ...s, caption: e.target.value }))}
-              placeholder="짧은 설명"
-            />
-          </FormField>
-          <FormField>
-            <FormLabel htmlFor="img-source">출처</FormLabel>
-            <FormInput
-              id="img-source"
-              type="text"
-              value={draft.source}
-              onChange={(e) => setDraft((s) => ({ ...s, source: e.target.value }))}
-              placeholder="출처 표기"
-            />
-          </FormField>
-          <FormActions>
-            <FormCancel
-              type="button"
-              onClick={() => {
-                setAdding(false)
-                setDraft({ url: '', caption: '', source: '' })
-              }}
-            >
-              취소
-            </FormCancel>
-            <FormSave type="button" onClick={addImage} disabled={!draft.url.trim()}>
-              추가
-            </FormSave>
-          </FormActions>
-        </AddForm>
-      ) : (
-        <AddRow>
-          {/* 비어 있을 땐 드롭존이 곧 업로드 버튼이다 — 같은 동작을 두 번 세우지 않는다. */}
-          {images.length > 0 && (
-            <AddBtn
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-            >
-              <FiUploadCloud /> {uploading ? '업로드 중…' : '파일 업로드'}
-            </AddBtn>
-          )}
-          <AddBtn type="button" onClick={() => setAdding(true)}>
-            <FiPlus /> URL로 추가
-          </AddBtn>
-        </AddRow>
-      )}
       <HiddenFileInput
         ref={fileInputRef}
         type="file"
         accept="image/*"
         multiple
-        onChange={(e) => {
-          const files = e.target.files
-          if (files && files.length > 0) handleFiles(files)
+        onChange={(changeEvent) => {
+          const files = changeEvent.target.files
+          if (files && files.length > 0) void handleFiles(files)
         }}
       />
 
@@ -465,15 +465,14 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
           >
           <LightboxClose
             type="button"
-            onClick={(e) => {
-              e.stopPropagation()
+            onClick={(clickEvent) => {
+              clickEvent.stopPropagation()
               setLightbox(null)
             }}
             aria-label="닫기"
           >
             <FiX />
           </LightboxClose>
-          {/* image/caption 클릭은 닫기로 전파 — Lightbox onClick이 처리. */}
           <LightboxImage
             src={lightbox.src}
             alt={lightbox.caption ?? ''}
@@ -708,50 +707,21 @@ const PrimaryToggle = styled.button<{ $active: boolean }>`
   }
 `
 
-const AddRow = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-`
-
-const AddBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  gap: 5px;
-  padding: 6px 12px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color 0.14s, border-color 0.14s;
-
-  &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.text.tertiary};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-`
-
 const AddForm = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 0 4px;
-  max-width: 540px;
+  padding: 12px 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  width: 100%;
+
+  @container eventdetail (min-width: 960px) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.9fr) auto;
+    align-items: end;
+    gap: 12px;
+  }
 `
 
 const FormField = styled.div`
@@ -790,6 +760,11 @@ const FormActions = styled.div`
   justify-content: flex-end;
   gap: 8px;
   margin-top: 4px;
+
+  @container eventdetail (min-width: 960px) {
+    margin-top: 0;
+    padding-bottom: 1px;
+  }
 `
 
 const baseFormBtn = `

@@ -193,6 +193,9 @@ function candidateDescription(
   currentEventId: string,
 ): string | undefined {
   const parts: string[] = []
+  if (candidate.subtitle?.trim()) {
+    parts.push(candidate.subtitle.trim())
+  }
   const dateLabel = eventDateLabel(candidate)
   if (dateLabel) parts.push(dateLabel)
   const extraCount = candidate.extraParents?.length ?? 0

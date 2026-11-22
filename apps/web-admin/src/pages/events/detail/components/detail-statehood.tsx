@@ -18,7 +18,13 @@ import { useQueries } from '@tanstack/react-query'
 import { MdDragIndicator } from 'react-icons/md'
 import styled from 'styled-components'
 
-import { ledgerAccent, ledgerAccentSubtle, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
+import {
+  ledgerAccent,
+  ledgerAccentSubtle,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
 import {
@@ -36,6 +42,7 @@ import { TRANSITION_EVENT_LABELS } from '@/widgets/country/country-detail/model/
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import { SectionHintText } from './actors/actors.styles'
 
 type StatehoodRole = 'FOUNDED' | 'DISSOLVED'
 
@@ -183,6 +190,9 @@ export function DetailStatehood({
         <S.SectionTitle>국가 성립·소멸</S.SectionTitle>
         {entries.length > 1 && <S.SectionSubtitle>{entries.length}곳</S.SectionSubtitle>}
       </S.SectionHeader>
+      <SectionHintText>
+        이 사건으로 새로 세워진 나라(성립)와 사라진 구체제(소멸), 계승 관계를 기록합니다.
+      </SectionHintText>
 
       {(entries.length > 0 || otherParticipants.length > 0) && (
         <TransitionBoard role="region" aria-label="체제 전환 흐름 인포그래픽">
@@ -746,20 +756,19 @@ const ActorsLink = styled.a`
 const TransitionBoard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.02)'};
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 12px 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
 `
 
 const TransitionGrid = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(120px, 0.8fr) auto minmax(0, 1fr);
   align-items: stretch;
-  gap: 8px;
+  gap: 10px;
 
   @media (max-width: 680px) {
     grid-template-columns: minmax(0, 1fr);
@@ -770,17 +779,12 @@ const TransitionLane = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid
     ${({ theme, $dragOver }) =>
       $dragOver ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
   background: ${({ theme, $dragOver }) =>
-    $dragOver
-      ? ledgerAccentSubtle(theme.mode)
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.02)'
-        : 'rgba(255,255,255,0.75)'};
+    $dragOver ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   transition: border-color 0.14s, background 0.14s;
 `
 
@@ -876,11 +880,18 @@ const TransitionCenterNode = styled.div`
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 8px 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  padding: 4px 12px;
+  border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-right: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
   text-align: center;
+
+  @media (max-width: 680px) {
+    border-left: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    border-right: 0;
+    align-items: flex-start;
+    text-align: left;
+  }
 `
 
 const TransitionCenterKicker = styled.span`
@@ -901,8 +912,8 @@ const QuickAssignBar = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 8px;
-  padding-top: 8px;
-  border-top: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  padding-top: 10px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const QuickAssignLabel = styled.span`
@@ -929,8 +940,8 @@ const QuickAssignChip = styled.span`
   gap: 5px;
   padding: 2px 8px;
   border-radius: ${RADIUS.PILL};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -959,9 +970,9 @@ const QuickAssignBtn = styled.button<{ $founded: boolean }>`
 
 const QuickAssignMoreBtn = styled.button`
   ${buttonReset}
-  padding: 2px 8px;
+  padding: 2px 9px;
   border-radius: ${RADIUS.PILL};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   font-size: 11.5px;
   font-weight: 600;
   color: ${metaText};

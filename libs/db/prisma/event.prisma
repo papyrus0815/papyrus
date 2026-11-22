@@ -326,6 +326,9 @@ model Event {
   /// 사건명
   title String @db.VarChar(100)
 
+  /// 부제 · 이칭·작전명 — 사건명을 짧게 유지하고 통칭·작전명·핵심 의의를 한 줄로 적는다(예: '바르바로사 작전 — 나치 독일의 소련 침공 지시', '독소전쟁')
+  subtitle String? @db.VarChar(150)
+
   /// 원어 사건명 — 그 사건을 부르는 당대·현지 이름(Siebenjähriger Krieg · 壬辰倭亂). 사학사 관점마다 이름이 다르다
   originalTitle String? @map("original_title") @db.VarChar(300)
 

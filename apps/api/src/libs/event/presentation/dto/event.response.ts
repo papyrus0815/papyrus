@@ -14,6 +14,9 @@ export class EventResponseDto {
   @ApiProperty({ description: '사건명' })
   title!: string
 
+  @ApiProperty({ description: '부제 · 이칭·작전명', required: false, nullable: true })
+  subtitle?: string | null
+
   @ApiProperty({ description: '원어 사건명', required: false, nullable: true })
   originalTitle?: string | null
 
@@ -654,6 +657,9 @@ export class EventLinkCandidateDto {
 
   @ApiProperty({ description: '사건명' })
   title!: string
+
+  @ApiProperty({ description: '부제 · 이칭·작전명', required: false, nullable: true })
+  subtitle?: string | null
 
   @ApiProperty({ description: '시작일', required: false })
   startDate?: string | null
