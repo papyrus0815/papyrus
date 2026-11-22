@@ -2820,11 +2820,16 @@ export function CountryPoliticalPartiesBlock({
   }, [parties, theme.mode])
 
   const createMut = useMutation({
-    mutationFn: (body: CreatePoliticalPartyInput) =>
-      politicalPartyApi.create(body),
-    onSuccess: () => {
-      notify.success('정당을 등록했습니다.')
-      setModal(null)
+    mutationFn: (payload: { body: CreatePoliticalPartyInput; keepOpen?: boolean }) =>
+      politicalPartyApi.create(payload.body),
+    onSuccess: (_row, variables) => {
+      notify.success(
+        variables.keepOpen
+          ? `「${variables.body.name}」 등록 완료 — 이어서 다음 정당을 입력하세요.`
+          : '정당을 등록했습니다.',
+      )
+      /* '등록 후 계속'이면 창은 그대로 — 모달이 폼을 비우고 명칭 칸으로 돌아간다 */
+      if (!variables.keepOpen) setModal(null)
       invalidate()
     },
     onError: (e: Error) => notify.error(e.message),
@@ -3746,7 +3751,11 @@ export function CountryPoliticalPartiesBlock({
           partyId={modal.mode === 'edit' ? modal.id : undefined}
           saving={createMut.isPending || updateMut.isPending}
           onClose={() => setModal(null)}
-          onSubmitCreate={(body) => createMut.mutate(body)}
+          onSubmitCreate={(body, options) =>
+            options?.keepOpen
+              ? createMut.mutateAsync({ body, keepOpen: true })
+              : createMut.mutate({ body })
+          }
           onSubmitEdit={(id, body) => updateMut.mutate({ id, body })}
         />
       ) : null}
@@ -3815,7 +3824,14 @@ export function PartyFormModal({
   partyId?: string
   saving: boolean
   onClose: () => void
-  onSubmitCreate: (body: CreatePoliticalPartyInput) => void
+  /**
+   * `keepOpen`('등록 후 계속')이면 Promise를 돌려 준다 — 성공하면 모달이 폼을 비우고 이어서 받고,
+   * 실패하면(거부) 입력을 그대로 둔다. 그 외에는 부모가 닫는다.
+   */
+  onSubmitCreate: (
+    body: CreatePoliticalPartyInput,
+    options?: { keepOpen?: boolean },
+  ) => void | Promise<unknown>
   onSubmitEdit: (id: string, body: CreatePoliticalPartyInput) => void
 }) {
   const playClickSound = useClickSound()
@@ -3849,6 +3865,11 @@ export function PartyFormModal({
   const [initialSnapshot, setInitialSnapshot] = useState(() =>
     partyFormSnapshot(EMPTY_PARTY_FORM),
   )
+  /** '등록 후 계속'으로 이 창에서 등록한 정당 이름 — 위 띠에 쌓아 보여 준다 */
+  const [registeredInSession, setRegisteredInSession] = useState<string[]>([])
+  /** 폼을 비울 때 날짜 칸 등 내부 상태를 가진 칸을 새로 그리려는 세대 번호 */
+  const [formGeneration, setFormGeneration] = useState(0)
+  const [continuing, setContinuing] = useState(false)
 
   const handleLogoFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -3924,6 +3945,7 @@ export function PartyFormModal({
       : null
   const canSubmit =
     !saving &&
+    !continuing &&
     !logoUploading &&
     !loadingEdit &&
     missingRequired.length === 0 &&
@@ -3959,8 +3981,25 @@ export function PartyFormModal({
     onClose()
   }
 
-  const submit = () => {
-    if (!canSubmit) return
+  const resetForCreateNext = () => {
+    setName('')
+    setShortName('')
+    setLocalName('')
+    setIdeologyTags([])
+    setIdeologyInput('')
+    setPosition('')
+    setFoundedDate('')
+    setDissolvedDate('')
+    setLogoUrl('')
+    setBrandColor('')
+    setDateErrors({})
+    setInitialSnapshot(partyFormSnapshot(EMPTY_PARTY_FORM))
+    setFormGeneration((generation) => generation + 1)
+    formScrollRef.current?.scrollTo({ top: 0 })
+    window.requestAnimationFrame(() => nameInputRef.current?.focus())
+  }
+
+  const buildBody = (): CreatePoliticalPartyInput => {
     const parsedColor = normalizeBrandColorInput(brandColor)
     const scope =
       historicalCountryId != null && historicalCountryId !== ''
@@ -3981,8 +4020,30 @@ export function PartyFormModal({
       brandColor: parsedColor,
       ...scope,
     }
+    return body
+  }
+
+  const submit = () => {
+    if (!canSubmit) return
+    const body = buildBody()
     if (mode === 'create') onSubmitCreate(body)
     else if (partyId) onSubmitEdit(partyId, body)
+  }
+
+  /** 등록하고 창은 그대로 — 성공하면 폼을 비우고 다음 정당을 받는다 */
+  const submitAndContinue = async () => {
+    if (!canSubmit || mode !== 'create') return
+    const body = buildBody()
+    setContinuing(true)
+    try {
+      await onSubmitCreate(body, { keepOpen: true })
+      setRegisteredInSession((prev) => [...prev, body.shortName || body.name])
+      resetForCreateNext()
+    } catch {
+      /* 오류 알림은 부모가 띄운다 — 입력은 그대로 둔다 */
+    } finally {
+      setContinuing(false)
+    }
   }
 
   useModalSubmitShortcut({
@@ -4363,14 +4424,19 @@ export function PartyFormModal({
           <KitFormLoading label="정당 정보를 불러오는 중" />
         ) : (
           <>
-            {saving ? (
+            {saving || continuing ? (
               <FormS.BusyBar role="status" aria-live="polite">
                 {mode === 'create'
                   ? '정당을 등록하는 중...'
                   : '수정 사항을 저장하는 중...'}
               </FormS.BusyBar>
+            ) : registeredInSession.length > 0 ? (
+              <RegisteredInSessionBar role="status" aria-live="polite">
+                <strong>이 창에서 {registeredInSession.length}개 등록</strong>
+                <span className="names">{registeredInSession.join(' · ')}</span>
+              </RegisteredInSessionBar>
             ) : null}
-            <EventFormS.FormSection>
+            <EventFormS.FormSection key={formGeneration}>
               {layoutMode === 'split' ? (
                 <FormS.SplitColumnsGrid>
                   <FormS.SplitColumnLeft>
@@ -4404,10 +4470,22 @@ export function PartyFormModal({
             onClick={() => {
               void requestClose()
             }}
-            disabled={saving}
+            disabled={saving || continuing}
           >
-            취소
+            {registeredInSession.length > 0 && !isDirty ? '닫기' : '취소'}
           </PersonRegisterModalCancelBtn>
+          {mode === 'create' ? (
+            <ContinueRegisterBtn
+              type="button"
+              disabled={!canSubmit}
+              title="이 정당을 등록하고 창을 비워 다음 정당을 이어서 입력합니다"
+              onClick={() => {
+                void submitAndContinue()
+              }}
+            >
+              {continuing ? '등록 중...' : '등록 후 계속'}
+            </ContinueRegisterBtn>
+          ) : null}
           <FormS.ModalPrimarySubmitBtn
             type="button"
             disabled={!canSubmit}
@@ -4433,6 +4511,35 @@ export function PartyFormModal({
     </RegisterModal>
   )
 }
+
+/** '등록 후 계속' — 취소와 같은 테두리 버튼, 글자만 주색 */
+const ContinueRegisterBtn = styled(PersonRegisterModalCancelBtn)`
+  color: ${({ theme }) => theme.colors.primary};
+  font-weight: 600;
+`
+
+/** 이 창에서 이어서 등록한 정당들 */
+const RegisteredInSessionBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.08)'};
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  .names {
+    min-width: 0;
+  }
+`
 
 const PartyColorRow = styled.div`
   display: flex;

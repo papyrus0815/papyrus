@@ -1,7 +1,7 @@
 import React from 'react'
 
 import '@testing-library/jest-dom'
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 import {
@@ -176,5 +176,36 @@ describe('PartyFormModal — 사건 등록 모달 문법', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('등록 후 계속 — 성공하면 창을 비우고 명칭 칸으로, 등록한 정당을 위 띠에 쌓는다', async () => {
+    const onSubmitCreate = jest.fn(async () => undefined)
+    renderCreate(onSubmitCreate)
+    const nameInput = screen.getByLabelText(/^명칭/) as HTMLInputElement
+    fireEvent.change(nameInput, { target: { value: '독일 사회민주당' } })
+    fireEvent.change(screen.getByLabelText('약칭'), { target: { value: 'SPD' } })
+    fireEvent.click(screen.getByRole('button', { name: '등록 후 계속' }))
+    expect(onSubmitCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '독일 사회민주당', shortName: 'SPD' }),
+      { keepOpen: true },
+    )
+    await waitFor(() => expect(screen.getByText('이 창에서 1개 등록')).toBeInTheDocument())
+    expect(screen.getByText('SPD')).toBeInTheDocument()
+    expect((screen.getByLabelText(/^명칭/) as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('약칭') as HTMLInputElement).value).toBe('')
+    /* 하단 취소가 '닫기'로 — 헤더 X도 aria-label이 닫기라 글자로 찾는다 */
+    expect(screen.getByText('닫기', { selector: 'button' })).toBeInTheDocument()
+  })
+
+  it('등록 후 계속 — 실패하면 입력을 그대로 둔다', async () => {
+    const onSubmitCreate = jest.fn(async () => {
+      throw new Error('중복')
+    })
+    renderCreate(onSubmitCreate)
+    fireEvent.change(screen.getByLabelText(/^명칭/), { target: { value: '중앙당' } })
+    fireEvent.click(screen.getByRole('button', { name: '등록 후 계속' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '등록 후 계속' })).not.toBeDisabled())
+    expect((screen.getByLabelText(/^명칭/) as HTMLInputElement).value).toBe('중앙당')
+    expect(screen.queryByText(/이 창에서/)).not.toBeInTheDocument()
   })
 })
