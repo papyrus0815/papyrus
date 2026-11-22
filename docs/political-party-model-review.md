@@ -162,3 +162,13 @@ ElectionAlliance에 `allianceOrganizationId?` — 선거마다의 연합이 지�
 - 웹: 등록 모달 '종류' 칩 + 창당·해산 칸을 연도만·기원전 되는 칸으로(`PeriodDateField`를 shared로 승격) · 상세에 「이름」「법적 지위」 섹션과 모달 · 날짜 표시는 전부 `shared/lib/party-dates`(정밀도·BC 인지) — 거울을 직접 읽던 국가 정당 지면·전역 편람 둘 다.
 - 실데이터: 국가 파시스트당 이름 4건(National Fascist Party·파시스트당·국민/민족 파시스트당+번역 메모)·법적 지위 3건(합법 1921.11.9–1926.11 → 유일 합법 1926.11–1943.7.27 → 불법화 1943.7.27–).
 - 검증: API 단위 19·실API 왕복 16/16(BC 붕당 생성·역전·대표 유일·409·BC 정렬·연쇄 삭제) · 웹 스펙 26(구조화 날짜 저장·없는 날짜·이름/지위 모달·날짜 헬퍼) · tsc 기준선 동일 · 변경 줄 lint 0 · 1440px 화면 확인.
+
+### B2 이념 — 구현 완료(미커밋)
+- 마이그레이션 `20261123030000_ideology_catalog` — `ideology`(이름 전역 유일·영문·범주 사상/정책 노선/이익 대변/기타·상위 개념) · `ideology_alias`(표기 변형, 전역 유일) · `political_party_ideology`(대표·순서·구조화 기간·메모, 쓰이는 이념은 삭제 Restrict) · `political_party_position_period`(스펙트럼 기간, 지속 중 1개).
+  (적용 사고: sed 실패로 빈 SQL이 적용 기록됨 → 파일 재작성·실행 후 `_prisma_migrations.checksum`을 파일 sha256으로 갱신, `migrate status` up to date)
+- 시드 `ideology.catalog.seed`(+`scripts/run-ideology-catalog-seed.ts`, 멱등): 카탈로그 72개·별칭 6개, 정당 35곳 이관(쉼표 → 통째로 모르는 조각만 가운뎃점 분해), '선거연합'은 이념이 아니라 kind=ELECTORAL_LIST로, 국가 파시스트당은 나무위키 인포박스 13종 완비(조합주의·자급자족주의·제3의 위치·군주제 보강).
+- 정본/캐시: 연결이 정본, `political_party.ideology` 문자열은 연결 순서대로 이은 **표시 캐시** — 연결을 바꾸는 모든 길(정당 생성·수정, PUT/PATCH/DELETE 연결, 카탈로그 개명, 시드)이 `party-ideology.util`로 같은 규칙에 다시 쓴다. 옛 문자열 입력(빠른 등록)은 서버가 카탈로그로 풀어 연결.
+- API: `/ideologies` CRUD(이름·영문·별칭 검색, 이름/별칭 충돌 409, 상위 순환 400, 쓰이는 이념 삭제 409) · `/political-parties/:id/ideologies`(GET·PUT 집합 — 남는 연결의 기간·메모 보존·PATCH·DELETE, 대표 1개) · `/position-periods` CRUD(지속 중 저장 → 정당 대표 position 동기화).
+- 웹: 이념 고르기(`widgets/ideology/ideology-picker` — 이름·영문·표기로 찾기·없으면 즉석 생성·첫 칩 대표·콤보박스 키보드) · 카탈로그 행 고치기 모달 · 정당 모달의 키워드 칸 대체 · 상세 「이념·스펙트럼」(연결별 시기·메모·대표, 카탈로그 이동, 스펙트럼 기간).
+- 남김: 조직·인물 × 이념 연결 표는 카탈로그만 공용으로 두고 각 지면 작업 때(Organization.ideology 문자열 1건).
+- 검증: API 단위 12 · 실API 16/16 · 웹 스펙 23 · tsc 기준선 동일 · 신규 lint 0 · 1440px 화면(13종·상위·영문, 선택기 목록이 모달 스크롤에 잘리던 것 → 흐름 배치 + 자동 스크롤로 수정).
