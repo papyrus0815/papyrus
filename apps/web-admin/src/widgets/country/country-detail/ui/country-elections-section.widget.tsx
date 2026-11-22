@@ -315,6 +315,51 @@ import {
 } from './country-politics-tab.styles'
 
 /** RichTextEditor HTML — 시각적 빈 본문이면 null (저장 시) */
+/**
+ * 등록 모달의 서술 칸(종료 서술·설명)은 textarea — 저장값은 여전히 HTML(상세 지면이 서식 있는 글로 읽는다).
+ * 열 때 HTML → 줄글, 저장할 때 줄글 → <p>. 빈 줄 = 문단, 한 줄 바꿈 = <br>.
+ */
+function richHtmlToEditableText(html: string | null | undefined): string {
+  const raw = (html ?? '').trim()
+  if (!raw) return ''
+  if (!raw.includes('<')) return raw
+  const withBreaks = raw
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6]|blockquote)>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+  let decoded = withBreaks
+  if (typeof document !== 'undefined') {
+    const decoder = document.createElement('textarea')
+    decoder.innerHTML = withBreaks
+    decoded = decoder.value
+  } else {
+    decoded = withBreaks.replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+  }
+  return decoded.replace(/\n{3,}/g, '\n\n').trim()
+}
+
+function plainTextToRichHtml(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed) return ''
+  const escapeHtml = (value: string) =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return trimmed
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
+/** 손대지 않은 칸은 원래 HTML 그대로(인물 링크·서식 보존), 고친 칸만 줄글 → HTML */
+function editableTextToSavedHtml(
+  text: string,
+  originalHtml: string | null | undefined,
+): string | null {
+  if (text === richHtmlToEditableText(originalHtml)) {
+    return optionalRichTextHtmlOrNull(originalHtml ?? '')
+  }
+  return optionalRichTextHtmlOrNull(plainTextToRichHtml(text))
+}
+
 function optionalRichTextHtmlOrNull(html: string): string | null {
   const trimmed = html.trim()
   if (!trimmed) return null
@@ -7101,7 +7146,6 @@ const ELECTION_SPLIT_RIGHT_ID = 'election-form-split-right'
 const POLL_DATE_ANCHOR_ID = 'election-form-poll-date'
 
 export function ElectionFormModal({
-  entityLinkCountryId,
   electionScope,
   mode,
   initial,
@@ -7113,6 +7157,7 @@ export function ElectionFormModal({
   onSubmit,
 }: {
   /** 리치텍스트 엔티티 연결 — 서버 검색 시 정당 등 범위 한정 */
+  /** 예전 서식 편집기의 인물·정당 링크 범위 — 모달 서술 칸이 textarea가 되며 쓰지 않음(호출부 호환용) */
   entityLinkCountryId?: string
   electionScope: { countryId?: string; historicalCountryId?: string }
   mode: 'create' | 'edit'
@@ -7133,9 +7178,6 @@ export function ElectionFormModal({
       | Parameters<typeof updateElection>[1]
   }) => void
 }) {
-  const resolvedEntityLinkCountryId =
-    entityLinkCountryId ?? initial?.countryId ?? electionScope.countryId
-
   const [name, setName] = useState(initial?.name ?? '')
   const [shortName, setShortName] = useState(initial?.shortName ?? '')
   const [electionType, setElectionType] = useState(
@@ -7149,7 +7191,9 @@ export function ElectionFormModal({
           new Date().toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10),
   )
-  const [description, setDescription] = useState(initial?.description ?? '')
+  const [description, setDescription] = useState(() =>
+    richHtmlToEditableText(initial?.description),
+  )
   const [legTermStart, setLegTermStart] = useState(() =>
     toLocalDateYmd(initial?.legislatureTermStart),
   )
@@ -7181,7 +7225,7 @@ export function ElectionFormModal({
     toLocalDateYmd(initial?.resultingLegislatureClosureDate),
   )
   const [resultingDissolutionNotes, setResultingDissolutionNotes] = useState(
-    initial?.resultingLegislatureDissolutionNotes ?? '',
+    () => richHtmlToEditableText(initial?.resultingLegislatureDissolutionNotes),
   )
   const [scopeHistoricalCountryId, setScopeHistoricalCountryId] = useState(
     () => initial?.historicalCountryId ?? '',
@@ -7205,7 +7249,7 @@ export function ElectionFormModal({
       toLocalDateYmd(initial.pollDate) || new Date().toISOString().slice(0, 10),
     )
     setPollEndYmd(toLocalDateYmd(initial.pollEndDate))
-    setDescription(initial.description ?? '')
+    setDescription(richHtmlToEditableText(initial.description))
     setLegTermStart(toLocalDateYmd(initial.legislatureTermStart))
     setLegTermEnd(toLocalDateYmd(initial.legislatureTermEnd))
     setVoterTurnout(
@@ -7227,7 +7271,7 @@ export function ElectionFormModal({
       toLocalDateYmd(initial.resultingLegislatureClosureDate),
     )
     setResultingDissolutionNotes(
-      initial.resultingLegislatureDissolutionNotes ?? '',
+      richHtmlToEditableText(initial.resultingLegislatureDissolutionNotes),
     )
     setScopeHistoricalCountryId(initial.historicalCountryId ?? '')
     setLinkedEventId(initial.eventId ?? '')
@@ -7254,19 +7298,6 @@ export function ElectionFormModal({
     if (typeof parsed === 'number' && parsed > 0) return parsed
     return nextSuggestedOrdinal
   }, [convOrdinalStr, nextSuggestedOrdinal])
-
-  const handleApplyStandardTemplate = useCallback(() => {
-    const ord = activeOrdinalForTemplate
-    const typeLabel = labelElectionType(electionType)
-    const stdName = `제${ord}대 ${typeLabel}`
-    const stdShort = `제${ord}대`
-    setConvOrdinalStr(String(ord))
-    setName(stdName)
-    if (!shortName.trim() || /^제\d+대$/.test(shortName.trim())) {
-      setShortName(stdShort)
-    }
-    notify.success(`「${stdName}」 표준 명칭과 ${ord}회차가 입력되었습니다.`)
-  }, [activeOrdinalForTemplate, electionType, shortName])
 
   const handleApplyTermDurationYears = useCallback(
     (years: number) => {
@@ -7300,8 +7331,8 @@ export function ElectionFormModal({
         legTermEnd,
         resultingClosureKind.trim(),
         resultingClosureYmd,
-        optionalRichTextHtmlOrNull(resultingDissolutionNotes),
-        optionalRichTextHtmlOrNull(description),
+        resultingDissolutionNotes.trim(),
+        description.trim(),
       ].filter(Boolean).length,
     [
       legTermStart,
@@ -7537,8 +7568,10 @@ export function ElectionFormModal({
       convocationOrdinal: convOrdinalParsed,
       resultingLegislatureClosureKind: resultingKindVal,
       resultingLegislatureClosureDate: resultingClosureIso,
-      resultingLegislatureDissolutionNotes:
-        optionalRichTextHtmlOrNull(resultingDissolutionNotes),
+      resultingLegislatureDissolutionNotes: editableTextToSavedHtml(
+        resultingDissolutionNotes,
+        initial?.resultingLegislatureDissolutionNotes,
+      ),
     }
     const eventIdBody = linkedEventId.trim() || null
     if (mode === 'create') {
@@ -7555,7 +7588,7 @@ export function ElectionFormModal({
           legislatureTermEnd: termEndIso,
           voterTurnoutPercent: turnoutBody,
           totalSeats: totalSeatsParsed,
-          description: optionalRichTextHtmlOrNull(description),
+          description: editableTextToSavedHtml(description, initial?.description),
           eventId: eventIdBody,
           ...chronologyExtra,
         },
@@ -7575,7 +7608,7 @@ export function ElectionFormModal({
           legislatureTermEnd: termEndIso,
           voterTurnoutPercent: turnoutBody,
           totalSeats: totalSeatsParsed,
-          description: optionalRichTextHtmlOrNull(description),
+          description: editableTextToSavedHtml(description, initial?.description),
           eventId: eventIdBody,
           ...chronologyExtra,
         },
@@ -7620,8 +7653,8 @@ export function ElectionFormModal({
   /*
    * 칸 배치 = 성격 순서. 왼쪽은 '어떤 선거인가'(유형 → 명칭 → 회차 → 소속 → 연결 사건)와 '언제·어떻게 끝났나'
    * (투표 기간 → 상태 → 집계), 오른쪽은 이 선거로 꾸려진 의회(임기 → 실제 종료 → 종료 서술)와 긴 글(설명).
-   * 유형이 맨 앞인 까닭: 명칭 추천('제13대 국회·의회 지역구')이 유형을 따라 바뀐다. 예전엔 명칭을 먼저 쓰고
-   * 아래에서 유형을 바꾸면 추천이 뒤늦게 달라졌고, 투표 결과(집계)는 의회 칸 아래 오른쪽 끝에 떨어져 있었다.
+   * 명칭이 맨 앞(사건 등록 모달과 같은 문법). 명칭 추천 버튼('제13대 표준 명칭 채우기'·'다음 회차')은 걷었다 —
+   * 회차 칸 자리표시가 같은 안내를 한다. 서술 두 칸은 textarea(서식·인물 링크는 선거 상세 서술 칸에서).
    */
   const basicSectionNode = (
     <FormS.FormGroupSection
@@ -7631,21 +7664,6 @@ export function ElectionFormModal({
       <FormS.FormGroupTitle id={`${ELECTION_FORM_SECTION_ID.basic}-title`}>
         기본 정보
       </FormS.FormGroupTitle>
-      <EventFormS.FormRow>
-        <EventFormS.FormLabel as="div" id="election-form-type-label">
-          유형 <EventFormS.Required>*</EventFormS.Required>
-        </EventFormS.FormLabel>
-        <EventFormS.FormField>
-          <ToneChipGroup
-            ariaLabelledBy="election-form-type-label"
-            value={electionType}
-            onChange={(next) => {
-              if (next) setElectionType(next)
-            }}
-            options={typeChipOptions}
-          />
-        </EventFormS.FormField>
-      </EventFormS.FormRow>
       <EventFormS.FormRow>
         <EventFormS.FormLabel htmlFor="election-form-name">
           명칭 <EventFormS.Required>*</EventFormS.Required>
@@ -7660,25 +7678,21 @@ export function ElectionFormModal({
             aria-required
             placeholder={`예: 제${activeOrdinalForTemplate}대 ${labelElectionType(electionType)}`}
           />
-          <FormS.TitleSuggestionRow aria-label="추천 이름·회차">
-            <FormS.TitleSuggestionLabel>추천</FormS.TitleSuggestionLabel>
-            <FormS.TitleSuggestionButton
-              type="button"
-              onClick={handleApplyStandardTemplate}
-              title="선택된 선거 유형과 회차를 기준으로 명칭·짧은 이름·회차를 한 번에 채웁니다"
-            >
-              제{activeOrdinalForTemplate}대 표준 명칭 채우기
-            </FormS.TitleSuggestionButton>
-            {convOrdinalStr !== String(nextSuggestedOrdinal) ? (
-              <FormS.TitleSuggestionButton
-                type="button"
-                onClick={() => setConvOrdinalStr(String(nextSuggestedOrdinal))}
-                title="기존 동일 유형 선거의 다음 순번을 자동으로 입력합니다"
-              >
-                다음 회차 ({nextSuggestedOrdinal}회)
-              </FormS.TitleSuggestionButton>
-            ) : null}
-          </FormS.TitleSuggestionRow>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div" id="election-form-type-label">
+          유형 <EventFormS.Required>*</EventFormS.Required>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <ToneChipGroup
+            ariaLabelledBy="election-form-type-label"
+            value={electionType}
+            onChange={(next) => {
+              if (next) setElectionType(next)
+            }}
+            options={typeChipOptions}
+          />
         </EventFormS.FormField>
       </EventFormS.FormRow>
       <EventFormS.FormRow>
@@ -7980,35 +7994,31 @@ export function ElectionFormModal({
         </EventFormS.FormField>
       </EventFormS.FormRow>
       <EventFormS.FormRow>
-        <EventFormS.FormLabel as="div">
+        <EventFormS.FormLabel htmlFor="election-form-closure-notes">
           종료 서술<FormS.OptionalTag>(선택)</FormS.OptionalTag>
         </EventFormS.FormLabel>
         <EventFormS.FormField>
-          <HistoryArticleEditorWrap>
-            <RichTextEditor
-              value={resultingDissolutionNotes}
-              onChange={setResultingDissolutionNotes}
-              placeholder="정시 만료·조기 해산 등 (선택)"
-              entityLinkCountryId={resolvedEntityLinkCountryId}
-              onImageUpload={uploadElectionRichTextImage}
-            />
-          </HistoryArticleEditorWrap>
+          <EventFormS.Textarea
+            id="election-form-closure-notes"
+            value={resultingDissolutionNotes}
+            onChange={(event) => setResultingDissolutionNotes(event.target.value)}
+            placeholder="정시 만료·조기 해산 경위 등 (선택)"
+            rows={4}
+          />
         </EventFormS.FormField>
       </EventFormS.FormRow>
       <EventFormS.FormRow>
-        <EventFormS.FormLabel as="div">
+        <EventFormS.FormLabel htmlFor="election-form-description">
           설명<FormS.OptionalTag>(선택)</FormS.OptionalTag>
         </EventFormS.FormLabel>
         <EventFormS.FormField>
-          <HistoryArticleEditorWrap>
-            <RichTextEditor
-              value={description}
-              onChange={setDescription}
-              placeholder="선거에 대한 부가 설명 (선택)"
-              entityLinkCountryId={resolvedEntityLinkCountryId}
-              onImageUpload={uploadElectionRichTextImage}
-            />
-          </HistoryArticleEditorWrap>
+          <EventFormS.Textarea
+            id="election-form-description"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="선거의 배경·쟁점·결과 의의 (선택) — 인물 링크·서식은 선거 상세의 서술 칸에서"
+            rows={6}
+          />
         </EventFormS.FormField>
       </EventFormS.FormRow>
     </FormS.FormGroupSection>

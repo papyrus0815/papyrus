@@ -69,14 +69,22 @@ describe('ElectionFormModal — 사건 등록 모달 문법', () => {
     expect(pollField?.querySelector('input[aria-label="연도"]')).toHaveValue(String(new Date().getFullYear()))
   })
 
-  it('명칭이 비면 저장이 잠기고, 표준 명칭 채우기 후 칩으로 바꾼 유형과 함께 등록한다', () => {
+  it('명칭이 맨 위·추천 버튼 없음, 명칭이 비면 저장이 잠기고, 칩으로 바꾼 유형·textarea 설명과 함께 등록한다', () => {
     const { onSubmit } = renderModal()
     expect(screen.getByRole('button', { name: '선거 등록' })).toBeDisabled()
     expect(screen.getByRole('button', { name: /필수 입력: 명칭/ })).toBeInTheDocument()
 
+    /* 명칭 칸이 유형 칩보다 먼저(문서 순서), 추천 버튼은 없다 */
+    const nameInput = screen.getByLabelText(/^명칭/)
+    const typeGroup = screen.getByRole('radiogroup', { name: /^유형/ })
+    expect(nameInput.compareDocumentPosition(typeGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /표준 명칭 채우기/ })).toBeNull()
+
     fireEvent.click(screen.getByRole('radio', { name: '대통령·수반 직선' }))
-    fireEvent.click(screen.getByRole('button', { name: /표준 명칭 채우기/ }))
-    expect(screen.getByLabelText(/^명칭/)).toHaveValue('제1대 대통령·수반 직선')
+    fireEvent.change(nameInput, { target: { value: '제1대 대통령·수반 직선' } })
+    fireEvent.change(screen.getByPlaceholderText(/동일 국가·유형 내 순번/), { target: { value: '1' } })
+    /* 서술은 textarea — 빈 줄 = 문단, 저장은 <p> HTML */
+    fireEvent.change(screen.getByLabelText(/^설명/), { target: { value: '첫 직선제.\n\n결선 없이 확정.' } })
     expect(screen.getByText('등록 준비 완료')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('radio', { name: '마감' }))
@@ -92,6 +100,7 @@ describe('ElectionFormModal — 사건 등록 모달 문법', () => {
           totalSeats: 300,
           convocationOrdinal: 1,
           countryId: 'de',
+          description: '<p>첫 직선제.</p><p>결선 없이 확정.</p>',
         }),
       }),
     )
