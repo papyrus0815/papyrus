@@ -182,6 +182,106 @@ export type PoliticalPartyLegalStatusInput = {
   sortOrder?: number
 }
 
+/** 표지 이미지 종류 */
+export type PartySymbolKind = 'LOGO' | 'FLAG' | 'EMBLEM' | 'BALLOT_SYMBOL' | 'PHOTO' | 'POSTER' | 'OTHER'
+
+export const PARTY_SYMBOL_KIND_OPTIONS: Array<{ value: PartySymbolKind; label: string; hint: string }> = [
+  { value: 'LOGO', label: '로고·휘장', hint: '대표 로고는 목록·카드에 쓰인다' },
+  { value: 'FLAG', label: '당기', hint: '' },
+  { value: 'EMBLEM', label: '상징물', hint: '파스케스, 낫과 망치' },
+  { value: 'BALLOT_SYMBOL', label: '투표 상징', hint: '인도 국민회의의 손바닥 — 기표용 그림' },
+  { value: 'PHOTO', label: '사진', hint: '당사·집회' },
+  { value: 'POSTER', label: '포스터·선전물', hint: '' },
+  { value: 'OTHER', label: '기타', hint: '' },
+]
+
+export function labelPartySymbolKind(kind: string | null | undefined): string {
+  return PARTY_SYMBOL_KIND_OPTIONS.find((option) => option.value === kind)?.label ?? kind ?? ''
+}
+
+export type PartySymbolDto = StructuredPeriodFields & {
+  id: string
+  partyId: string
+  kind: PartySymbolKind
+  imageUrl: string
+  caption?: string | null
+  isPrimary: boolean
+  sortOrder: number
+}
+
+export type PartySymbolInput = {
+  kind: PartySymbolKind
+  imageUrl: string
+  caption?: string | null
+  isPrimary?: boolean
+  start?: StructuredDateInput | null
+  end?: StructuredDateInput | null
+}
+
+/** 표현(말·노래) 종류 */
+export type PartyExpressionKind = 'MOTTO' | 'SLOGAN' | 'ANTHEM' | 'PARTY_SONG' | 'SALUTE' | 'OTHER'
+
+export const PARTY_EXPRESSION_KIND_OPTIONS: Array<{ value: PartyExpressionKind; label: string; hint: string }> = [
+  { value: 'MOTTO', label: '표어', hint: 'Credere, Obbedire, Combattere' },
+  { value: 'SLOGAN', label: '구호', hint: '선거 구호' },
+  { value: 'ANTHEM', label: '당가', hint: '원문에는 제목 — Giovinezza' },
+  { value: 'PARTY_SONG', label: '당 노래', hint: '당가 외 노래' },
+  { value: 'SALUTE', label: '인사법·경례', hint: '' },
+  { value: 'OTHER', label: '기타', hint: '' },
+]
+
+export function labelPartyExpressionKind(kind: string | null | undefined): string {
+  return PARTY_EXPRESSION_KIND_OPTIONS.find((option) => option.value === kind)?.label ?? kind ?? ''
+}
+
+export type PartyExpressionDto = StructuredPeriodFields & {
+  id: string
+  partyId: string
+  kind: PartyExpressionKind
+  originalText: string
+  languageCode?: string | null
+  translation?: string | null
+  mediaUrl?: string | null
+  isPrimary: boolean
+  note?: string | null
+  sortOrder: number
+}
+
+export type PartyExpressionInput = {
+  kind: PartyExpressionKind
+  originalText: string
+  languageCode?: string | null
+  translation?: string | null
+  mediaUrl?: string | null
+  isPrimary?: boolean
+  start?: StructuredDateInput | null
+  end?: StructuredDateInput | null
+  note?: string | null
+}
+
+/** 당사 이력 */
+export type PartyHeadquartersDto = StructuredPeriodFields & {
+  id: string
+  partyId: string
+  cityId?: string | null
+  city?: { id: string; name: string; localName?: string | null } | null
+  buildingName?: string | null
+  address?: string | null
+  isCurrent: boolean
+  note?: string | null
+  sortOrder: number
+}
+
+export type PartyHeadquartersInput = {
+  cityId?: string | null
+  buildingName?: string | null
+  address?: string | null
+  start?: StructuredDateInput | null
+  end?: StructuredDateInput | null
+  isCurrent?: boolean
+  note?: string | null
+}
+
 /** 정당 산하·연계 조직에서 그 조직이 맡은 자리 */
 export type PartyOrganizationRole =
   | 'GOVERNING_ORGAN'
@@ -328,6 +428,8 @@ export type PoliticalParty = PoliticalPartyRow & {
   dissolvedDate?: string | null
   logoUrl?: string | null
   brandColor?: string | null
+  /** 상징색 여러 개(#RRGGBB) */
+  colorPalette?: string[] | null
   aliases?: PoliticalPartyAliasDto[]
   _count?: PoliticalPartyCounts
   createdAt?: string
@@ -356,6 +458,8 @@ export type CreatePoliticalPartyInput = {
   logoUrl?: string | null
   /** UI·차트용 #RRGGBB */
   brandColor?: string | null
+  /** 상징색 여러 개(#RRGGBB, 최대 12) — 비우면 null */
+  colorPalette?: string[] | null
   countryId?: string | null
   /** 역사적 국가 맥락의 정당 (현대 국가와 배타적으로 쓰는 경우가 많음) */
   historicalCountryId?: string | null
@@ -682,6 +786,65 @@ export const politicalPartyApi = {
   deleteAlias: async (partyId: string, aliasId: string) => {
     await requestJson<void>(
       `/political-parties/${encodeURIComponent(partyId)}/aliases/${encodeURIComponent(aliasId)}`,
+      { method: 'DELETE' },
+    )
+  },
+
+  /** 표지 이미지 — 로고·당기·상징·투표 상징·사진·포스터 */
+  getSymbols: async (partyId: string) =>
+    requestJson<PartySymbolDto[]>(`/political-parties/${encodeURIComponent(partyId)}/symbols`),
+  createSymbol: async (partyId: string, body: PartySymbolInput) =>
+    requestJson<PartySymbolDto>(`/political-parties/${encodeURIComponent(partyId)}/symbols`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateSymbol: async (partyId: string, symbolId: string, body: Partial<PartySymbolInput>) =>
+    requestJson<PartySymbolDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/symbols/${encodeURIComponent(symbolId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    ),
+  deleteSymbol: async (partyId: string, symbolId: string) => {
+    await requestJson<void>(`/political-parties/${encodeURIComponent(partyId)}/symbols/${encodeURIComponent(symbolId)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  /** 표현 — 표어·구호·당가·인사법 */
+  getExpressions: async (partyId: string) =>
+    requestJson<PartyExpressionDto[]>(`/political-parties/${encodeURIComponent(partyId)}/expressions`),
+  createExpression: async (partyId: string, body: PartyExpressionInput) =>
+    requestJson<PartyExpressionDto>(`/political-parties/${encodeURIComponent(partyId)}/expressions`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateExpression: async (partyId: string, expressionId: string, body: Partial<PartyExpressionInput>) =>
+    requestJson<PartyExpressionDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/expressions/${encodeURIComponent(expressionId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    ),
+  deleteExpression: async (partyId: string, expressionId: string) => {
+    await requestJson<void>(
+      `/political-parties/${encodeURIComponent(partyId)}/expressions/${encodeURIComponent(expressionId)}`,
+      { method: 'DELETE' },
+    )
+  },
+
+  /** 당사 이력 — 지속 중(없으면 가장 늦은) 당사의 도시가 정당의 당사 도시 */
+  getHeadquarters: async (partyId: string) =>
+    requestJson<PartyHeadquartersDto[]>(`/political-parties/${encodeURIComponent(partyId)}/headquarters`),
+  createHeadquarters: async (partyId: string, body: PartyHeadquartersInput) =>
+    requestJson<PartyHeadquartersDto>(`/political-parties/${encodeURIComponent(partyId)}/headquarters`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateHeadquarters: async (partyId: string, hqId: string, body: Partial<PartyHeadquartersInput>) =>
+    requestJson<PartyHeadquartersDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/headquarters/${encodeURIComponent(hqId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    ),
+  deleteHeadquarters: async (partyId: string, hqId: string) => {
+    await requestJson<void>(
+      `/political-parties/${encodeURIComponent(partyId)}/headquarters/${encodeURIComponent(hqId)}`,
       { method: 'DELETE' },
     )
   },

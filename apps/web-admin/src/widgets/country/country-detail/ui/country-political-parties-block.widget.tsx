@@ -221,6 +221,7 @@ import { PartyLegalStatusBlock, PartyNamesBlock } from './party-identity-section
 import { PartyIdeologyBlock } from './party-ideology-sections'
 import { PartyMembershipsBlock } from './party-membership-sections'
 import { PartyOrganizationsBlock } from './party-organization-sections'
+import { PartyExpressionsBlock, PartyHeadquartersBlock, PartySymbolsBlock } from './party-mark-sections'
 import { type IdeologyChip, IdeologyPicker } from '@/widgets/ideology/ideology-picker'
 import { CountryTabEmptyState } from './country-tab-empty-state'
 import {
@@ -2787,6 +2788,9 @@ export function CountryPoliticalPartiesBlock({
               />
               <PartyIdeologyBlock partyId={detailParty.id} />
               <PartyOrganizationsBlock partyId={detailParty.id} />
+              <PartySymbolsBlock partyId={detailParty.id} />
+              <PartyExpressionsBlock partyId={detailParty.id} />
+              <PartyHeadquartersBlock partyId={detailParty.id} countryId={countryId} />
               <PartyLineageBlock
                 partyId={detailParty.id}
                 partyName={detailParty.name}
@@ -3425,6 +3429,7 @@ interface PartyFormValues {
   dissolved: PeriodDateFormValue
   logoUrl: string
   brandColor: string
+  colorPalette: string[]
 }
 
 const EMPTY_PARTY_FORM: PartyFormValues = {
@@ -3438,6 +3443,7 @@ const EMPTY_PARTY_FORM: PartyFormValues = {
   dissolved: { ...EMPTY_PERIOD_DATE },
   logoUrl: '',
   brandColor: '',
+  colorPalette: [],
 }
 
 /** 응답 정당 행 → 창당·해산 칸 값(구조화 칸이 진실, 없으면 거울 DATETIME에서) */
@@ -3474,6 +3480,7 @@ const partyFormSnapshot = (values: PartyFormValues) =>
     partialOfFormValue(values.dissolved),
     values.logoUrl,
     values.brandColor,
+    values.colorPalette,
   ])
 
 export function PartyFormModal({
@@ -3515,6 +3522,9 @@ export function PartyFormModal({
   const [dissolved, setDissolved] = useState<PeriodDateFormValue>({ ...EMPTY_PERIOD_DATE })
   const [logoUrl, setLogoUrl] = useState('')
   const [brandColor, setBrandColor] = useState('')
+  /** 상징색 여러 개 — 차트용 하나(brandColor)와 별개 */
+  const [colorPalette, setColorPalette] = useState<string[]>([])
+  const [paletteDraft, setPaletteDraft] = useState('#000000')
   const [logoUploading, setLogoUploading] = useState(false)
   const logoFileInputRef = useRef<HTMLInputElement>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
@@ -3581,6 +3591,7 @@ export function PartyFormModal({
           dissolved: partyDissolvedFormValue(row),
           logoUrl: row.logoUrl ?? '',
           brandColor: row.brandColor ?? '',
+          colorPalette: Array.isArray(row.colorPalette) ? row.colorPalette : [],
         }
         setLoaded(row)
         setName(values.name)
@@ -3593,6 +3604,7 @@ export function PartyFormModal({
         setDissolved(values.dissolved)
         setLogoUrl(values.logoUrl)
         setBrandColor(values.brandColor)
+        setColorPalette(values.colorPalette)
         setInitialSnapshot(partyFormSnapshot(values))
       })
       .catch((err: Error) => notify.error(err.message))
@@ -3633,6 +3645,7 @@ export function PartyFormModal({
       dissolved,
       logoUrl,
       brandColor,
+      colorPalette,
     }) !== initialSnapshot
 
   const requestClose = async () => {
@@ -3663,6 +3676,7 @@ export function PartyFormModal({
     setDissolved({ ...EMPTY_PERIOD_DATE })
     setLogoUrl('')
     setBrandColor('')
+    setColorPalette([])
     setInitialSnapshot(partyFormSnapshot(EMPTY_PARTY_FORM))
     setFormGeneration((generation) => generation + 1)
     formScrollRef.current?.scrollTo({ top: 0 })
@@ -3689,6 +3703,7 @@ export function PartyFormModal({
       dissolved: structuredInputOf(dissolved),
       logoUrl: logoUrl.trim() || null,
       brandColor: parsedColor,
+      colorPalette: colorPalette.length > 0 ? colorPalette : null,
       ...scope,
     }
     return body
@@ -3985,6 +4000,45 @@ export function PartyFormModal({
         </EventFormS.FormField>
       </EventFormS.FormRow>
       <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div" id="party-color-palette-label">
+          상징색<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <PaletteRow role="group" aria-labelledby="party-color-palette-label">
+            {colorPalette.map((hex) => (
+              <PaletteChip key={hex}>
+                <span className="sw" style={{ background: hex }} aria-hidden />
+                {hex}
+                <button type="button" aria-label={`${hex} 빼기`} onClick={() => setColorPalette((prev) => prev.filter((item) => item !== hex))}>
+                  <FiX size={11} />
+                </button>
+              </PaletteChip>
+            ))}
+            {colorPalette.length < 12 ? (
+              <>
+                <PartyColorSwatchInput
+                  type="color"
+                  value={paletteDraft}
+                  onChange={(event) => setPaletteDraft(event.target.value)}
+                  aria-label="더할 상징색"
+                />
+                <PartyDescOutlineBtn
+                  type="button"
+                  onClick={() => {
+                    const hex = paletteDraft.toUpperCase()
+                    setColorPalette((prev) => (prev.includes(hex) ? prev : [...prev, hex]))
+                  }}
+                >
+                  <FiPlus size={13} />
+                  색 더하기
+                </PartyDescOutlineBtn>
+              </>
+            ) : null}
+          </PaletteRow>
+          <EventFormS.Hint>당이 쓰는 색 여러 개(예: 검정·빨강). 차트·목록의 색은 위 브랜드 컬러 하나입니다.</EventFormS.Hint>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
         <EventFormS.FormLabel as="div">미리보기</EventFormS.FormLabel>
         <EventFormS.FormField>
           {/* 목록 카드에서 보일 모습 — 색·로고·약칭을 넣는 즉시 반영 */}
@@ -4180,6 +4234,43 @@ const RegisteredInSessionBar = styled.div`
   }
   .names {
     min-width: 0;
+  }
+`
+
+const PaletteRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+`
+
+/** 상징색 칩 */
+const PaletteChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 4px 3px 7px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  .sw {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    border: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+  button {
+    display: inline-flex;
+    padding: 2px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    cursor: pointer;
   }
 `
 
