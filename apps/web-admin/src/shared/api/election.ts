@@ -346,6 +346,17 @@ export type ElectionBallotOptionDto = {
   } | null
 }
 
+/** 선거 연합·블록 — 각자 출마하되 하나로 묶여 싸운 정당 묶음(선거마다 새로 꾸림). 소속은 정당 집계의 allianceId */
+export type ElectionAllianceDto = {
+  id: string
+  electionId: string
+  name: string
+  shortName?: string | null
+  color?: string | null
+  sortOrder: number
+  notes?: string | null
+}
+
 export type ElectionPartyResultDto = {
   id: string
   electionId: string
@@ -354,6 +365,8 @@ export type ElectionPartyResultDto = {
   voteSharePercent?: string | null
   seatsWon?: number | null
   notes?: string | null
+  /** 이 선거에서 속한 선거 연합(ElectionAllianceDto.id) */
+  allianceId?: string | null
   party?: {
     id: string
     name: string
@@ -481,6 +494,8 @@ export type ElectionDetailDto = {
   ballotOptions: ElectionBallotOptionDto[]
   /** 선거별 정당 집계(전국 득표·의석) */
   partyResults?: ElectionPartyResultDto[]
+  /** 선거 연합·블록 */
+  alliances?: ElectionAllianceDto[]
   /** 동일 유형·범위의 직전 선거 대비 정당 득표·의석 증감 */
   partyResultComparisonVsPrevious?: PartyResultComparisonVsPreviousDto | null
 }
@@ -808,6 +823,7 @@ export async function upsertElectionPartyResult(
     voteSharePercent?: string | null
     seatsWon?: number | null
     notes?: string | null
+    allianceId?: string | null
   },
 ) {
   return requestJson<ElectionPartyResultDto>(
@@ -822,6 +838,41 @@ export async function deleteElectionPartyResult(
 ) {
   return requestJson<void>(
     `/elections/${encodeURIComponent(electionId)}/party-results/${encodeURIComponent(partyId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export type ElectionAllianceInput = {
+  name: string
+  shortName?: string | null
+  color?: string | null
+  sortOrder?: number
+  notes?: string | null
+  /** 소속 정당 — 이 선거에 정당 집계가 있는 정당만. 주면 소속을 통째로 바꾼다 */
+  memberPartyIds?: string[]
+}
+
+export async function createElectionAlliance(electionId: string, body: ElectionAllianceInput) {
+  return requestJson<ElectionAllianceDto>(`/elections/${encodeURIComponent(electionId)}/alliances`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateElectionAlliance(
+  electionId: string,
+  allianceId: string,
+  body: Partial<ElectionAllianceInput>,
+) {
+  return requestJson<ElectionAllianceDto>(
+    `/elections/${encodeURIComponent(electionId)}/alliances/${encodeURIComponent(allianceId)}`,
+    { method: 'PATCH', body: JSON.stringify(body) },
+  )
+}
+
+export async function deleteElectionAlliance(electionId: string, allianceId: string) {
+  return requestJson<void>(
+    `/elections/${encodeURIComponent(electionId)}/alliances/${encodeURIComponent(allianceId)}`,
     { method: 'DELETE' },
   )
 }

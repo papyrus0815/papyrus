@@ -7,6 +7,8 @@
  *  · 의석이 있는 선거(정당 집계 seatsWon 합 > 0) → 의회 반원 좌석도. 점 하나 = 의석 하나(600석 넘으면 비례 축소),
  *    왼쪽부터 정당 순서대로 채우고 가운데 점선이 과반선.
  *  · 의석이 없는 선거(대통령·국민투표·득표만 있는 집계) → 반원 도넛. 가운데에 1위와 득표율.
+ *  · 선거 연합이 있으면 소속 정당을 붙여 앉히고(연합 자리 = 소속 의석 가중 평균 이념 위치) 바깥에 연합 색 호를
+ *    두른다. 범례도 연합 머리 아래에 소속 정당을 들여 쓴다.
  */
 import React, { useMemo } from 'react'
 
@@ -25,8 +27,16 @@ export interface ElectionResultSegment {
   seats: number | null
   /** 이념 위치 순위(좌 0 → 우 6) — 좌석도는 이 순서로 왼쪽부터 채운다. 없으면 가운데 뒤 */
   positionRank?: number | null
+  /** 선거 연합 key(ElectionResultAlliance.key) — 같은 key끼리 붙여 앉힌다 */
+  allianceKey?: string | null
   partyId: string | null
   personId: string | null
+}
+
+export interface ElectionResultAlliance {
+  key: string
+  label: string
+  fill: string
 }
 
 const POSITION_RANK: Record<string, number> = {
@@ -58,6 +68,51 @@ export function sortBySeatingOrder<Item extends { positionRank?: number | null; 
   })
 }
 
+/**
+ * 연합을 한 덩어리로 앉힌다. 연합 자리 = 소속 정당 이념 위치의 의석 가중 평균(의석 없으면 단순 평균),
+ * 연합 밖 정당은 저마다 한 덩어리. 덩어리 안은 sortBySeatingOrder.
+ */
+export function sortBySeatingOrderGrouped<
+  Item extends { positionRank?: number | null; seats: number | null; allianceKey?: string | null },
+>(items: Item[]): Item[] {
+  const groups = new Map<string, Item[]>()
+  items.forEach((item, idx) => {
+    const groupKey = item.allianceKey ? `alliance:${item.allianceKey}` : `solo:${idx}`
+    const bucket = groups.get(groupKey)
+    if (bucket) bucket.push(item)
+    else groups.set(groupKey, [item])
+  })
+  const ranked = [...groups.values()].map((members) => {
+    const seatSum = members.reduce((sum, member) => sum + Math.max(0, member.seats ?? 0), 0)
+    const rank =
+      seatSum > 0
+        ? members.reduce((sum, member) => sum + (member.positionRank ?? 7) * Math.max(0, member.seats ?? 0), 0) / seatSum
+        : members.reduce((sum, member) => sum + (member.positionRank ?? 7), 0) / members.length
+    return { members: sortBySeatingOrder(members), rank, seatSum }
+  })
+  ranked.sort((left, right) => left.rank - right.rank || right.seatSum - left.seatSum)
+  return ranked.flatMap((group) => group.members)
+}
+
+/** 득표 도넛용 — 연합 덩어리(합산 비중 큰 순), 덩어리 안은 비중 큰 순 */
+function groupByAllianceForShare(segments: ElectionResultSegment[]): ElectionResultSegment[] {
+  if (!segments.some((seg) => seg.allianceKey)) return segments
+  const groups = new Map<string, ElectionResultSegment[]>()
+  segments.forEach((seg, idx) => {
+    const groupKey = seg.allianceKey ? `alliance:${seg.allianceKey}` : `solo:${idx}`
+    const bucket = groups.get(groupKey)
+    if (bucket) bucket.push(seg)
+    else groups.set(groupKey, [seg])
+  })
+  return [...groups.values()]
+    .map((members) => ({
+      members: [...members].sort((left, right) => right.share - left.share),
+      share: members.reduce((sum, member) => sum + member.share, 0),
+    }))
+    .sort((left, right) => right.share - left.share)
+    .flatMap((group) => group.members)
+}
+
 const MAX_DOTS = 600
 const VIEW_W = 220
 const VIEW_H = 118
@@ -72,6 +127,8 @@ export interface SeatDot {
   radius: number
   fill: string
   label: string
+  /** 입력 정당의 groupKey(연합) — 묶음 호 계산용 */
+  groupKey: string | null
 }
 
 /** 의석 수 → 줄 수·줄별 좌석(반지름에 비례) → 왼쪽부터 각도순 좌표 */
@@ -109,7 +166,7 @@ function layoutSeats(totalDots: number): Array<{ x: number; y: number; angle: nu
  * 기록 안 된 의석(총 의석 − 합)은 unknownFill. 같은 viewBox(VIEW_W×VIEW_H) 좌표다.
  */
 export function computeSeatDots(
-  parties: Array<{ fill: string; seats: number; label: string }>,
+  parties: Array<{ fill: string; seats: number; label: string; groupKey?: string | null }>,
   chamberSeats: number,
   unknownFill: string,
 ): SeatDot[] {
@@ -132,10 +189,10 @@ export function computeSeatDots(
         leftover -= 1
       }
     })
-  const sequence: Array<{ fill: string; label: string }> = []
+  const sequence: Array<{ fill: string; label: string; groupKey: string | null }> = []
   parties.forEach((party, idx) => {
     for (let count = 0; count < assigned[idx]; count += 1) {
-      sequence.push({ fill: party.fill, label: party.label })
+      sequence.push({ fill: party.fill, label: party.label, groupKey: party.groupKey ?? null })
     }
   })
   const rowCount = Math.max(2, Math.min(14, Math.round(Math.sqrt(totalDots) / 2.1)))
@@ -148,8 +205,20 @@ export function computeSeatDots(
     radius: dotR,
     fill: sequence[idx]?.fill ?? unknownFill,
     label: sequence[idx]?.label ?? '기록 없는 의석',
+    groupKey: sequence[idx]?.groupKey ?? null,
   }))
 }
+
+/** 반원 바깥 묶음 호(연합 표시) — angle은 π(왼쪽) → 0(오른쪽) */
+function bracketArcPath(fromAngle: number, toAngle: number, radius: number): string {
+  const point = (angle: number) =>
+    `${(CENTER_X + Math.cos(angle) * radius).toFixed(2)} ${(CENTER_Y - Math.sin(angle) * radius).toFixed(2)}`
+  return `M ${point(fromAngle)} A ${radius} ${radius} 0 0 1 ${point(toAngle)}`
+}
+
+const BRACKET_R = OUTER_R + 7
+/** 호 끝을 살짝 안으로 — 이웃 연합 호와 맞닿지 않게 */
+const BRACKET_INSET = 0.018
 
 export const HEMICYCLE_VIEWBOX = `0 0 ${VIEW_W} ${VIEW_H}`
 
@@ -172,17 +241,31 @@ function arcPath(startShare: number, endShare: number): string {
 }
 
 export function ElectionResultHemicycle({
-  segments,
+  segments: rawSegments,
   totalSeats,
   kicker,
   onSelectSegment,
+  alliances = [],
 }: {
   segments: ElectionResultSegment[]
   totalSeats: number | null
   kicker: string
   onSelectSegment: (segment: ElectionResultSegment) => void
+  /** 선거 연합 — segments[].allianceKey가 가리킨다 */
+  alliances?: ElectionResultAlliance[]
 }) {
   const theme = useTheme()
+  const allianceByKey = useMemo(() => new Map(alliances.map((alliance) => [alliance.key, alliance])), [alliances])
+  /* 존재하지 않는 연합 key는 무시 */
+  const segments = useMemo(
+    () =>
+      groupByAllianceForShare(
+        rawSegments.map((seg) =>
+          seg.allianceKey && !allianceByKey.has(seg.allianceKey) ? { ...seg, allianceKey: null } : seg,
+        ),
+      ),
+    [rawSegments, allianceByKey],
+  )
   const seatSum = segments.reduce((sum, seg) => sum + (seg.seats ?? 0), 0)
   const useSeats = seatSum > 0
   const chamberSeats = useSeats ? Math.max(seatSum, totalSeats ?? 0) : 0
@@ -191,10 +274,11 @@ export function ElectionResultHemicycle({
     () =>
       useSeats
         ? computeSeatDots(
-            sortBySeatingOrder(segments).map((seg) => ({
+            sortBySeatingOrderGrouped(segments).map((seg) => ({
               fill: seg.fill,
               seats: seg.seats ?? 0,
               label: `${seg.label} · ${seg.subLabel}`,
+              groupKey: seg.allianceKey ?? null,
             })),
             chamberSeats,
             theme.mode === 'dark' ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)',
@@ -213,11 +297,76 @@ export function ElectionResultHemicycle({
     return segments.map((seg) => {
       const start = cursor
       cursor += Math.max(0, seg.share) / divisor
-      return { seg, path: arcPath(start, Math.min(1, cursor)) }
+      return { seg, path: arcPath(start, Math.min(1, cursor)), start, end: Math.min(1, cursor) }
     })
   }, [useSeats, segments])
 
-  const leader = segments[0] ?? null
+  /** 연합별 바깥 호 — 좌석도는 소속 점들의 각도 범위, 도넛은 소속 조각 범위 */
+  const allianceBrackets = useMemo(() => {
+    if (alliances.length === 0) return []
+    const spans = new Map<string, { from: number; to: number }>()
+    const extend = (key: string, from: number, to: number) => {
+      const prev = spans.get(key)
+      spans.set(key, prev ? { from: Math.max(prev.from, from), to: Math.min(prev.to, to) } : { from, to })
+    }
+    if (useSeats) {
+      seatDots.forEach((dot) => {
+        if (!dot.groupKey) return
+        const angle = Math.atan2(CENTER_Y - dot.y, dot.x - CENTER_X)
+        extend(dot.groupKey, angle, angle)
+      })
+    } else {
+      arcs.forEach(({ seg, start, end }) => {
+        if (!seg.allianceKey) return
+        extend(seg.allianceKey, Math.PI - start * Math.PI, Math.PI - end * Math.PI)
+      })
+    }
+    return [...spans.entries()].flatMap(([key, span]) => {
+      const alliance = allianceByKey.get(key)
+      if (!alliance) return []
+      const from = Math.min(Math.PI, span.from + (useSeats ? 0.02 : -BRACKET_INSET))
+      const to = Math.max(0, span.to - (useSeats ? 0.02 : -BRACKET_INSET))
+      if (from <= to) return []
+      return [{ alliance, path: bracketArcPath(from, to, BRACKET_R) }]
+    })
+  }, [alliances.length, useSeats, seatDots, arcs, allianceByKey])
+
+  /** 범례 — 연합 머리 + 들여 쓴 소속, 그 뒤 연합 밖 정당. 정당 행은 8개까지 */
+  const legendEntries = useMemo(() => {
+    type Entry =
+      | { kind: 'alliance'; alliance: ElectionResultAlliance; seats: number | null; share: number; count: number }
+      | { kind: 'segment'; seg: ElectionResultSegment; nested: boolean }
+    const entries: Entry[] = []
+    const seen = new Set<string>()
+    segments.forEach((seg) => {
+      const alliance = seg.allianceKey ? allianceByKey.get(seg.allianceKey) : undefined
+      if (alliance && !seen.has(alliance.key)) {
+        seen.add(alliance.key)
+        const members = segments.filter((member) => member.allianceKey === alliance.key)
+        const memberSeats = members.filter((member) => member.seats != null)
+        entries.push({
+          kind: 'alliance',
+          alliance,
+          seats: memberSeats.length > 0 ? memberSeats.reduce((sum, member) => sum + (member.seats ?? 0), 0) : null,
+          share: members.reduce((sum, member) => sum + member.share, 0),
+          count: members.length,
+        })
+        members.forEach((member) => entries.push({ kind: 'segment', seg: member, nested: true }))
+      } else if (!alliance) {
+        entries.push({ kind: 'segment', seg, nested: false })
+      }
+    })
+    let segmentBudget = 8
+    const visible = entries.filter((entry) => {
+      if (entry.kind === 'alliance') return true
+      if (segmentBudget <= 0) return false
+      segmentBudget -= 1
+      return true
+    })
+    return { visible, hidden: entries.filter((entry) => entry.kind === 'segment').length - 8 }
+  }, [segments, allianceByKey])
+
+  const leader = [...segments].sort((left, right) => right.share - left.share)[0] ?? null
   const majority = chamberSeats > 0 ? Math.floor(chamberSeats / 2) + 1 : null
   const scaledNote = useSeats && chamberSeats > MAX_DOTS ? `점 1개 ≈ ${(chamberSeats / MAX_DOTS).toFixed(1)}석` : null
 
@@ -248,6 +397,11 @@ export function ElectionResultHemicycle({
                   <title>{`${seg.label} · ${seg.subLabel}`}</title>
                 </path>
               ))}
+          {allianceBrackets.map(({ alliance, path }) => (
+            <path key={alliance.key} d={path} fill="none" stroke={alliance.fill} strokeWidth="3" strokeLinecap="round">
+              <title>{alliance.label}</title>
+            </path>
+          ))}
           {useSeats ? (
             <line
               x1={CENTER_X}
@@ -278,13 +432,34 @@ export function ElectionResultHemicycle({
 
       <Legend aria-label={`${kicker} 범례`}>
         <LegendKicker>{kicker}</LegendKicker>
-        {segments.slice(0, 8).map((seg) => {
+        {legendEntries.visible.map((entry) => {
+          if (entry.kind === 'alliance') {
+            const { alliance, seats, share, count } = entry
+            const reached = majority != null && seats != null ? seats >= majority : null
+            return (
+              <LegendAllianceRow key={`alliance-${alliance.key}`}>
+                <span className="sw" style={{ borderColor: alliance.fill }} aria-hidden />
+                <span className="name">{alliance.label}</span>
+                <span className="stat">
+                  {[
+                    seats != null ? `${seats.toLocaleString('ko-KR')}석` : `${(share * 100).toFixed(1)}%`,
+                    `${count}개 정당`,
+                    reached === true ? '과반' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </LegendAllianceRow>
+            )
+          }
+          const { seg, nested } = entry
           const clickable = Boolean(seg.partyId || seg.personId)
           return (
             <LegendRow
               key={seg.key}
               type="button"
               disabled={!clickable}
+              data-nested={nested || undefined}
               onClick={() => onSelectSegment(seg)}
             >
               <span className="sw" style={{ background: seg.fill }} aria-hidden />
@@ -296,7 +471,7 @@ export function ElectionResultHemicycle({
             </LegendRow>
           )
         })}
-        {segments.length > 8 ? <LegendMore>외 {segments.length - 8}</LegendMore> : null}
+        {legendEntries.hidden > 0 ? <LegendMore>외 {legendEntries.hidden}</LegendMore> : null}
       </Legend>
     </ResultGrid>
   )
@@ -399,6 +574,9 @@ const LegendRow = styled.button`
   &:disabled {
     cursor: default;
   }
+  &[data-nested] {
+    padding-left: 18px;
+  }
   &:not(:disabled):hover {
     background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)')};
   }
@@ -435,6 +613,38 @@ const LegendRow = styled.button`
     display: block;
     height: 100%;
     border-radius: 999px;
+  }
+`
+
+const LegendAllianceRow = styled.div`
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  margin-top: 4px;
+
+  .sw {
+    width: 10px;
+    height: 10px;
+    border: 2.5px solid;
+    border-radius: 999px;
+    box-sizing: border-box;
+  }
+  .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  .stat {
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    ${DIGIT_DISPLAY}
   }
 `
 

@@ -68,6 +68,8 @@ import { useHistoricalCountriesByModernCountry } from '@/features/country/api/us
 import {
   ELECTION_STATUS_OPTIONS,
   ELECTION_TYPE_OPTIONS,
+  type ElectionAllianceDto,
+  type ElectionAllianceInput,
   type ElectionBallotOptionDto,
   type ElectionCandidacyDto,
   type ElectionDetailDto,
@@ -80,9 +82,11 @@ import {
   type PoliticalPartyRow,
   createBallotOption,
   createElection,
+  createElectionAlliance,
   createElectionCandidacy,
   deleteBallotOption,
   deleteElection,
+  deleteElectionAlliance,
   deleteElectionCandidacy,
   deleteElectionPartyResult,
   getElection,
@@ -96,6 +100,7 @@ import {
   updateBallotOption,
   createElectionNarrativeEvent,
   updateElection,
+  updateElectionAlliance,
   updateElectionCandidacy,
   upsertBallotOptionResult,
   upsertCandidacyResult,
@@ -188,6 +193,7 @@ import * as DashboardStyles from './country-detail-dashboard.styles'
 import { CountryPoliticalPartiesBlock } from './country-political-parties-block.widget'
 import { LinkedEventPickerField } from './linked-event-picker-field'
 import { CountryTabEmptyState } from './country-tab-empty-state'
+import { ElectionAllianceFormModal, ElectionAlliancesPanel, summarizeAlliances } from './election-alliances-panel'
 import * as FormS from './military-unit-form/styles'
 import {
   ElectionResultHemicycle,
@@ -1269,6 +1275,19 @@ const PartyColorDot = styled.span<{ $fill: string }>`
   flex-shrink: 0;
 `
 
+/** 정당 집계 표 — 선거 연합 소속 꼬리표 */
+const PartyAllianceTag = styled.span`
+  flex: none;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
 const PartyNameInline = styled.span`
   display: inline-flex;
   align-items: center;
@@ -1679,6 +1698,12 @@ export function CountryElectionsSection({
     | { mode: 'edit'; electionId: string; row: ElectionPartyResultDto }
     | null
   >(null)
+  /** 선거 연합 등록·수정 */
+  const [allianceModal, setAllianceModal] = useState<
+    | { mode: 'create'; electionId: string }
+    | { mode: 'edit'; electionId: string; alliance: ElectionAllianceDto }
+    | null
+  >(null)
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string
     message: string
@@ -1970,6 +1995,33 @@ export function CountryElectionsSection({
       notify.success('정당 집계가 저장되었습니다.')
     },
     onError: (e: Error) => notify.error(e.message),
+  })
+
+  const allianceSaveMut = useMutation({
+    mutationFn: (payload: {
+      electionId: string
+      allianceId?: string
+      body: ElectionAllianceInput
+    }) =>
+      payload.allianceId
+        ? updateElectionAlliance(payload.electionId, payload.allianceId, payload.body)
+        : createElectionAlliance(payload.electionId, payload.body),
+    onSuccess: (_data, vars) => {
+      invalidate()
+      setAllianceModal(null)
+      notify.success(vars.allianceId ? '선거 연합을 수정했습니다.' : '선거 연합을 추가했습니다.')
+    },
+    onError: (err: Error) => notify.error(err.message),
+  })
+
+  const allianceDelMut = useMutation({
+    mutationFn: (payload: { electionId: string; allianceId: string }) =>
+      deleteElectionAlliance(payload.electionId, payload.allianceId),
+    onSuccess: () => {
+      invalidate()
+      notify.success('선거 연합을 삭제했습니다. 소속 정당 집계는 그대로 남습니다.')
+    },
+    onError: (err: Error) => notify.error(err.message),
   })
 
   const partyResultDelMut = useMutation({
@@ -2849,6 +2901,24 @@ export function CountryElectionsSection({
                           row,
                         })
                       }
+                      onAddAlliance={() =>
+                        setAllianceModal({ mode: 'create', electionId: detail.id })
+                      }
+                      onEditAlliance={(alliance) =>
+                        setAllianceModal({ mode: 'edit', electionId: detail.id, alliance })
+                      }
+                      onDeleteAlliance={(alliance) => {
+                        setConfirmDialog({
+                          title: '선거 연합 삭제',
+                          message: `「${alliance.name}」연합을 삭제할까요? 소속 정당의 집계(득표·의석)는 남고 연합 소속만 풀립니다.`,
+                          confirmLabel: '삭제',
+                          danger: true,
+                          onConfirm: () => {
+                            allianceDelMut.mutate({ electionId: detail.id, allianceId: alliance.id })
+                            setConfirmDialog(null)
+                          },
+                        })
+                      }}
                       onDeletePartyResult={(row) => {
                         const label = getPartyDisplayName(row.party) || '정당'
                         setConfirmDialog({
@@ -3128,6 +3198,39 @@ export function CountryElectionsSection({
           />
         )}
 
+        {allianceModal && detail && detail.id === allianceModal.electionId ? (
+          <ElectionAllianceFormModal
+            key={
+              allianceModal.mode === 'create'
+                ? `alliance-new-${allianceModal.electionId}`
+                : `alliance-${allianceModal.alliance.id}`
+            }
+            mode={allianceModal.mode}
+            initial={allianceModal.mode === 'edit' ? allianceModal.alliance : undefined}
+            alliances={detail.alliances ?? []}
+            partyResults={detail.partyResults ?? []}
+            partyInfo={(partyId) => {
+              const row = detail.partyResults?.find((result) => result.partyId === partyId)
+              const registry = parties.find((party) => party.id === partyId)
+              return {
+                name: getPartyDisplayName(row?.party ?? registry) || partyId,
+                fill: row
+                  ? partyResultSliceFill(row, hueFromPartyId(partyId), registry?.brandColor)
+                  : `hsl(${hueFromPartyId(partyId)} 68% 54%)`,
+              }
+            }}
+            saving={allianceSaveMut.isPending}
+            onClose={() => setAllianceModal(null)}
+            onSubmit={(body) =>
+              allianceSaveMut.mutate({
+                electionId: allianceModal.electionId,
+                allianceId: allianceModal.mode === 'edit' ? allianceModal.alliance.id : undefined,
+                body,
+              })
+            }
+          />
+        ) : null}
+
         {partyResultModal && (
           <PartyResultFormModal
             key={
@@ -3177,6 +3280,9 @@ function ElectionDetailPanel({
   syncingPartyResults,
   onEditPartyResult,
   onDeletePartyResult,
+  onAddAlliance,
+  onEditAlliance,
+  onDeleteAlliance,
   onEditElection,
   onSaveElectionNarrative,
   savingNarrative,
@@ -3205,6 +3311,9 @@ function ElectionDetailPanel({
   syncingPartyResults?: boolean
   onEditPartyResult: (row: ElectionPartyResultDto) => void
   onDeletePartyResult: (row: ElectionPartyResultDto) => void
+  onAddAlliance: () => void
+  onEditAlliance: (alliance: ElectionAllianceDto) => void
+  onDeleteAlliance: (alliance: ElectionAllianceDto) => void
   onEditElection: () => void
   onSaveElectionNarrative: (patch: {
     resultingLegislatureDissolutionNotes?: string | null
@@ -3600,6 +3709,29 @@ function ElectionDetailPanel({
   }, [detail.partyResultComparisonVsPrevious?.rows])
 
   /** 정당 집계 합계·잔여(기타) */
+  const alliances = useMemo(() => detail.alliances ?? [], [detail.alliances])
+  const allianceNameById = useMemo(
+    () => new Map(alliances.map((alliance) => [alliance.id, alliance.shortName || alliance.name])),
+    [alliances],
+  )
+  const alliancePartyInfo = useCallback(
+    (partyId: string) => {
+      const row = partyResults.find((result) => result.partyId === partyId)
+      const registry = parties.find((party) => party.id === partyId)
+      return {
+        name: getPartyShortName(row?.party ?? registry) || getPartyDisplayName(row?.party ?? registry) || partyId,
+        fill: row
+          ? partyResultSliceFill(row, hueFromPartyId(partyId), registry?.brandColor)
+          : `hsl(${hueFromPartyId(partyId)} 68% 54%)`,
+      }
+    },
+    [partyResults, parties],
+  )
+  const allianceSummaries = useMemo(
+    () => summarizeAlliances(alliances, partyResults, alliancePartyInfo, '#94a3b8'),
+    [alliances, partyResults, alliancePartyInfo],
+  )
+
   const partyResultsSummary = useMemo(
     () => computePartyResultsSummary(partyResults, detail.totalSeats),
     [partyResults, detail.totalSeats],
@@ -4188,6 +4320,7 @@ function ElectionDetailPanel({
             positionRank: politicalPositionRank(
               parties.find((party) => party.id === slice.row.partyId)?.position,
             ),
+            allianceKey: slice.row.allianceId ?? null,
             partyId: slice.row.partyId !== '__other__' ? slice.row.partyId : null,
             personId: null as string | null,
           }
@@ -4666,6 +4799,15 @@ function ElectionDetailPanel({
                           : null
                       }
                       kicker={heroPowerBar.kicker}
+                      alliances={
+                        heroPowerBar.mode === 'parties'
+                          ? allianceSummaries.map((summary) => ({
+                              key: summary.alliance.id,
+                              label: summary.alliance.shortName || summary.alliance.name,
+                              fill: summary.fill,
+                            }))
+                          : []
+                      }
                       onSelectSegment={(segment) => {
                         if (segment.partyId) {
                           setElectionMentionPartyId(segment.partyId)
@@ -5367,6 +5509,16 @@ function ElectionDetailPanel({
                           : '후보 결과로 집계 반영'}
                       </ElectionSectionActionBtn>
                     ) : null}
+                    {!isReferendum ? (
+                      <ElectionSectionActionBtn
+                        type="button"
+                        onClick={onAddAlliance}
+                        title="각자 출마하되 하나로 묶여 싸운 정당 묶음(블록·연대). 연정은 행정부·내각, 합당은 정당 계보에서 등록합니다"
+                      >
+                        <FiPlus size={12} strokeWidth={2.25} aria-hidden />
+                        연합 추가
+                      </ElectionSectionActionBtn>
+                    ) : null}
                     <ElectionSectionActionBtn
                       type="button"
                       onClick={onAddPartyResult}
@@ -5376,6 +5528,15 @@ function ElectionDetailPanel({
                     </ElectionSectionActionBtn>
                   </ElectionSectionActions>
                 </ElectionSectionHeader>
+
+                <ElectionAlliancesPanel
+                  summaries={allianceSummaries}
+                  totalSeats={detail.totalSeats ?? null}
+                  partyInfo={alliancePartyInfo}
+                  onEdit={onEditAlliance}
+                  onDelete={onDeleteAlliance}
+                  onSelectParty={(partyId) => setElectionMentionPartyId(partyId)}
+                />
 
                 {partyResults.length > 0 ? (
                   <PartyShareInfographic>
@@ -5814,6 +5975,11 @@ function ElectionDetailPanel({
                                       ? getPartyDisplayName(row.party)
                                       : row.partyId}
                                   </EntityTableLinkBtn>
+                                  {row.allianceId && allianceNameById.get(row.allianceId) ? (
+                                    <PartyAllianceTag>
+                                      {allianceNameById.get(row.allianceId)}
+                                    </PartyAllianceTag>
+                                  ) : null}
                                 </PartyNameInline>
                               </DataTd>
                               <DataTd>{formatVotesForDisplay(row.votes)}</DataTd>
