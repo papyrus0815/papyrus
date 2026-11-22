@@ -75,7 +75,13 @@ const electionInclude = {
     },
     orderBy: { party: { name: 'asc' as const } },
   },
+  alliances: {
+    orderBy: [{ sortOrder: 'asc' as const }, { name: 'asc' as const }],
+  },
 } satisfies Prisma.ElectionInclude
+
+/** 연합 표시 색 — #RRGGBB만(좌석도 묶음 선) */
+const ALLIANCE_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/
 
 const ELECTION_TYPE_VALUES = new Set<string>(Object.values(ElectionType))
 const CLOSURE_KIND_VALUES = new Set<string>(
@@ -160,6 +166,29 @@ export interface UpsertPartyResultBody {
   voteSharePercent?: string | null
   seatsWon?: number | null
   notes?: string | null
+  /** 이 선거의 선거 연합 id — null이면 연합에서 뺀다 */
+  allianceId?: string | null
+}
+
+export interface CreateElectionAllianceBody {
+  name: string
+  shortName?: string | null
+  /** #RRGGBB */
+  color?: string | null
+  sortOrder?: number
+  notes?: string | null
+  /** 소속 정당 id — 이 선거에 정당 집계가 있는 정당만. 다른 연합에 있던 정당은 옮겨 온다 */
+  memberPartyIds?: string[]
+}
+
+export interface UpdateElectionAllianceBody {
+  name?: string
+  shortName?: string | null
+  color?: string | null
+  sortOrder?: number
+  notes?: string | null
+  /** 주면 소속을 이 목록으로 통째 바꾼다(빠진 정당은 연합 없음으로) */
+  memberPartyIds?: string[]
 }
 
 export interface CreateElectionBody {
@@ -574,6 +603,15 @@ export class ElectionController {
     if (body.seatsWon != null && body.seatsWon < 0) {
       throw new BadRequestException('의석수는 0 이상이어야 합니다.')
     }
+    if (body.allianceId != null) {
+      const alliance = await this.prisma.electionAlliance.findFirst({
+        where: { id: body.allianceId, electionId },
+        select: { id: true },
+      })
+      if (!alliance) {
+        throw new BadRequestException('이 선거의 연합이 아닙니다.')
+      }
+    }
 
     const row = await this.prisma.electionPartyResult.upsert({
       where: {
@@ -586,6 +624,7 @@ export class ElectionController {
         voteSharePercent: voteShareDecimal ?? undefined,
         seatsWon: body.seatsWon ?? undefined,
         notes: body.notes ?? undefined,
+        allianceId: body.allianceId ?? undefined,
       },
       update: {
         votes:
@@ -596,6 +635,7 @@ export class ElectionController {
           body.voteSharePercent !== undefined ? voteShareDecimal : undefined,
         seatsWon: body.seatsWon !== undefined ? body.seatsWon : undefined,
         notes: body.notes !== undefined ? body.notes : undefined,
+        allianceId: body.allianceId !== undefined ? body.allianceId : undefined,
       },
       include: {
         party: {
@@ -622,6 +662,121 @@ export class ElectionController {
     } catch {
       throw new NotFoundException('정당 집계를 찾을 수 없습니다.')
     }
+  }
+
+  // ── 선거 연합·블록 ──────────────────────────────────────────────
+  // 각 정당이 따로 출마하되 하나로 묶여 싸운 연합. 소속은 정당 집계 행의 allianceId라
+  // 한 정당은 한 선거에서 한 연합에만 든다(집계가 선거·정당당 1행).
+
+  @Post(':electionId/alliances')
+  async createAlliance(
+    @Request() req: any,
+    @Param('electionId') electionId: string,
+    @Body()
+    body: CreateElectionAllianceBody,
+  ): Promise<any> {
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
+    const name = this.normalizeAllianceName(body.name)
+    const color = this.normalizeAllianceColor(body.color)
+    const memberPartyIds = await this.assertAllianceMembers(
+      electionId,
+      body.memberPartyIds,
+    )
+    try {
+      const alliance = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.electionAlliance.create({
+          data: {
+            electionId,
+            name,
+            shortName: body.shortName?.trim() || null,
+            color,
+            sortOrder: body.sortOrder ?? 0,
+            notes: body.notes?.trim() || null,
+          },
+        })
+        if (memberPartyIds && memberPartyIds.length > 0) {
+          await tx.electionPartyResult.updateMany({
+            where: { electionId, partyId: { in: memberPartyIds } },
+            data: { allianceId: created.id },
+          })
+        }
+        return created
+      })
+      return alliance
+    } catch (error) {
+      this.rethrowAllianceNameConflict(error)
+      throw error
+    }
+  }
+
+  @Patch(':electionId/alliances/:allianceId')
+  async updateAlliance(
+    @Request() req: any,
+    @Param('electionId') electionId: string,
+    @Param('allianceId') allianceId: string,
+    @Body()
+    body: UpdateElectionAllianceBody,
+  ): Promise<any> {
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
+    const existing = await this.prisma.electionAlliance.findFirst({
+      where: { id: allianceId, electionId },
+      select: { id: true },
+    })
+    if (!existing) throw new NotFoundException('선거 연합을 찾을 수 없습니다.')
+    const data: Prisma.ElectionAllianceUpdateInput = {}
+    if (body.name !== undefined) data.name = this.normalizeAllianceName(body.name)
+    if (body.shortName !== undefined) data.shortName = body.shortName?.trim() || null
+    if (body.color !== undefined) data.color = this.normalizeAllianceColor(body.color)
+    if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
+    if (body.notes !== undefined) data.notes = body.notes?.trim() || null
+    const memberPartyIds = await this.assertAllianceMembers(
+      electionId,
+      body.memberPartyIds,
+    )
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.electionAlliance.update({
+          where: { id: allianceId },
+          data,
+        })
+        if (memberPartyIds) {
+          await tx.electionPartyResult.updateMany({
+            where: {
+              electionId,
+              allianceId,
+              partyId: { notIn: memberPartyIds },
+            },
+            data: { allianceId: null },
+          })
+          if (memberPartyIds.length > 0) {
+            await tx.electionPartyResult.updateMany({
+              where: { electionId, partyId: { in: memberPartyIds } },
+              data: { allianceId },
+            })
+          }
+        }
+        return updated
+      })
+    } catch (error) {
+      this.rethrowAllianceNameConflict(error)
+      throw error
+    }
+  }
+
+  @Delete(':electionId/alliances/:allianceId')
+  async deleteAlliance(
+    @Request() req: any,
+    @Param('electionId') electionId: string,
+    @Param('allianceId') allianceId: string,
+  ): Promise<void> {
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
+    const existing = await this.prisma.electionAlliance.findFirst({
+      where: { id: allianceId, electionId },
+      select: { id: true },
+    })
+    if (!existing) throw new NotFoundException('선거 연합을 찾을 수 없습니다.')
+    // 소속 정당 집계는 FK SetNull로 '연합 없음'이 된다(집계 자체는 남음)
+    await this.prisma.electionAlliance.delete({ where: { id: allianceId } })
   }
 
   @Get(':id')
@@ -966,6 +1121,57 @@ export class ElectionController {
    * 쓰기 전 소유 검증 — 본인이 등록한 선거만 수정/삭제할 수 있다.
    * (역사적 국가 도메인의 403 패턴과 동일. 하위 리소스 쓰기도 부모 선거 소유자로 게이트한다.)
    */
+  private normalizeAllianceName(raw: string | undefined): string {
+    const name = raw?.trim() ?? ''
+    if (!name) throw new BadRequestException('연합 명칭을 입력하세요.')
+    if (name.length > 200) {
+      throw new BadRequestException('연합 명칭은 200자 이하여야 합니다.')
+    }
+    return name
+  }
+
+  private normalizeAllianceColor(raw: string | null | undefined): string | null {
+    const color = raw?.trim() ?? ''
+    if (!color) return null
+    const withHash = color.startsWith('#') ? color : `#${color}`
+    if (!ALLIANCE_COLOR_PATTERN.test(withHash)) {
+      throw new BadRequestException('연합 색은 #RRGGBB 형식이어야 합니다.')
+    }
+    return withHash.toUpperCase()
+  }
+
+  /** 소속 정당은 이 선거에 정당 집계가 있어야 한다 — 소속이 집계 행에 저장되므로 */
+  private async assertAllianceMembers(
+    electionId: string,
+    partyIds: string[] | undefined,
+  ): Promise<string[] | undefined> {
+    if (partyIds === undefined) return undefined
+    if (!Array.isArray(partyIds)) {
+      throw new BadRequestException('memberPartyIds는 배열이어야 합니다.')
+    }
+    const unique = [...new Set(partyIds.filter((partyId) => typeof partyId === 'string' && partyId))]
+    if (unique.length === 0) return []
+    const found = await this.prisma.electionPartyResult.findMany({
+      where: { electionId, partyId: { in: unique } },
+      select: { partyId: true },
+    })
+    if (found.length !== unique.length) {
+      throw new BadRequestException(
+        '정당 집계가 없는 정당은 연합에 넣을 수 없습니다. 먼저 정당 집계를 추가하세요.',
+      )
+    }
+    return unique
+  }
+
+  private rethrowAllianceNameConflict(error: unknown): void {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      throw new ConflictException('이 선거에 같은 이름의 연합이 이미 있습니다.')
+    }
+  }
+
   private async ensureElectionOwner(id: string, accountId?: string) {
     const election = await this.prisma.election.findUnique({
       where: { id },

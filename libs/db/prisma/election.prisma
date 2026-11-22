@@ -6,6 +6,7 @@
 /// + 국민투표/다중 선택안(ElectionBallotOption / ElectionBallotOptionResult)
 /// + 정당 일반 소속(PoliticalPartyMembership) — 지도부(PoliticalPartyLeadership)와 별개
 /// + 행정부(Cabinet)와 정당의 연정·여당 관계(CabinetPoliticalParty)
+/// + 선거 연합·블록(ElectionAlliance) — 각 정당이 따로 출마하되 연합으로 싸운 묶음(선거마다 새로 꾸림)
 ///
 /// 연결 원칙:
 /// - 인물(Person)은 후보(Candidacy)·당원(Membership)·재임(Tenure)으로 각각 다른 행에 표현
@@ -208,6 +209,7 @@ model Election {
   candidacies    ElectionCandidacy[]
   ballotOptions  ElectionBallotOption[]
   partyResults   ElectionPartyResult[]
+  alliances      ElectionAlliance[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -242,6 +244,10 @@ model ElectionPartyResult {
 
   notes String? @db.Text
 
+  /// 이 선거에서 속한 선거 연합(선택). 정당 집계가 선거·정당당 1행이라 '한 선거에 한 연합'이 저절로 지켜진다
+  allianceId String?           @map("alliance_id") @db.Char(36)
+  alliance   ElectionAlliance? @relation("ElectionAllianceMembers", fields: [allianceId], references: [id], onDelete: SetNull)
+
   election Election       @relation(fields: [electionId], references: [id], onDelete: Cascade)
   party    PoliticalParty @relation("ElectionPartyResults", fields: [partyId], references: [id], onDelete: Cascade)
 
@@ -254,7 +260,44 @@ model ElectionPartyResult {
   @@unique([electionId, partyId], name: "uq_election_party_result_election_party")
   @@index([electionId], name: "idx_election_party_result_electionId")
   @@index([partyId], name: "idx_election_party_result_partyId")
+  @@index([allianceId], name: "idx_election_party_result_allianceId")
   @@map("election_party_result")
+}
+
+// ========================
+// ElectionAlliance (선거 연합·블록)
+// ========================
+/// 한 선거에서 여러 정당이 각자 출마하되 하나로 묶여 싸운 연합(예: 1907 뷜로 블록, 후보 단일화 연대).
+/// 연합은 선거마다 새로 꾸려지므로 선거에 붙인다. 소속은 ElectionPartyResult.allianceId.
+/// 공동 명부 하나로 출마해 한 정당처럼 득표했다면 연합이 아니라 정당으로 등록한다.
+/// 연립정부(연정)는 CabinetPoliticalParty, 합당은 PoliticalPartyTransition(MERGER_INTO)이 맡는다.
+model ElectionAlliance {
+  id String @id @default(uuid()) @db.Char(36)
+
+  electionId String @map("election_id") @db.Char(36)
+
+  /// 연합 명칭 (예: 뷜로 블록)
+  name String @db.VarChar(200)
+
+  /// 짧은 표기
+  shortName String? @map("short_name") @db.VarChar(80)
+
+  /// 좌석도 묶음 표시 색(#RRGGBB, 선택)
+  color String? @db.VarChar(16)
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  notes String? @db.Text
+
+  election Election              @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  members  ElectionPartyResult[] @relation("ElectionAllianceMembers")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([electionId, name], name: "uq_election_alliance_election_name")
+  @@index([electionId], name: "idx_election_alliance_electionId")
+  @@map("election_alliance")
 }
 
 // ========================
