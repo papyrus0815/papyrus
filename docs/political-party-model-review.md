@@ -183,3 +183,13 @@ ElectionAlliance에 `allianceOrganizationId?` — 선거마다의 연합이 지�
 - 실데이터: 국가 파시스트당 산하 조직 7건(파시즘 대평의회·검은 셔츠단·청년 조직 3기·여성 단체·기관지 이탈리아 인민 — 이름·기간은 나무위키 인포박스).
 - 남김: 무솔리니(두체) 당직은 인물 행이 없어 미입력 · 이탈리아 전투 파쇼가 조직(NGO)으로 있음 → 정당(kind=MOVEMENT)+계보로 옮길 데이터 작업 · 청년 조직 3기 사이의 조직 계보(AGF→ONB→GIL).
 - 검증: 실API 20/20 · API 스펙 176 · 웹 스펙(소속 모달 4·인물 상세 28·정당 23) · tsc 기준선 동일 · 변경 줄 lint 0 · 1440px 화면.
+
+### B4 표지·표현·당사 — 구현 완료(미커밋)
+- 마이그레이션 `20261123070000_party_marks_expressions_hq` — `political_party_symbol`(로고·당기·상징물·투표 상징·사진·포스터, 대표·캡션·구조화 기간) · `political_party_expression`(표어·구호·당가·당 노래·인사법, 원문·언어·번역·음원 링크·대표·기간) · `political_party_headquarters`(도시 FK 선택·건물·주소·기간·지속 중 1개) · `political_party.color_palette`(JSON #RRGGBB 배열). 기존 logo_url 1건 → 대표 LOGO 표지로 백필.
+  (새 표의 city FK 기본 이름이 political_party.headquarters_city_id FK와 겹쳐 `map: "party_hq_history_city_id_fkey"`)
+- 캐시: `logoUrl` = 대표 LOGO 표지(정당 폼의 로고 업로드는 대표 LOGO를 만들거나 바꾸고, 지우면 대표 표시만 끈다 — 이력 보존), `headquartersCityId` = 지속 중 당사(없으면 가장 늦게까지 쓴 당사)의 도시. 둘 다 `party-marks.util` 한 곳. 정당 API의 `headquartersCityId` 쓰기는 무시(이력이 정본).
+- API: `/symbols`·`/expressions`·`/headquarters` CRUD(종류별 대표 1개, 이미지·링크 형식, 언어 코드, 역전, 도시 존재, 당사는 도시·건물·주소 중 하나) · 정당 생성·수정의 colorPalette 검증(최대 12, 대문자·중복 제거).
+- 웹: 정당 상세 「표지」(썸네일 격자·업로드 또는 주소)·「표어·당가」(원문 기울임·언어·번역·음원 링크; 노래는 '제목' 라벨)·「당사」(도시 검색·건물·주소·지금의 당사) · 정당 모달 '상징색' 칩 편집.
+- 실데이터: 국가 파시스트당 표어 Credere, Obbedire, Combattere(믿고, 따르고, 싸우라)·당가 Giovinezza(청춘이여)·당사 팔라초 브라스키(로마 — 도시 목록에 로마가 없어 주소로)·상징색 검정.
+- 남김: 당기·로고·파스케스 이미지(파일·라이선스 확인 후 B8) · 로마 도시 행.
+- 검증: 실API 16/17(1건은 테스트 순서 오류 — 지속 중 당사는 끝을 비운다는 규칙대로 동작) · API 스펙 15 · 웹 스펙 14 · tsc 기준선 동일 · 신규 lint 0 · 1440px 화면.
