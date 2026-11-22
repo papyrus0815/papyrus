@@ -36,6 +36,7 @@ import {
   membershipOverlapsTenure,
 } from '../domain/party-top-leaders.util'
 import { serializeElectionBigInt } from '../election-serialize.util'
+import { ideologyIdsFromText, syncPartyIdeologies } from '../domain/party-ideology.util'
 import {
   type StructuredDateColumns,
   type StructuredDateInput,
@@ -60,6 +61,9 @@ export interface CreatePoliticalPartyBody {
   name: string
   shortName?: string | null
   localName?: string | null
+  /** 이념 카탈로그 id 목록(순서 = 표시 순서) — 정본. 주면 연결을 이 목록에 맞춘다 */
+  ideologyIds?: string[]
+  /** @deprecated 문자열 이념 — 카탈로그로 풀어 연결한다(구 클라이언트 호환). ideologyIds가 우선 */
   ideology?: string | null
   position?: string | null
   /** 종류 — PARTY(기본)·MOVEMENT·FACTION·PARLIAMENTARY_GROUP·ELECTORAL_LIST·OTHER */
@@ -84,6 +88,8 @@ export interface UpdatePoliticalPartyBody {
   name?: string
   shortName?: string | null
   localName?: string | null
+  ideologyIds?: string[]
+  /** @deprecated 문자열 이념 — ideologyIds가 우선 */
   ideology?: string | null
   position?: string | null
   kind?: string | null
@@ -571,7 +577,6 @@ export class PoliticalPartyController {
         name: body.name,
         shortName: body.shortName ?? undefined,
         localName: body.localName ?? undefined,
-        ideology: body.ideology ?? undefined,
         position: body.position as any,
         kind: this.parsePartyKind(body.kind) ?? undefined,
         description: body.description ?? undefined,
@@ -584,6 +589,7 @@ export class PoliticalPartyController {
         historicalCountryId: body.historicalCountryId ?? undefined,
       },
     })
+    await this.applyIdeologies(row.id, body.ideologyIds, body.ideology)
     await this.notificationService.notifyPoliticalParty(
       row.name,
       EventMethod.CREATE,
@@ -623,7 +629,6 @@ export class PoliticalPartyController {
     if (body.name !== undefined) data.name = body.name
     if (body.shortName !== undefined) data.shortName = body.shortName
     if (body.localName !== undefined) data.localName = body.localName
-    if (body.ideology !== undefined) data.ideology = body.ideology
     if (body.position !== undefined) data.position = body.position
     if (body.kind !== undefined) data.kind = this.parsePartyKind(body.kind) ?? PoliticalPartyKind.PARTY
     if (body.description !== undefined) data.description = body.description
@@ -643,10 +648,12 @@ export class PoliticalPartyController {
       '해산일은 창당일 이후여야 합니다.',
     )
 
-    const row = await this.prisma.politicalParty.update({
+    await this.prisma.politicalParty.update({
       where: { id },
       data: data as any,
     })
+    await this.applyIdeologies(id, body.ideologyIds, body.ideology)
+    const row = await this.prisma.politicalParty.findUniqueOrThrow({ where: { id } })
     await this.notificationService.notifyPoliticalParty(
       row.name,
       EventMethod.UPDATE,
@@ -680,6 +687,31 @@ export class PoliticalPartyController {
     if (structured !== undefined) return parseStructuredDateInput(structured, fieldLabel)
     if (legacyIso !== undefined) return structuredDateFromLegacyIso(legacyIso, fieldLabel)
     return undefined
+  }
+
+  /**
+   * 이념 연결 반영 — ideologyIds(정본)가 우선, 없으면 옛 문자열을 카탈로그로 풀어서.
+   * 둘 다 undefined면 건드리지 않는다. 표시 캐시(ideology)는 sync가 다시 쓴다.
+   */
+  private async applyIdeologies(
+    partyId: string,
+    ideologyIds: string[] | undefined,
+    legacyText: string | null | undefined,
+  ): Promise<void> {
+    if (ideologyIds !== undefined) {
+      if (!Array.isArray(ideologyIds)) throw new BadRequestException('ideologyIds는 배열이어야 합니다.')
+      const ids = [...new Set(ideologyIds.filter((value) => typeof value === 'string' && value))]
+      const found = ids.length > 0 ? await this.prisma.ideology.count({ where: { id: { in: ids } } }) : 0
+      if (found !== ids.length) throw new BadRequestException('없는 이념이 섞여 있습니다.')
+      await this.prisma.$transaction((tx) => syncPartyIdeologies(tx, partyId, ids))
+      return
+    }
+    if (legacyText !== undefined) {
+      await this.prisma.$transaction(async (tx) => {
+        const ids = await ideologyIdsFromText(tx, legacyText)
+        await syncPartyIdeologies(tx, partyId, ids)
+      })
+    }
   }
 
   /** 구조화 칸 + DATETIME 거울(foundedDate/dissolvedDate) */

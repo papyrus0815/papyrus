@@ -127,10 +127,10 @@ model PoliticalParty {
   /// 현지어 명칭
   localName String? @map("local_name") @db.VarChar(150)
 
-  /// 이념(자유 텍스트)
+  /// 이념 표시 캐시 — 정본은 PoliticalPartyIdeology(카탈로그 연결). 서비스가 연결 순서대로 이름을 이어 갱신한다(목록·검색이 조인 없이 돈다)
   ideology String? @db.Text
 
-  /// 이념 스펙트럼(요약)
+  /// 이념 스펙트럼 — 대표값. 시기별 변화는 PoliticalPartyPositionPeriod(지속 중 행을 저장하면 이 칸도 맞춘다)
   position PoliticalPosition?
 
   /// 종류 — 정당·운동·붕당·교섭단체·공동 명부
@@ -184,6 +184,10 @@ model PoliticalParty {
   aliases              PoliticalPartyAlias[]
   /// 법적 지위 기간(합법·유일 합법·불법화·해산 판결…)
   legalStatuses        PoliticalPartyLegalStatus[]
+  /// 이념 연결(카탈로그) — 대표·기간·순서
+  ideologyLinks        PoliticalPartyIdeology[]
+  /// 스펙트럼 기간 변화
+  positionPeriods      PoliticalPartyPositionPeriod[]
   leaderships          PoliticalPartyLeadership[]
   affiliations         PoliticalPartyOrganization[]
   /// 일반 당원·소속 기간
@@ -292,6 +296,84 @@ model PoliticalPartyAlias {
   @@unique([partyId, name, type, languageCode], name: "uniq_party_alias")
   @@index([partyId], name: "idx_party_alias_partyId")
   @@map("political_party_alias")
+}
+
+// ========================
+// PoliticalPartyIdeology (정당 × 이념 카탈로그)
+// ========================
+
+/// 정당의 이념·노선 — 카탈로그(Ideology) 연결. 순서 = 표시 순서, isPrimary = 대표 이념.
+/// 기간은 그 이념을 내건 시기(나중에 버린 노선 등). 한 정당에 같은 이념은 한 행.
+model PoliticalPartyIdeology {
+  id String @id @default(uuid()) @db.Char(36)
+
+  partyId    String @map("party_id") @db.Char(36)
+  ideologyId String @map("ideology_id") @db.Char(36)
+
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
+
+  note      String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
+  party    PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  /// 쓰이는 이념은 지울 수 없다(연결을 먼저 푼다)
+  ideology Ideology       @relation(fields: [ideologyId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([partyId, ideologyId], name: "uniq_party_ideology")
+  @@index([ideologyId], name: "idx_party_ideology_ideologyId")
+  @@map("political_party_ideology")
+}
+
+// ========================
+// PoliticalPartyPositionPeriod (스펙트럼 기간)
+// ========================
+
+/// 정당 스펙트럼의 시기별 변화 — 좌경화·우경화. 지속 중(isCurrent) 행을 저장하면 PoliticalParty.position도 맞춘다.
+model PoliticalPartyPositionPeriod {
+  id String @id @default(uuid()) @db.Char(36)
+
+  partyId String @map("party_id") @db.Char(36)
+
+  position PoliticalPosition
+
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
+
+  isCurrent Boolean @default(false) @map("is_current")
+
+  /// 근거·맥락 — '1990년대 제3의 길 노선으로 중도좌파'
+  note      String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
+  party PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([partyId], name: "idx_party_position_period_partyId")
+  @@map("political_party_position_period")
 }
 
 // ========================

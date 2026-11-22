@@ -28,6 +28,7 @@ import { EthnicityModule } from '../../../libs/ethnicity/ethnicity.module'
 import { GlossaryModule } from '../../../libs/glossary/glossary.module'
 import { TreatyModule } from '../../../libs/treaty/treaty.module'
 import { ElectionModule } from '../../../libs/election/election.module'
+import { IdeologyModule } from '../../../libs/ideology/ideology.module'
 import { PoliticalSystemModule } from '../../../libs/political-system/political-system.module'
 import { TradeModule } from '../../../libs/trade/trade.module'
 import { EntityLinkSearchModule } from '../../../libs/entity-link-search/entity-link-search.module'
@@ -85,6 +86,7 @@ import {
     GlossaryModule,
     TreatyModule,
     ElectionModule,
+    IdeologyModule,
     PoliticalSystemModule,
     TradeModule,
     EntityLinkSearchModule,

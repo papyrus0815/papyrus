@@ -1,0 +1,74 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                            IDEOLOGY CATALOG                                  ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+///
+/// 이념·노선 카탈로그 — 정당·조직·인물이 함께 쓰는 공용 정본(설계 docs/political-party-model-review.md §4.3, B2).
+///
+/// 왜 문자열이 아닌가: 쉼표로 이은 이념 문자열은 정당끼리 가로지르지 못한다('조합주의 정당 전부'),
+/// 표기가 흩어지고(포퓰리즘·표퓰리즘), 계층이 없다(파시즘 ⊃ 이탈리아 파시즘). 카탈로그 한 행 = 한 개념.
+///
+/// 범주: 위키 인포박스의 '이념' 칸에는 사상(파시즘) 말고도 정책 노선(자유무역·보통선거)과
+/// 이익 대변(참전군인 권익)이 함께 들어간다. 지우지 않고 범주로 가른다.
+
+enum IdeologyCategory {
+  /// 사상·주의 (파시즘, 자유주의, 공화주의, 반공주의)
+  IDEOLOGY
+  /// 정책 노선 (자유무역, 보통선거, 농지개혁, 미일동맹)
+  POLICY
+  /// 이익 대변 (참전군인 권익, 소수민족 권익, 상공인)
+  INTEREST
+  /// 기타
+  OTHER
+}
+
+model Ideology {
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 한국어 표준 명칭 — 전역 유일(표기 변형은 IdeologyAlias)
+  name String @unique @db.VarChar(120)
+
+  /// 영문 명칭 (Italian fascism)
+  englishName String? @map("english_name") @db.VarChar(150)
+
+  category IdeologyCategory @default(IDEOLOGY)
+
+  /// 상위 개념 — 파시즘 ⊃ 이탈리아 파시즘, 자유주의 ⊃ 사회자유주의
+  parentId String? @map("parent_id") @db.Char(36)
+
+  description String? @db.Text
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  parent   Ideology?  @relation("IdeologyHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Ideology[] @relation("IdeologyHierarchy")
+
+  aliases    IdeologyAlias[]
+  partyLinks PoliticalPartyIdeology[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([parentId], name: "idx_ideology_parentId")
+  @@index([category], name: "idx_ideology_category")
+  @@map("ideology")
+}
+
+/// 이념의 다른 표기·번역 — 검색·이관 대조용(표퓰리즘 → 포퓰리즘, Fascismo → 파시즘)
+model IdeologyAlias {
+  id String @id @default(uuid()) @db.Char(36)
+
+  ideologyId String @map("ideology_id") @db.Char(36)
+
+  /// 표기 — 전역 유일(한 표기는 한 개념만 가리킨다)
+  name String @unique @db.VarChar(150)
+
+  /// ISO 639 (ko, en, it…)
+  languageCode String? @map("language_code") @db.VarChar(10)
+
+  ideology Ideology @relation(fields: [ideologyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ideologyId], name: "idx_ideology_alias_ideologyId")
+  @@map("ideology_alias")
+}
