@@ -3023,7 +3023,15 @@ export function ModernExecutiveSpectrumCard({
       maxY,
     )
 
-    const eraBands = regimeEras
+    /*
+     * 같은 시기에 나란히 선 정체(헝가리 왕국 ∥ 오스트리아-헝가리 이중제국, 프로이센 ∥ 독일 제국, 서독 ∥ 동독)는
+     * 한 줄에 겹쳐 그리면 이름 글자가 포개졌다 — 겹치는 것끼리는 아랫줄로 내린다(시작순 탐욕 배정).
+     * 줄 비교는 연도로 한다 — 화면 %로 하면 짧은 체제의 최소 폭(2%)이 다음 체제에 살짝 닿는 것까지 겹침으로 세어
+     * 독일이 4줄이 됐다(바이마르 14년 → 나치). 그런 칸은 이름을 안 그릴 만큼 좁아 닿아도 글자가 포개지지 않는다.
+     */
+    const laneEnds: number[] = []
+    const eraBands = [...regimeEras]
+      .sort((left, right) => left.startYear - right.startYear)
       .map((era, idx) => {
         const end = era.endYear ?? nowYr
         const dur = Math.max(0.8, end - era.startYear)
@@ -3032,15 +3040,23 @@ export function ModernExecutiveSpectrumCard({
           2,
           Math.min(100 - leftPct, axis.toPct(era.startYear + dur) - leftPct),
         )
+        let lane = laneEnds.findIndex((laneEndYear) => laneEndYear <= era.startYear)
+        if (lane === -1) {
+          lane = laneEnds.length
+          laneEnds.push(end)
+        }
+        laneEnds[lane] = end
         return {
           ...era,
           endResolved: end,
           leftPct,
           widthPct,
+          lane,
           even: idx % 2 === 0,
         }
       })
       .filter((b) => b.widthPct > 0)
+    const eraLaneCount = Math.max(1, laneEnds.length)
 
     const mapTrack = (
       items: ExecutiveTimelineItem[],
@@ -3093,7 +3109,7 @@ export function ModernExecutiveSpectrumCard({
       .slice(0, 10)
       .reverse()
 
-    return { minY, maxY, eraBands, tracks, axis, recentChips }
+    return { minY, maxY, eraBands, eraLaneCount, tracks, axis, recentChips }
   }, [timeline, regimeEras, theme.mode])
 
   if (!model) {
@@ -3157,7 +3173,7 @@ export function ModernExecutiveSpectrumCard({
               {hasLabelCol ? (
                 <ExecTrackAxisLabel>헌정체제</ExecTrackAxisLabel>
               ) : null}
-              <RegimeEraBar>
+              <RegimeEraBar style={{ height: model.eraLaneCount * REGIME_LANE_PX + 2 }}>
                 <AxisGapMarks gaps={model.axis.gaps} />
                 {model.eraBands.map((band) => (
                   <RegimeEraSegBtn
@@ -3167,6 +3183,9 @@ export function ModernExecutiveSpectrumCard({
                     style={{
                       left: `${band.leftPct.toFixed(2)}%`,
                       width: `${band.widthPct.toFixed(2)}%`,
+                      top: band.lane * REGIME_LANE_PX,
+                      height: REGIME_LANE_PX - (model.eraLaneCount > 1 ? 1 : 0),
+                      bottom: 'auto',
                     }}
                     onClick={() => onOpenPoliticalSystem?.()}
                     title={`${band.label}${band.governmentFormLabel ? ` (${band.governmentFormLabel})` : ''} · ${band.startYear}–${band.endYear ?? '현재'}`}
@@ -4573,6 +4592,9 @@ const RegimeEraBar = styled.div`
   background: ${({ theme }) => ledgerBackground(theme.mode)};
   overflow: hidden;
 `
+
+/** 헌정 체제 띠 한 줄 높이 — 겹치는 정체가 있으면 줄 수만큼 띠가 자란다 */
+const REGIME_LANE_PX = 16
 
 const RegimeEraSegBtn = styled.button<{ $even: boolean }>`
   position: absolute;
