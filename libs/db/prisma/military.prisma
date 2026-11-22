@@ -898,6 +898,8 @@ model MilitaryUnit {
   eventRelations           EventDepartmentRelation[]      @relation("EventMilitaryUnitRelations")
   /// 레거시 지휘관 기록 (GovernmentPositionTenure로 무손실 이관됨)
   commanders               MilitaryUnitCommander[]
+  /// 이 부대를 산하 준군사조직 등으로 둔 정당(검은 셔츠단 MVSN·SS)
+  partyAffiliations        PoliticalPartyOrganization[] @relation("PoliticalPartyMilitaryUnit")
   /// 참전 기록
   wars                     WarHistoryMilitaryUnit[]
 

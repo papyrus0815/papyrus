@@ -707,25 +707,29 @@ const party: Projection = {
   subject: 'person',
   objects: ['politicalParty'],
   async forward(prisma, _ctx, personId) {
-    const [memberships, leaderships] = await Promise.all([
-      prisma.politicalPartyMembership.findMany({
-        where: { personId },
-        select: { roleTitle: true, startDate: true, endDate: true, party: { select: { id: true, name: true } } },
-      }),
-      prisma.politicalPartyLeadership.findMany({
-        where: { personId },
-        select: { roleTitle: true, startDate: true, endDate: true, party: { select: { id: true, name: true } } },
-      }),
-    ])
+    /* 당직의 정본은 당원 소속(roleCategory=LEADERSHIP) — 옛 지도부 표는 B3에서 제거 */
+    const memberships = await prisma.politicalPartyMembership.findMany({
+      where: { personId },
+      select: {
+        roleTitle: true,
+        roleCategory: true,
+        startDate: true,
+        endDate: true,
+        party: { select: { id: true, name: true } },
+      },
+    })
     const base = { relation: this.relation, group: this.group, direction: 'out' as const }
-    return result([
-      ...memberships.map((row) =>
-        edge(base, '당원', simpleTarget('politicalParty', row.party), row.roleTitle ?? null, periodFromDates(row.startDate, row.endDate)),
+    return result(
+      memberships.map((row) =>
+        edge(
+          base,
+          row.roleCategory === 'LEADERSHIP' ? '당직' : '당원',
+          simpleTarget('politicalParty', row.party),
+          row.roleTitle ?? null,
+          periodFromDates(row.startDate, row.endDate),
+        ),
       ),
-      ...leaderships.map((row) =>
-        edge(base, '당직', simpleTarget('politicalParty', row.party), row.roleTitle, periodFromDates(row.startDate, row.endDate)),
-      ),
-    ])
+    )
   },
   async reverse(prisma, ctx, _kind, id) {
     const where = { partyId: id }

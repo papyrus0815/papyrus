@@ -1118,7 +1118,12 @@ export class PersonController {
       ),
       books: serializeBigInt(person.Book || []),
       organizationRoles: serializeBigInt(person.OrganizationPersonRole || []),
-      partyLeaderships: serializeBigInt(person.PoliticalPartyLeadership || []),
+      /* 당직 = 당원 소속 중 LEADERSHIP(옛 지도부 표 제거 후에도 같은 키로) */
+      partyLeaderships: serializeBigInt(
+        (person.politicalPartyMemberships || []).filter(
+          (membership: { roleCategory?: string | null }) => membership.roleCategory === 'LEADERSHIP',
+        ),
+      ),
       partyMemberships: serializeBigInt(person.politicalPartyMemberships || []),
       electionCandidacies: serializeBigInt(person.electionCandidacies || []),
       militaryCommands: (() => {

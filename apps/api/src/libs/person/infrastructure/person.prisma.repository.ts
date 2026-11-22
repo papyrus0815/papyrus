@@ -364,7 +364,8 @@ const PERSON_INFOGRAPHIC_INCLUDE = {
   },
   militaryCareers: { select: { id: true }, take: 1 },
   MilitaryUnitCommander: { select: { id: true }, take: 1 },
-  PoliticalPartyLeadership: { select: { id: true }, take: 1 },
+  /* 당직(LEADERSHIP) 한 건이라도 — 정치 경력 힌트 */
+  politicalPartyMemberships: { where: { roleCategory: 'LEADERSHIP' as const }, select: { id: true }, take: 1 },
   electionCandidacies: { select: { id: true }, take: 1 },
   artistCareers: { select: { id: true }, take: 1 },
   mediaCareers: { select: { id: true }, take: 1 },
@@ -879,7 +880,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           (person.militaryCareers?.length ?? 0) > 0 ||
           (person.MilitaryUnitCommander?.length ?? 0) > 0,
         political:
-          (person.PoliticalPartyLeadership?.length ?? 0) > 0 ||
+          (person.politicalPartyMemberships?.length ?? 0) > 0 ||
           (person.electionCandidacies?.length ?? 0) > 0,
         academic: academicRows.length > 0,
         religious: (person.religiousCareers?.length ?? 0) > 0,
@@ -1876,21 +1877,6 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
           },
         },
-        PoliticalPartyLeadership: {
-          select: {
-            id: true,
-            roleTitle: true,
-            startDate: true,
-            endDate: true,
-            party: {
-              select: {
-                id: true,
-                name: true,
-                shortName: true,
-              },
-            },
-          },
-        },
         politicalPartyMemberships: {
           select: {
             id: true,
@@ -1899,6 +1885,19 @@ export class PersonPrismaRepository implements IPersonRepository {
             endDate: true,
             roleCategory: true,
             leadershipTier: true,
+            officeKind: true,
+            officeOrdinal: true,
+            isFounder: true,
+            startEra: true,
+            startYear: true,
+            startMonth: true,
+            startDay: true,
+            startPrecision: true,
+            endEra: true,
+            endYear: true,
+            endMonth: true,
+            endDay: true,
+            endPrecision: true,
             roleTitle: true,
             notes: true,
             party: {

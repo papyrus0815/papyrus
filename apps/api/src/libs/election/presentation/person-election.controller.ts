@@ -20,10 +20,18 @@ import { serializeElectionBigInt } from '../election-serialize.util'
 import { CreatePartyMembershipDto } from './dto/create-party-membership.dto'
 import { UpdatePartyMembershipDto } from './dto/update-party-membership.dto'
 import {
-  assertMembershipStartBeforeEnd,
   assertMembershipWithinPersonLifespan,
-  membershipInputToDate,
 } from './party-membership-dates.util'
+import {
+  type StructuredDateColumns,
+  type StructuredDateInput,
+  assertStructuredRangeOrder,
+  parseStructuredDateInput,
+  readStructuredDate,
+  structuredDateData,
+  structuredDateFromLegacyIso,
+  structuredDateMirror,
+} from '../domain/party-structured-date.util'
 
 /**
  * 인물별 정당 소속·선거 후보 (persons 라우트 보조)
@@ -88,15 +96,10 @@ export class PersonElectionController {
     const person = await this.ensurePersonOwned(personId, req)
     await this.ensurePartyExists(body.partyId)
 
-    const startParsed = membershipInputToDate(
-      body.startDate,
-      body.startDate !== undefined,
-    )
-    const endParsed = membershipInputToDate(body.endDate, body.endDate !== undefined)
-    const effectiveStart = startParsed === undefined ? null : startParsed
-    const effectiveEnd = endParsed === undefined ? null : endParsed
-    assertMembershipStartBeforeEnd(effectiveStart, effectiveEnd)
-    assertMembershipWithinPersonLifespan(effectiveStart, effectiveEnd, person)
+    const start = this.resolveMembershipDate(body.start, body.startDate, '소속 시작') ?? readStructuredDate({}, 'start')
+    const end = this.resolveMembershipDate(body.end, body.endDate, '소속 끝') ?? readStructuredDate({}, 'end')
+    assertStructuredRangeOrder(start, end, '종료일은 시작일 이후여야 합니다.')
+    assertMembershipWithinPersonLifespan(structuredDateMirror(start), structuredDateMirror(end), person)
 
     const roleCategory =
       body.roleCategory != null ? body.roleCategory : undefined
@@ -106,14 +109,18 @@ export class PersonElectionController {
       data: {
         personId,
         partyId: body.partyId,
-        startDate: startParsed === undefined ? undefined : startParsed,
-        endDate: endParsed === undefined ? undefined : endParsed,
+        ...this.membershipDateData('start', start),
+        ...this.membershipDateData('end', end),
         roleCategory: roleCategory as any ?? undefined,
         leadershipTier: isLeadership
           ? body.leadershipTier != null
             ? (body.leadershipTier as any)
             : undefined
           : null,
+        /* 당직 종류·대수는 지도부일 때만 의미 — 아니면 비운다 */
+        officeKind: isLeadership ? (body.officeKind ?? null) : null,
+        officeOrdinal: isLeadership ? (body.officeOrdinal ?? null) : null,
+        isFounder: body.isFounder ?? false,
         roleTitle: body.roleTitle ?? undefined,
         notes: body.notes ?? undefined,
       },
@@ -142,19 +149,17 @@ export class PersonElectionController {
       await this.ensurePartyExists(body.partyId)
     }
 
-    const startWas = body.startDate !== undefined
-    const endWas = body.endDate !== undefined
-    const startParsed = membershipInputToDate(body.startDate, startWas)
-    const endParsed = membershipInputToDate(body.endDate, endWas)
-    const nextStart = startWas ? startParsed ?? null : existing.startDate
-    const nextEnd = endWas ? endParsed ?? null : existing.endDate
-    assertMembershipStartBeforeEnd(nextStart, nextEnd)
-    assertMembershipWithinPersonLifespan(nextStart, nextEnd, person)
+    const startInput = this.resolveMembershipDate(body.start, body.startDate, '소속 시작')
+    const endInput = this.resolveMembershipDate(body.end, body.endDate, '소속 끝')
+    const nextStart = startInput ?? readStructuredDate(existing, 'start')
+    const nextEnd = endInput ?? readStructuredDate(existing, 'end')
+    assertStructuredRangeOrder(nextStart, nextEnd, '종료일은 시작일 이후여야 합니다.')
+    assertMembershipWithinPersonLifespan(structuredDateMirror(nextStart), structuredDateMirror(nextEnd), person)
 
     const data: Record<string, unknown> = {}
     if (body.partyId !== undefined) data.partyId = body.partyId
-    if (startWas) data.startDate = startParsed ?? null
-    if (endWas) data.endDate = endParsed ?? null
+    if (startInput) Object.assign(data, this.membershipDateData('start', startInput))
+    if (endInput) Object.assign(data, this.membershipDateData('end', endInput))
 
     const roleCategoryInBody = body.roleCategory !== undefined
     const leadershipTierInBody = body.leadershipTier !== undefined
@@ -166,6 +171,18 @@ export class PersonElectionController {
     const effectiveRole = roleCategoryInBody
       ? body.roleCategory
       : existing.roleCategory
+
+    if (effectiveRole !== 'LEADERSHIP') {
+      /* 지도부가 아니면 당직 칸은 비운다 */
+      if (roleCategoryInBody) {
+        data.officeKind = null
+        data.officeOrdinal = null
+      }
+    } else {
+      if (body.officeKind !== undefined) data.officeKind = body.officeKind ?? null
+      if (body.officeOrdinal !== undefined) data.officeOrdinal = body.officeOrdinal ?? null
+    }
+    if (body.isFounder !== undefined) data.isFounder = body.isFounder
 
     if (roleCategoryInBody && body.roleCategory !== 'LEADERSHIP') {
       data.leadershipTier = null
@@ -208,6 +225,22 @@ export class PersonElectionController {
     })
     if (!existing) throw new NotFoundException('당원 기록을 찾을 수 없습니다.')
     await this.prisma.politicalPartyMembership.delete({ where: { id: membershipId } })
+  }
+
+  /** 구조화(start)가 정본, 없으면 레거시 ISO(startDate). 둘 다 undefined면 undefined(건드리지 않음) */
+  private resolveMembershipDate(
+    structured: StructuredDateInput | null | undefined,
+    legacyIso: string | null | undefined,
+    fieldLabel: string,
+  ): StructuredDateColumns | undefined {
+    if (structured !== undefined) return parseStructuredDateInput(structured, fieldLabel)
+    if (legacyIso !== undefined) return structuredDateFromLegacyIso(legacyIso, fieldLabel)
+    return undefined
+  }
+
+  /** 구조화 칸 + DATETIME 거울(startDate/endDate — 재임 겹침·정렬이 읽는다) */
+  private membershipDateData(prefix: 'start' | 'end', columns: StructuredDateColumns) {
+    return { ...structuredDateData(prefix, columns), [`${prefix}Date`]: structuredDateMirror(columns) }
   }
 
   @Get(':personId/election-candidacies')

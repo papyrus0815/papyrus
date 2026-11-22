@@ -1,28 +1,10 @@
 import { BadRequestException } from '@nestjs/common'
 
-/** ISO 문자열 또는 null/빈 값 → Date | null | undefined (필드 미포함은 undefined) */
-export function membershipInputToDate(
-  value: string | null | undefined,
-  wasInBody: boolean,
-): Date | null | undefined {
-  if (!wasInBody) return undefined
-  if (value == null || value === '') return null
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) {
-    throw new BadRequestException('날짜 형식이 올바르지 않습니다.')
-  }
-  return d
-}
-
-export function assertMembershipStartBeforeEnd(
-  start: Date | null | undefined,
-  end: Date | null | undefined,
-): void {
-  if (start != null && end != null && end.getTime() < start.getTime()) {
-    throw new BadRequestException('종료일은 시작일 이후여야 합니다.')
-  }
-}
-
+/**
+ * 당원 활동 기간이 인물 생몰 안에 드는지 — 연 단위.
+ * 시작·끝은 구조화 칸의 DATETIME 거울(AD 1000~9999)이라 그 밖(기원전 등)은 검사하지 않는다.
+ * (ISO 파싱·순서 검사는 party-structured-date.util이 맡는다)
+ */
 export function assertMembershipWithinPersonLifespan(
   start: Date | null | undefined,
   end: Date | null | undefined,

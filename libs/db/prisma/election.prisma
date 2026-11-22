@@ -4,7 +4,7 @@
 ///
 /// 선거 단위(Election) · 선거구(ElectoralDistrict) · 후보(ElectionCandidacy) · 집계(ElectionResult)
 /// + 국민투표/다중 선택안(ElectionBallotOption / ElectionBallotOptionResult)
-/// + 정당 일반 소속(PoliticalPartyMembership) — 지도부(PoliticalPartyLeadership)와 별개
+/// + 정당 소속(PoliticalPartyMembership) — 평당원부터 당직(당수·서기장, officeKind)까지 한 표
 /// + 행정부(Cabinet)와 정당의 연정·여당 관계(CabinetPoliticalParty)
 /// + 선거 연합·블록(ElectionAlliance) — 각 정당이 따로 출마하되 연합으로 싸운 묶음(선거마다 새로 꾸림)
 ///
@@ -447,6 +447,28 @@ enum PartyMembershipRoleCategory {
   OTHER
 }
 
+/// 당직 종류 — 직함 문자열과 별개로 '역대 당수'·'역대 서기장'을 정당끼리 같은 축으로 모은다
+enum PartyOfficeKind {
+  /// 당수·최고 지도자 (두체, 퓌러, 총재)
+  LEADER
+  /// 당 의장·대표
+  CHAIR
+  /// 서기장·사무총장 (Segretario, 총서기)
+  SECRETARY_GENERAL
+  /// 부대표·부총재
+  DEPUTY_LEADER
+  /// 원내대표
+  PARLIAMENTARY_LEADER
+  /// 대변인
+  SPOKESPERSON
+  /// 재정·회계 책임
+  TREASURER
+  /// 명예 당수
+  HONORARY_LEADER
+  /// 기타 당직
+  OTHER
+}
+
 /// 역할 분류가 지도부(LEADERSHIP)일 때 상대적 위계 (직함 문자열과 별도로 ‘최고인지’ 구분)
 enum PartyMembershipLeadershipTier {
   /// 최고 책임·1인 (대표·총재 등)
@@ -466,15 +488,38 @@ enum PartyMembershipLeadershipTier {
 // ========================
 // PoliticalPartyMembership (일반 당원·소속)
 // ========================
-/// 당대표 등 공식 직책은 PoliticalPartyLeadership 사용. 여기서는 소속·기간만 기록.
+/// 소속·기간 + 당직. 당수·서기장 같은 당직은 roleCategory=LEADERSHIP + officeKind(+officeOrdinal 제N대).
+/// 기구의 구성원(정치국원·대평의회 위원)은 그 기구(Organization)의 인물 직책(OrganizationPersonRole)에 둔다 — 두 곳에 같은 사실을 넣지 않는다.
 model PoliticalPartyMembership {
   id String @id @default(uuid()) @db.Char(36)
 
   personId String @map("person_id") @db.Char(36)
   partyId  String @map("party_id") @db.Char(36)
 
+  /// AD 1000~9999 거울 — 정렬·재임 겹침 판정 호환. 진실은 아래 구조화 칸
   startDate DateTime? @map("start_date")
   endDate   DateTime? @map("end_date")
+
+  /// 구조화 기간 — BC·연 정밀도(precision 서버 파생)
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
+
+  /// 당직 종류 — roleCategory=LEADERSHIP일 때. 직함 문자열('두체')은 roleTitle
+  officeKind PartyOfficeKind? @map("office_kind")
+
+  /// 제N대 — 당직의 대수
+  officeOrdinal Int? @map("office_ordinal")
+
+  /// 창당 발기인
+  isFounder Boolean @default(false) @map("is_founder")
 
   /// 역할 분류 (국가 공통 직책 유형)
   roleCategory PartyMembershipRoleCategory @default(OTHER) @map("role_category")

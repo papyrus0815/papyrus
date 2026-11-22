@@ -3,6 +3,7 @@ import { PrismaModule } from '../shared/database'
 import { PoliticalPartyController } from './presentation/political-party.controller'
 import { PoliticalPartyIdentityController } from './presentation/political-party-identity.controller'
 import { PoliticalPartyIdeologyController } from './presentation/political-party-ideology.controller'
+import { PoliticalPartyOrganizationController } from './presentation/political-party-organization.controller'
 import { PoliticalPartyTransitionController } from './presentation/political-party-transition.controller'
 import { ElectoralDistrictController } from './presentation/electoral-district.controller'
 import { ElectionController } from './presentation/election.controller'
@@ -20,6 +21,7 @@ import { EventModule } from '../event/infrastructure/event.module'
     PoliticalPartyController,
     PoliticalPartyIdentityController,
     PoliticalPartyIdeologyController,
+    PoliticalPartyOrganizationController,
     PoliticalPartyTransitionController,
     ElectoralDistrictController,
     ElectionController,

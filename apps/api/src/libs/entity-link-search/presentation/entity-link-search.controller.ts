@@ -36,6 +36,11 @@ const ORG_TYPE_LABEL: Record<string, string> = {
   BUSINESS_ASSOCIATION: '상공·업계 단체',
   EDUCATION: '교육·학술기관',
   MILITARY_ACADEMY: '군사 교육기관',
+  PARTY_ORGAN: '당 기구',
+  MASS_ORGANIZATION: '대중 조직',
+  PARAMILITARY: '준군사조직',
+  MEDIA: '언론·출판',
+  POLITICAL_ALLIANCE: '정치 연합·인터내셔널',
   OTHER: '조직',
 }
 

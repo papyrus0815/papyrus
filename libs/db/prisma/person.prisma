@@ -338,8 +338,7 @@ model Person {
   commandedDeployedUnits   SideDeployedUnit[]         @relation("SideDeployedUnitCommander")
   Book                     Book[]
   OrganizationPersonRole   OrganizationPersonRole[]   @relation("OrganizationPersonRoles")
-  PoliticalPartyLeadership PoliticalPartyLeadership[] @relation("PoliticalPartyLeadership")
-  /// 정당 일반 소속(당원·기간). 지도부는 PoliticalPartyLeadership.
+  /// 정당 소속(당원·기간)과 당직(LEADERSHIP + officeKind).
   politicalPartyMemberships PoliticalPartyMembership[] @relation("PoliticalPartyMemberships")
   /// 선거 후보 이력
   electionCandidacies ElectionCandidacy[] @relation("ElectionCandidacies")

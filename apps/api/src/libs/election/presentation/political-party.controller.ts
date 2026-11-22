@@ -144,7 +144,6 @@ export class PoliticalPartyController {
         _count: {
           select: {
             memberships: true,
-            leaderships: true,
             electionPartyResults: true,
             cabinetAffiliations: true,
             eventRelations: true,
@@ -547,7 +546,6 @@ export class PoliticalPartyController {
         _count: {
           select: {
             memberships: true,
-            leaderships: true,
             electionPartyResults: true,
             cabinetAffiliations: true,
             eventRelations: true,

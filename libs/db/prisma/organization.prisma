@@ -67,7 +67,17 @@ enum OrganizationType {
   MILITARY_ACADEMY
   /// [1:1 브리지 전용] 기업 정본은 `industry.prisma`의 `Company` (`/companies`)를 사용한다.
   COMPANY
-  /// 기타 (예: 민간결사, 준군사단체 자유군단 등)
+  /// 당 기구 — 중앙위원회·정치국·대평의회·지역 지도부(정당의 산하·연계 조직으로 잇는다)
+  PARTY_ORGAN
+  /// 대중 조직 — 청년·여성·학생 동원 단체(발릴라, 히틀러 유겐트, 콤소몰)
+  MASS_ORGANIZATION
+  /// 준군사조직 — 검은 셔츠단, SA, 자유군단(정규 무력이 되면 군부대로)
+  PARAMILITARY
+  /// 언론·출판 — 신문·잡지·방송(기관지 이탈리아 인민, 프라우다)
+  MEDIA
+  /// 정치 연합·인터내셔널 — 인민전선, 코민테른, 사회주의 인터내셔널
+  POLITICAL_ALLIANCE
+  /// 기타 (예: 민간결사)
   OTHER
 }
 

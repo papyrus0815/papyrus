@@ -15,10 +15,8 @@
 ///   • 언어별/시대별 명칭 변화
 ///   • 공식명과 통칭의 구분
 /// 
-/// - 정당 지도부(PoliticalPartyLeadership): 인사 관리
-///   • 당대표, 원내대표, 사무총장 등
-///   • 임기와 선출 과정
-///   • 권력 구조와 파벌 관계
+/// - 당직(당수·서기장·원내대표…)은 PoliticalPartyMembership(roleCategory=LEADERSHIP + officeKind)이 정본.
+///   (옛 PoliticalPartyLeadership 표는 0행·쓰기 경로 없이 이중 정본이라 B3에서 제거)
 /// 
 /// - 정당-조직 관계(PoliticalPartyOrganization): 연계 조직
 ///   • 당 전국위원회, 산하단체
@@ -188,7 +186,6 @@ model PoliticalParty {
   ideologyLinks        PoliticalPartyIdeology[]
   /// 스펙트럼 기간 변화
   positionPeriods      PoliticalPartyPositionPeriod[]
-  leaderships          PoliticalPartyLeadership[]
   affiliations         PoliticalPartyOrganization[]
   /// 일반 당원·소속 기간
   memberships          PoliticalPartyMembership[]   @relation("PartyMemberships")
@@ -426,75 +423,81 @@ model PoliticalPartyLegalStatus {
 }
 
 // ========================
-// PoliticalPartyLeadership (Party ↔ Person)
-// ========================
-
-/// 정당과 인물 간 리더십/직책 관계(예: Chair, Leader)
-model PoliticalPartyLeadership {
-  /// PK
-  id String @id @default(uuid()) @db.Char(36)
-
-  /// 정당/인물
-  partyId  String @map("party_id") @db.Char(36)
-  personId String @map("person_id") @db.Char(36)
-
-  /// 역할명(예: Chair, Leader)
-  roleTitle String @map("role_title") @db.VarChar(100)
-
-  /// 기간
-  startDate DateTime? @map("start_date")
-  endDate   DateTime? @map("end_date")
-
-  /// 비고
-  notes String? @db.Text
-
-  //--- 관계
-  party  PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
-  person Person         @relation("PoliticalPartyLeadership", fields: [personId], references: [id], onDelete: Cascade)
-
-  //--- 메타데이터
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([partyId], name: "idx_party_leader_partyId")
-  @@index([personId], name: "idx_party_leader_personId")
-  @@map("political_party_leadership")
-}
-
-// ========================
 // PoliticalPartyOrganization (Party ↔ Organization)
 // ========================
 
-/// 정당과 조직 간 관계(예: 당 전국위원회, 산하/제휴 단체)
+/// 정당의 산하·연계 조직에서 그 조직이 맡은 자리
+enum PoliticalPartyOrganizationRole {
+  /// 지도 기구 — 대평의회·중앙위원회·정치국
+  GOVERNING_ORGAN
+  /// 청년 조직 — 발릴라, 히틀러 유겐트, 콤소몰
+  YOUTH_WING
+  /// 학생 조직
+  STUDENT_WING
+  /// 여성 조직
+  WOMEN_WING
+  /// 준군사조직 — 검은 셔츠단, SA
+  PARAMILITARY_WING
+  /// 기관지·당 매체 — 이탈리아 인민, 프라우다
+  OFFICIAL_MEDIA
+  /// 싱크탱크·정책 재단
+  THINK_TANK
+  /// 계열 노조
+  TRADE_UNION
+  /// 지역 지부·지역 지도부 — 대관구, 바트당 지역 지도부
+  REGIONAL_BRANCH
+  /// 해외 지부
+  OVERSEAS_BRANCH
+  /// 원내 교섭단체·의원단
+  PARLIAMENTARY_GROUP
+  /// 국제 조직 가입 — 코민테른, 사회주의 인터내셔널
+  INTERNATIONAL_MEMBERSHIP
+  /// 지속 연합 참여 — 인민전선
+  ALLIANCE_MEMBERSHIP
+  /// 기타
+  OTHER
+}
+
+/// 정당의 산하·연계 조직 — 조직(Organization) 또는 군부대(MilitaryUnit)에 역할·기간을 달아 잇는다.
+/// 이름 문자열로 두지 않는다: 기관지 편집장 경력·청년단 지도자·부대 지휘관이 같은 엔티티에 걸려야 한다.
+/// 대상은 organizationId·militaryUnitId 중 정확히 하나(서비스가 검증). 같은 조직이 시기마다 역할이 다르면 행이 둘.
 model PoliticalPartyOrganization {
-  /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 정당/조직
-  partyId        String @map("party_id") @db.Char(36)
-  organizationId String @map("organization_id") @db.Char(36)
+  partyId String @map("party_id") @db.Char(36)
 
-  /// 관계 유형(조직 스키마의 OrganizationRelationType 재사용)
-  relationType OrganizationRelationType @map("relation_type")
+  role PoliticalPartyOrganizationRole
 
-  /// 기간
-  startDate DateTime? @map("start_date")
-  endDate   DateTime? @map("end_date")
+  organizationId String? @map("organization_id") @db.Char(36)
+  militaryUnitId String? @map("military_unit_id") @db.Char(36)
 
-  /// 비고
-  notes String? @db.Text
+  /// 기간 — 구조화 날짜(precision 서버 파생)
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
 
-  //--- 관계
+  note      String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
   party        PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
-  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  militaryUnit MilitaryUnit?  @relation("PoliticalPartyMilitaryUnit", fields: [militaryUnitId], references: [id], onDelete: Cascade)
 
-  //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@unique([partyId, organizationId, relationType], name: "uniq_party_org_relation")
+  @@unique([partyId, organizationId, role], name: "uniq_party_org_role")
+  @@unique([partyId, militaryUnitId, role], name: "uniq_party_unit_role")
   @@index([partyId], name: "idx_party_org_partyId")
   @@index([organizationId], name: "idx_party_org_orgId")
+  @@index([militaryUnitId], name: "idx_party_org_unitId")
   @@map("political_party_organization")
 }
 
