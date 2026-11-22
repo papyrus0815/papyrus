@@ -63,6 +63,11 @@ interface InlineSearchSelectProps {
    * 옵션에 그 값이 있으면 옵션 라벨이 이긴다.
    */
   selectedLabelFallback?: string
+  /**
+   * 검색어가 바뀔 때 알림 — 옵션 밖(서버)에서 더 찾아 options에 보태야 할 때(내각 모달의 인물 검색).
+   * 칸이 걸러 보이는 것은 그대로 이 컴포넌트가 한다.
+   */
+  onQueryChange?: (query: string) => void
 }
 
 export function InlineSearchSelect({
@@ -81,9 +86,15 @@ export function InlineSearchSelect({
   dataJumpTarget,
   clearable = true,
   selectedLabelFallback,
+  onQueryChange,
 }: InlineSearchSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const onQueryChangeRef = useRef(onQueryChange)
+  onQueryChangeRef.current = onQueryChange
+  useEffect(() => {
+    onQueryChangeRef.current?.(query)
+  }, [query])
   // active = 키보드로 하이라이트된 항목 인덱스. -1 = 무선택(포커스 직후 Enter가 첫 항목을
   // 실수로 선택하지 않도록). onCreateNew가 있으면 filtered.length가 '새로 만들기' 행 인덱스.
   const [active, setActive] = useState(-1)

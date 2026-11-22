@@ -4498,20 +4498,6 @@ export const TlItemAgeNote = styled.span<{ $color: string }>`
   color: ${(p) => p.$color};
 `
 
-export const TlItemBirthRow = styled.div<{
-  $color: string
-  $thumbOnEnd?: boolean
-}>`
-  margin-top: 6px;
-  font-size: 10.5px;
-  color: ${(p) => p.$color};
-  display: flex;
-  align-items: center;
-  justify-content: ${(p) => (p.$thumbOnEnd ? 'flex-end' : 'flex-start')};
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
 /** 행정부 상세·재임 기록 — 인쇄 시 본문 영역만 출력(나머지 UI는 숨김) */
 export const CabinetDetailPrintGlobalStyle = createGlobalStyle`
   @media print {

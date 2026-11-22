@@ -1,4 +1,4 @@
-import { FiAward, FiHome, FiUser } from 'react-icons/fi'
+import { FiAward, FiUser } from 'react-icons/fi'
 
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
@@ -59,7 +59,6 @@ export function TlItem({
   posTitle,
   range,
   ageAtStart,
-  birthPlace,
   lineColor,
   /** 없으면 `lineColor` — 직책 뱃지(`TlItemPosPill`) 전용 */
   posPillLineColor,
@@ -87,7 +86,6 @@ export function TlItem({
   posTitle: string
   range: string
   ageAtStart: number | null
-  birthPlace: string | null
   lineColor: string
   posPillLineColor?: string | null
   thumbRingColor?: string | null
@@ -255,23 +253,6 @@ export function TlItem({
             </span>
           )}
         </CabS.TlItemMetaRow>
-        {birthPlace && (
-          <CabS.TlItemBirthRow
-            $color={C.placeholderText}
-            $thumbOnEnd={thumbOnEnd}
-          >
-            <FiHome
-              size={12}
-              aria-hidden
-              style={{
-                flexShrink: 0,
-                opacity: 0.88,
-                color: C.textFaint,
-              }}
-            />
-            {birthPlace}
-          </CabS.TlItemBirthRow>
-        )}
       </CabS.TlItemTextCol>
     </CabS.TlItemRoot>
   )

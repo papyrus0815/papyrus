@@ -2982,8 +2982,6 @@ export function CabinetsSection({
                                               effStartDate,
                                             )
                                           : null
-                                      const birthPlace =
-                                        getPersonBirthPlaceLabel(head?.person)
                                       const isDeleting =
                                         deletingCabinetId === item.id
                                       // 짝수: 썸네일 위·연도는 축 중앙, 홀수: 연도 축 중앙·썸네일 아래
@@ -3031,7 +3029,6 @@ export function CabinetsSection({
                                         posTitle,
                                         range,
                                         ageAtStart,
-                                        birthPlace,
                                         lineColor: uiLine,
                                         posPillLineColor: posPillLine,
                                         thumbRingColor: itemP.line,

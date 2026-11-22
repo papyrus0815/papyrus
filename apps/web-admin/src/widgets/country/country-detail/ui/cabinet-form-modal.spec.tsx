@@ -2,7 +2,7 @@ import React from 'react'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom'
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
@@ -180,36 +180,16 @@ describe('CabinetFormModal — 정보 밀도 완화 · 점세개(⋯) 설정 메
     expect(screen.getByTestId('cabinet-form-split-grid')).toBeInTheDocument()
   })
 
-  it('수반 직책의 부가 설정(행정부 분류 · 추가/친정 직위)이 점세개(⋯) 팝오버로 분리되어 초기 화면이 깔끔하게 유지된다', () => {
+  it('수반 직책의 부가 설정(행정부 분류 · 추가/친정 직위)은 ⋯ 메뉴에 숨기지 않고 바로 펼쳐 보인다', () => {
     renderCabinetModal()
 
-    // 초기 화면에 정부수반/국가원수 토글이 노출되지 않고 점세개 팝오버 안에 숨겨진다
-    expect(
-      screen.queryByRole('button', { name: '정부수반 (내각)' }),
-    ).not.toBeInTheDocument()
+    // 예전엔 ⋯ 팝오버 안에 있었다 — 모든 정보가 한눈에 보이게 칸 아래에 펼친다
+    expect(screen.queryByRole('button', { name: '수반 직책 설정 더보기' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '정부수반 (내각)' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '국가원수 (행정부)' })).toBeInTheDocument()
 
-    const roleMoreBtn = screen.getByRole('button', {
-      name: '수반 직책 설정 더보기',
-    })
-    fireEvent.click(roleMoreBtn)
-
-    const rolePopover = screen.getByRole('dialog', {
-      name: '수반 직책 설정 및 추가 프리셋',
-    })
-    expect(
-      within(rolePopover).getByRole('button', { name: '정부수반 (내각)' }),
-    ).toBeInTheDocument()
-    expect(
-      within(rolePopover).getByRole('button', { name: '국가원수 (행정부)' }),
-    ).toBeInTheDocument()
-
-    // 친정 직위('섭정') 클릭 시 직책 입력값에 반영되고 팝오버가 닫힌다
-    fireEvent.click(within(rolePopover).getByRole('button', { name: '섭정' }))
-    expect(
-      screen.queryByRole('dialog', {
-        name: '수반 직책 설정 및 추가 프리셋',
-      }),
-    ).not.toBeInTheDocument()
+    // 친정 직위('섭정') 클릭 시 직책 입력값에 반영된다
+    fireEvent.click(screen.getByRole('button', { name: '섭정' }))
     expect(screen.getByDisplayValue('섭정')).toBeInTheDocument()
   })
 
@@ -236,28 +216,16 @@ describe('CabinetFormModal — 정보 밀도 완화 · 점세개(⋯) 설정 메
     expect(activeCallout).toHaveTextContent('집단지도 · 위원회')
   })
 
-  it('출범 사건 · 취임/퇴임 경위 · 내각 개요는 기본적으로 접혀 있으며 [추가 정보 입력]을 누르면 펼쳐진다', () => {
+  it('출범 사건 · 취임/퇴임 경위 · 내각 개요는 접지 않고 처음부터 보인다', () => {
     renderCabinetModal()
 
-    expect(screen.queryByText('출범 사건')).not.toBeInTheDocument()
-    expect(
-      screen.queryByPlaceholderText(
-        '출범 기조나 연립 구성 등 간단한 설명 (선택)',
-      ),
-    ).not.toBeInTheDocument()
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /추가 정보 입력/,
-      }),
-    )
-
+    expect(screen.queryByRole('button', { name: /추가 정보 입력/ })).not.toBeInTheDocument()
     expect(screen.getByText('출범 사건')).toBeInTheDocument()
     expect(
-      screen.getByPlaceholderText(
-        '출범 기조나 연립 구성 등 간단한 설명 (선택)',
-      ),
+      screen.getByPlaceholderText('출범 기조나 연립 구성 등 간단한 설명 (선택)'),
     ).toBeInTheDocument()
+    // 배경·상세 사유 메모도 버튼 없이 바로 칸으로
+    expect(screen.getByPlaceholderText('예: 거국연립내각 구성 배경')).toBeInTheDocument()
   })
 
   it('군주 · 원수 재위 모드로 진입 시 군주 전용 직함 프리셋(국왕·황제 등)과 왕호 입력란을 제공하고 정당·내각명 필드는 숨긴다', () => {
@@ -272,5 +240,34 @@ describe('CabinetFormModal — 정보 밀도 완화 · 점세개(⋯) 설정 메
     ).toBeInTheDocument()
     expect(screen.queryByText('집권 정당')).not.toBeInTheDocument()
     expect(screen.queryByText('내각 명칭')).not.toBeInTheDocument()
+  })
+
+  it('수반 인물은 국적 칸과 같은 검색 드롭다운 — 검색어로 서버 검색 결과까지 묶음으로 보이고 고르면 선택된다', async () => {
+    const personsApi = jest.requireMock('@/shared/api/persons') as { searchPersons: jest.Mock }
+    personsApi.searchPersons.mockImplementation(async (query: string) =>
+      query.includes('이토')
+        ? [
+            {
+              id: 'ito',
+              name: '히로부미',
+              surname: '이토',
+              middleName: null,
+              originalName: '伊藤博文',
+              nameDisplayOrder: 'korean',
+              country: null,
+            },
+          ]
+        : [],
+    )
+    renderCabinetModal()
+
+    const combobox = screen.getByRole('combobox', { name: '수반 인물' })
+    fireEvent.focus(combobox)
+    fireEvent.change(combobox, { target: { value: '이토' } })
+    const option = await screen.findByRole('option', { name: /이토 히로부미/ })
+    expect(screen.getByText('다른 국가 인물 (검색)')).toBeInTheDocument()
+    fireEvent.click(option)
+    await waitFor(() => expect(screen.getByText('이토 히로부미')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '인물 변경' })).toBeInTheDocument()
   })
 })
