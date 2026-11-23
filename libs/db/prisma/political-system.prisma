@@ -119,6 +119,13 @@ model PoliticalSystem {
   upperHouseName  String? @map("upper_house_name") @db.VarChar(100)
   upperHouseSeats Int?    @map("upper_house_seats")
 
+  /// 하원(또는 단원) — 원 카탈로그(B7). 고르면 서버가 위 이름 칸을 표시 캐시로 채운다
+  lowerChamberId String?  @map("lower_chamber_id") @db.Char(36)
+  lowerChamber   Chamber? @relation("PoliticalSystemLowerChamber", fields: [lowerChamberId], references: [id], onDelete: SetNull)
+  /// 상원 — 양원제일 때만
+  upperChamberId String?  @map("upper_chamber_id") @db.Char(36)
+  upperChamber   Chamber? @relation("PoliticalSystemUpperChamber", fields: [upperChamberId], references: [id], onDelete: SetNull)
+
   //--- 국가원수 / 정부수반
   ///
   /// 직함은 **관직 정의 카탈로그**(GovernmentPositionDefinition)를 정본으로 본다 —
@@ -159,5 +166,120 @@ model PoliticalSystem {
   @@index([startYear], name: "idx_political_system_startYear")
   @@index([headOfStatePositionId], name: "idx_political_system_headOfStatePositionId")
   @@index([headOfGovernmentPositionId], name: "idx_political_system_headOfGovernmentPositionId")
+  @@index([lowerChamberId], name: "idx_political_system_lowerChamberId")
+  @@index([upperChamberId], name: "idx_political_system_upperChamberId")
   @@map("political_system")
+}
+
+// ========================
+// Chamber (의회의 원) — B7, docs/political-party-model-review.md
+// ========================
+
+/// 원의 자리 — 양원제의 하원·상원, 단원제의 유일 원, 의결권 없는 자문 기구(중추원)
+enum ChamberRole {
+  LOWER
+  UPPER
+  UNICAMERAL
+  ADVISORY
+  OTHER
+}
+
+/// 의원이 어떻게 그 자리에 오는가
+enum ChamberComposition {
+  /// 직선
+  ELECTED
+  /// 군주·정부 임명(이탈리아 왕국 원로원)
+  APPOINTED
+  /// 세습(귀족원)
+  HEREDITARY
+  /// 간선 — 주·지방 의회가 뽑음(독일 연방참의원)
+  INDIRECT
+  /// 직능·조합 대표(파시 및 조합원)
+  CORPORATIST
+  /// 섞임
+  MIXED
+  OTHER
+}
+
+/// 의회의 원 하나 — 정당 의석·선거·정체가 가리키는 정본. 공유 정본(계정 소유 없음)
+model Chamber {
+  id String @id @default(uuid()) @db.Char(36)
+
+  //--- 국가 (dual FK — 역사 우선, 현대는 dual-fill)
+  countryId           String?            @map("country_id") @db.Char(36)
+  country             Country?           @relation("CountryChambers", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation("HistoricalCountryChambers", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
+  /// 한국어 이름 — '대의원', '서민원'
+  name      String  @db.VarChar(150)
+  /// 원어 — 'Camera dei Deputati', 'House of Commons'
+  localName String? @map("local_name") @db.VarChar(200)
+  shortName String? @map("short_name") @db.VarChar(60)
+
+  role        ChamberRole
+  composition ChamberComposition?
+
+  /// 원이 존재한 기간(구조화) — 모르면 비운다(정원 이력·정체 기간이 따로 있다)
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
+
+  /// 이 원이 대신한 원 — 국가가 바뀌어도 같은 기관이 이어지면(그레이트브리튼 → 연합왕국 서민원)
+  predecessorId String?   @map("predecessor_id") @db.Char(36)
+  predecessor   Chamber?  @relation("ChamberLineage", fields: [predecessorId], references: [id], onDelete: SetNull)
+  successors    Chamber[] @relation("ChamberLineage")
+
+  note      String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
+  sizes          ChamberSize[]
+  elections      Election[]        @relation("ElectionChamber")
+  observations   Observation[]     @relation("ObservationChamber")
+  systemsAsLower PoliticalSystem[] @relation("PoliticalSystemLowerChamber")
+  systemsAsUpper PoliticalSystem[] @relation("PoliticalSystemUpperChamber")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_chamber_countryId")
+  @@index([historicalCountryId], name: "idx_chamber_historicalCountryId")
+  @@index([predecessorId], name: "idx_chamber_predecessorId")
+  @@map("chamber")
+}
+
+/// 원의 정원 이력 — 선거법·영토가 바뀔 때마다(대의원 508 → 535 → 400)
+model ChamberSize {
+  id        String  @id @default(uuid()) @db.Char(36)
+  chamberId String  @map("chamber_id") @db.Char(36)
+  chamber   Chamber @relation(fields: [chamberId], references: [id], onDelete: Cascade)
+
+  seats Int
+
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
+
+  note      String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([chamberId], name: "idx_chamber_size_chamberId")
+  @@map("chamber_size")
 }

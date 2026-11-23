@@ -277,6 +277,11 @@ export class CreateObservationDto {
   @IsString()
   currencyCode?: string | null
 
+  /** 원 차원 지표(party.seats)의 원 — chamber.id */
+  @IsOptional()
+  @IsString()
+  chamberId?: string | null
+
   @IsOptional()
   @ValidateNested()
   @Type(() => StructuredPointDto)
@@ -357,6 +362,11 @@ export class UpdateObservationDto {
   @ValidateIf((_, value) => value !== null)
   @IsString()
   currencyCode?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  chamberId?: string | null
 
   @IsOptional()
   @ValidateIf((_, value) => value !== null)

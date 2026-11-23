@@ -77,6 +77,16 @@ const electionInclude = {
     },
     orderBy: { party: { name: 'asc' as const } },
   },
+  chamber: {
+    select: {
+      id: true,
+      name: true,
+      localName: true,
+      role: true,
+      composition: true,
+      sizes: { orderBy: { startYear: 'asc' as const } },
+    },
+  },
   alliances: {
     orderBy: [{ sortOrder: 'asc' as const }, { name: 'asc' as const }],
     include: {
@@ -107,6 +117,8 @@ export interface UpdateElectionBody {
   resultingLegislatureDissolutionNotes?: string | null
   voterTurnoutPercent?: string | number | null
   totalSeats?: number | null
+  /** 어느 원의 선거인가 — 원 카탈로그(chamber.id). null이면 끊는다 */
+  chamberId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
   scopeAdministrativeDivisionId?: string | null
@@ -216,6 +228,8 @@ export interface CreateElectionBody {
   resultingLegislatureDissolutionNotes?: string | null
   voterTurnoutPercent?: string | number | null
   totalSeats?: number | null
+  /** 어느 원의 선거인가 — 원 카탈로그(chamber.id). null이면 끊는다 */
+  chamberId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
   scopeAdministrativeDivisionId?: string | null
@@ -940,6 +954,7 @@ export class ElectionController {
           body.resultingLegislatureDissolutionNotes ?? undefined,
         voterTurnoutPercent: turnoutDecimal ?? undefined,
         totalSeats: body.totalSeats ?? undefined,
+        chamberId: (await this.assertChamberId(body.chamberId)) ?? undefined,
         countryId: body.countryId ?? undefined,
         historicalCountryId: body.historicalCountryId ?? undefined,
         scopeAdministrativeDivisionId: body.scopeAdministrativeDivisionId ?? undefined,
@@ -1004,6 +1019,10 @@ export class ElectionController {
         '투표율',
       )
     if (body.totalSeats !== undefined) data.totalSeats = body.totalSeats
+    if (body.chamberId !== undefined) {
+      /* 이 갱신은 국가 FK를 스칼라로 쓰는 unchecked 입력 — 관계(connect)와 섞지 않는다 */
+      data.chamberId = await this.assertChamberId(body.chamberId)
+    }
     if (body.countryId !== undefined) data.countryId = body.countryId
     if (body.historicalCountryId !== undefined) data.historicalCountryId = body.historicalCountryId
     if (body.scopeAdministrativeDivisionId !== undefined)
@@ -1191,6 +1210,15 @@ export class ElectionController {
       throw new BadRequestException('연합 색은 #RRGGBB 형식이어야 합니다.')
     }
     return withHash.toUpperCase()
+  }
+
+  /** 원 — 있는지만 본다(국가가 바뀌는 선거도 있어 국가 일치는 강제하지 않는다) */
+  private async assertChamberId(raw: string | null | undefined): Promise<string | null | undefined> {
+    if (raw === undefined) return undefined
+    if (raw === null || raw === '') return null
+    const chamber = await this.prisma.chamber.findUnique({ where: { id: raw }, select: { id: true } })
+    if (!chamber) throw new BadRequestException('원을 찾을 수 없습니다.')
+    return raw
   }
 
   /**

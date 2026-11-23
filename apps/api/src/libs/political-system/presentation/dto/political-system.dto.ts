@@ -41,6 +41,13 @@ export interface PoliticalSystemPositionRefDto {
 }
 
 /** 소속 국가 요약 — 어느 FK가 찼는지로 현대/역사를 가른다 (선거 목록 선례 동형) */
+export interface PoliticalSystemChamberRefDto {
+  id: string
+  name: string
+  localName: string | null
+  role: string
+}
+
 export interface PoliticalSystemCountryRefDto {
   id: string
   name: string
@@ -72,6 +79,12 @@ export interface PoliticalSystemResponseDto {
   lowerHouseSeats: number | null
   upperHouseName: string | null
   upperHouseSeats: number | null
+
+  /** 원 카탈로그(B7) — 있으면 이쪽이 정본, 위 이름 칸은 표시 캐시 */
+  lowerChamberId: string | null
+  lowerChamber: PoliticalSystemChamberRefDto | null
+  upperChamberId: string | null
+  upperChamber: PoliticalSystemChamberRefDto | null
 
   /** 카탈로그에서 고른 국가원수 직함 — 있으면 이쪽이 표시의 정본 */
   headOfStatePositionId: string | null
@@ -121,6 +134,10 @@ export interface CreatePoliticalSystemDto {
   lowerHouseSeats?: number | null
   upperHouseName?: string | null
   upperHouseSeats?: number | null
+
+  /** 원 카탈로그에서 고른 원 — 보내면 서버가 이름 칸을 그 원으로 채운다. null이면 연결만 끊는다 */
+  lowerChamberId?: string | null
+  upperChamberId?: string | null
 
   /**
    * 관직 정의 id. 카탈로그에서 고른 직함은 이 필드로 보낸다 —

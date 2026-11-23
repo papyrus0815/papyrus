@@ -61,6 +61,8 @@ const RESPONSE_INCLUDE = {
   historicalCountry: COUNTRY_REF_SELECT,
   headOfStatePosition: POSITION_REF_SELECT,
   headOfGovernmentPosition: POSITION_REF_SELECT,
+  lowerChamber: { select: { id: true, name: true, localName: true, role: true } },
+  upperChamber: { select: { id: true, name: true, localName: true, role: true } },
 } as const
 
 /**
@@ -190,9 +192,10 @@ export class PoliticalSystemController {
     this.assertPeriodOrder(normalizedRest)
     await this.assertPositionRefs(normalizedRest, resolvedAxis)
 
+    const createData = await this.withChamberCache(this.writable(normalizedRest))
     const row = await this.prisma.politicalSystem.create({
       data: {
-        ...this.writable(normalizedRest),
+        ...createData,
         countryId: resolvedAxis.countryId,
         historicalCountryId: resolvedAxis.historicalCountryId,
         accountId: accountId ?? null,
@@ -303,7 +306,7 @@ export class PoliticalSystemController {
       resolvedAxis,
     )
 
-    const writeData = this.writable(dto)
+    const writeData = await this.withChamberCache(this.writable(dto))
     if (effectiveStartYear != null && dto.startEra === undefined && !existing.startEra) {
       writeData.startEra = effectiveStartEra
     } else if (dto.startYear === null && dto.startEra === undefined) {
@@ -597,6 +600,24 @@ export class PoliticalSystemController {
   }
 
   /**
+   * 원을 고르면 이름 칸은 그 원의 표시 캐시 — '대의원(Camera dei Deputati)'. 대시보드가 이 칸을 읽는다.
+   * 없는 원 id는 400.
+   */
+  private async withChamberCache(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    for (const side of ['lower', 'upper'] as const) {
+      const chamberId = data[`${side}ChamberId`]
+      if (typeof chamberId !== 'string' || !chamberId) continue
+      const chamber = await this.prisma.chamber.findUnique({
+        where: { id: chamberId },
+        select: { name: true, localName: true },
+      })
+      if (!chamber) throw new BadRequestException('원을 찾을 수 없습니다.')
+      data[`${side}HouseName`] = chamber.localName ? `${chamber.name}(${chamber.localName})` : chamber.name
+    }
+    return data
+  }
+
+  /**
    * 보내온 키만 추린다. `undefined`인 키는 빼서 부분 갱신이 유지되고,
    * 명시적 `null`은 그대로 넘겨 값 삭제가 된다.
    */
@@ -619,6 +640,8 @@ export class PoliticalSystemController {
       'lowerHouseSeats',
       'upperHouseName',
       'upperHouseSeats',
+      'lowerChamberId',
+      'upperChamberId',
       'headOfStatePositionId',
       'headOfStateTitle',
       'headOfStateHasPower',
@@ -635,11 +658,14 @@ export class PoliticalSystemController {
     if (dto.legislatureType === 'UNICAMERAL') {
       data.upperHouseName = null
       data.upperHouseSeats = null
+      data.upperChamberId = null
     } else if (dto.legislatureType === 'NONE') {
       data.lowerHouseName = null
       data.lowerHouseSeats = null
       data.upperHouseName = null
       data.upperHouseSeats = null
+      data.lowerChamberId = null
+      data.upperChamberId = null
     }
     /*
      * 한 직함에 두 진실을 두지 않는다. 카탈로그에서 고른 정의가 오면 같은 축의

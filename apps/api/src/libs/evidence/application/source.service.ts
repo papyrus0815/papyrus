@@ -294,6 +294,7 @@ export class SourceService {
         aggregation: true,
         unit: true,
         definition: true,
+        dimension: true,
       },
       orderBy: [{ domain: 'asc' }, { sortOrder: 'asc' }],
     })

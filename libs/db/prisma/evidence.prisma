@@ -134,6 +134,12 @@ enum CitationTargetType {
 }
 
 /// 지표 값의 성격 — 화면이 숫자를 어떻게 읽고 합칠지 정한다
+/// 측정값의 추가 차원 — 주체·지표·시점만으로 값이 하나로 안 정해질 때
+enum MetricDimension {
+  /// 의회의 원 — 같은 정당·같은 해라도 하원·상원 의석이 따로다
+  CHAMBER
+}
+
 enum MetricValueKind {
   /// 셀 수 있는 수 (사망자·병력·함선)
   COUNT
@@ -244,6 +250,9 @@ model MetricDefinition {
   /// MONEY가 아닐 때의 단위 — 'person' · 'vessel' · 'percent' · 'point' · 'km2' · 'day'
   unit String? @db.VarChar(20)
 
+  /// 이 지표가 요구하는 차원 — CHAMBER면 측정값마다 원(Observation.chamberId)이 필수, 아니면 원을 받지 않는다
+  dimension MetricDimension?
+
   /// 정의 — 무엇을 포함하고 무엇을 빼는가 (예: '전투 중 사망 + 전상 후 사망. 질병 사망 제외')
   definition String? @db.Text
 
@@ -289,6 +298,10 @@ model Observation {
   currencyId String?   @map("currency_id") @db.Char(36)
   currency   Currency? @relation(fields: [currencyId], references: [id], onDelete: Restrict)
 
+  /// 원 차원(B7) — 지표의 dimension이 CHAMBER일 때만(정당 의석: 어느 원에서 몇 석)
+  chamberId String?  @map("chamber_id") @db.Char(36)
+  chamber   Chamber? @relation("ObservationChamber", fields: [chamberId], references: [id], onDelete: SetNull)
+
   /// 시점(점) 또는 구간 시작 — 구조화 날짜 (precision은 서버 파생: year|month|day)
   startEra       Era?    @map("start_era")
   startYear      Int?    @map("start_year")
@@ -319,5 +332,6 @@ model Observation {
   @@index([subjectType, subjectId, sortOrder], name: "idx_observation_subject")
   @@index([metricId], name: "idx_observation_metric")
   @@index([currencyId], name: "idx_observation_currency")
+  @@index([chamberId], name: "idx_observation_chamber")
   @@map("observation")
 }

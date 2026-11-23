@@ -13,7 +13,7 @@
  *
  * 멱등: 지표는 key, 통화는 code 기준 upsert.
  */
-import { MetricAggregation, MetricValueKind } from '@prisma/client'
+import { MetricAggregation, MetricDimension, MetricValueKind } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
 
@@ -25,6 +25,8 @@ interface MetricSeed {
   aggregation: MetricAggregation
   unit?: string
   definition: string
+  /** 추가 차원 — 'CHAMBER'면 측정값마다 원 필수 */
+  dimension?: MetricDimension
 }
 
 const { COUNT, MONEY, RATIO, INDEX, MEASURE } = MetricValueKind
@@ -409,8 +411,9 @@ const METRICS: MetricSeed[] = [
     valueKind: COUNT,
     aggregation: LATEST,
     unit: 'seat',
+    dimension: MetricDimension.CHAMBER,
     definition:
-      '그 시점에 이 정당이 가진 의석. 선거 집계로 못 담는 경우(임명직 상원·탈당·보궐·단일 명부 국민투표)용 — 어느 원(院)인지와 정원은 단서(qualifier)에 적는다(의회·원 카탈로그 B7이 생기면 원 FK로 승격).',
+      '그 시점에 이 정당이 어느 원(院)에서 가진 의석. 선거 집계로 못 담는 경우(임명직 상원·탈당·보궐·단일 명부 신임 투표)용 — 원은 필수 차원, 정원은 원의 정원 이력에서 읽는다.',
   },
 ]
 
@@ -441,6 +444,7 @@ export async function seedEvidenceMetricCatalog(prisma: PrismaService): Promise<
       valueKind: metric.valueKind,
       aggregation: metric.aggregation,
       unit: metric.unit ?? null,
+      dimension: metric.dimension ?? null,
       definition: metric.definition,
       sortOrder: index,
       isSystem: true,

@@ -4,6 +4,7 @@ import {
   EstimateMethod,
   EstimateRole,
   MetricAggregation,
+  MetricDimension,
   MetricValueKind,
   ObservationSubjectType,
   Prisma,
@@ -30,6 +31,24 @@ export interface MetricView {
   aggregation: MetricAggregation
   unit: string | null
   definition: string | null
+  /** 이 지표가 요구하는 차원 — CHAMBER면 측정값마다 원 */
+  dimension: MetricDimension | null
+}
+
+/** 원 차원(정당 의석) — 어느 원에서 몇 석 중 */
+export interface ObservationChamberView {
+  id: string
+  name: string
+  localName: string | null
+  role: string
+  /** 정원 이력 — 화면이 측정 시점의 정원('400석 / 400석')을 고른다 */
+  sizes: Array<{
+    seats: number
+    startEra: 'BC' | 'AD' | null
+    startYear: number | null
+    endEra: 'BC' | 'AD' | null
+    endYear: number | null
+  }>
 }
 
 export interface ObservationView {
@@ -45,6 +64,7 @@ export interface ObservationView {
   atLeast: boolean
   qualifier: string | null
   currency: { code: string; name: string; symbol: string } | null
+  chamber: ObservationChamberView | null
   start: StructuredPoint | null
   end: StructuredPoint | null
   note: string | null
@@ -65,11 +85,24 @@ const METRIC_SELECT = {
   aggregation: true,
   unit: true,
   definition: true,
+  dimension: true,
 } as const
 
 const OBSERVATION_INCLUDE = {
   metric: { select: METRIC_SELECT },
   currency: { select: { code: true, name: true, symbol: true } },
+  chamber: {
+    select: {
+      id: true,
+      name: true,
+      localName: true,
+      role: true,
+      sizes: {
+        select: { seats: true, startEra: true, startYear: true, endEra: true, endYear: true },
+        orderBy: { startYear: 'asc' as const },
+      },
+    },
+  },
 } as const
 
 type ObservationRow = Prisma.ObservationGetPayload<{ include: typeof OBSERVATION_INCLUDE }>
@@ -141,6 +174,7 @@ export class ObservationService {
     const metric = await this.findMetric(dto.metricKey)
     const numbers = normalizeObservationValue(dto)
     const currencyId = await this.resolveCurrency(metric.valueKind, dto.currencyCode)
+    const chamberId = await this.resolveChamber(metric.dimension, dto.chamberId)
     const start = dto.start ? normalizePoint(dto.start, 'start') : null
     const end = dto.end ? normalizePoint(dto.end, 'end') : null
     assertPointOrder(start, end)
@@ -157,6 +191,7 @@ export class ObservationService {
           ...numbers,
           qualifier: dto.qualifier?.trim() || null,
           currencyId,
+          chamberId,
           ...prefixColumns('start', pointToColumns(start)),
           ...prefixColumns('end', pointToColumns(end)),
           note: dto.note ?? null,
@@ -192,7 +227,7 @@ export class ObservationService {
     const metric =
       dto.metricKey !== undefined && dto.metricKey !== current.metric.key
         ? await this.findMetric(dto.metricKey)
-        : { id: current.metricId, valueKind: current.metric.valueKind }
+        : { id: current.metricId, valueKind: current.metric.valueKind, dimension: current.metric.dimension }
     if (metric.id !== current.metricId) patch.metricId = metric.id
 
     /* 수치 다섯 칸은 묶음 — 하나라도 오면 새 조합 전체를 다시 검증한다 */
@@ -217,6 +252,14 @@ export class ObservationService {
       const code =
         dto.currencyCode !== undefined ? dto.currencyCode : current.currency?.code ?? null
       patch.currencyId = await this.resolveCurrency(metric.valueKind, code)
+    }
+
+    /* 원 차원도 지표에 묶인다 */
+    if (dto.chamberId !== undefined || patch.metricId !== undefined) {
+      patch.chamberId = await this.resolveChamber(
+        metric.dimension,
+        dto.chamberId !== undefined ? dto.chamberId : current.chamberId,
+      )
     }
 
     if (dto.start !== undefined || dto.end !== undefined) {
@@ -297,6 +340,7 @@ export class ObservationService {
         aggregation: row.metric.aggregation,
         unit: row.metric.unit,
         definition: row.metric.definition,
+        dimension: row.metric.dimension,
       },
       value: decimalToString(row.value),
       low: decimalToString(row.low),
@@ -305,6 +349,7 @@ export class ObservationService {
       atLeast: row.atLeast,
       qualifier: row.qualifier,
       currency: row.currency,
+      chamber: row.chamber,
       start: columnsToPoint(columnsOf(row, 'start')),
       end: columnsToPoint(columnsOf(row, 'end')),
       note: row.note,
@@ -315,13 +360,30 @@ export class ObservationService {
     }))
   }
 
-  private async findMetric(key: string): Promise<{ id: string; valueKind: MetricValueKind }> {
+  private async findMetric(
+    key: string,
+  ): Promise<{ id: string; valueKind: MetricValueKind; dimension: MetricDimension | null }> {
     const metric = await this.prisma.metricDefinition.findUnique({
       where: { key },
-      select: { id: true, valueKind: true },
+      select: { id: true, valueKind: true, dimension: true },
     })
     if (!metric) throw new BadRequestException(`알 수 없는 지표입니다: ${key}`)
     return metric
+  }
+
+  /** 원 차원 지표(정당 의석)는 원 필수, 그 밖의 지표는 원 금지 — 의석이 어느 원의 것인지 단서 글에 숨지 않게 */
+  private async resolveChamber(
+    dimension: MetricDimension | null,
+    chamberId: string | null | undefined,
+  ): Promise<string | null> {
+    if (dimension !== MetricDimension.CHAMBER) {
+      if (chamberId) throw new BadRequestException('이 지표는 원(院)을 받지 않습니다')
+      return null
+    }
+    if (!chamberId) throw new BadRequestException('의석 지표에는 어느 원인지(chamberId)가 필요합니다')
+    const chamber = await this.prisma.chamber.findUnique({ where: { id: chamberId }, select: { id: true } })
+    if (!chamber) throw new BadRequestException('원을 찾을 수 없습니다')
+    return chamber.id
   }
 
   /** MONEY 지표는 통화 필수, 그 밖의 지표는 통화 금지 — 단위가 두 곳에서 말하지 않게 */

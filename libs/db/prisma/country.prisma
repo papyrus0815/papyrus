@@ -115,6 +115,7 @@ model Country {
   governmentTenures         GovernmentPositionTenure[]       @relation("TenureCountry")
   cabinets                  Cabinet[]                        @relation("CabinetCountry")
   politicalSystems          PoliticalSystem[]                @relation("CountryPoliticalSystems")
+  chambers                  Chamber[]                        @relation("CountryChambers")
   eventCountryRelations     EventCountryRelation[]
   eventSeries               EventSeries[]            @relation("CountryEventSeries")
   nextHostedEventSeries     EventSeries[]            @relation("NextHostCountryEventSeries")
