@@ -4609,6 +4609,15 @@ function ElectionDetailPanel({
                     </strong>
                   </ElectionHeroFactItem>
                 ) : null}
+                {detail.chamber ? (
+                  <ElectionHeroFactItem>
+                    <span className="k">원</span>
+                    <span title={detail.chamber.localName ?? undefined}>
+                      {detail.chamber.name}
+                      {detail.chamber.localName ? ` (${detail.chamber.localName})` : ''}
+                    </span>
+                  </ElectionHeroFactItem>
+                ) : null}
                 {detail.totalSeats != null ? (
                   <ElectionHeroFactItem>
                     <span className="k">총 의석</span>
