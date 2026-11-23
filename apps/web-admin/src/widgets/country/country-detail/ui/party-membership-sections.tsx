@@ -49,8 +49,9 @@ import {
 } from '@/widgets/political-party/party-sidecar-parts'
 import { PartyMembershipFormModal } from '@/widgets/political-party/party-membership-form-modal'
 import { PartyCitationButton } from './party-citations'
+import { partyKeys } from '@/widgets/political-party/party-query-keys'
 
-const membershipsKey = (partyId: string) => ['political-parties', partyId, 'memberships'] as const
+const membershipsKey = partyKeys.memberships
 const OFFICE_ORDER = PARTY_OFFICE_KIND_OPTIONS.map((option) => option.value as string)
 
 function personName(person: PartyMembershipListRow['person']): string {

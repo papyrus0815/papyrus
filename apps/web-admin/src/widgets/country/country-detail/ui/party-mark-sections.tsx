@@ -68,10 +68,11 @@ import {
 } from './country-politics-tab.styles'
 import * as FormS from './military-unit-form/styles'
 import { PartyCitationButton } from './party-citations'
+import { partyKeys } from '@/widgets/political-party/party-query-keys'
 
-const symbolsKey = (partyId: string) => ['political-parties', partyId, 'symbols'] as const
-const expressionsKey = (partyId: string) => ['political-parties', partyId, 'expressions'] as const
-const headquartersKey = (partyId: string) => ['political-parties', partyId, 'headquarters'] as const
+const symbolsKey = partyKeys.symbols
+const expressionsKey = partyKeys.expressions
+const headquartersKey = partyKeys.headquarters
 
 /** 곁가지가 바뀌면 목록·상세의 캐시(로고·당사 도시)도 바뀐다 */
 function useInvalidateParty(partyId: string, key: readonly unknown[]) {

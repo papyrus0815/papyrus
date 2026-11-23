@@ -62,6 +62,7 @@ import {
   type PartyTopLeaderTenure,
   type PoliticalParty,
   type PoliticalPartyKind,
+  type PartyTransitionEndpoint,
   type PoliticalPartyTransitionKind,
   type PoliticalPosition,
   POLITICAL_PARTY_KIND_OPTIONS,
@@ -89,6 +90,7 @@ import {
   periodDateFormError,
   periodDateFormValue,
   structuredInputOf,
+  transitionEffectiveOn,
 } from '@/shared/lib/party-dates'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
@@ -98,7 +100,6 @@ import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PeriodDateField } from '@/shared/ui/period-date-field/period-date-field'
 import { notify } from '@/shared/ui/toast'
-import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
 import {
   KitFormLoading,
@@ -123,7 +124,6 @@ import {
   PersonRegisterModalStickyFooter,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import {
-  DateFieldBtn,
   ErrorMessage,
   FieldControl,
   FieldHint,
@@ -176,11 +176,6 @@ import {
   PartyDetailLineageSection,
   PartyDetailLogoHero,
   PartyDetailLogoImg,
-  PartyDetailMetaGrid,
-  PartyDetailMetaSection,
-  PartyDetailMetaTile,
-  PartyDetailMetaTileLabel,
-  PartyDetailMetaTileValue,
   PartyDetailTopActions,
   PartyDetailTopBar,
   PartyDetailTopLeft,
@@ -224,6 +219,7 @@ import { PartyOrganizationsBlock } from './party-organization-sections'
 import { PartyCitationButton } from './party-citations'
 import { PartyMetricsBlock } from './party-metric-sections'
 import { PartyLinksBlock } from './party-link-sections'
+import { PartyInfoboxPanel } from './party-infobox-panel'
 import { PartyExpressionsBlock, PartyHeadquartersBlock, PartySymbolsBlock } from './party-mark-sections'
 import { type IdeologyChip, IdeologyPicker } from '@/widgets/ideology/ideology-picker'
 import { CountryTabEmptyState } from './country-tab-empty-state'
@@ -248,32 +244,6 @@ const PartyListAreaBody = styled.div`
   display: flex;
   flex-direction: column;
   margin-top: 14px;
-`
-
-const SelectClearRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
-`
-
-const ClearFieldBtn = styled.button`
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  transition: border-color 0.15s ease;
-  &:hover {
-    border-color: #6366f1;
-  }
 `
 
 /** 로고 — 카드형 업로드 대신 썸네일 + 텍스트 액션 (가벼운 한 줄 레이아웃) */
@@ -704,19 +674,6 @@ const PartyStatusBadge = styled.span<{ $dissolved?: boolean }>`
           : '#bbf7d0'};
 `
 
-const IdeologyTag = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 500;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.22)' : '#eef2ff'};
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
 const POSITION_OPTIONS: { value: PoliticalPosition; label: string }[] = [
   { value: 'FAR_LEFT', label: '극좌' },
   { value: 'LEFT', label: '좌파' },
@@ -735,22 +692,6 @@ function formatDate(iso?: string | null) {
   } catch {
     return iso
   }
-}
-
-function formatYmdKo(ymd: string) {
-  if (!ymd) return ''
-  try {
-    return new Date(`${ymd}T12:00:00.000Z`).toLocaleDateString('ko-KR')
-  } catch {
-    return ymd
-  }
-}
-
-function formatPickedCalendarDateLabel(raw: string) {
-  if (!raw) return ''
-  const t = Date.parse(raw)
-  if (!Number.isNaN(t)) return new Date(t).toLocaleDateString('ko-KR', { timeZone: 'UTC' })
-  return raw.length >= 10 ? formatYmdKo(raw.slice(0, 10)) : raw
 }
 
 function labelPoliticalPosition(value: string | null | undefined) {
@@ -1462,28 +1403,19 @@ function transitionKindTag(kind: PoliticalPartyTransitionKind): string | null {
   return TRANSITION_KIND_LABELS[kind] ?? kind
 }
 
-function formatLineageDate(iso: string | null | undefined): string | null {
-  if (!iso?.trim()) return null
-  const d = new Date(`${iso.trim()}T12:00:00`)
-  if (Number.isNaN(d.getTime())) return iso.trim()
-  return d.toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+/** 계보 기준일 라벨 — 구조화 칸(1921년만 알아도) 우선 */
+function formatLineageDate(row: PartyTransitionEndpoint): string | null {
+  return formatPartialDate(transitionEffectiveOn(row)) || null
 }
 
-/** API 날짜 문자열 → DatePickerModal용 YYYY-MM-DD */
-function isoTransitionDateToYmd(iso: string | null | undefined): string {
-  if (!iso?.trim()) return ''
-  const s = iso.trim()
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
-  const d = new Date(s)
-  if (Number.isNaN(d.getTime())) return ''
-  const y = d.getUTCFullYear()
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(d.getUTCDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+/** 계보 행 → 폼 날짜 칸 */
+function lineageEffectiveFormValue(row: PartyTransitionEndpoint): PeriodDateFormValue {
+  if (row.effectiveYear != null) {
+    return periodDateFormValue(row.effectiveEra, row.effectiveYear, row.effectiveMonth, row.effectiveDay)
+  }
+  const iso = transitionEffectiveOn(row)
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  return match ? periodDateFormValue('AD', Number(match[1]), Number(match[2]), Number(match[3])) : { ...EMPTY_PERIOD_DATE }
 }
 
 function PartyLineageBlock({
@@ -1506,26 +1438,24 @@ function PartyLineageBlock({
   const [lineageOtherPartyId, setLineageOtherPartyId] = useState<string | null>(
     null,
   )
-  const [lineageConfirmEffectiveDate, setLineageConfirmEffectiveDate] =
-    useState('')
+  const [lineageEffective, setLineageEffective] = useState<PeriodDateFormValue>({ ...EMPTY_PERIOD_DATE })
+  const lineageEffectiveError = periodDateFormError(lineageEffective)
   const [lineageConfirmNotes, setLineageConfirmNotes] = useState('')
   const [lineagePartyError, setLineagePartyError] = useState<string | null>(
     null,
   )
   const [lineageKind, setLineageKind] =
     useState<PoliticalPartyTransitionKind>('SUCCESSION')
-  const [lineageDatePickerOpen, setLineageDatePickerOpen] = useState(false)
   const [lineageEditingId, setLineageEditingId] = useState<string | null>(null)
 
   const closeLineageModal = () => {
     setLineageModal(null)
     setLineageEditingId(null)
     setLineageOtherPartyId(null)
-    setLineageConfirmEffectiveDate('')
+    setLineageEffective({ ...EMPTY_PERIOD_DATE })
     setLineageConfirmNotes('')
     setLineagePartyError(null)
     setLineageKind('SUCCESSION')
-    setLineageDatePickerOpen(false)
   }
 
   const { data: lineage, isLoading } = useQuery({
@@ -1546,17 +1476,16 @@ function PartyLineageBlock({
       link: 'predecessor' | 'successor'
       otherPartyId: string
       kind: PoliticalPartyTransitionKind
-      effectiveDate?: string | null
+      effective: ReturnType<typeof structuredInputOf>
       notes?: string | null
     }) => {
-      const { editingId, link, otherPartyId, kind, effectiveDate, notes } =
+      const { editingId, link, otherPartyId, kind, effective, notes } =
         payload
-      const ed = effectiveDate?.trim()
       const nt = notes?.trim()
       if (editingId) {
         return politicalPartyApi.updateTransition(editingId, {
           kind,
-          effectiveDate: ed ? ed : null,
+          effective,
           notes: nt ? nt : null,
         })
       }
@@ -1569,7 +1498,7 @@ function PartyLineageBlock({
         fromPartyId: from,
         toPartyId: to,
         kind,
-        ...(ed ? { effectiveDate: ed } : {}),
+        ...(effective ? { effective } : {}),
         ...(nt ? { notes: nt } : {}),
       })
     },
@@ -1616,7 +1545,7 @@ function PartyLineageBlock({
             <PartyDetailLineageList>
               {lineage.predecessors.map((row) => {
                 const metaParts: string[] = []
-                const dateLabel = formatLineageDate(row.effectiveDate)
+                const dateLabel = formatLineageDate(row)
                 if (dateLabel) metaParts.push(`기준일: ${dateLabel}`)
                 if (row.notes?.trim()) metaParts.push(row.notes.trim())
                 return (
@@ -1676,9 +1605,7 @@ function PartyLineageBlock({
                           setLineageModal('predecessor')
                           setLineageOtherPartyId(row.fromPartyId)
                           setLineageKind(row.kind)
-                          setLineageConfirmEffectiveDate(
-                            isoTransitionDateToYmd(row.effectiveDate),
-                          )
+                          setLineageEffective(lineageEffectiveFormValue(row))
                           setLineageConfirmNotes(row.notes ?? '')
                           setLineagePartyError(null)
                         }}
@@ -1719,7 +1646,7 @@ function PartyLineageBlock({
                   setLineageEditingId(null)
                   setLineageModal('predecessor')
                   setLineageOtherPartyId(null)
-                  setLineageConfirmEffectiveDate('')
+                  setLineageEffective({ ...EMPTY_PERIOD_DATE })
                   setLineageConfirmNotes('')
                   setLineagePartyError(null)
                   setLineageKind('SUCCESSION')
@@ -1735,7 +1662,7 @@ function PartyLineageBlock({
             <PartyDetailLineageList>
               {lineage.successors.map((row) => {
                 const metaParts: string[] = []
-                const dateLabel = formatLineageDate(row.effectiveDate)
+                const dateLabel = formatLineageDate(row)
                 if (dateLabel) metaParts.push(`기준일: ${dateLabel}`)
                 if (row.notes?.trim()) metaParts.push(row.notes.trim())
                 return (
@@ -1795,9 +1722,7 @@ function PartyLineageBlock({
                           setLineageModal('successor')
                           setLineageOtherPartyId(row.toPartyId)
                           setLineageKind(row.kind)
-                          setLineageConfirmEffectiveDate(
-                            isoTransitionDateToYmd(row.effectiveDate),
-                          )
+                          setLineageEffective(lineageEffectiveFormValue(row))
                           setLineageConfirmNotes(row.notes ?? '')
                           setLineagePartyError(null)
                         }}
@@ -1838,7 +1763,7 @@ function PartyLineageBlock({
                   setLineageEditingId(null)
                   setLineageModal('successor')
                   setLineageOtherPartyId(null)
-                  setLineageConfirmEffectiveDate('')
+                  setLineageEffective({ ...EMPTY_PERIOD_DATE })
                   setLineageConfirmNotes('')
                   setLineagePartyError(null)
                   setLineageKind('SUCCESSION')
@@ -1868,7 +1793,7 @@ function PartyLineageBlock({
                   setLineageEditingId(null)
                   setLineageModal('predecessor')
                   setLineageOtherPartyId(null)
-                  setLineageConfirmEffectiveDate('')
+                  setLineageEffective({ ...EMPTY_PERIOD_DATE })
                   setLineageConfirmNotes('')
                   setLineagePartyError(null)
                   setLineageKind('SUCCESSION')
@@ -1888,7 +1813,7 @@ function PartyLineageBlock({
                   setLineageEditingId(null)
                   setLineageModal('successor')
                   setLineageOtherPartyId(null)
-                  setLineageConfirmEffectiveDate('')
+                  setLineageEffective({ ...EMPTY_PERIOD_DATE })
                   setLineageConfirmNotes('')
                   setLineagePartyError(null)
                   setLineageKind('SUCCESSION')
@@ -1943,6 +1868,10 @@ function PartyLineageBlock({
                           notify.error(msg)
                           return
                         }
+                        if (lineageEffectiveError) {
+                          notify.error(`기준일: ${lineageEffectiveError}`)
+                          return
+                        }
                         if (lineageConfirmNotes.length > 4000) {
                           notify.error('메모는 4000자 이하여야 합니다.')
                           return
@@ -1953,7 +1882,7 @@ function PartyLineageBlock({
                           link: lineageModal,
                           otherPartyId: lineageOtherPartyId ?? '',
                           kind: lineageKind,
-                          effectiveDate: lineageConfirmEffectiveDate || null,
+                          effective: structuredInputOf(lineageEffective),
                           notes: lineageConfirmNotes.trim() || null,
                         })
                       }}
@@ -2101,40 +2030,18 @@ function PartyLineageBlock({
                     <FieldRow>
                       <FieldLabel>기준일 (선택)</FieldLabel>
                       <FieldControl>
-                        <SelectClearRow>
-                          <DateFieldBtn
-                            type="button"
-                            disabled={saveMut.isPending}
-                            $hasValue={!!lineageConfirmEffectiveDate}
-                            onClick={() => {
-                              playClickSound()
-                              setLineageDatePickerOpen(true)
-                            }}
-                          >
-                            <FiCalendar size={16} />
-                            <span>
-                              {lineageConfirmEffectiveDate
-                                ? formatPickedCalendarDateLabel(
-                                    lineageConfirmEffectiveDate,
-                                  )
-                                : '달력에서 선택'}
-                            </span>
-                            <FiChevronDown size={20} />
-                          </DateFieldBtn>
-                          {lineageConfirmEffectiveDate ? (
-                            <ClearFieldBtn
-                              type="button"
-                              disabled={saveMut.isPending}
-                              onClick={() => {
-                                playClickSound()
-                                setLineageConfirmEffectiveDate('')
-                              }}
-                              aria-label="기준일 지우기"
-                            >
-                              <FiX size={16} />
-                            </ClearFieldBtn>
-                          ) : null}
-                        </SelectClearRow>
+                        <PeriodDateField
+                          {...lineageEffective}
+                          ariaLabel="계보 기준일"
+                          pickerTitle="계보 기준일"
+                          error={Boolean(lineageEffectiveError)}
+                          onChange={setLineageEffective}
+                        />
+                        {lineageEffectiveError ? (
+                          <EmptyHint role="alert" style={{ margin: '6px 0 0' }}>
+                            {lineageEffectiveError}
+                          </EmptyHint>
+                        ) : null}
                       </FieldControl>
                     </FieldRow>
                     <FieldRow>
@@ -2155,16 +2062,6 @@ function PartyLineageBlock({
                 </FormSectionInner>
               )}
             </SidePanel>
-            <DatePickerModal
-              isOpen={lineageDatePickerOpen}
-              onClose={() => setLineageDatePickerOpen(false)}
-              initialDate={lineageConfirmEffectiveDate || undefined}
-              onSelect={(date) => {
-                setLineageConfirmEffectiveDate(date)
-                setLineageDatePickerOpen(false)
-              }}
-              title="계보 기준일"
-            />
           </PartyDetailLineageAddPanel>
         </>
       )}
@@ -2524,6 +2421,21 @@ export function CountryPoliticalPartiesBlock({
   const goToList = () =>
     navigate(`${pathKeys.countryElections(routeCountryId)}?subtab=parties`)
 
+  /** 인포박스의 정당 본체 입력 — 곁가지는 패널이 섹션과 같은 캐시로 읽는다 */
+  const infoboxParty = useMemo(
+    () => ({
+      name: detailParty?.name ?? '',
+      localName: detailParty?.localName ?? null,
+      shortName: detailParty?.shortName ?? null,
+      position: detailParty?.position ?? null,
+      colorPalette: detailParty?.colorPalette ?? null,
+      brandColor: detailParty?.brandColor ?? null,
+      founded: detailParty ? partyFoundedOn(detailParty) : '',
+      dissolved: detailParty ? partyDissolvedOn(detailParty) : '',
+    }),
+    [detailParty],
+  )
+
   // 현대 국가는 연결된 역사 국가 소속 정당도 허용해야 하므로,
   // 이미 올바른 범위로 로드된 parties 목록에 포함 여부로 판단한다.
   const wrongCountryDetail =
@@ -2695,230 +2607,170 @@ export function CountryPoliticalPartiesBlock({
                   </PartyDetailHeroBody>
                 </PartyDetailHeroStack>
               </PartyDetailHero>
-              <PartyDetailMetaSection>
-                <PartyDetailMetaGrid>
-                  <PartyDetailMetaTile>
-                    <PartyDetailMetaTileLabel>
-                      브랜드 컬러
-                    </PartyDetailMetaTileLabel>
-                    <PartyDetailMetaTileValue>
-                      {detailParty.brandColor ? (
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 10,
+              <PartyDetailBody>
+                <PartyDetailColumns>
+                <PartyDetailMain>
+                  <PartyDetailDescSection aria-label="정당 설명">
+                    <PartyDescSectionLabelRow>
+                      <PartyDescSectionLabel>설명</PartyDescSectionLabel>
+                      {!editingPartyDescription ? (
+                        <PartyDescOutlineBtn
+                          type="button"
+                          onClick={() => {
+                            setPartyDescriptionDraft(detailParty.description ?? '')
+                            setEditingPartyDescription(true)
                           }}
                         >
-                          <span
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: 8,
-                              background: detailParty.brandColor,
-                              boxShadow: `inset 0 0 0 1px rgba(0,0,0,0.08)`,
+                          <FiEdit2 size={14} />
+                          {isRichTextVisuallyEmpty(detailParty.description)
+                            ? '추가'
+                            : '수정'}
+                        </PartyDescOutlineBtn>
+                      ) : null}
+                    </PartyDescSectionLabelRow>
+                    {editingPartyDescription ? (
+                      <PartyDescBody>
+                        <PartyDescriptionEditorWrap>
+                          <RichTextEditor
+                            value={partyDescriptionDraft}
+                            onChange={setPartyDescriptionDraft}
+                            showTitle={false}
+                            placeholder="정당 소개·강령 요약 등을 입력하세요."
+                            entityLinkCountryId={countryId ?? ''}
+                            mentionEntities={{ politicalParties: parties }}
+                            mentionEntitiesLoading={isLoading}
+                            onImageUpload={async (file) => {
+                              const result = await uploadImage(
+                                file,
+                                'political-parties',
+                              )
+                              return result.url
                             }}
-                            aria-hidden
                           />
-                          <code
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: 'inherit',
+                        </PartyDescriptionEditorWrap>
+                        <PartyDescriptionEditActions>
+                          <PartyDescOutlineBtn
+                            type="button"
+                            disabled={saveDescriptionMut.isPending}
+                            onClick={() => {
+                              setEditingPartyDescription(false)
+                              setPartyDescriptionDraft('')
                             }}
                           >
-                            {detailParty.brandColor}
-                          </code>
-                        </span>
-                      ) : (
-                        '—'
+                            취소
+                          </PartyDescOutlineBtn>
+                          <PartyDescPrimaryBtn
+                            type="button"
+                            disabled={saveDescriptionMut.isPending}
+                            onClick={() =>
+                              saveDescriptionMut.mutate({
+                                id: detailParty.id,
+                                html: partyDescriptionDraft,
+                              })
+                            }
+                          >
+                            {saveDescriptionMut.isPending ? '저장 중…' : '저장'}
+                          </PartyDescPrimaryBtn>
+                        </PartyDescriptionEditActions>
+                      </PartyDescBody>
+                    ) : isRichTextVisuallyEmpty(detailParty.description) ? (
+                      <PartyDescBody>
+                        <PartyDescEmptyHint>
+                          설명이 없습니다.「추가」버튼으로 rich text 설명을 넣을 수
+                          있습니다.
+                        </PartyDescEmptyHint>
+                      </PartyDescBody>
+                    ) : (
+                      <PartyDescBody>
+                        <PartyDescProse>
+                          <div onClick={handleProseClick} role="presentation">
+                            {isLikelyRichTextHtml(detailParty.description) ? (
+                              <PartyDescContent
+                                html={detailParty.description ?? ''}
+                                aria-label="정당 설명"
+                              />
+                            ) : (
+                              <PartyDescPlainText>
+                                {detailParty.description}
+                              </PartyDescPlainText>
+                            )}
+                          </div>
+                        </PartyDescProse>
+                      </PartyDescBody>
+                    )}
+                  </PartyDetailDescSection>
+                  <PartyChapter id="party-chapter-identity" aria-labelledby="party-chapter-identity-title">
+                    <PartyChapterTitle id="party-chapter-identity-title">정체 — 이름·지위·이념</PartyChapterTitle>
+                    <PartyNamesBlock partyId={detailParty.id} />
+                    <PartyLegalStatusBlock
+                      partyId={detailParty.id}
+                      countryId={countryId}
+                      historicalCountryId={historicalCountryId}
+                    />
+                    <PartyIdeologyBlock partyId={detailParty.id} />
+                  </PartyChapter>
+                  <PartyChapter id="party-chapter-organization" aria-labelledby="party-chapter-organization-title">
+                    <PartyChapterTitle id="party-chapter-organization-title">조직·사람</PartyChapterTitle>
+                    <PartyOrganizationsBlock partyId={detailParty.id} />
+                    <PartyMembershipsBlock partyId={detailParty.id} />
+                    <PartyHeadquartersBlock partyId={detailParty.id} countryId={countryId} />
+                  </PartyChapter>
+                  <PartyChapter id="party-chapter-marks" aria-labelledby="party-chapter-marks-title">
+                    <PartyChapterTitle id="party-chapter-marks-title">표지·표현</PartyChapterTitle>
+                    <PartySymbolsBlock partyId={detailParty.id} />
+                    <PartyExpressionsBlock partyId={detailParty.id} />
+                  </PartyChapter>
+                  <PartyChapter id="party-chapter-evidence" aria-labelledby="party-chapter-evidence-title">
+                    <PartyChapterTitle id="party-chapter-evidence-title">수치·관계·계보</PartyChapterTitle>
+                    <PartyMetricsBlock partyId={detailParty.id} />
+                    <PartyLinksBlock partyId={detailParty.id} partyName={detailParty.name} />
+                    <PartyLineageBlock
+                      partyId={detailParty.id}
+                      partyName={detailParty.name}
+                      parties={parties}
+                      routeCountryId={routeCountryId}
+                    />
+                  </PartyChapter>
+                  <PartyChapter id="party-chapter-activity" aria-labelledby="party-chapter-activity-title">
+                    <PartyChapterTitle id="party-chapter-activity-title">활동 — 집권·선거·내각·법률</PartyChapterTitle>
+                    <PartyTopLeadersBlock partyId={detailParty.id} />
+                    <PartyElectionResultsBlock
+                      partyId={detailParty.id}
+                      routeCountryId={routeCountryId}
+                      brandColor={normalizeBrandColorInput(
+                        detailParty.brandColor ?? '',
                       )}
-                    </PartyDetailMetaTileValue>
-                  </PartyDetailMetaTile>
-                  <PartyDetailMetaTile>
-                    <PartyDetailMetaTileLabel>
-                      이념·노선
-                    </PartyDetailMetaTileLabel>
-                    <PartyDetailMetaTileValue>
-                      {parseIdeologyKeywords(detailParty.ideology).length ? (
-                        <span
-                          style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: 6,
-                          }}
-                        >
-                          {parseIdeologyKeywords(detailParty.ideology).map(
-                            (t, i) => (
-                              <IdeologyTag key={`${t}-${i}`}>{t}</IdeologyTag>
-                            ),
-                          )}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </PartyDetailMetaTileValue>
-                  </PartyDetailMetaTile>
-                  <PartyDetailMetaTile>
-                    <PartyDetailMetaTileLabel>
-                      스펙트럼
-                    </PartyDetailMetaTileLabel>
-                    <PartyDetailMetaTileValue>
-                      {labelPoliticalPosition(
-                        detailParty.position ?? undefined,
-                      )}
-                    </PartyDetailMetaTileValue>
-                  </PartyDetailMetaTile>
-                  <PartyDetailMetaTile>
-                    <PartyDetailMetaTileLabel>창당</PartyDetailMetaTileLabel>
-                    <PartyDetailMetaTileValue>
-                      {formatPartialDate(partyFoundedOn(detailParty)) || '—'}
-                    </PartyDetailMetaTileValue>
-                  </PartyDetailMetaTile>
-                  <PartyDetailMetaTile>
-                    <PartyDetailMetaTileLabel>해산</PartyDetailMetaTileLabel>
-                    <PartyDetailMetaTileValue>
-                      {formatPartialDate(partyDissolvedOn(detailParty)) || '—'}
-                    </PartyDetailMetaTileValue>
-                  </PartyDetailMetaTile>
-                </PartyDetailMetaGrid>
-                <PartyIdentitySourceRow>
-                  <span>창당·해산·종류·스펙트럼 등 기본 정보의 출처</span>
-                  <PartyCitationButton
+                    />
+                    <PartyCabinetAffiliationsBlock
+                      partyId={detailParty.id}
+                      routeCountryId={routeCountryId}
+                    />
+                    <PartyLawsBlock
+                      partyId={detailParty.id}
+                      routeCountryId={routeCountryId}
+                      countryId={countryId}
+                      historicalCountryId={historicalCountryId}
+                    />
+                  </PartyChapter>
+                </PartyDetailMain>
+                <PartyDetailAside>
+                  <PartyInfoboxPanel
                     partyId={detailParty.id}
-                    targetType="POLITICAL_PARTY"
-                    targetId={detailParty.id}
-                    subject={`${detailParty.name} · 기본 정보`}
+                    routeCountryId={routeCountryId}
+                    party={infoboxParty}
                   />
-                </PartyIdentitySourceRow>
-              </PartyDetailMetaSection>
-              <PartyNamesBlock partyId={detailParty.id} />
-              <PartyLegalStatusBlock
-                partyId={detailParty.id}
-                countryId={countryId}
-                historicalCountryId={historicalCountryId}
-              />
-              <PartyIdeologyBlock partyId={detailParty.id} />
-              <PartyOrganizationsBlock partyId={detailParty.id} />
-              <PartySymbolsBlock partyId={detailParty.id} />
-              <PartyExpressionsBlock partyId={detailParty.id} />
-              <PartyHeadquartersBlock partyId={detailParty.id} countryId={countryId} />
-              <PartyMetricsBlock partyId={detailParty.id} />
-              <PartyLinksBlock partyId={detailParty.id} partyName={detailParty.name} />
-              <PartyLineageBlock
-                partyId={detailParty.id}
-                partyName={detailParty.name}
-                parties={parties}
-                routeCountryId={routeCountryId}
-              />
-              <PartyTopLeadersBlock partyId={detailParty.id} />
-              <PartyElectionResultsBlock
-                partyId={detailParty.id}
-                routeCountryId={routeCountryId}
-                brandColor={normalizeBrandColorInput(
-                  detailParty.brandColor ?? '',
-                )}
-              />
-              <PartyMembershipsBlock partyId={detailParty.id} />
-              <PartyCabinetAffiliationsBlock
-                partyId={detailParty.id}
-                routeCountryId={routeCountryId}
-              />
-              <PartyLawsBlock
-                partyId={detailParty.id}
-                routeCountryId={routeCountryId}
-                countryId={countryId}
-                historicalCountryId={historicalCountryId}
-              />
-              <PartyDetailDescSection aria-label="정당 설명">
-                <PartyDescSectionLabelRow>
-                  <PartyDescSectionLabel>설명</PartyDescSectionLabel>
-                  {!editingPartyDescription ? (
-                    <PartyDescOutlineBtn
-                      type="button"
-                      onClick={() => {
-                        setPartyDescriptionDraft(detailParty.description ?? '')
-                        setEditingPartyDescription(true)
-                      }}
-                    >
-                      <FiEdit2 size={14} />
-                      {isRichTextVisuallyEmpty(detailParty.description)
-                        ? '추가'
-                        : '수정'}
-                    </PartyDescOutlineBtn>
-                  ) : null}
-                </PartyDescSectionLabelRow>
-                {editingPartyDescription ? (
-                  <PartyDescBody>
-                    <PartyDescriptionEditorWrap>
-                      <RichTextEditor
-                        value={partyDescriptionDraft}
-                        onChange={setPartyDescriptionDraft}
-                        showTitle={false}
-                        placeholder="정당 소개·강령 요약 등을 입력하세요."
-                        entityLinkCountryId={countryId ?? ''}
-                        mentionEntities={{ politicalParties: parties }}
-                        mentionEntitiesLoading={isLoading}
-                        onImageUpload={async (file) => {
-                          const result = await uploadImage(
-                            file,
-                            'political-parties',
-                          )
-                          return result.url
-                        }}
-                      />
-                    </PartyDescriptionEditorWrap>
-                    <PartyDescriptionEditActions>
-                      <PartyDescOutlineBtn
-                        type="button"
-                        disabled={saveDescriptionMut.isPending}
-                        onClick={() => {
-                          setEditingPartyDescription(false)
-                          setPartyDescriptionDraft('')
-                        }}
-                      >
-                        취소
-                      </PartyDescOutlineBtn>
-                      <PartyDescPrimaryBtn
-                        type="button"
-                        disabled={saveDescriptionMut.isPending}
-                        onClick={() =>
-                          saveDescriptionMut.mutate({
-                            id: detailParty.id,
-                            html: partyDescriptionDraft,
-                          })
-                        }
-                      >
-                        {saveDescriptionMut.isPending ? '저장 중…' : '저장'}
-                      </PartyDescPrimaryBtn>
-                    </PartyDescriptionEditActions>
-                  </PartyDescBody>
-                ) : isRichTextVisuallyEmpty(detailParty.description) ? (
-                  <PartyDescBody>
-                    <PartyDescEmptyHint>
-                      설명이 없습니다.「추가」버튼으로 rich text 설명을 넣을 수
-                      있습니다.
-                    </PartyDescEmptyHint>
-                  </PartyDescBody>
-                ) : (
-                  <PartyDescBody>
-                    <PartyDescProse>
-                      <div onClick={handleProseClick} role="presentation">
-                        {isLikelyRichTextHtml(detailParty.description) ? (
-                          <PartyDescContent
-                            html={detailParty.description ?? ''}
-                            aria-label="정당 설명"
-                          />
-                        ) : (
-                          <PartyDescPlainText>
-                            {detailParty.description}
-                          </PartyDescPlainText>
-                        )}
-                      </div>
-                    </PartyDescProse>
-                  </PartyDescBody>
-                )}
-              </PartyDetailDescSection>
+                  <PartyIdentitySourceRow>
+                    <span>창당·해산·종류·스펙트럼 등 기본 정보의 출처</span>
+                    <PartyCitationButton
+                      partyId={detailParty.id}
+                      targetType="POLITICAL_PARTY"
+                      targetId={detailParty.id}
+                      subject={`${detailParty.name} · 기본 정보`}
+                    />
+                  </PartyIdentitySourceRow>
+                </PartyDetailAside>
+                </PartyDetailColumns>
+              </PartyDetailBody>
             </PartyDetailLayout>
           )
         ) : isLoading ? (
@@ -4251,15 +4103,70 @@ const RegisteredInSessionBar = styled.div`
   }
 `
 
-/** 기본 정보 출처 줄 — 메타 격자 아래 오른쪽 */
+/** 기본 정보 출처 줄 — 인포박스 아래 */
 const PartyIdentitySourceRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  padding: 4px 0 0;
+  padding: 6px 2px 0;
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/**
+ * 상세 본문 — 넓으면 [섹션 | 인포박스] 두 단, 좁으면 인포박스를 위로.
+ * 폭 판정은 뷰포트가 아니라 본문 폭(좌측 목록·레일을 뺀 자리)으로 — 컨테이너 쿼리.
+ */
+const PartyDetailBody = styled.div`
+  container-type: inline-size;
+  margin-top: 16px;
+`
+
+const PartyDetailMain = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+`
+
+/* sticky 아님 — 인포박스가 화면보다 길어 붙여 두면 아래 줄에 닿을 수 없다 */
+const PartyDetailAside = styled.div`
+  min-width: 0;
+  margin-bottom: 16px;
+
+  @container (min-width: 960px) {
+    margin-bottom: 0;
+  }
+`
+
+/* 두 단 격자 — 컨테이너(PartyDetailBody)의 자식에서만 @container가 먹는다 */
+const PartyDetailColumns = styled.div`
+  display: flex;
+  flex-direction: column-reverse;
+
+  @container (min-width: 960px) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 28px;
+    align-items: start;
+  }
+`
+
+/** 섹션 묶음(장) — 머리글 아래 같은 성격의 섹션들 */
+const PartyChapter = styled.section`
+  display: flex;
+  flex-direction: column;
+  margin-top: 28px;
+`
+
+const PartyChapterTitle = styled.h2`
+  margin: 0 0 4px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid ${({ theme }) => theme.colors.text.primary};
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const PaletteRow = styled.div`

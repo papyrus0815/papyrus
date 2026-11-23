@@ -67,6 +67,7 @@ import {
   PeriodPair,
 } from '@/widgets/political-party/party-sidecar-parts'
 import { PartyCitationButton } from './party-citations'
+import { partyKeys } from '@/widgets/political-party/party-query-keys'
 
 const ALIAS_TYPE_ORDER: PoliticalPartyAliasType[] = POLITICAL_PARTY_ALIAS_TYPE_OPTIONS.map((option) => option.value)
 
@@ -84,8 +85,8 @@ const LANGUAGE_SUGGESTIONS = [
   ['la', '라틴어'],
 ] as const
 
-const aliasesKey = (partyId: string) => ['political-parties', partyId, 'aliases'] as const
-const legalStatusesKey = (partyId: string) => ['political-parties', partyId, 'legal-statuses'] as const
+const aliasesKey = partyKeys.aliases
+const legalStatusesKey = partyKeys.legalStatuses
 
 // ─── 이름 ──────────────────────────────────────────────────────────────────
 

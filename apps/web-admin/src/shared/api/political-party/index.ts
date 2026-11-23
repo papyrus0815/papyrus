@@ -534,7 +534,13 @@ export type PartyTransitionEndpoint = {
   fromPartyId: string
   toPartyId: string
   kind: PoliticalPartyTransitionKind
+  /** 거울(AD1000+) — 정본은 effective* 구조화 칸 */
   effectiveDate?: string | null
+  effectiveEra?: 'BC' | 'AD' | null
+  effectiveYear?: number | null
+  effectiveMonth?: number | null
+  effectiveDay?: number | null
+  effectivePrecision?: 'year' | 'month' | 'day' | null
   notes?: string | null
   toParty?: { id: string; name: string; shortName?: string | null; brandColor?: string | null }
   fromParty?: { id: string; name: string; shortName?: string | null; brandColor?: string | null }
@@ -579,14 +585,15 @@ export type CreatePartyTransitionInput = {
   fromPartyId: string
   toPartyId: string
   kind: PoliticalPartyTransitionKind
-  effectiveDate?: string | null
+  /** 계보가 일어난 때(구조화) — null이면 지운다 */
+  effective?: StructuredDateInput | null
   notes?: string | null
 }
 
 /** PATCH — 상대 정당(from/to) 변경 없음 */
 export type UpdatePartyTransitionInput = {
   kind?: PoliticalPartyTransitionKind
-  effectiveDate?: string | null
+  effective?: StructuredDateInput | null
   notes?: string | null
 }
 

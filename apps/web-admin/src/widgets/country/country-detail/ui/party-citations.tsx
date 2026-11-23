@@ -13,8 +13,9 @@ import type { Citation } from '@/shared/api/evidence'
 import { type PartyCitationTargetType, politicalPartyApi } from '@/shared/api/political-party'
 import { notify } from '@/shared/ui/toast'
 import { CitationsModal } from '@/widgets/evidence/citations-modal'
+import { partyKeys } from '@/widgets/political-party/party-query-keys'
 
-export const partyCitationsKey = (partyId: string) => ['political-parties', partyId, 'citations'] as const
+export const partyCitationsKey = partyKeys.citations
 
 export function usePartyCitations(partyId: string) {
   const { data = [] } = useQuery({

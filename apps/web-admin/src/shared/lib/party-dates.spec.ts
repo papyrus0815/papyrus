@@ -6,8 +6,10 @@ import {
   partialSignedYear,
   partialSortKey,
   partyFoundedOn,
+  parseLooseDateText,
   periodDateFormError,
   structuredInputOf,
+  transitionEffectiveOn,
 } from './party-dates'
 
 describe('정당 날짜', () => {
@@ -60,5 +62,28 @@ describe('정당 날짜', () => {
         { era: 'BC', year: 10, month: undefined, day: undefined },
       ),
     ).toBe(true)
+  })
+})
+
+describe('계보 날짜', () => {
+  it('구조화 칸이 정본 — 연도만 알면 연도만', () => {
+    expect(transitionEffectiveOn({ effectiveEra: 'AD', effectiveYear: 1943, effectiveDate: '1943-01-01T00:00:00.000Z' })).toBe('1943')
+    expect(formatPartialDate(transitionEffectiveOn({ effectiveEra: 'AD', effectiveYear: 1921, effectiveMonth: 11, effectiveDay: 9 }))).toBe(
+      '1921년 11월 9일',
+    )
+  })
+
+  it('구조화 칸이 없는 옛 행은 거울 ISO', () => {
+    expect(transitionEffectiveOn({ effectiveDate: '1918-12-30T00:00:00.000Z' })).toBe('1918-12-30')
+    expect(transitionEffectiveOn({})).toBe('')
+  })
+
+  it('한 줄 입력 — 1955는 1월 1일이 아니라 연도만, 기원전·없는 날짜', () => {
+    expect(parseLooseDateText('1955')).toEqual({ era: 'AD', year: 1955 })
+    expect(parseLooseDateText('1955-11-15')).toEqual({ era: 'AD', year: 1955, month: 11, day: 15 })
+    expect(parseLooseDateText('기원전 133')).toEqual({ era: 'BC', year: 133 })
+    expect(parseLooseDateText('')).toBeNull()
+    expect(parseLooseDateText('1955-02-30')).toBeUndefined()
+    expect(parseLooseDateText('1955년')).toBeUndefined()
   })
 })

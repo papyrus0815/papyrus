@@ -64,9 +64,10 @@ import {
   PartyDetailDescSection,
 } from './country-politics-tab.styles'
 import * as FormS from './military-unit-form/styles'
+import { partyKeys } from '@/widgets/political-party/party-query-keys'
 
 const PARTY_METRIC_DOMAIN = 'politics'
-const observationsKey = (partyId: string) => ['observations', 'POLITICAL_PARTY', partyId] as const
+const observationsKey = partyKeys.observations
 
 function pointLabel(observation: Observation): string {
   const start = observation.start

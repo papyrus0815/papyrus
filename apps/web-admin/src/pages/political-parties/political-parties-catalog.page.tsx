@@ -54,6 +54,8 @@ import {
   partialSignedYear,
   partyDissolvedOn,
   partyFoundedOn,
+  parseLooseDateText,
+  transitionEffectiveOn,
 } from '@/shared/lib/party-dates'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
@@ -438,16 +440,14 @@ export function PoliticalPartiesCatalogPage() {
         transDirection === 'predecessor' ? transTargetPartyId : selectedParty.id
       const toPartyId =
         transDirection === 'predecessor' ? selectedParty.id : transTargetPartyId
-      const effectiveDate = transEffectiveDate.trim()
-        ? /^\d{4}$/.test(transEffectiveDate.trim())
-          ? `${transEffectiveDate.trim()}-01-01`
-          : transEffectiveDate.trim()
-        : null
+      /* '1955'는 1955-01-01이 아니라 연도만 — 구조화로 보낸다 */
+      const effective = parseLooseDateText(transEffectiveDate)
+      if (effective === undefined) throw new Error('발효일은 1955 · 1955-11 · 1955-11-15 · 기원전 133 형식입니다.')
       return politicalPartyApi.createTransition({
         fromPartyId,
         toPartyId,
         kind: transKind,
-        effectiveDate,
+        effective,
         notes: transNotes.trim() || null,
       })
     },
@@ -1085,7 +1085,7 @@ export function PoliticalPartiesCatalogPage() {
 
                       <TransitionFormRow>
                         <SmallInput
-                          placeholder="발효일 (예: 1918-12-30 또는 1955)"
+                          placeholder="발효일 (예: 1918-12-30 · 1955 · 기원전 133)"
                           value={transEffectiveDate}
                           onChange={(e) => setTransEffectiveDate(e.target.value)}
                         />
@@ -1175,9 +1175,9 @@ export function PoliticalPartiesCatalogPage() {
                                     {TRANSITION_KIND_LABEL[edge.kind] ??
                                       edge.kind}
                                   </ShortBadge>
-                                  {edge.effectiveDate && (
+                                  {transitionEffectiveOn(edge) && (
                                     <span>
-                                      {formatIsoDateShort(edge.effectiveDate)}
+                                      {formatPartialDate(transitionEffectiveOn(edge))}
                                     </span>
                                   )}
                                   <MiniRemoveBtn
@@ -1230,9 +1230,9 @@ export function PoliticalPartiesCatalogPage() {
                                     {TRANSITION_KIND_LABEL[edge.kind] ??
                                       edge.kind}
                                   </ShortBadge>
-                                  {edge.effectiveDate && (
+                                  {transitionEffectiveOn(edge) && (
                                     <span>
-                                      {formatIsoDateShort(edge.effectiveDate)}
+                                      {formatPartialDate(transitionEffectiveOn(edge))}
                                     </span>
                                   )}
                                   <MiniRemoveBtn

@@ -96,6 +96,43 @@ export function periodEndOn(fields: PeriodFields): string {
     : ''
 }
 
+/** 계보(전신·후신)가 일어난 때 — 구조화 칸 우선, 없으면 레거시 ISO 거울 */
+export function transitionEffectiveOn(row: {
+  effectiveEra?: string | null
+  effectiveYear?: number | null
+  effectiveMonth?: number | null
+  effectiveDay?: number | null
+  effectiveDate?: string | null
+}): string {
+  if (row.effectiveYear != null) {
+    return partialDateFromStructured(row.effectiveYear, row.effectiveMonth, row.effectiveDay, row.effectiveEra)
+  }
+  const iso = row.effectiveDate?.trim()
+  return iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? iso.slice(0, 10) : ''
+}
+
+/**
+ * 한 줄 입력 → 구조화 입력. '1955' · '1955-11' · '1955-11-15' · '기원전 133' · '-133'.
+ * 빈 문자열은 null(지우기), 못 읽으면 undefined(형식 오류).
+ */
+export function parseLooseDateText(
+  raw: string,
+): { era: 'BC' | 'AD'; year: number; month?: number; day?: number } | null | undefined {
+  const text = raw.trim()
+  if (!text) return null
+  const match = /^(?:(기원전|BC)\s*|(-))?(\d{1,4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?$/i.exec(text)
+  if (!match) return undefined
+  const value: PeriodDateFormValue = {
+    era: match[1] || match[2] ? 'BC' : 'AD',
+    year: Number(match[3]),
+    month: match[4] ? Number(match[4]) : undefined,
+    day: match[5] ? Number(match[5]) : undefined,
+  }
+  if (value.month != null && (value.month < 1 || value.month > 12)) return undefined
+  if (periodDateFormError(value)) return undefined
+  return structuredInputOf(value) ?? undefined
+}
+
 /** 기간 라벨 — '1928년 ~ 1943년 7월 27일', '1928년 ~ 현재', '~ 1943년', '' */
 export function formatPeriodLabel(fields: PeriodFields): string {
   const start = formatPartialDate(periodStartOn(fields))

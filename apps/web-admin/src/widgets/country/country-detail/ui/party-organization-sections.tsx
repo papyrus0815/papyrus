@@ -62,8 +62,9 @@ import {
   PeriodPair,
 } from '@/widgets/political-party/party-sidecar-parts'
 import { PartyCitationButton } from './party-citations'
+import { partyKeys } from '@/widgets/political-party/party-query-keys'
 
-const organizationsKey = (partyId: string) => ['political-parties', partyId, 'organizations'] as const
+const organizationsKey = partyKeys.organizations
 
 function targetName(link: PartyOrganizationLinkDto): string {
   return link.organization?.name ?? link.militaryUnit?.name ?? '—'

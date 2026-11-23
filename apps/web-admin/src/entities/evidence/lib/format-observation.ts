@@ -22,6 +22,7 @@ const UNIT_SUFFIX: Record<string, string> = {
   km2: 'km²',
   day: '일',
   branch: '곳',
+  seat: '석',
 }
 
 function trimDecimal(value: number, digits: number): string {

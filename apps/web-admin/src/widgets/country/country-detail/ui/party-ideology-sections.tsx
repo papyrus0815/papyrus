@@ -61,9 +61,10 @@ import {
 } from '@/widgets/political-party/party-sidecar-parts'
 import { POSITION_TONE_OPTIONS, ToneChipGroup } from './politics-form/politics-form-parts'
 import { PartyCitationButton } from './party-citations'
+import { partyKeys } from '@/widgets/political-party/party-query-keys'
 
-const ideologiesKey = (partyId: string) => ['political-parties', partyId, 'ideologies'] as const
-const positionPeriodsKey = (partyId: string) => ['political-parties', partyId, 'position-periods'] as const
+const ideologiesKey = partyKeys.ideologies
+const positionPeriodsKey = partyKeys.positionPeriods
 
 export function PartyIdeologyBlock({ partyId }: { partyId: string }) {
   const queryClient = useQueryClient()

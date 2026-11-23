@@ -58,8 +58,9 @@ import {
 } from './country-politics-tab.styles'
 import * as FormS from './military-unit-form/styles'
 import { PartyCitationButton } from './party-citations'
+import { partyKeys } from '@/widgets/political-party/party-query-keys'
 
-const linksKey = (partyId: string) => ['political-parties', partyId, 'links'] as const
+const linksKey = partyKeys.links
 
 type LinkRole = PartyLinkDto['role']
 
