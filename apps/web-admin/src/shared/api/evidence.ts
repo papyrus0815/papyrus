@@ -43,6 +43,17 @@ export interface MetricDefinition {
   aggregation: MetricAggregation
   unit: string | null
   definition: string | null
+  /** 추가 차원 — 'CHAMBER'면 측정값마다 원(院)이 필수(정당 의석) */
+  dimension?: 'CHAMBER' | null
+}
+
+/** 측정값의 원 차원 — 정원 이력까지('400석 / 400석') */
+export interface ObservationChamber {
+  id: string
+  name: string
+  localName: string | null
+  role: string
+  sizes: Array<{ seats: number; startEra: 'BC' | 'AD' | null; startYear: number | null; endEra: 'BC' | 'AD' | null; endYear: number | null }>
 }
 
 export type SourceKind =
@@ -107,6 +118,7 @@ export interface Observation {
   atLeast: boolean
   qualifier: string | null
   currency: { code: string; name: string; symbol: string } | null
+  chamber?: ObservationChamber | null
   start: StructuredPoint | null
   end: StructuredPoint | null
   note: string | null
@@ -175,6 +187,8 @@ export interface CreateObservationInput {
   atLeast?: boolean
   qualifier?: string | null
   currencyCode?: string | null
+  /** 원 차원 지표(party.seats)의 원 */
+  chamberId?: string | null
   start?: StructuredPointInput | null
   end?: StructuredPointInput | null
   note?: string | null

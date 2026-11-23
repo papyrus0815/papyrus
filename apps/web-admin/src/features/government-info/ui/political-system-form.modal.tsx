@@ -20,6 +20,7 @@ import {
   type GovernmentForm,
   type LegislatureType,
 } from '@/entities/political-system/model/political-system'
+import { chamberApi, chamberKeys, chamberLabel, chamberSeatsAt } from '@/shared/api/chamber'
 import { personCareerApi } from '@/shared/api/person-career'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
@@ -58,6 +59,9 @@ type FormState = {
   lowerHouseSeats: string
   upperHouseName: string
   upperHouseSeats: string
+  /** 원 카탈로그(B7)에서 고른 원 — 비면 이름 칸만 */
+  lowerChamberId: string
+  upperChamberId: string
   /**
    * 직함 선택 — 관직 정의 id, 또는 '카탈로그에 없음'을 뜻하는 센티널(CUSTOM_TITLE),
    * 또는 빈 값(지정 안 함). 자유입력 칸은 센티널일 때만 열린다.
@@ -91,6 +95,8 @@ const EMPTY: FormState = {
   lowerHouseSeats: '',
   upperHouseName: '',
   upperHouseSeats: '',
+  lowerChamberId: '',
+  upperChamberId: '',
   headOfStateChoice: '',
   headOfStateTitle: '',
   headOfStateHasPower: true,
@@ -151,6 +157,8 @@ function hydrate(system: PoliticalSystem): FormState {
     lowerHouseSeats: toText(system.lowerHouseSeats),
     upperHouseName: toText(system.upperHouseName),
     upperHouseSeats: toText(system.upperHouseSeats),
+    lowerChamberId: system.lowerChamberId ?? '',
+    upperChamberId: system.upperChamberId ?? '',
     headOfStateChoice: system.headOfStatePositionId
       ? system.headOfStatePositionId
       : system.headOfStateTitle
@@ -311,6 +319,34 @@ export function PoliticalSystemFormModal({
     staleTime: 60_000,
   })
 
+  /* 원 카탈로그 — 이 정체의 나라 원들. 고르면 이름 칸을 원으로 채운다(서버도 같은 캐시를 쓴다) */
+  const chamberScope = {
+    countryId: effectiveHistoricalCountryId ? null : (countryId ?? null),
+    historicalCountryId: effectiveHistoricalCountryId ?? null,
+  }
+  const { data: chambers = [] } = useQuery({
+    queryKey: chamberKeys.list(chamberScope),
+    queryFn: () => chamberApi.list(chamberScope),
+    enabled: open && Boolean(chamberScope.countryId || chamberScope.historicalCountryId),
+    staleTime: 60_000,
+  })
+  const pickChamber = (side: 'lower' | 'upper', chamberId: string) => {
+    const chamber = chambers.find((candidate) => candidate.id === chamberId)
+    setForm((prev) => {
+      const next = { ...prev, [`${side}ChamberId`]: chamberId }
+      if (chamber) {
+        next[`${side}HouseName`] = chamberLabel(chamber)
+        const seatsKey = `${side}HouseSeats` as const
+        if (!prev[seatsKey].trim()) {
+          const year = Number(prev.startYear)
+          const seats = chamberSeatsAt(chamber.sizes, Number.isFinite(year) && year > 0 ? (prev.startEra === 'BC' ? -year : year) : null)
+          if (seats != null) next[seatsKey] = String(seats)
+        }
+      }
+      return next
+    })
+  }
+
   /**
    * 수정 중인 정체가 이미 참조하는 정의는 목록에서 빠져도 되살린다.
    * 스코프 하드컷(예: 다른 나라 전용으로 스코프된 '국가주석')에 걸려 사라지면
@@ -443,6 +479,8 @@ export function PoliticalSystemFormModal({
       lowerHouseSeats: hasLegislature ? numberOrNull(form.lowerHouseSeats) : null,
       upperHouseName: isBicameral ? textOrNull(form.upperHouseName) : null,
       upperHouseSeats: isBicameral ? numberOrNull(form.upperHouseSeats) : null,
+      lowerChamberId: hasLegislature ? form.lowerChamberId || null : null,
+      upperChamberId: isBicameral ? form.upperChamberId || null : null,
       /*
        * 한 축에 값은 한 벌만 간다. 카탈로그를 골랐으면 id만, '카탈로그에 없음'이면
        * 자유입력만 — 둘을 함께 보내면 나중에 어느 쪽이 진실인지 알 수 없어진다.
@@ -670,9 +708,24 @@ export function PoliticalSystemFormModal({
         {hasLegislature && (
           <Grid>
             <Field>
+              {primaryHouseLabel(legislature)} — 원 카탈로그
+              <Select value={form.lowerChamberId} onChange={(event) => pickChamber('lower', event.target.value)}>
+                <option value="">고르지 않음(이름만)</option>
+                {chambers
+                  .filter((chamber) => chamber.role !== 'UPPER')
+                  .map((chamber) => (
+                    <option key={chamber.id} value={chamber.id}>
+                      {chamberLabel(chamber)}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+            <Field>
               {primaryHouseLabel(legislature)} 이름
               <Input
                 value={form.lowerHouseName}
+                readOnly={Boolean(form.lowerChamberId)}
+                title={form.lowerChamberId ? '원 카탈로그에서 고른 원의 이름 — 바꾸려면 원을 고치거나 선택을 푸세요' : undefined}
                 onChange={(event) => set('lowerHouseName', event.target.value)}
                 placeholder={isBicameral ? '국민의회 · 하원' : '국회'}
               />
@@ -689,9 +742,24 @@ export function PoliticalSystemFormModal({
             {isBicameral && (
               <>
                 <Field>
+                  상원 — 원 카탈로그
+                  <Select value={form.upperChamberId} onChange={(event) => pickChamber('upper', event.target.value)}>
+                    <option value="">고르지 않음(이름만)</option>
+                    {chambers
+                      .filter((chamber) => chamber.role === 'UPPER' || chamber.role === 'OTHER')
+                      .map((chamber) => (
+                        <option key={chamber.id} value={chamber.id}>
+                          {chamberLabel(chamber)}
+                        </option>
+                      ))}
+                  </Select>
+                </Field>
+                <Field>
                   상원 이름
                   <Input
                     value={form.upperHouseName}
+                    readOnly={Boolean(form.upperChamberId)}
+                    title={form.upperChamberId ? '원 카탈로그에서 고른 원의 이름 — 바꾸려면 원을 고치거나 선택을 푸세요' : undefined}
                     onChange={(event) =>
                       set('upperHouseName', event.target.value)
                     }

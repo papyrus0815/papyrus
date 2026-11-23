@@ -527,6 +527,16 @@ export type ElectionDetailDto = {
   voterTurnoutPercent?: string | null
   /** 선거로 선출되는 의회 총 의석 */
   totalSeats?: number | null
+  /** 어느 원의 선거인가(B7) — 정원 이력까지 */
+  chamberId?: string | null
+  chamber?: {
+    id: string
+    name: string
+    localName?: string | null
+    role: string
+    composition?: string | null
+    sizes: Array<{ seats: number; startEra?: string | null; startYear?: number | null; endEra?: string | null; endYear?: number | null }>
+  } | null
   countryId?: string | null
   historicalCountryId?: string | null
   country?: { id: string; name: string } | null
@@ -657,6 +667,7 @@ export async function createElection(body: {
   legislatureTermEnd?: string | null
   voterTurnoutPercent?: string | number | null
   totalSeats?: number | null
+  chamberId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
   scopeAdministrativeDivisionId?: string | null
@@ -686,6 +697,7 @@ export async function updateElection(
     legislatureTermEnd: string | null
     voterTurnoutPercent: string | number | null
     totalSeats: number | null
+    chamberId: string | null
     countryId: string | null
     historicalCountryId: string | null
     scopeAdministrativeDivisionId: string | null

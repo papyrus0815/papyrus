@@ -135,6 +135,7 @@ import { confirm } from '@/shared/ui/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
+import { chamberApi, chamberKeys, chamberLabel, chamberSeatsAt, labelChamberRole } from '@/shared/api/chamber'
 import {
   ModalBody,
   ModalBoxWide,
@@ -7374,6 +7375,18 @@ export function ElectionFormModal({
       ? formatPercentOneDecimalForInput(initial.voterTurnoutPercent)
       : '',
   )
+  /* 어느 원의 선거인가(B7) — 원을 고르고 총 의석이 비어 있으면 투표 연도의 정원으로 채운다 */
+  const [chamberId, setChamberId] = useState(initial?.chamberId ?? '')
+  const chamberScope = {
+    countryId: electionScope.historicalCountryId ? null : (electionScope.countryId ?? null),
+    historicalCountryId: electionScope.historicalCountryId ?? null,
+  }
+  const { data: chambers = [] } = useQuery({
+    queryKey: chamberKeys.list(chamberScope),
+    queryFn: () => chamberApi.list(chamberScope),
+    enabled: Boolean(chamberScope.countryId || chamberScope.historicalCountryId),
+    staleTime: 60_000,
+  })
   const [totalSeatsStr, setTotalSeatsStr] = useState(
     initial?.totalSeats != null ? String(initial.totalSeats) : '',
   )
@@ -7428,6 +7441,7 @@ export function ElectionFormModal({
     setTotalSeatsStr(
       initial.totalSeats != null ? String(initial.totalSeats) : '',
     )
+    setChamberId(initial.chamberId ?? '')
     setConvOrdinalStr(
       initial.convocationOrdinal != null
         ? String(initial.convocationOrdinal)
@@ -7755,6 +7769,7 @@ export function ElectionFormModal({
           legislatureTermEnd: termEndIso,
           voterTurnoutPercent: turnoutBody,
           totalSeats: totalSeatsParsed,
+          chamberId: chamberId || null,
           description: editableTextToSavedHtml(description, initial?.description),
           eventId: eventIdBody,
           ...chronologyExtra,
@@ -7775,6 +7790,7 @@ export function ElectionFormModal({
           legislatureTermEnd: termEndIso,
           voterTurnoutPercent: turnoutBody,
           totalSeats: totalSeatsParsed,
+          chamberId: chamberId || null,
           description: editableTextToSavedHtml(description, initial?.description),
           eventId: eventIdBody,
           ...chronologyExtra,
@@ -8069,6 +8085,35 @@ export function ElectionFormModal({
           <FormS.FormGroupSummaryBadge>{legFilledCount}칸</FormS.FormGroupSummaryBadge>
         ) : null}
       </FormS.FormGroupTitle>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel htmlFor="election-chamber">
+          원(院)<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <FormSelectNative
+            id="election-chamber"
+            value={chamberId}
+            onChange={(event) => {
+              const nextId = event.target.value
+              setChamberId(nextId)
+              const chamber = chambers.find((candidate) => candidate.id === nextId)
+              if (chamber && !totalSeatsStr.trim()) {
+                const year = Number(String(pollDate).slice(0, 4))
+                const seats = chamberSeatsAt(chamber.sizes, Number.isFinite(year) && year > 0 ? year : null)
+                if (seats != null) setTotalSeatsStr(String(seats))
+              }
+            }}
+          >
+            <option value="">고르지 않음 — 대통령·국민투표 등</option>
+            {chambers.map((chamber) => (
+              <option key={chamber.id} value={chamber.id}>
+                {chamberLabel(chamber)} · {labelChamberRole(chamber.role)}
+              </option>
+            ))}
+          </FormSelectNative>
+          <EventFormS.Hint>원은 정체·헌정 탭의 「의회 — 원」에서 관리합니다. 고르면 투표 연도의 정원을 총 의석으로 채웁니다(비어 있을 때만).</EventFormS.Hint>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
       <EventFormS.FormRow>
         <EventFormS.FormLabel as="div">
           의회 임기<FormS.OptionalTag>(선택)</FormS.OptionalTag>

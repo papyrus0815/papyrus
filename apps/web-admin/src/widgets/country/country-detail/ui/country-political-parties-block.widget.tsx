@@ -2722,7 +2722,10 @@ export function CountryPoliticalPartiesBlock({
                   </PartyChapter>
                   <PartyChapter id="party-chapter-evidence" aria-labelledby="party-chapter-evidence-title">
                     <PartyChapterTitle id="party-chapter-evidence-title">수치·관계·계보</PartyChapterTitle>
-                    <PartyMetricsBlock partyId={detailParty.id} />
+                    <PartyMetricsBlock
+                        partyId={detailParty.id}
+                        chamberScope={historicalCountryId ? { historicalCountryId } : { countryId }}
+                      />
                     <PartyLinksBlock partyId={detailParty.id} partyName={detailParty.name} />
                     <PartyLineageBlock
                       partyId={detailParty.id}

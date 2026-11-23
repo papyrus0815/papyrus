@@ -50,6 +50,8 @@ import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { notify } from '@/shared/ui/toast'
 
+import { ChamberCatalogSection } from '@/widgets/chamber/chamber-catalog-section'
+
 import { PoliticalSystemFormModal } from './political-system-form.modal'
 
 const EMPTY_FACT_LABELS = [
@@ -599,6 +601,8 @@ export function PoliticalSystemTab({
           })}
         </TimelineList>
       )}
+
+      <ChamberCatalogSection countryId={countryId} historicalCountryId={historicalCountryId} />
 
       <PoliticalSystemFormModal
         open={formOpen}

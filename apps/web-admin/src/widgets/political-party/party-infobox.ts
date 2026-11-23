@@ -5,6 +5,7 @@
  * 섹션에서 고치면 인포박스도 바뀌고, 비어 있는 항목은 줄이 생기지 않는다(빈 '—' 줄을 늘어놓지 않음).
  * 순서는 나무위키·위키백과 정당 정보 상자의 관례(이름 → 표지 → 표어 → 존속 → 계보 → 지도부 → 기구 → 이념 → 당사 → 조직 → 수치)를 따른다.
  */
+import { chamberSeatsAt } from '@/shared/api/chamber'
 import type { Observation } from '@/shared/api/evidence'
 import {
   type PartyExpressionDto,
@@ -318,12 +319,29 @@ export function buildPartyInfobox(input: PartyInfoboxInput): PartyInfobox {
   /* 수치 — 최신 채택값 */
   const members = latestObservation(input.observations, 'party.members')
   if (members) push('members', '당원', [{ text: formatObservationExact(members), when: observationWhen(members) }])
-  const seats = latestObservation(input.observations, 'party.seats')
-  if (seats) {
-    push('seats', '의석', [
-      { text: formatObservationExact(seats), sub: seats.qualifier ?? null, when: observationWhen(seats) },
-    ])
+  /* 의석 — 원마다 최신 하나. 정원은 원의 정원 이력에서('400석 / 400석') */
+  const seatRows = input.observations.filter(
+    (observation) => observation.metric.key === 'party.seats' && observation.estimateRole !== 'ALTERNATIVE',
+  )
+  const byChamber = new Map<string, Observation[]>()
+  for (const observation of seatRows) {
+    const key = observation.chamber?.id ?? '-'
+    byChamber.set(key, [...(byChamber.get(key) ?? []), observation])
   }
+  push(
+    'seats',
+    '의석',
+    [...byChamber.values()].map((rows) => {
+      const seats = latestObservation(rows, 'party.seats')!
+      const year = seats.start ? (seats.start.era === 'BC' ? -seats.start.year : seats.start.year) : null
+      const total = seats.chamber ? chamberSeatsAt(seats.chamber.sizes, year) : null
+      return {
+        text: total != null ? `${formatObservationExact(seats)} / ${total.toLocaleString('ko-KR')}석` : formatObservationExact(seats),
+        sub: seats.chamber?.name ?? seats.qualifier ?? null,
+        when: observationWhen(seats),
+      }
+    }),
+  )
 
   const palette = (party.colorPalette?.length ? party.colorPalette : party.brandColor ? [party.brandColor] : []).filter(Boolean)
 

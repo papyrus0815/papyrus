@@ -13,6 +13,7 @@ import styled from 'styled-components'
 import { ESTIMATE_METHOD_LABEL, ESTIMATE_ROLE_LABEL } from '@/entities/evidence/lib/evidence-labels'
 import { formatObservationExact, isUnverified } from '@/entities/evidence/lib/format-observation'
 import * as EventFormS from '@/pages/events/create/event-create.styles'
+import { chamberApi, chamberKeys, chamberLabel, chamberSeatsAt, labelChamberRole } from '@/shared/api/chamber'
 import { getAllCurrencies } from '@/shared/api/currencies'
 import {
   type CreateObservationInput,
@@ -87,7 +88,18 @@ const pointKey = (observation: Observation) =>
       (observation.start.month ?? 1) * 100 +
       (observation.start.day ?? 1)
 
-export function PartyMetricsBlock({ partyId }: { partyId: string }) {
+/** 원 후보를 어느 나라에서 찾나 — 현대 국가면 연결된 역사 국가의 원까지(왕국 대의원·파시스트 시기 원) */
+export type ChamberScope = { countryId?: string | null; historicalCountryId?: string | null }
+
+/** '400석 / 400석 · 대의원' — 측정 시점의 정원이 있으면 분모로 */
+export function seatsOfLabel(observation: Observation): string | null {
+  if (!observation.chamber) return null
+  const year = observation.start ? (observation.start.era === 'BC' ? -observation.start.year : observation.start.year) : null
+  const total = chamberSeatsAt(observation.chamber.sizes, year)
+  return `${total != null ? `정원 ${total.toLocaleString('ko-KR')}석 · ` : ''}${observation.chamber.name}`
+}
+
+export function PartyMetricsBlock({ partyId, chamberScope }: { partyId: string; chamberScope: ChamberScope }) {
   const queryClient = useQueryClient()
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; row: Observation } | null>(null)
   const { data = [], isLoading } = useQuery({
@@ -142,6 +154,7 @@ export function PartyMetricsBlock({ partyId }: { partyId: string }) {
                 <FactRow key={observation.id}>
                   <FactMain>
                     <span className="title">{formatObservationExact(observation)}</span>
+                    {seatsOfLabel(observation) ? <span className="period">{seatsOfLabel(observation)}</span> : null}
                     <span className="period strong">{pointLabel(observation)}</span>
                     {observation.estimateRole ? <FactBadge>{ESTIMATE_ROLE_LABEL[observation.estimateRole]}</FactBadge> : null}
                     {observation.method ? <span className="period">{ESTIMATE_METHOD_LABEL[observation.method]}</span> : null}
@@ -184,6 +197,7 @@ export function PartyMetricsBlock({ partyId }: { partyId: string }) {
         <PartyObservationFormModal
           key={modal.mode === 'edit' ? modal.row.id : 'new'}
           partyId={partyId}
+          chamberScope={chamberScope}
           initial={modal.mode === 'edit' ? modal.row : undefined}
           onClose={() => setModal(null)}
           onSaved={() => {
@@ -201,11 +215,13 @@ const cleanNumber = (raw: string) => raw.replace(/[,\s]/g, '')
 
 export function PartyObservationFormModal({
   partyId,
+  chamberScope,
   initial,
   onClose,
   onSaved,
 }: {
   partyId: string
+  chamberScope: ChamberScope
   initial?: Observation
   onClose: () => void
   onSaved: () => void
@@ -216,6 +232,14 @@ export function PartyObservationFormModal({
   const metric = metrics.find((candidate) => candidate.key === metricKey)
   const isMoney = metric?.valueKind === 'MONEY'
   const { data: currencies = [] } = useQuery({ queryKey: ['currencies'], queryFn: getAllCurrencies, enabled: isMoney, staleTime: 300_000 })
+  const needsChamber = metric?.dimension === 'CHAMBER'
+  const { data: chambers = [] } = useQuery({
+    queryKey: chamberKeys.list(chamberScope),
+    queryFn: () => chamberApi.list(chamberScope),
+    enabled: needsChamber && Boolean(chamberScope.countryId || chamberScope.historicalCountryId),
+    staleTime: 60_000,
+  })
+  const [chamberId, setChamberId] = useState(initial?.chamber?.id ?? '')
 
   const [value, setValue] = useState(initial?.value ?? '')
   const [low, setLow] = useState(initial?.low ?? '')
@@ -244,7 +268,9 @@ export function PartyObservationFormModal({
         ? '값은 숫자만(쉼표 허용)'
         : isMoney && !currencyCode
           ? '필수: 통화'
-          : pointError
+          : needsChamber && !chamberId
+            ? '필수: 원(院) — 의석은 어느 원의 것인지 정해야 합니다'
+            : pointError
             ? `시점: ${pointError}`
             : citationResult.problem
 
@@ -259,6 +285,7 @@ export function PartyObservationFormModal({
         approx,
         atLeast,
         currencyCode: isMoney ? currencyCode : null,
+        chamberId: needsChamber ? chamberId : null,
         start: start ? { era: start.era, year: start.year, month: start.month ?? null, day: start.day ?? null } : null,
         qualifier: qualifier.trim() || null,
         estimateRole: estimateRole || null,
@@ -314,6 +341,22 @@ export function PartyObservationFormModal({
                   이상(하한만 앎)
                 </CheckRow>
               </CheckLine>
+              {needsChamber ? (
+                <>
+                  <FormSelectNative aria-label="원(院)" value={chamberId} onChange={(event) => setChamberId(event.target.value)} style={{ marginTop: 8 }}>
+                    <option value="">원 선택 *</option>
+                    {chambers.map((chamber) => (
+                      <option key={chamber.id} value={chamber.id}>
+                        {chamberLabel(chamber)} · {labelChamberRole(chamber.role)}
+                        {chamber.historicalCountry?.name ? ` · ${chamber.historicalCountry.name}` : ''}
+                      </option>
+                    ))}
+                  </FormSelectNative>
+                  {chambers.length === 0 ? (
+                    <EventFormS.Hint>이 나라에 등록된 원이 없습니다 — 정부·행정 → 정체·헌정의 「의회 — 원」에서 먼저 추가하세요.</EventFormS.Hint>
+                  ) : null}
+                </>
+              ) : null}
               {isMoney ? (
                 <FormSelectNative aria-label="통화" value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value)} style={{ marginTop: 8 }}>
                   <option value="">통화 선택 *</option>

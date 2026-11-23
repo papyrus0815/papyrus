@@ -93,4 +93,26 @@ describe('정당 인포박스 — 기록에서 만든다', () => {
     expect(ideology?.inline).toBe(true)
     expect(ideology?.items.map((item) => item.text)).toEqual(['이탈리아 파시즘', '조합주의'])
   })
+
+  it('의석은 원마다 — 정원은 원의 정원 이력에서', () => {
+    const box = buildPartyInfobox({
+      ...empty,
+      observations: [
+        observation('party.seats', '400', 1929, {
+          chamber: {
+            id: 'camera',
+            name: '대의원',
+            localName: 'Camera dei Deputati',
+            role: 'LOWER',
+            sizes: [{ seats: 400, startEra: 'AD', startYear: 1929, endEra: 'AD', endYear: 1939 }],
+          },
+        }),
+      ],
+    })
+    expect(box.rows.find((row) => row.key === 'seats')?.items[0]).toMatchObject({
+      text: '400석 / 400석',
+      sub: '대의원',
+      when: '1929년',
+    })
+  })
 })
