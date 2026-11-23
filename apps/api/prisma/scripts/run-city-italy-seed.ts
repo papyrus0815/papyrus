@@ -2,13 +2,13 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
-import { seedCityRome } from '../seeds/city.rome.seed'
+import { seedItalyCities } from '../seeds/city.italy.seed'
 
 async function main() {
   dotenv.config({ path: path.resolve(process.cwd(), 'env.development') })
   const prisma = new PrismaService({ useAdapter: true })
   try {
-    await seedCityRome(prisma)
+    await seedItalyCities(prisma)
   } finally {
     await prisma.$disconnect()
   }

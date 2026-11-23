@@ -83,7 +83,8 @@ export async function backfillChambers(prisma: PrismaClient): Promise<void> {
   for (const system of systems) {
     const scope: Scope = { countryId: system.countryId, historicalCountryId: system.historicalCountryId }
     const data: { lowerChamberId?: string; upperChamberId?: string } = {}
-    if (system.lowerHouseName?.trim()) {
+    /* 이미 원에 이어진 정체는 건너뛴다 — 큐레이션이 병합·정리한 원을 글자 칸에서 되살리지 않게 */
+    if (system.lowerHouseName?.trim() && !system.lowerChamberId) {
       const role = system.legislatureType === 'UNICAMERAL' ? ChamberRole.UNICAMERAL : ChamberRole.LOWER
       const chamber = await findOrCreate(scope, role, system.lowerHouseName)
       /* 이름에 존속 연도가 있으면(자정원 1910~1912) 그 기간이 정원의 기간 — 정체 기간(1636~)보다 정확 */
@@ -97,7 +98,7 @@ export async function backfillChambers(prisma: PrismaClient): Promise<void> {
       )
       if (!system.lowerChamberId) data.lowerChamberId = chamber.id
     }
-    if (system.upperHouseName?.trim() && system.legislatureType === 'BICAMERAL') {
+    if (system.upperHouseName?.trim() && system.legislatureType === 'BICAMERAL' && !system.upperChamberId) {
       const chamber = await findOrCreate(scope, ChamberRole.UPPER, system.upperHouseName)
       await ensureSize(chamber.id, system.upperHouseSeats, system.startYear, system.endYear, system.startEra, system.endEra)
       if (!system.upperChamberId) data.upperChamberId = chamber.id
