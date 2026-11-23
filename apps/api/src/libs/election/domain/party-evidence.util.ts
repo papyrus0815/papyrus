@@ -1,5 +1,5 @@
 /**
- * 정당 근거 — 인용 대상(정당 본체 + 곁가지 9종)과 지울 때의 정리(B5, docs/political-party-model-review.md §4.9·4.11).
+ * 정당 근거 — 인용 대상(정당 본체 + 곁가지 10종)과 지울 때의 정리(B5, docs/political-party-model-review.md §4.9·4.11).
  *
  * 인용·측정값은 다형이라 DB FK가 없다(근거 도메인 원칙). 그래서 정당 쪽 기록을 지우는 모든 길이
  * 같은 트랜잭션 안에서 여기를 불러 그 기록의 인용을 함께 지운다. 출처(Source)는 공유 자원이라 남긴다.
@@ -23,6 +23,7 @@ export const PARTY_CITATION_TARGETS = [
   CitationTargetType.PARTY_SYMBOL,
   CitationTargetType.PARTY_EXPRESSION,
   CitationTargetType.PARTY_HEADQUARTERS,
+  CitationTargetType.PARTY_LINK,
 ] as const
 
 export type PartyCitationTarget = (typeof PARTY_CITATION_TARGETS)[number]
@@ -56,6 +57,14 @@ async function idsOf(db: Db, targetType: PartyCitationTarget, partyId: string): 
       return (await db.politicalPartyExpression.findMany({ where, select })).map((row) => row.id)
     case CitationTargetType.PARTY_HEADQUARTERS:
       return (await db.politicalPartyHeadquarters.findMany({ where, select })).map((row) => row.id)
+    case CitationTargetType.PARTY_LINK:
+      /* 관계는 두 정당의 것 — 어느 쪽에서든 인용하고, 어느 쪽이 지워져도 정리된다 */
+      return (
+        await db.politicalPartyLink.findMany({
+          where: { OR: [{ fromPartyId: partyId }, { toPartyId: partyId }] },
+          select,
+        })
+      ).map((row) => row.id)
   }
 }
 

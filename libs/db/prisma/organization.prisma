@@ -247,6 +247,8 @@ model Organization {
   aliases           OrganizationAlias[]
   events            OrganizationEvent[]
   partyAffiliations PoliticalPartyOrganization[]
+  /// 이 조직(지속 연합)의 선거별 회차
+  electionAlliances ElectionAlliance[] @relation("ElectionAllianceOrganization")
   parents           OrganizationHierarchy[]   @relation("OrgHierarchyParent")
   children          OrganizationHierarchy[]   @relation("OrgHierarchyChild")
 

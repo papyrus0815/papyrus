@@ -182,6 +182,10 @@ model PoliticalParty {
   transitionsFrom PoliticalPartyTransition[] @relation("PartyTransitionFrom")
   transitionsTo   PoliticalPartyTransition[] @relation("PartyTransitionTo")
 
+  /// 계보가 아닌 관계(자매·위성·계파·공동 교섭단체) — 이 정당이 from/to
+  linksFrom PoliticalPartyLink[] @relation("PartyLinkFrom")
+  linksTo   PoliticalPartyLink[] @relation("PartyLinkTo")
+
   aliases              PoliticalPartyAlias[]
   /// 법적 지위 기간(합법·유일 합법·불법화·해산 판결…)
   legalStatuses        PoliticalPartyLegalStatus[]
@@ -676,6 +680,58 @@ model PoliticalPartyOrganization {
   @@index([organizationId], name: "idx_party_org_orgId")
   @@index([militaryUnitId], name: "idx_party_org_unitId")
   @@map("political_party_organization")
+}
+
+// ========================
+// PoliticalPartyLink (계보가 아닌 관계)
+// ========================
+
+/// 정당 사이의 '함께 있었던' 관계 — 계보(Transition)는 '어디서 왔나', 이건 '나란히 어떤 사이였나'
+enum PoliticalPartyLinkKind {
+  /// 자매 정당 — 대칭(CDU–CSU). 한 행만 두고 양쪽에서 읽는다
+  SISTER_PARTY
+  /// 위성정당 — from이 to의 위성(더불어시민당 → 더불어민주당)
+  SATELLITE_OF
+  /// 계파·분파 — from이 to 안의 계파(노론 안의 시파) 또는 당내 파벌
+  FACTION_OF
+  /// 공동 교섭단체·원내 연합 — 대칭
+  PARLIAMENTARY_UNION
+  /// 기타
+  OTHER
+}
+
+/// 정당 두 곳의 관계 한 줄 — 종류·기간·메모. 대칭 종류(자매·공동 교섭단체)는 방향과 무관하게 한 쌍에 한 행(서비스가 막는다)
+model PoliticalPartyLink {
+  id String @id @default(uuid()) @db.Char(36)
+
+  fromPartyId String @map("from_party_id") @db.Char(36)
+  toPartyId   String @map("to_party_id") @db.Char(36)
+
+  kind PoliticalPartyLinkKind
+
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
+
+  note      String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
+  fromParty PoliticalParty @relation("PartyLinkFrom", fields: [fromPartyId], references: [id], onDelete: Cascade)
+  toParty   PoliticalParty @relation("PartyLinkTo", fields: [toPartyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([fromPartyId, toPartyId, kind], name: "uniq_party_link")
+  @@index([toPartyId], name: "idx_party_link_to")
+  @@map("political_party_link")
 }
 
 // ========================

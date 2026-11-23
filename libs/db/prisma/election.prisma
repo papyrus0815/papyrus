@@ -289,6 +289,10 @@ model ElectionAlliance {
 
   notes String? @db.Text
 
+  /// 지속 연합 — 이 선거의 연합이 여러 선거에 걸친 연합(정치 연합 조직, 인민전선·국민 블록)의 한 회차일 때
+  allianceOrganizationId String?       @map("alliance_organization_id") @db.Char(36)
+  allianceOrganization   Organization? @relation("ElectionAllianceOrganization", fields: [allianceOrganizationId], references: [id], onDelete: SetNull)
+
   election Election              @relation(fields: [electionId], references: [id], onDelete: Cascade)
   members  ElectionPartyResult[] @relation("ElectionAllianceMembers")
 
@@ -297,6 +301,7 @@ model ElectionAlliance {
 
   @@unique([electionId, name], name: "uq_election_alliance_election_name")
   @@index([electionId], name: "idx_election_alliance_electionId")
+  @@index([allianceOrganizationId], name: "idx_election_alliance_orgId")
   @@map("election_alliance")
 }
 
