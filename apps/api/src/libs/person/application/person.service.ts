@@ -1,5 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { AggregateType, AttachmentOwner, EventMethod, NotificationSubResource, PersonHumanRelationshipType, PersonRelationshipTag, PersonTrait } from '@prisma/client'
+import { AggregateType, AttachmentOwner, CitationTargetType, EventMethod, NotificationSubResource, ObservationSubjectType, PersonHumanRelationshipType, PersonRelationshipTag, PersonTrait } from '@prisma/client'
+
+import { removeObservationsForSubjects } from '../../evidence/application/observation-cleanup'
 import {
   IPersonRepository,
   CreatePersonData,
@@ -2480,7 +2482,23 @@ export class PersonService {
       }
     }
 
+    /*
+     * 근거(인용·측정값)는 다형이라 FK CASCADE가 없다 — 인물과 함께 사라지는 당원 소속 행의 인용,
+     * 인물 대상 측정값(+그 인용)을 같이 지운다. 소속 id는 CASCADE로 지워지기 전에 모은다.
+     */
+    const membershipIds = (
+      await this.prisma.politicalPartyMembership.findMany({ where: { personId: id }, select: { id: true } })
+    ).map((row) => row.id)
+
     await this.personRepository.delete(id)
+    await this.prisma.$transaction(async (tx) => {
+      if (membershipIds.length > 0) {
+        await tx.citation.deleteMany({
+          where: { targetType: CitationTargetType.PARTY_MEMBERSHIP, targetId: { in: membershipIds } },
+        })
+      }
+      await removeObservationsForSubjects(tx, ObservationSubjectType.PERSON, [id])
+    })
     await this.notificationService.notifyPerson(
       personDisplayName(person),
       EventMethod.DELETE,
