@@ -11,21 +11,36 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
-import { Prisma } from '@prisma/client'
+import { PoliticalPartyTransitionKind, Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import { areJurisdictionsCompatible } from '../domain/law-jurisdiction.util'
+import { removePartyCitations } from '../domain/party-evidence.util'
+import {
+  type StructuredDateColumns,
+  type StructuredDateInput,
+  parseStructuredDateInput,
+  structuredDateData,
+  structuredDateFromLegacyIso,
+  structuredDateMirror,
+} from '../domain/party-structured-date.util'
+
+const TRANSITION_KIND_VALUES = new Set<string>(Object.values(PoliticalPartyTransitionKind))
 import { serializeElectionBigInt } from '../election-serialize.util'
 
 export interface CreatePoliticalPartyTransitionBody {
   fromPartyId: string
   toPartyId: string
   kind: string
+  /** 계보가 일어난 때(구조화, 정본) — 1921년만 알아도 된다 */
+  effective?: StructuredDateInput | null
+  /** 레거시 ISO(구 클라이언트) — effective가 오면 무시 */
   effectiveDate?: string | null
   notes?: string | null
 }
 
 export interface UpdatePoliticalPartyTransitionBody {
   kind?: string
+  effective?: StructuredDateInput | null
   effectiveDate?: string | null
   notes?: string | null
 }
@@ -64,7 +79,8 @@ export class PoliticalPartyTransitionController {
     }
 
     await this.assertNoLineageCycle(body.fromPartyId, body.toPartyId)
-    const effectiveDate = this.parseOptionalDate(body.effectiveDate)
+    const kind = this.parseKind(body.kind)
+    const effective = this.parseEffective(body) ?? structuredDateFromLegacyIso(null, '계보')
 
     let row
     try {
@@ -72,9 +88,9 @@ export class PoliticalPartyTransitionController {
         data: {
           fromPartyId: body.fromPartyId,
           toPartyId: body.toPartyId,
-          kind: body.kind as any,
-          effectiveDate: effectiveDate ?? undefined,
-          notes: body.notes ?? undefined,
+          kind,
+          ...this.effectiveData(effective),
+          notes: body.notes?.trim() || undefined,
         },
         include: {
           fromParty: { select: { id: true, name: true, shortName: true } },
@@ -103,20 +119,15 @@ export class PoliticalPartyTransitionController {
     })
     if (!existing) throw new NotFoundException('계보 연결을 찾을 수 없습니다.')
 
-    const data: {
-      kind?: string
-      effectiveDate?: Date | null
-      notes?: string | null
-    } = {}
-    if (body.kind !== undefined) data.kind = body.kind
-    if (body.effectiveDate !== undefined) {
-      data.effectiveDate = this.parseOptionalDate(body.effectiveDate)
-    }
-    if (body.notes !== undefined) data.notes = body.notes
+    const data: Prisma.PoliticalPartyTransitionUncheckedUpdateInput = {}
+    if (body.kind !== undefined) data.kind = this.parseKind(body.kind)
+    const effective = this.parseEffective(body)
+    if (effective) Object.assign(data, this.effectiveData(effective))
+    if (body.notes !== undefined) data.notes = body.notes?.trim() || null
 
     const row = await this.prisma.politicalPartyTransition.update({
       where: { id },
-      data: data as any,
+      data,
       include: {
         fromParty: { select: { id: true, name: true, shortName: true } },
         toParty: { select: { id: true, name: true, shortName: true } },
@@ -132,7 +143,10 @@ export class PoliticalPartyTransitionController {
       select: { id: true },
     })
     if (!existing) throw new NotFoundException('계보 연결을 찾을 수 없습니다.')
-    await this.prisma.politicalPartyTransition.delete({ where: { id } })
+    await this.prisma.$transaction(async (tx) => {
+      await removePartyCitations(tx, 'PARTY_TRANSITION', [id])
+      await tx.politicalPartyTransition.delete({ where: { id } })
+    })
   }
 
   private async ensureParty(id: string) {
@@ -144,13 +158,26 @@ export class PoliticalPartyTransitionController {
     return row
   }
 
-  private parseOptionalDate(raw: string | null | undefined): Date | null {
-    if (raw == null || raw === '') return null
-    const d = new Date(raw)
-    if (Number.isNaN(d.getTime())) {
-      throw new BadRequestException('날짜 형식이 올바르지 않습니다.')
+  private parseKind(raw: string | undefined): PoliticalPartyTransitionKind {
+    if (!raw || !TRANSITION_KIND_VALUES.has(raw)) {
+      throw new BadRequestException(`계보 유형이 올바르지 않습니다: ${raw ?? '(없음)'}`)
     }
-    return d
+    return raw as PoliticalPartyTransitionKind
+  }
+
+  /** undefined = 안 바꿈. 구조화 입력이 정본, 없으면 레거시 ISO */
+  private parseEffective(body: {
+    effective?: StructuredDateInput | null
+    effectiveDate?: string | null
+  }): StructuredDateColumns | undefined {
+    if (body.effective !== undefined) return parseStructuredDateInput(body.effective, '계보')
+    if (body.effectiveDate !== undefined) return structuredDateFromLegacyIso(body.effectiveDate, '계보')
+    return undefined
+  }
+
+  /** 구조화 칸 + AD1000+ 거울 */
+  private effectiveData(columns: StructuredDateColumns) {
+    return { ...structuredDateData('effective', columns), effectiveDate: structuredDateMirror(columns) }
   }
 
   private async assertPartiesCountryCompatible(

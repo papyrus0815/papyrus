@@ -754,7 +754,14 @@ model PoliticalPartyTransition {
 
   kind PoliticalPartyTransitionKind @map("kind")
 
+  /// 정렬·하위 호환 거울 — AD1000+ 일 단위만. 정본은 아래 구조화 날짜
   effectiveDate DateTime? @map("effective_date")
+  /// 계보가 일어난 때(구조화) — 1921년만 아는 경우·BC 붕당도 담는다. precision은 서버 파생
+  effectiveEra       Era?    @map("effective_era")
+  effectiveYear      Int?    @map("effective_year")
+  effectiveMonth     Int?    @map("effective_month")
+  effectiveDay       Int?    @map("effective_day")
+  effectivePrecision String? @map("effective_precision") @db.VarChar(10)
   notes         String?   @db.Text
 
   fromParty PoliticalParty @relation("PartyTransitionFrom", fields: [fromPartyId], references: [id], onDelete: Cascade)

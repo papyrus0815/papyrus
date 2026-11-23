@@ -402,6 +402,16 @@ const METRICS: MetricSeed[] = [
     aggregation: NONE,
     definition: '한 해(또는 적은 기간)의 당 수입 — 당비·기부·국고 보조 합계. 기간은 측정값의 시작·끝으로 적는다.',
   },
+  {
+    key: 'party.seats',
+    name: '의석 수',
+    domain: 'politics',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'seat',
+    definition:
+      '그 시점에 이 정당이 가진 의석. 선거 집계로 못 담는 경우(임명직 상원·탈당·보궐·단일 명부 국민투표)용 — 어느 원(院)인지와 정원은 단서(qualifier)에 적는다(의회·원 카탈로그 B7이 생기면 원 FK로 승격).',
+  },
 ]
 
 interface CurrencySeed {

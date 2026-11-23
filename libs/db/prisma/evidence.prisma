@@ -129,6 +129,8 @@ enum CitationTargetType {
   PARTY_HEADQUARTERS
   /// 정당 사이 관계 한 줄(자매·위성·계파)
   PARTY_LINK
+  /// 정당 계보 한 줄(전신·후신·합당·분당)
+  PARTY_TRANSITION
 }
 
 /// 지표 값의 성격 — 화면이 숫자를 어떻게 읽고 합칠지 정한다
