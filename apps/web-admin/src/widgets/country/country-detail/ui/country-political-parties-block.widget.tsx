@@ -223,6 +223,7 @@ import { PartyMembershipsBlock } from './party-membership-sections'
 import { PartyOrganizationsBlock } from './party-organization-sections'
 import { PartyCitationButton } from './party-citations'
 import { PartyMetricsBlock } from './party-metric-sections'
+import { PartyLinksBlock } from './party-link-sections'
 import { PartyExpressionsBlock, PartyHeadquartersBlock, PartySymbolsBlock } from './party-mark-sections'
 import { type IdeologyChip, IdeologyPicker } from '@/widgets/ideology/ideology-picker'
 import { CountryTabEmptyState } from './country-tab-empty-state'
@@ -2803,6 +2804,7 @@ export function CountryPoliticalPartiesBlock({
               <PartyExpressionsBlock partyId={detailParty.id} />
               <PartyHeadquartersBlock partyId={detailParty.id} countryId={countryId} />
               <PartyMetricsBlock partyId={detailParty.id} />
+              <PartyLinksBlock partyId={detailParty.id} partyName={detailParty.name} />
               <PartyLineageBlock
                 partyId={detailParty.id}
                 partyName={detailParty.name}

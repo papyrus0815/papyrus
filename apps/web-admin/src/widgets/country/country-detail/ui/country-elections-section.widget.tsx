@@ -3205,6 +3205,7 @@ export function CountryElectionsSection({
                 ? `alliance-new-${allianceModal.electionId}`
                 : `alliance-${allianceModal.alliance.id}`
             }
+            electionId={allianceModal.electionId}
             mode={allianceModal.mode}
             initial={allianceModal.mode === 'edit' ? allianceModal.alliance : undefined}
             alliances={detail.alliances ?? []}

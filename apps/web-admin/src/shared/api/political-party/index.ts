@@ -195,6 +195,7 @@ export type PartyCitationTargetType =
   | 'PARTY_SYMBOL'
   | 'PARTY_EXPRESSION'
   | 'PARTY_HEADQUARTERS'
+  | 'PARTY_LINK'
 
 export type PartyCitationGroupDto = {
   targetType: PartyCitationTargetType
@@ -427,6 +428,41 @@ export type PartyPositionPeriodInput = {
   start?: StructuredDateInput | null
   end?: StructuredDateInput | null
   isCurrent?: boolean
+  note?: string | null
+}
+
+/** 정당 사이 관계 종류 — 계보(전신·후신)와 선거 한 번의 연합은 따로 */
+export type PoliticalPartyLinkKind = 'SISTER_PARTY' | 'SATELLITE_OF' | 'FACTION_OF' | 'PARLIAMENTARY_UNION' | 'OTHER'
+
+/** 대칭 종류 — 방향 없음(자매·공동 교섭단체·기타) */
+export const SYMMETRIC_PARTY_LINK_KINDS: ReadonlySet<PoliticalPartyLinkKind> = new Set(['SISTER_PARTY', 'PARLIAMENTARY_UNION', 'OTHER'])
+
+export type PartyLinkPartySummary = {
+  id: string
+  name: string
+  shortName?: string | null
+  brandColor?: string | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
+}
+
+/** 관계 한 줄 — 요청한 정당 입장. role: peer(대칭) / subordinate(이 정당이 상대의 위성·계파) / superior(상대가 이 정당의) */
+export type PartyLinkDto = StructuredPeriodFields & {
+  id: string
+  kind: PoliticalPartyLinkKind
+  role: 'peer' | 'subordinate' | 'superior'
+  otherPartyId: string
+  otherParty: PartyLinkPartySummary
+  note?: string | null
+  sortOrder: number
+}
+
+export type PartyLinkInput = {
+  otherPartyId: string
+  kind: PoliticalPartyLinkKind
+  role?: 'subordinate' | 'superior'
+  start?: StructuredDateInput | null
+  end?: StructuredDateInput | null
   note?: string | null
 }
 
@@ -965,6 +1001,34 @@ export const politicalPartyApi = {
   deletePositionPeriod: async (partyId: string, periodId: string) => {
     await requestJson<void>(
       `/political-parties/${encodeURIComponent(partyId)}/position-periods/${encodeURIComponent(periodId)}`,
+      { method: 'DELETE' },
+    )
+  },
+
+  /** 정당 사이 관계 — 자매·위성·계파·공동 교섭단체. 한 행을 두 정당이 함께 본다 */
+  getLinks: async (partyId: string) =>
+    requestJson<PartyLinkDto[]>(`/political-parties/${encodeURIComponent(partyId)}/links`),
+
+  getLinkCandidates: async (partyId: string, query: string) =>
+    requestJson<PartyLinkPartySummary[]>(
+      `/political-parties/${encodeURIComponent(partyId)}/link-candidates?query=${encodeURIComponent(query)}`,
+    ),
+
+  createLink: async (partyId: string, body: PartyLinkInput) =>
+    requestJson<PartyLinkDto>(`/political-parties/${encodeURIComponent(partyId)}/links`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  updateLink: async (partyId: string, linkId: string, body: Partial<PartyLinkInput>) =>
+    requestJson<PartyLinkDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/links/${encodeURIComponent(linkId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    ),
+
+  deleteLink: async (partyId: string, linkId: string) => {
+    await requestJson<void>(
+      `/political-parties/${encodeURIComponent(partyId)}/links/${encodeURIComponent(linkId)}`,
       { method: 'DELETE' },
     )
   },

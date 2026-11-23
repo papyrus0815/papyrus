@@ -10,12 +10,19 @@
  */
 import React, { useMemo, useState } from 'react'
 
-import { FiEdit2, FiTrash2 } from 'react-icons/fi'
+import { useQuery } from '@tanstack/react-query'
+import { FiEdit2, FiLink, FiTrash2, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import * as EventFormS from '@/pages/events/create/event-create.styles'
 import { DIGIT_DISPLAY, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
-import type { ElectionAllianceDto, ElectionAllianceInput, ElectionPartyResultDto } from '@/shared/api/election'
+import {
+  type ElectionAllianceDto,
+  type ElectionAllianceInput,
+  type ElectionPartyResultDto,
+  getAllianceOrganizationCandidates,
+} from '@/shared/api/election'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import {
   PersonRegisterModalCancelBtn,
@@ -103,6 +110,12 @@ export function ElectionAlliancesPanel({
               {alliance.shortName && alliance.shortName.trim() !== alliance.name.trim() ? (
                 <span className="short">{alliance.shortName}</span>
               ) : null}
+              {alliance.allianceOrganization ? (
+                <span className="lasting" title="여러 선거에 걸친 지속 연합의 이번 회차">
+                  <FiLink size={11} aria-hidden />
+                  {alliance.allianceOrganization.name}
+                </span>
+              ) : null}
               <span className="stat">
                 {[
                   seats != null ? `${seats.toLocaleString('ko-KR')}석` : null,
@@ -151,6 +164,7 @@ export function ElectionAlliancesPanel({
 }
 
 export function ElectionAllianceFormModal({
+  electionId,
   mode,
   initial,
   alliances,
@@ -160,6 +174,7 @@ export function ElectionAllianceFormModal({
   onClose,
   onSubmit,
 }: {
+  electionId: string
   mode: 'create' | 'edit'
   initial?: ElectionAllianceDto
   alliances: ElectionAllianceDto[]
@@ -173,6 +188,21 @@ export function ElectionAllianceFormModal({
   const [shortName, setShortName] = useState(initial?.shortName ?? '')
   const [color, setColor] = useState(initial?.color ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
+  /** 지속 연합 — 기존 조직 / 새 이름 / 없음 */
+  const [lasting, setLasting] = useState<{ kind: 'none' } | { kind: 'existing'; id: string; name: string } | { kind: 'new'; name: string }>(
+    () =>
+      initial?.allianceOrganization
+        ? { kind: 'existing', id: initial.allianceOrganization.id, name: initial.allianceOrganization.name }
+        : { kind: 'none' },
+  )
+  const [lastingQuery, setLastingQuery] = useState('')
+  const debouncedLastingQuery = useDebouncedValue(lastingQuery, 220)
+  const { data: lastingCandidates = [] } = useQuery({
+    queryKey: ['elections', electionId, 'alliance-organization-candidates', debouncedLastingQuery.trim()],
+    queryFn: () => getAllianceOrganizationCandidates(electionId, debouncedLastingQuery.trim()),
+    enabled: lasting.kind === 'none',
+    staleTime: 30_000,
+  })
   const [memberIds, setMemberIds] = useState<Set<string>>(
     () =>
       new Set(
@@ -202,7 +232,8 @@ export function ElectionAllianceFormModal({
     (alliance) => alliance.id !== initial?.id && alliance.name.trim() === trimmedName,
   )
   const colorValid = color.trim() === '' || HEX_COLOR.test(color.trim())
-  const canSubmit = trimmedName !== '' && !duplicate && colorValid && !saving
+  const lastingInvalid = lasting.kind === 'new' && lasting.name.trim() === ''
+  const canSubmit = trimmedName !== '' && !duplicate && colorValid && !lastingInvalid && !saving
 
   const toggleMember = (partyId: string) => {
     setMemberIds((prev) => {
@@ -221,6 +252,9 @@ export function ElectionAllianceFormModal({
       color: color.trim() || null,
       notes: notes.trim() || null,
       memberPartyIds: [...memberIds],
+      ...(lasting.kind === 'new'
+        ? { newAllianceOrganizationName: lasting.name.trim() }
+        : { allianceOrganizationId: lasting.kind === 'existing' ? lasting.id : null }),
     })
   }
 
@@ -230,7 +264,9 @@ export function ElectionAllianceFormModal({
       ? '이 선거에 같은 이름의 연합이 있습니다.'
       : !colorValid
         ? '색은 #RRGGBB 형식'
-        : memberIds.size > 0
+        : lastingInvalid
+          ? '새 지속 연합의 이름을 입력하세요.'
+          : memberIds.size > 0
           ? `${memberIds.size}개 정당 · ${selectedSeats.toLocaleString('ko-KR')}석`
           : '소속 정당은 나중에 넣어도 됩니다.'
 
@@ -340,6 +376,76 @@ export function ElectionAllianceFormModal({
           )}
         </FormS.FormGroupSection>
 
+        <FormS.FormGroupSection aria-labelledby="election-alliance-lasting-title">
+          <FormS.FormGroupTitle id="election-alliance-lasting-title">지속 연합</FormS.FormGroupTitle>
+          <LastingHint>
+            인민전선·국민 블록처럼 여러 선거에 걸쳐 이어진 연합이면, 그 연합(정치 연합 조직)의 이번 회차로 잇습니다. 이번 선거에만
+            꾸린 연합이면 비워 둡니다.
+          </LastingHint>
+          {lasting.kind === 'existing' ? (
+            <LastingChosen>
+              <FiLink size={13} aria-hidden />
+              <span className="name">{lasting.name}</span>
+              <LastingClear type="button" aria-label="지속 연합 끊기" onClick={() => setLasting({ kind: 'none' })}>
+                <FiX size={13} />
+              </LastingClear>
+            </LastingChosen>
+          ) : lasting.kind === 'new' ? (
+            <LastingChosen>
+              <span className="tag">새 정치 연합</span>
+              <EventFormS.Input
+                aria-label="새 지속 연합 이름"
+                value={lasting.name}
+                onChange={(event) => setLasting({ kind: 'new', name: event.target.value })}
+                placeholder="예: 국민 블록(Blocchi Nazionali)"
+                autoFocus
+              />
+              <LastingClear type="button" aria-label="새 지속 연합 취소" onClick={() => setLasting({ kind: 'none' })}>
+                <FiX size={13} />
+              </LastingClear>
+            </LastingChosen>
+          ) : (
+            <>
+              <EventFormS.Input
+                aria-label="지속 연합 찾기"
+                value={lastingQuery}
+                onChange={(event) => setLastingQuery(event.target.value)}
+                placeholder="정치 연합 조직 이름으로 찾기"
+              />
+              <LastingList role="listbox" aria-label="지속 연합 후보">
+                {lastingCandidates.map((candidate) => (
+                  <div
+                    key={candidate.id}
+                    role="option"
+                    aria-selected={false}
+                    tabIndex={0}
+                    className="row"
+                    onClick={() => setLasting({ kind: 'existing', id: candidate.id, name: candidate.name })}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setLasting({ kind: 'existing', id: candidate.id, name: candidate.name })
+                      }
+                    }}
+                  >
+                    <span className="name">{candidate.name}</span>
+                    {candidate._count?.electionAlliances ? (
+                      <span className="meta">선거 {candidate._count.electionAlliances}회</span>
+                    ) : null}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="create"
+                  onClick={() => setLasting({ kind: 'new', name: lastingQuery.trim() || trimmedName })}
+                >
+                  + 「{lastingQuery.trim() || trimmedName || '새 연합'}」 정치 연합으로 새로 만들기
+                </button>
+              </LastingList>
+            </>
+          )}
+        </FormS.FormGroupSection>
+
         <FormS.FormGroupSection aria-labelledby="election-alliance-notes-title">
           <FormS.FormGroupTitle id="election-alliance-notes-title">메모</FormS.FormGroupTitle>
           <EventFormS.FormRow>
@@ -373,6 +479,98 @@ export function ElectionAllianceFormModal({
   )
 }
 
+const LastingHint = styled.p`
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const LastingChosen = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 10px;
+
+  .name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  .tag {
+    flex: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const LastingClear = styled.button`
+  margin-left: auto;
+  display: inline-flex;
+  padding: 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const LastingList = styled.div`
+  margin-top: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 10px;
+
+  .row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .row:hover,
+  .row:focus-visible {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.05)')};
+    outline: none;
+  }
+  .name {
+    font-size: 13px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  .meta {
+    font-size: 12px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  .create {
+    display: block;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-align: left;
+    color: ${({ theme }) => theme.colors.primary};
+    cursor: pointer;
+  }
+  .create:hover {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.05)')};
+  }
+`
+
 const AllianceList = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -405,6 +603,14 @@ const AllianceHead = styled.div`
   .short {
     font-size: 12px;
     color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  .lasting {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
   .stat {
     font-size: 12px;

@@ -391,6 +391,19 @@ export type ElectionAllianceDto = {
   color?: string | null
   sortOrder: number
   notes?: string | null
+  /** 지속 연합 — 여러 선거에 걸친 연합(정치 연합 조직)의 이번 회차일 때 */
+  allianceOrganizationId?: string | null
+  allianceOrganization?: { id: string; name: string; shortName?: string | null } | null
+}
+
+/** 지속 연합 후보 — 정치 연합 유형 조직 */
+export type AllianceOrganizationCandidate = {
+  id: string
+  name: string
+  shortName?: string | null
+  foundedDate?: string | null
+  dissolvedDate?: string | null
+  _count?: { electionAlliances?: number }
 }
 
 export type ElectionPartyResultDto = {
@@ -886,6 +899,16 @@ export type ElectionAllianceInput = {
   notes?: string | null
   /** 소속 정당 — 이 선거에 정당 집계가 있는 정당만. 주면 소속을 통째로 바꾼다 */
   memberPartyIds?: string[]
+  /** 지속 연합 조직 — null이면 끊는다 */
+  allianceOrganizationId?: string | null
+  /** 이 이름으로 정치 연합 조직을 새로 만들어 잇는다 */
+  newAllianceOrganizationName?: string | null
+}
+
+export async function getAllianceOrganizationCandidates(electionId: string, query: string) {
+  return requestJson<AllianceOrganizationCandidate[]>(
+    `/elections/${encodeURIComponent(electionId)}/alliance-organization-candidates?query=${encodeURIComponent(query)}`,
+  )
 }
 
 export async function createElectionAlliance(electionId: string, body: ElectionAllianceInput) {

@@ -1,6 +1,7 @@
 import React from 'react'
 
 import '@testing-library/jest-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, screen } from '@testing-library/react'
 
 import type { ElectionAllianceDto, ElectionPartyResultDto } from '@/shared/api/election'
@@ -10,6 +11,15 @@ import { ElectionAllianceFormModal, summarizeAlliances } from './election-allian
 import { ElectionResultHemicycle, sortBySeatingOrderGrouped } from './election-result-hemicycle'
 
 jest.mock('@/shared/hooks/use-click-sound.hook', () => ({ useClickSound: () => jest.fn() }))
+jest.mock('@/shared/api/election', () => ({
+  getAllianceOrganizationCandidates: jest.fn(async () => [
+    { id: 'org-bn', name: '국민 블록', _count: { electionAlliances: 2 } },
+  ]),
+}))
+
+const withQuery = (node: React.ReactElement) => (
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{node}</QueryClientProvider>
+)
 
 const partyResult = (partyId: string, seatsWon: number, allianceId: string | null = null): ElectionPartyResultDto => ({
   id: `row-${partyId}`,
@@ -73,7 +83,8 @@ describe('선거 연합 등록 모달', () => {
   it('명칭과 소속 정당을 골라 저장한다 — 다른 연합 소속은 옮김 안내', () => {
     const onSubmit = jest.fn()
     renderWithTheme(
-      <ElectionAllianceFormModal
+      withQuery(<ElectionAllianceFormModal
+        electionId="election-1907"
         mode="create"
         alliances={[{ ...bloc, id: 'other', name: '좌파 연대' }]}
         partyResults={[partyResult('DKP', 60), partyResult('FrVP', 28, 'other')]}
@@ -81,7 +92,7 @@ describe('선거 연합 등록 모달', () => {
         saving={false}
         onClose={() => undefined}
         onSubmit={onSubmit}
-      />,
+      />),
     )
     const save = screen.getByRole('button', { name: '저장' })
     expect(save).toBeDisabled()
@@ -97,12 +108,42 @@ describe('선거 연합 등록 모달', () => {
       color: null,
       notes: null,
       memberPartyIds: ['DKP', 'FrVP'],
+      allianceOrganizationId: null,
     })
+  })
+
+  it('지속 연합 — 기존 정치 연합을 고르거나 새로 만들어 잇는다', async () => {
+    const onSubmit = jest.fn()
+    renderWithTheme(
+      withQuery(
+        <ElectionAllianceFormModal
+          electionId="election-1924"
+          mode="create"
+          alliances={[]}
+          partyResults={[]}
+          partyInfo={partyInfo}
+          saving={false}
+          onClose={() => undefined}
+          onSubmit={onSubmit}
+        />,
+      ),
+    )
+    fireEvent.change(screen.getByLabelText(/명칭/), { target: { value: '국민 명부' } })
+    fireEvent.click(await screen.findByRole('option', { name: /국민 블록/ }))
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ allianceOrganizationId: 'org-bn' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '지속 연합 끊기' }))
+    fireEvent.click(await screen.findByRole('button', { name: /정치 연합으로 새로 만들기/ }))
+    expect(screen.getByLabelText('새 지속 연합 이름')).toHaveValue('국민 명부')
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ newAllianceOrganizationName: '국민 명부' }))
   })
 
   it('같은 선거에 같은 이름이면 저장을 막는다', () => {
     renderWithTheme(
-      <ElectionAllianceFormModal
+      withQuery(<ElectionAllianceFormModal
+        electionId="election-1907"
         mode="create"
         alliances={[bloc]}
         partyResults={[]}
@@ -110,7 +151,7 @@ describe('선거 연합 등록 모달', () => {
         saving={false}
         onClose={() => undefined}
         onSubmit={jest.fn()}
-      />,
+      />),
     )
     fireEvent.change(screen.getByLabelText(/명칭/), { target: { value: '뷜로 블록' } })
     expect(screen.getByText('이 선거에 같은 이름의 연합이 있습니다.')).toBeInTheDocument()
