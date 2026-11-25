@@ -179,6 +179,12 @@ export const TopUnderlineTabNav = styled(UnderlineTabNav)`
   width: 100%;
   max-width: 100%;
   align-items: stretch;
+  gap: 2px;
+
+  button {
+    padding: 12px 10px 11px;
+    font-size: 13px;
+  }
 `
 
 export const Left = styled.div`

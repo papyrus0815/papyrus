@@ -2066,8 +2066,9 @@ export function ModernGovernanceAndLeadersHeroCard({
   historicalHeadCount = 0,
   timeline,
   regimeEras = [],
+  activeTenureId,
   hideIncumbentHeads = false,
-  onEditOverview,
+  onFocusTenure,
   onOpenPoliticalSystem,
   onOpenCabinets,
   onOpenHeadsTab,
@@ -2089,9 +2090,6 @@ export function ModernGovernanceAndLeadersHeroCard({
   onOpenHeadsTab: () => void
   onSelectPerson: (personId: string) => void
 }) {
-  const theme = useTheme()
-  const [proseExpanded, setProseExpanded] = useState(false)
-
   const cleanDescription = description?.trim() ?? ''
   const plainPreview = useMemo(() => {
     if (!cleanDescription) return ''
@@ -2168,6 +2166,52 @@ export function ModernGovernanceAndLeadersHeroCard({
     () => timeline.filter((row) => !row.isHistoricalPolity).length,
     [timeline],
   )
+  const recentPastHeads = useMemo(() => {
+    const incumbentIds = new Set(currentHeads.map((head) => head.tenureId))
+    const incumbentPersonIds = new Set(
+      currentHeads.map((head) => head.personId).filter(Boolean),
+    )
+    const sorted = [...timeline]
+      .filter(
+        (row) =>
+          !row.isHistoricalPolity &&
+          !incumbentIds.has(row.recordId) &&
+          (!row.personId || !incumbentPersonIds.has(row.personId)),
+      )
+      .sort(
+        (left, right) =>
+          (right.endYear ?? right.startYear) -
+            (left.endYear ?? left.startYear) ||
+          right.startYear - left.startYear,
+      )
+
+    const mergedByPerson = new Map<
+      string,
+      ExecutiveTimelineItem & { mergedStartYear: number; mergedEndYear: number | null }
+    >()
+    for (const row of sorted) {
+      const personKey = row.personId ?? row.personName
+      const existing = mergedByPerson.get(personKey)
+      if (!existing) {
+        mergedByPerson.set(personKey, {
+          ...row,
+          mergedStartYear: row.startYear,
+          mergedEndYear: row.endYear,
+        })
+      } else {
+        existing.mergedStartYear = Math.min(existing.mergedStartYear, row.startYear)
+        if (existing.mergedEndYear != null && row.endYear != null) {
+          existing.mergedEndYear = Math.max(existing.mergedEndYear, row.endYear)
+        } else {
+          existing.mergedEndYear = null
+        }
+        if (row.ordinal != null && existing.ordinal != null) {
+          existing.ordinal = Math.min(existing.ordinal, row.ordinal)
+        }
+      }
+    }
+    return [...mergedByPerson.values()].slice(0, 3)
+  }, [timeline, currentHeads])
   const activeRegimeEra = useMemo(() => {
     if (regimeEras.length === 0) return null
     const openEra = [...regimeEras]
@@ -2180,11 +2224,7 @@ export function ModernGovernanceAndLeadersHeroCard({
     <BentoCard aria-label="국가 형태 및 통치 체제 요약">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>
-            {hideIncumbentHeads
-              ? '국가 체제 · 통치 개요'
-              : '국가 형태 · 국가수반'}
-          </BentoCardTitle>
+          <BentoCardTitle>국가 형태 · 국가수반</BentoCardTitle>
           {regimeEras.length > 0 ? (
             <BentoCardBadge>헌정 {regimeEras.length}기</BentoCardBadge>
           ) : modernHeadRecordsCount > 0 ? (
@@ -2218,43 +2258,18 @@ export function ModernGovernanceAndLeadersHeroCard({
         ))}
       </PolityMatrixGrid>
 
-      <BentoCardBody style={{ gap: 12 }}>
-        {/* 국가 소개 요약(있을 때만) */}
+      <BentoCardBody style={{ gap: 18 }}>
+        {/* 국가 소개 요약(있을 때만 간결 표시, 펼치기·편집 버튼 제거) */}
         {plainPreview ? (
           <IdentityProseBlock>
-            {proseExpanded ? (
-              <div className="full">
-                {isLikelyRichTextHtml(cleanDescription) ? (
-                  <RichTextReadView html={cleanDescription} />
-                ) : (
-                  <p>{cleanDescription}</p>
-                )}
-              </div>
-            ) : (
-              <p className="clamp">{plainPreview}</p>
-            )}
-            <div className="actions">
-              {plainPreview.length > 110 ? (
-                <TextActionBtn
-                  type="button"
-                  onClick={() => setProseExpanded((prev) => !prev)}
-                >
-                  {proseExpanded ? '접기' : '전문 보기'}
-                </TextActionBtn>
-              ) : null}
-              {onEditOverview ? (
-                <TextActionBtn type="button" onClick={onEditOverview}>
-                  <FiEdit2 size={10.5} /> 소개 편집
-                </TextActionBtn>
-              ) : null}
-            </div>
+            <p className="clamp">{plainPreview}</p>
           </IdentityProseBlock>
         ) : null}
 
-        {/* 2. 현직 국가수반 스포트라이트 (하단 2층 마인드맵이 없을 때만 노출하여 중복 방지) */}
+        {/* 2. 현직 국가수반 스포트라이트 */}
         {!hideIncumbentHeads ? (
           <div>
-            <BentoSubLabel style={{ marginBottom: 6 }}>
+            <BentoSubLabel style={{ marginBottom: 8 }}>
               <span>현직 국가수반 · 행정부</span>
               {currentCabinet ? (
                 <InlineCabinetLink
@@ -2278,6 +2293,7 @@ export function ModernGovernanceAndLeadersHeroCard({
                       key={head.tenureId}
                       type="button"
                       onClick={() => {
+                        if (onFocusTenure) onFocusTenure(head.tenureId)
                         if (head.personId) onSelectPerson(head.personId)
                         else onOpenHeadsTab()
                       }}
@@ -2322,7 +2338,61 @@ export function ModernGovernanceAndLeadersHeroCard({
           </div>
         ) : null}
 
-        {/* 3. 현행 헌정 체제 & 수반 연표 1줄 앵커 요약 (복잡한 알약 구름 제거) */}
+        {/* 2-B. 최근 · 주요 전임 국가수반 (최대 3인, 마인드맵 연동) */}
+        {recentPastHeads.length > 0 ? (
+          <div>
+            <BentoSubLabel style={{ marginBottom: 8 }}>
+              <span>이전 국가수반</span>
+              <InlineCabinetLink type="button" onClick={onOpenHeadsTab}>
+                역대 전체 ({modernHeadRecordsCount}) <FiArrowUpRight size={10.5} />
+              </InlineCabinetLink>
+            </BentoSubLabel>
+            <PastHeadsRow>
+              {recentPastHeads.map((past) => {
+                const avatar = past.profileImageUrl
+                  ? getUploadImageUrl(past.profileImageUrl)
+                  : null
+                const focused = activeTenureId === past.recordId
+                const spanText = past.mergedEndYear
+                  ? `${past.mergedStartYear}–${past.mergedEndYear}`
+                  : `${past.mergedStartYear}–`
+                return (
+                  <PastHeadChipBtn
+                    key={past.recordId}
+                    type="button"
+                    $active={focused}
+                    onClick={() => {
+                      if (onFocusTenure) {
+                        onFocusTenure(past.recordId)
+                      } else if (past.personId) {
+                        onSelectPerson(past.personId)
+                      } else {
+                        onOpenHeadsTab()
+                      }
+                    }}
+                  >
+                    <PastHeadMiniAvatar>
+                      {avatar ? (
+                        <img src={avatar} alt="" />
+                      ) : (
+                        <FiUser size={12} />
+                      )}
+                    </PastHeadMiniAvatar>
+                    <span className="meta">
+                      <strong>{past.personName}</strong>
+                      <small>
+                        {past.ordinal ? `제${past.ordinal}대 · ` : ''}
+                        {spanText}
+                      </small>
+                    </span>
+                  </PastHeadChipBtn>
+                )
+              })}
+            </PastHeadsRow>
+          </div>
+        ) : null}
+
+        {/* 3. 현행 헌정 체제 & 수반 연표 1줄 앵커 요약 */}
         {activeRegimeEra || modernHeadRecordsCount > 0 || historicalHeadCount > 0 ? (
           <SummaryLinkRow
             type="button"
@@ -3215,26 +3285,23 @@ const HeadCardBtn = styled.button`
   align-items: center;
   gap: 12px;
   padding: 11px 14px;
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(129, 140, 248, 0.22)'
-        : 'rgba(99, 102, 241, 0.14)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(30, 41, 59, 0.5))'
-      : 'linear-gradient(135deg, rgba(238, 242, 255, 0.72), rgba(248, 250, 252, 0.9))'};
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(15, 23, 42, 0.08)'};
+  background: transparent;
   text-align: left;
   font-family: inherit;
   cursor: pointer;
   transition:
     border-color 0.16s ease,
-    transform 0.16s ease;
+    background 0.16s ease;
 
   &:hover {
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    transform: translateY(-1px);
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 `
 
@@ -6143,11 +6210,11 @@ const IdentityProseBlock = styled.div`
 
   p.clamp {
     margin: 0;
-    font-size: 12.5px;
-    line-height: 1.6;
+    font-size: 13px;
+    line-height: 1.65;
     color: ${({ theme }) => theme.colors.text.secondary};
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
@@ -6282,11 +6349,18 @@ const RelatedPolitiesBlock = styled.div<{ $withDivider: boolean }>`
 const PolityMatrixGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 9px;
-  padding: 0 0 8px;
+  gap: 0;
+  padding: 2px 0 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(15, 23, 42, 0.065)'};
 
   @media (max-width: 720px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 14px;
   }
 `
 
@@ -6294,43 +6368,60 @@ const PolityMatrixCell = styled.button<{ $empty?: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
-  padding: 11px 13px;
-  border: 1px solid transparent;
-  border-radius: 14px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.04)'
-      : 'rgba(15, 23, 42, 0.032)'};
+  gap: 4px;
+  padding: 4px 14px 4px 0;
+  border: none;
+  border-right: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(15, 23, 42, 0.065)'};
+  border-radius: 0;
+  background: transparent;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
   min-width: 0;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.15s ease;
+  transition: opacity 0.15s ease;
+
+  &:not(:first-child) {
+    padding-left: 14px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 0;
+  }
 
   &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.12)'
-        : 'rgba(79, 70, 229, 0.055)'};
-    transform: translateY(-0.5px);
+    opacity: 0.78;
+  }
+
+  @media (max-width: 720px) {
+    padding: 0 10px 0 0;
+
+    &:not(:first-child) {
+      padding-left: 0;
+    }
+
+    &:nth-child(2n) {
+      border-right: none;
+      padding-left: 12px;
+    }
   }
 
   .kicker {
-    font-size: 10px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 650;
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
   .val {
-    font-size: 13px;
-    font-weight: 800;
+    font-size: 15px;
+    font-weight: 820;
+    letter-spacing: -0.02em;
     color: ${({ theme, $empty }) =>
-      $empty ? theme.colors.text.tertiary : ledgerAccent(theme.mode)};
+      $empty ? theme.colors.text.tertiary : theme.colors.text.primary};
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -6338,13 +6429,95 @@ const PolityMatrixCell = styled.button<{ $empty?: boolean }>`
   }
 
   .sub {
-    font-size: 10px;
+    font-size: 11px;
     color: ${({ theme }) => theme.colors.text.tertiary};
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
     ${DIGIT_DISPLAY}
+  }
+`
+
+const PastHeadsRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+`
+
+const PastHeadChipBtn = styled.button<{ $active: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.08)'
+          : 'rgba(15, 23, 42, 0.07)'};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  .meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5px;
+    min-width: 0;
+  }
+
+  .meta strong {
+    font-size: 12.5px;
+    font-weight: 750;
+    color: ${({ theme }) => theme.colors.text.primary};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .meta small {
+    font-size: 10.5px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    ${DIGIT_DISPLAY}
+  }
+`
+
+const PastHeadMiniAvatar = styled.span`
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.07)'
+      : 'rgba(15, 23, 42, 0.05)'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 `
 
@@ -6404,8 +6577,8 @@ const IncumbentEmptyStrip = styled.button`
 const GeoScaleStripGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
-  padding: 8px 0 4px;
+  gap: 14px 20px;
+  padding: 14px 0 4px;
 
   @media (max-width: 520px) {
     grid-template-columns: minmax(0, 1fr);
@@ -6416,31 +6589,25 @@ const GeoScaleCell = styled.button<{ $spanFull?: boolean }>`
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 4px;
-  padding: 11px 14px;
-  border: 1px solid transparent;
-  border-radius: 14px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.04)'
-      : 'rgba(15, 23, 42, 0.03)'};
+  gap: 5px;
+  padding: 4px 0 12px;
+  border: none;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(15, 23, 42, 0.065)'};
+  border-radius: 0;
+  background: transparent;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
   min-width: 0;
   grid-column: ${({ $spanFull }) => ($spanFull ? '1 / -1' : 'auto')};
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.15s ease;
+  transition: opacity 0.15s ease;
 
   &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.12)'
-        : 'rgba(79, 70, 229, 0.055)'};
-    transform: translateY(-0.5px);
+    opacity: 0.78;
   }
 
   @media (max-width: 520px) {
@@ -6454,21 +6621,21 @@ const SummaryLinkRow = styled.button`
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  padding: 9px 13px;
-  border: 1px solid transparent;
-  border-radius: 13px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.038)'
-      : 'rgba(15, 23, 42, 0.028)'};
+  padding: 12px 0 0;
+  border: none;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(15, 23, 42, 0.065)'};
+  border-radius: 0;
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+  transition: opacity 0.15s ease;
 
   span {
     overflow: hidden;
@@ -6488,10 +6655,6 @@ const SummaryLinkRow = styled.button`
   }
 
   &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.12)'
-        : 'rgba(79, 70, 229, 0.055)'};
+    opacity: 0.8;
   }
 `

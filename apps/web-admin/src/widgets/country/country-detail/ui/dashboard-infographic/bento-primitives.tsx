@@ -68,23 +68,39 @@ export const BentoCanvas = styled.div`
   flex-direction: column;
   gap: 0;
   width: 100%;
-  padding: 4px 0 44px;
+  padding: 6px 0 56px;
   box-sizing: border-box;
 
   > * {
-    padding: 28px 0;
+    padding: 52px 0;
   }
 
   > *:first-child {
-    padding-top: 6px;
+    padding-top: 12px;
+    padding-bottom: 52px;
+  }
+
+  > *:last-child {
+    padding-bottom: 0;
   }
 
   > * + * {
     border-top: 1px solid
       ${({ theme }) =>
         theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.08)'
+          ? 'rgba(255, 255, 255, 0.085)'
           : 'rgba(15, 23, 42, 0.08)'};
+  }
+
+  @media (max-width: 768px) {
+    > * {
+      padding: 36px 0;
+    }
+
+    > *:first-child {
+      padding-top: 8px;
+      padding-bottom: 36px;
+    }
   }
 `
 
@@ -99,15 +115,15 @@ export const BentoGridAsym = styled.div<{
   align-items: start;
 
   > *:first-child {
-    padding-right: 30px;
+    padding-right: 42px;
   }
 
   > *:nth-child(2) {
-    padding-left: 30px;
+    padding-left: 42px;
     border-left: 1px solid
       ${({ theme }) =>
         theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.08)'
+          ? 'rgba(255, 255, 255, 0.085)'
           : 'rgba(15, 23, 42, 0.075)'};
   }
 
@@ -121,12 +137,12 @@ export const BentoGridAsym = styled.div<{
     > *:nth-child(2) {
       padding-left: 0;
       border-left: none;
-      margin-top: 26px;
-      padding-top: 26px;
+      margin-top: 38px;
+      padding-top: 38px;
       border-top: 1px solid
         ${({ theme }) =>
           theme.mode === 'dark'
-            ? 'rgba(255, 255, 255, 0.08)'
+            ? 'rgba(255, 255, 255, 0.085)'
             : 'rgba(15, 23, 42, 0.075)'};
     }
   }
@@ -139,15 +155,15 @@ export const BentoGrid2Col = styled.div`
   align-items: start;
 
   > *:first-child {
-    padding-right: 30px;
+    padding-right: 42px;
   }
 
   > *:nth-child(2) {
-    padding-left: 30px;
+    padding-left: 42px;
     border-left: 1px solid
       ${({ theme }) =>
         theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.08)'
+          ? 'rgba(255, 255, 255, 0.085)'
           : 'rgba(15, 23, 42, 0.075)'};
   }
 
@@ -161,12 +177,12 @@ export const BentoGrid2Col = styled.div`
     > *:nth-child(2) {
       padding-left: 0;
       border-left: none;
-      margin-top: 26px;
-      padding-top: 26px;
+      margin-top: 38px;
+      padding-top: 38px;
       border-top: 1px solid
         ${({ theme }) =>
           theme.mode === 'dark'
-            ? 'rgba(255, 255, 255, 0.08)'
+            ? 'rgba(255, 255, 255, 0.085)'
             : 'rgba(15, 23, 42, 0.075)'};
     }
   }
@@ -203,8 +219,8 @@ export const BentoCardHeader = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 14px;
-  padding: 0 0 15px 0;
+  gap: 10px 16px;
+  padding: 0 0 22px 0;
   background: transparent;
 `
 
@@ -212,7 +228,7 @@ export const BentoCardTitleGroup = styled.div`
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   min-width: 0;
 `
 
@@ -221,33 +237,20 @@ export const BentoCardTitle = styled.h2`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 820;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.028em;
   color: ${({ theme }) => theme.colors.text.primary};
-
-  &::before {
-    content: '';
-    width: 3.5px;
-    height: 15px;
-    border-radius: 999px;
-    background: linear-gradient(180deg, #4f46e5 0%, #0ea5e9 100%);
-    flex-shrink: 0;
-  }
 `
 
 export const BentoCardBadge = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 2.5px 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 680;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.16)'
-      : 'rgba(79, 70, 229, 0.075)'};
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   ${DIGIT_DISPLAY}
 `
 
@@ -262,42 +265,36 @@ export const BentoActionBtn = styled.button<{ $accent?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 3.5px;
-  height: 27px;
-  padding: 0 10px;
-  border-radius: 999px;
+  height: 26px;
+  padding: 0 7px;
+  margin-right: -4px;
+  border-radius: 6px;
   border: none;
-  background: ${({ theme, $accent }) =>
-    $accent
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.15)'
-        : 'rgba(79, 70, 229, 0.065)'
-      : 'transparent'};
+  background: transparent;
   color: ${({ theme, $accent }) =>
     $accent ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
   font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 680;
+  font-size: 12px;
+  font-weight: 650;
   cursor: pointer;
   white-space: nowrap;
   transition:
     background ${MOTION.fast} ease,
-    color ${MOTION.fast} ease,
-    transform ${MOTION.fast} ease;
+    color ${MOTION.fast} ease;
 
   &:hover {
     background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.24)'
-        : 'rgba(79, 70, 229, 0.12)'};
+        ? 'rgba(255, 255, 255, 0.06)'
+        : 'rgba(15, 23, 42, 0.05)'};
     color: ${({ theme }) => ledgerAccent(theme.mode)};
-    transform: translateY(-0.5px);
   }
 `
 
 export const BentoCardBody = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 20px;
   padding: 0;
   flex: 1;
   min-width: 0;

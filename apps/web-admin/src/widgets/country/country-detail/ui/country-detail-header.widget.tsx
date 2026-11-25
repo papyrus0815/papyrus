@@ -217,7 +217,7 @@ export function CountryDetailHeader({
         )}
         {(onEdit || onDelete) && (
           <S.HeroKebab ref={kebabRef}>
-            <S.KebabButton
+            <S.HeroKebabButton
               type="button"
               aria-haspopup="menu"
               aria-expanded={menuOpen}
@@ -228,7 +228,7 @@ export function CountryDetailHeader({
               }}
             >
               <FiMoreHorizontal aria-hidden />
-            </S.KebabButton>
+            </S.HeroKebabButton>
             <S.DropdownMenu
               role="menu"
               style={{ display: menuOpen ? 'block' : 'none' }}

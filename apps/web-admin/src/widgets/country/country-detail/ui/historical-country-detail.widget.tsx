@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useEffect,
   useState,
   useCallback,
@@ -12,9 +11,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiArrowLeft,
   FiArrowUpRight,
-  FiChevronDown,
   FiEdit2,
-  FiPlus,
 } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -751,7 +748,6 @@ const historicalTabId = (tab: HistoricalCountryTab) => `historical-country-tab-$
 function HistoricalCountryTabs({
   activeTab,
   onTabChange,
-  counts,
   contextBar,
 }: {
   activeTab: HistoricalCountryTab
@@ -760,53 +756,14 @@ function HistoricalCountryTabs({
   contextBar?: ReactNode
 }) {
   const listRef = useRef<HTMLDivElement | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-  const [emptyMenuOpen, setEmptyMenuOpen] = useState(false)
-
-  useEffect(() => {
-    if (!emptyMenuOpen) return
-    const onPointerDown = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setEmptyMenuOpen(false)
-      }
-    }
-    const onEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setEmptyMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('keydown', onEscape)
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onEscape)
-    }
-  }, [emptyMenuOpen])
-
-  const { visibleTabs, emptyTabs } = useMemo(() => {
-    const visible: Array<(typeof HISTORICAL_TABS)[number]> = []
-    const empty: Array<(typeof HISTORICAL_TABS)[number]> = []
-    for (const tab of HISTORICAL_TABS) {
-      const count = counts?.[tab.id]
-      const shouldHideAsEmpty =
-        tab.id !== 'overview' &&
-        activeTab !== tab.id &&
-        count !== undefined &&
-        count === 0
-      if (shouldHideAsEmpty) {
-        empty.push(tab)
-      } else {
-        visible.push(tab)
-      }
-    }
-    return { visibleTabs: visible, emptyTabs: empty }
-  }, [counts, activeTab])
 
   const handleKeyDown = (keyEvent: React.KeyboardEvent<HTMLDivElement>) => {
     const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']
-    if (!keys.includes(keyEvent.key) || visibleTabs.length === 0) return
+    if (!keys.includes(keyEvent.key) || HISTORICAL_TABS.length === 0) return
     keyEvent.preventDefault()
-    const index = visibleTabs.findIndex((tab) => tab.id === activeTab)
+    const index = HISTORICAL_TABS.findIndex((tab) => tab.id === activeTab)
     const safeIdx = index >= 0 ? index : 0
-    const last = visibleTabs.length - 1
+    const last = HISTORICAL_TABS.length - 1
     const nextIndex =
       keyEvent.key === 'Home'
         ? 0
@@ -819,7 +776,7 @@ function HistoricalCountryTabs({
             : safeIdx < last
               ? safeIdx + 1
               : 0
-    const target = visibleTabs[nextIndex]
+    const target = HISTORICAL_TABS[nextIndex]
     onTabChange(target.id)
     requestAnimationFrame(() => {
       listRef.current
@@ -841,84 +798,26 @@ function HistoricalCountryTabs({
             aria-label="역사 국가 상세 메뉴"
             onKeyDown={handleKeyDown}
           >
-            {visibleTabs.map((tab, tabIdx) => {
+            {HISTORICAL_TABS.map((tab) => {
               const active = activeTab === tab.id
-              const count = counts?.[tab.id]
-              const nextTab = visibleTabs[tabIdx + 1]
-              const showGroupDivider = Boolean(
-                nextTab && nextTab.group !== tab.group,
-              )
 
               return (
-                <Fragment key={tab.id}>
-                  <UnderlineTabButton
-                    id={historicalTabId(tab.id)}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    tabIndex={active ? 0 : -1}
-                    $active={active}
-                    onClick={() => onTabChange(tab.id)}
-                  >
-                    <TabStyles.TabLabelWrap>
-                      <span>{tab.label}</span>
-                      {count != null && count > 0 && (
-                        <TabStyles.TabCountBadge $active={active}>
-                          {count.toLocaleString('ko-KR')}
-                        </TabStyles.TabCountBadge>
-                      )}
-                    </TabStyles.TabLabelWrap>
-                  </UnderlineTabButton>
-                  {showGroupDivider && (
-                    <TabStyles.TabGroupDivider aria-hidden />
-                  )}
-                </Fragment>
+                <UnderlineTabButton
+                  key={tab.id}
+                  id={historicalTabId(tab.id)}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  tabIndex={active ? 0 : -1}
+                  $active={active}
+                  onClick={() => onTabChange(tab.id)}
+                >
+                  <span>{tab.label}</span>
+                </UnderlineTabButton>
               )
             })}
           </TabStyles.TopUnderlineTabNav>
         </TabStyles.Left>
-
-        {emptyTabs.length > 0 && (
-          <TabStyles.EmptyTabsMenuWrap ref={menuRef}>
-            <TabStyles.EmptyTabsTriggerBtn
-              type="button"
-              $open={emptyMenuOpen}
-              aria-haspopup="menu"
-              aria-expanded={emptyMenuOpen}
-              onClick={() => setEmptyMenuOpen((prev) => !prev)}
-            >
-              <FiPlus size={11.5} aria-hidden />
-              <span>빈 탭 {emptyTabs.length}</span>
-              <FiChevronDown size={11.5} aria-hidden />
-            </TabStyles.EmptyTabsTriggerBtn>
-            {emptyMenuOpen && (
-              <TabStyles.EmptyTabsPopover
-                role="menu"
-                aria-label="미입력 도메인 탭 목록"
-              >
-                <TabStyles.EmptyTabsPopoverLabel>
-                  아직 기록이 없는 탭 바로 열기
-                </TabStyles.EmptyTabsPopoverLabel>
-                <TabStyles.EmptyTabsGrid>
-                  {emptyTabs.map((emptyTab) => (
-                    <TabStyles.EmptyTabOptionBtn
-                      key={emptyTab.id}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setEmptyMenuOpen(false)
-                        onTabChange(emptyTab.id)
-                      }}
-                    >
-                      <FiPlus size={10.5} aria-hidden />
-                      {emptyTab.label}
-                    </TabStyles.EmptyTabOptionBtn>
-                  ))}
-                </TabStyles.EmptyTabsGrid>
-              </TabStyles.EmptyTabsPopover>
-            )}
-          </TabStyles.EmptyTabsMenuWrap>
-        )}
       </TabStyles.Row>
     </TabStyles.StickyContainer>
   )
@@ -1205,9 +1104,9 @@ function HistoricalOverviewSection({
   const hasDiplomacyBlock =
     stats.lawCount > 0 || stats.treatyCount > 0 || stats.ethnicityCount > 0
 
-  const historicalDomainCards: Array<{ key: string; node: ReactNode }> = []
+  const coreHistoricalCards: Array<{ key: string; node: ReactNode }> = []
   if (hasParliamentBlock) {
-    historicalDomainCards.push({
+    coreHistoricalCards.push({
       key: 'parliament',
       node: (
         <ParliamentAndPartyBentoCard
@@ -1231,7 +1130,7 @@ function HistoricalOverviewSection({
     })
   }
   if (hasDiplomacyBlock) {
-    historicalDomainCards.push({
+    coreHistoricalCards.push({
       key: 'diplomacy',
       node: (
         <DiplomacyTreatyLawBentoCard
@@ -1247,36 +1146,32 @@ function HistoricalOverviewSection({
       ),
     })
   }
-  if (hasMilitaryBlock) {
-    historicalDomainCards.push({
-      key: 'military',
-      node: (
-        <MilitaryForceBentoCard
-          militaryCount={stats.militaryCount}
-          highCommandCount={stats.highCommandCount}
-          militaryBranchBreakdown={stats.militaryBranchBreakdown}
-          warSummary={stats.warSummary}
-          onOpenMilitary={() => onGoToTab('military')}
-        />
-      ),
-    })
-  }
 
-  const historicalDomainRows: ReactNode[] = []
-  for (let rowIdx = 0; rowIdx < historicalDomainCards.length; rowIdx += 2) {
-    const first = historicalDomainCards[rowIdx]
-    const second = historicalDomainCards[rowIdx + 1]
+  const coreHistoricalRows: ReactNode[] = []
+  for (let rowIdx = 0; rowIdx < coreHistoricalCards.length; rowIdx += 2) {
+    const first = coreHistoricalCards[rowIdx]
+    const second = coreHistoricalCards[rowIdx + 1]
     if (second) {
-      historicalDomainRows.push(
+      coreHistoricalRows.push(
         <BentoGrid2Col key={`${first.key}-${second.key}`}>
           {first.node}
           {second.node}
         </BentoGrid2Col>,
       )
     } else {
-      historicalDomainRows.push(<div key={first.key}>{first.node}</div>)
+      coreHistoricalRows.push(<div key={first.key}>{first.node}</div>)
     }
   }
+
+  const militaryCardNode = hasMilitaryBlock ? (
+    <MilitaryForceBentoCard
+      militaryCount={stats.militaryCount}
+      highCommandCount={stats.highCommandCount}
+      militaryBranchBreakdown={stats.militaryBranchBreakdown}
+      warSummary={stats.warSummary}
+      onOpenMilitary={() => onGoToTab('military')}
+    />
+  ) : null
 
   const geoCardNode = (
     <CompactGeoBentoCard
@@ -1375,18 +1270,10 @@ function HistoricalOverviewSection({
           onSelectPerson={(pid) => setPreviewPersonId(pid)}
         />
 
-        {/* 3단: [의회·정당·선거 → 헌법·법령·조약 → 군사·전적] 권력 작동 우선순위 벤토 */}
-        {historicalDomainRows}
+        {/* 3단: 핵심 정치 · 법제 축 ([의회·정당·선거 | 헌법·법령·조약]) */}
+        {coreHistoricalRows}
 
-        {/* 4단: 강역 변천(존재 시) */}
-        {hasTerritoryCard ? (
-          <HistoricalTerritoryWaterfallCard
-            historicalCountryId={country.id}
-            onSelectEvent={(eid) => setPreviewEventId(eid)}
-          />
-        ) : null}
-
-        {/* 5단: 역사 연표 · 핵심 전환점 인포그래픽 */}
+        {/* 4단: 당대 핵심 역사 흐름 (역사 연표 · 핵심 전환점) */}
         {hasEventsBlock ? (
           <ModernEventsCard
             eventCount={stats.eventCount}
@@ -1401,6 +1288,24 @@ function HistoricalOverviewSection({
             onOpenMilitary={() => onGoToTab('military')}
           />
         ) : null}
+
+        {/* 5단: 보조 도메인 (강역 변천 · 군사 편제 — 역사 사건 아래 최하단 배치) */}
+        {hasTerritoryCard && militaryCardNode ? (
+          <BentoGrid2Col>
+            <HistoricalTerritoryWaterfallCard
+              historicalCountryId={country.id}
+              onSelectEvent={(eid) => setPreviewEventId(eid)}
+            />
+            {militaryCardNode}
+          </BentoGrid2Col>
+        ) : hasTerritoryCard ? (
+          <HistoricalTerritoryWaterfallCard
+            historicalCountryId={country.id}
+            onSelectEvent={(eid) => setPreviewEventId(eid)}
+          />
+        ) : (
+          militaryCardNode
+        )}
 
         {/* 하단: 더 채울 수 있는 기록 + 최근 편집 */}
         <ArchiveFootprintBar

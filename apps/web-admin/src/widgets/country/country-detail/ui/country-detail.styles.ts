@@ -3163,8 +3163,8 @@ export const HeroGradientVeil = styled.div`
   inset: 0;
   background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'linear-gradient(96deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.76) 32%, rgba(15, 23, 42, 0.36) 68%, rgba(15, 23, 42, 0.18) 100%), linear-gradient(180deg, rgba(15, 23, 42, 0.08) 0%, rgba(15, 23, 42, 0.5) 100%)'
-      : 'linear-gradient(96deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.76) 32%, rgba(255, 255, 255, 0.28) 68%, rgba(255, 255, 255, 0.1) 100%), linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(248, 250, 252, 0.46) 100%)'};
+      ? 'linear-gradient(96deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.76) 32%, rgba(15, 23, 42, 0.42) 68%, rgba(15, 23, 42, 0.38) 100%), linear-gradient(180deg, rgba(15, 23, 42, 0.08) 0%, rgba(15, 23, 42, 0.5) 100%)'
+      : 'linear-gradient(96deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.76) 32%, rgba(255, 255, 255, 0.34) 68%, rgba(255, 255, 255, 0.32) 100%), linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(248, 250, 252, 0.46) 100%)'};
 `
 
 /** 국기 타일 — 썸네일이면 이미지, 없으면 이모지, 그것도 없으면 이니셜 */
@@ -3287,61 +3287,96 @@ export const HeroMetaSep = styled.span`
   opacity: 0.4;
 `
 
-/** 우측 액션 묶음 — 케밥 메뉴는 흐름 안에 두어 밴드 높이에 묶이지 않는다 */
+/** 우측 액션 묶음 — 국기 그라데이션 위에 이질감 없이 녹아드는 배경 없는 고스트 컨트롤 */
 export const HeroActions = styled.div`
   position: relative;
   z-index: 2;
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex-shrink: 0;
 `
 
-/** 헤더 우측 인라인 정보 수정 버튼 — 글래스모피즘 필 버튼 */
+/** 헤더 우측 인라인 정보 수정 버튼 — 뒷배경 제거 고스트 스타일 */
 export const HeroEditButton = styled.button`
   appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 36px;
-  padding: 0 14px;
+  height: 34px;
+  padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.16)'
-        : 'rgba(15, 23, 42, 0.12)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(15, 23, 42, 0.72)'
-      : 'rgba(255, 255, 255, 0.86)'};
-  backdrop-filter: blur(10px);
+  border: none;
+  background: transparent;
+  box-shadow: none;
   color: ${({ theme }) => theme.colors.text.primary};
+  text-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 1px 10px rgba(15, 23, 42, 0.85)'
+      : '0 1px 10px rgba(255, 255, 255, 0.9)'};
   font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 680;
   white-space: nowrap;
   cursor: pointer;
-  box-shadow: 0 4px 12px -4px rgba(15, 23, 42, 0.12);
   transition:
     background ${MOTION.fast} ease,
-    border-color ${MOTION.fast} ease,
-    transform ${MOTION.fast} ease;
+    color ${MOTION.fast} ease;
 
   svg {
-    width: 13px;
-    height: 13px;
+    width: 13.5px;
+    height: 13.5px;
     flex-shrink: 0;
   }
 
   &:hover {
     background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(30, 41, 59, 0.92)'
-        : '#ffffff'};
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    transform: translateY(-0.5px);
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(15, 23, 42, 0.08)'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
+  }
+`
+
+/** 헤더 우측 점세개(케밥) 버튼 — 정보 수정과 동일한 무배경·무테두리 고스트 아이콘 버튼 */
+export const HeroKebabButton = styled.button`
+  appearance: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: ${({ theme }) => theme.colors.text.primary};
+  filter: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'drop-shadow(0 1px 6px rgba(15, 23, 42, 0.85))'
+      : 'drop-shadow(0 1px 6px rgba(255, 255, 255, 0.9))'};
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+
+  svg {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(15, 23, 42, 0.08)'};
   }
 
   &:focus-visible {

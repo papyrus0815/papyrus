@@ -406,33 +406,11 @@ export function HistoricalHeroFlowCard({
           </MilestoneStep>
         </MilestoneFlowGrid>
 
-        {/* 개요 · 국호유래 · 통사 서술 (클램프 또는 인라인 에디터) */}
-        {isEditorOpen ? (
-          <EditorWrap>
-            <RichTextEditor
-              value={savedDescription ?? ''}
-              onChange={onEditorChange}
-              placeholder="역사적 정치체에 대한 핵심 개요를 작성하세요..."
-              showTitle={false}
-            />
-            <EditorBtnRow>
-              <BentoActionBtn type="button" onClick={onCancelEditor}>
-                취소
-              </BentoActionBtn>
-              <BentoActionBtn
-                type="button"
-                $accent
-                disabled={isSaving}
-                onClick={onSaveEditor}
-              >
-                {isSaving ? '저장 중…' : '개요 저장'}
-              </BentoActionBtn>
-            </EditorBtnRow>
-          </EditorWrap>
-        ) : hasNarrative ? (
+        {/* 개요 · 국호유래 · 통사 요약 (대시보드 내 불필요한 펼치기·편집 버튼 제거) */}
+        {hasNarrative ? (
           <>
             <BentoDivider />
-            <ProseClampArea $expanded={expanded}>
+            <ProseClampArea $expanded={false}>
               {savedDescription ? (
                 isLikelyRichTextHtml(savedDescription) ? (
                   <RichTextReadView html={savedDescription} />
@@ -451,23 +429,8 @@ export function HistoricalHeroFlowCard({
                 </PlainProse>
               ) : null}
             </ProseClampArea>
-            <NarrativeActionRow>
-              <ToggleClampBtn
-                type="button"
-                onClick={() => setExpanded((prev) => !prev)}
-              >
-                {expanded ? '서술 접기' : '서술 전문 펼치기'}
-              </ToggleClampBtn>
-              <ToggleClampBtn type="button" onClick={onOpenEditor}>
-                <FiEdit2 size={10.5} /> 개요 편집
-              </ToggleClampBtn>
-            </NarrativeActionRow>
           </>
-        ) : (
-          <ToggleClampBtn type="button" onClick={onOpenEditor}>
-            <FiEdit2 size={10.5} /> 역사 개요 작성하기
-          </ToggleClampBtn>
-        )}
+        ) : null}
       </BentoCardBody>
     </BentoCard>
   )

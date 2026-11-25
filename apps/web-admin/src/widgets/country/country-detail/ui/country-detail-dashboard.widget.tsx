@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
+import { useCountry } from '@/entities/country/api'
 import {
   useBondYields,
   useDemographicIndicators,
@@ -70,6 +71,13 @@ export function CountryDetailDashboard({
   const stats = preloadedStats ?? fallbackStats
   const rootRef = useRef<HTMLDivElement | null>(null)
   const isModern = country.type === 'modern'
+  const fullCountryQuery = useCountry(
+    isModern && country.description === undefined ? country.id : '',
+  )
+  const resolvedDescription =
+    country.description !== undefined
+      ? country.description
+      : fullCountryQuery.data?.description
 
   const { data: economicIndicators = [] } = useEconomicIndicators(
     isModern ? country.id : undefined,
@@ -397,10 +405,31 @@ export function CountryDetailDashboard({
   const hasDemographicsCard = demographicIndicators.length > 0
   const hasLineageCard = (country.historicalCountries?.length ?? 0) > 0
 
-  const populatedDomainCards: Array<{ key: string; node: ReactNode }> = []
-  // 1순위: 의회 · 정당 · 선거 (행정부 마인드맵 바로 아래 최상단 배치)
+  const pairDomainCards = (
+    cards: Array<{ key: string; node: ReactNode }>,
+  ): ReactNode[] => {
+    const rows: ReactNode[] = []
+    for (let rowIdx = 0; rowIdx < cards.length; rowIdx += 2) {
+      const first = cards[rowIdx]
+      const second = cards[rowIdx + 1]
+      if (second) {
+        rows.push(
+          <BentoGrid2Col key={`${first.key}-${second.key}`}>
+            {first.node}
+            {second.node}
+          </BentoGrid2Col>,
+        )
+      } else {
+        rows.push(<div key={first.key}>{first.node}</div>)
+      }
+    }
+    return rows
+  }
+
+  /* ─── 핵심 국정·민생 축 (의회·정당·선거 → 헌법·법령·조약 → 교역·주력산업 → 인구구조) ─── */
+  const coreDomainCards: Array<{ key: string; node: ReactNode }> = []
   if (hasParliamentCard) {
-    populatedDomainCards.push({
+    coreDomainCards.push({
       key: 'parliament',
       node: (
         <ParliamentAndPartyBentoCard
@@ -421,9 +450,8 @@ export function CountryDetailDashboard({
       ),
     })
   }
-  // 2순위: 헌법 · 법령 · 외교 조약
   if (hasDiplomacyCard) {
-    populatedDomainCards.push({
+    coreDomainCards.push({
       key: 'diplomacy',
       node: (
         <DiplomacyTreatyLawBentoCard
@@ -439,24 +467,8 @@ export function CountryDetailDashboard({
       ),
     })
   }
-  // 3순위: 국방 · 군사 전력
-  if (hasMilitaryCard) {
-    populatedDomainCards.push({
-      key: 'military',
-      node: (
-        <MilitaryForceBentoCard
-          militaryCount={stats.militaryCount}
-          highCommandCount={stats.highCommandCount}
-          militaryBranchBreakdown={stats.militaryBranchBreakdown}
-          warSummary={stats.warSummary}
-          onOpenMilitary={goMilitary}
-        />
-      ),
-    })
-  }
-  // 4순위: 교역 · 주력 산업 · 기업
   if (hasTradeCard) {
-    populatedDomainCards.push({
+    coreDomainCards.push({
       key: 'trade',
       node: (
         <TradeAndIndustryBentoCard
@@ -469,9 +481,8 @@ export function CountryDetailDashboard({
       ),
     })
   }
-  // 5순위: 인구 구조 · 연령 피라미드
   if (hasDemographicsCard) {
-    populatedDomainCards.push({
+    coreDomainCards.push({
       key: 'demographics',
       node: (
         <DemographicsBentoCard
@@ -484,9 +495,11 @@ export function CountryDetailDashboard({
       ),
     })
   }
-  // 6순위: 국가 계보 · 과거 정치체 (역사 연표 바로 위)
+
+  /* ─── 하단 보조 축 (역사 연표보다 항상 아래: 국가 계보 · 군사 편제) ─── */
+  const appendixDomainCards: Array<{ key: string; node: ReactNode }> = []
   if (hasLineageCard) {
-    populatedDomainCards.push({
+    appendixDomainCards.push({
       key: 'lineage',
       node: (
         <ModernLineageCard
@@ -500,22 +513,23 @@ export function CountryDetailDashboard({
       ),
     })
   }
-
-  const domainRows: ReactNode[] = []
-  for (let rowIdx = 0; rowIdx < populatedDomainCards.length; rowIdx += 2) {
-    const first = populatedDomainCards[rowIdx]
-    const second = populatedDomainCards[rowIdx + 1]
-    if (second) {
-      domainRows.push(
-        <BentoGrid2Col key={`${first.key}-${second.key}`}>
-          {first.node}
-          {second.node}
-        </BentoGrid2Col>,
-      )
-    } else {
-      domainRows.push(<div key={first.key}>{first.node}</div>)
-    }
+  if (hasMilitaryCard) {
+    appendixDomainCards.push({
+      key: 'military',
+      node: (
+        <MilitaryForceBentoCard
+          militaryCount={stats.militaryCount}
+          highCommandCount={stats.highCommandCount}
+          militaryBranchBreakdown={stats.militaryBranchBreakdown}
+          warSummary={stats.warSummary}
+          onOpenMilitary={goMilitary}
+        />
+      ),
+    })
   }
+
+  const coreDomainRows = pairDomainCards(coreDomainCards)
+  const appendixDomainRows = pairDomainCards(appendixDomainCards)
 
   return (
     <>
@@ -525,7 +539,7 @@ export function CountryDetailDashboard({
           {/* 1단 비대칭 히어로 벤토: [좌측: 국가 형태 · 현직 및 역대 국가수반] | [우측: 인터랙티브 지도 · 인구/영토/거시 제원] */}
           <BentoGridAsym $leftFr={1.34} $rightFr={1}>
             <ModernGovernanceAndLeadersHeroCard
-              description={country.description}
+              description={resolvedDescription}
               activePolitySeats={stats.civicSnapshot.activePolitySeats}
               currentHeads={stats.currentHeads}
               currentCabinet={stats.currentCabinet}
@@ -533,7 +547,7 @@ export function CountryDetailDashboard({
               timeline={stats.executiveTimeline}
               regimeEras={stats.civicSnapshot.regimeEras}
               activeTenureId={activeMindMapTenureId ?? focusedTenureId}
-              hideIncumbentHeads={isMindMapVisible}
+              hideIncumbentHeads={false}
               onFocusTenure={(tid) =>
                 setFocusedTenureState({ cid: country.id, tid })
               }
@@ -601,10 +615,10 @@ export function CountryDetailDashboard({
             onSelectPerson={(pid) => setPreviewPersonId(pid)}
           />
 
-          {/* 3~4단: [의회·정당·선거 → 헌법·법령·조약 → 국방·군사 → 교역·산업 → 인구 구조 → 국가 계보] 우선순위 2열 벤토 */}
-          {domainRows}
+          {/* 3~4단: 핵심 정치·법제·경제·인구 축 ([의회·정당·선거 → 헌법·법령·조약 → 교역·산업 → 인구 구조]) */}
+          {coreDomainRows}
 
-          {/* 5단: 역사 연표 · 핵심 전환점 인포그래픽 (시대·분야 비중 + 시간순 전환점 흐름) */}
+          {/* 5단: 국가 핵심 역사 흐름 (역사 연표 · 핵심 전환점) */}
           <ModernEventsCard
             eventCount={stats.eventCount}
             centuryBuckets={stats.eventCenturyDomainCounts}
@@ -619,6 +633,9 @@ export function CountryDetailDashboard({
             onOpenEvents={goEvents}
             onOpenMilitary={goMilitary}
           />
+
+          {/* 6단: 보조 도메인 ([국가 계보 · 과거 정치체 | 군사 · 전적]) */}
+          {appendixDomainRows}
 
           {/* 하단: 더 채울 수 있는 기록 + 최근 편집 */}
           <ArchiveFootprintBar

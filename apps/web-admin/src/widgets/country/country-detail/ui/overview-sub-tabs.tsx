@@ -1,14 +1,8 @@
 import {
-  Fragment,
-  useEffect,
-  useMemo,
   useRef,
-  useState,
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-
-import { FiChevronDown, FiPlus } from 'react-icons/fi'
 
 import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
 
@@ -83,49 +77,9 @@ export function panelId(key: OverviewSubTab): string {
 export function OverviewSubTabs({
   activeSubTab,
   onSubTabChange,
-  counts,
   contextBar,
 }: OverviewSubTabsProps) {
   const listRef = useRef<HTMLDivElement | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-  const [emptyMenuOpen, setEmptyMenuOpen] = useState(false)
-
-  useEffect(() => {
-    if (!emptyMenuOpen) return
-    const onPointerDown = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setEmptyMenuOpen(false)
-      }
-    }
-    const onEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setEmptyMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('keydown', onEscape)
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onEscape)
-    }
-  }, [emptyMenuOpen])
-
-  const { visibleTabs, emptyTabs } = useMemo(() => {
-    const visible: typeof TAB_LABELS = []
-    const empty: typeof TAB_LABELS = []
-    for (const item of TAB_LABELS) {
-      const count = counts?.[item.key]
-      const shouldHideAsEmpty =
-        item.key !== 'dashboard' &&
-        activeSubTab !== item.key &&
-        count !== undefined &&
-        count === 0
-      if (shouldHideAsEmpty) {
-        empty.push(item)
-      } else {
-        visible.push(item)
-      }
-    }
-    return { visibleTabs: visible, emptyTabs: empty }
-  }, [counts, activeSubTab])
 
   const handleKeyDown = (keyEvent: KeyboardEvent<HTMLDivElement>) => {
     if (
@@ -137,21 +91,21 @@ export function OverviewSubTabs({
       return
     }
     keyEvent.preventDefault()
-    const idx = visibleTabs.findIndex(
+    const idx = TAB_LABELS.findIndex(
       (tabItem) => tabItem.key === activeSubTab,
     )
-    if (visibleTabs.length === 0) return
+    if (TAB_LABELS.length === 0) return
     let nextIdx = idx >= 0 ? idx : 0
     if (keyEvent.key === 'ArrowLeft') {
-      nextIdx = idx > 0 ? idx - 1 : visibleTabs.length - 1
+      nextIdx = idx > 0 ? idx - 1 : TAB_LABELS.length - 1
     } else if (keyEvent.key === 'ArrowRight') {
-      nextIdx = idx < visibleTabs.length - 1 ? idx + 1 : 0
+      nextIdx = idx < TAB_LABELS.length - 1 ? idx + 1 : 0
     } else if (keyEvent.key === 'Home') {
       nextIdx = 0
     } else if (keyEvent.key === 'End') {
-      nextIdx = visibleTabs.length - 1
+      nextIdx = TAB_LABELS.length - 1
     }
-    const target = visibleTabs[nextIdx]
+    const target = TAB_LABELS[nextIdx]
     if (!target) return
     onSubTabChange(target.key)
     requestAnimationFrame(() => {
@@ -173,81 +127,29 @@ export function OverviewSubTabs({
             aria-label="국가 상세 메인 메뉴"
             onKeyDown={handleKeyDown}
           >
-            {visibleTabs.map(({ key, label, group }, tabIdx) => {
+            {TAB_LABELS.map(({ key, label }) => {
               const active = activeSubTab === key
-              const count = counts?.[key]
-              const nextTab = visibleTabs[tabIdx + 1]
-              const showGroupDivider = Boolean(nextTab && nextTab.group !== group)
 
               return (
-                <Fragment key={key}>
-                  {/* 2차 구역이 있는 탭(정부·행정·군사)은 hover·클릭으로 아래 메뉴가 펼쳐진다 — 없으면 단추 그대로 */}
-                  <CountryTabSubmenu tabKey={key} active={active}>
-                    <UnderlineTabButton
-                      id={tabId(key)}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      aria-controls={panelId(key)}
-                      tabIndex={active ? 0 : -1}
-                      $active={active}
-                      onClick={() => onSubTabChange(key)}
-                    >
-                      <S.TabLabelWrap>
-                        <span>{label}</span>
-                        {count != null && count > 0 && (
-                          <S.TabCountBadge $active={active}>
-                            {count.toLocaleString('ko-KR')}
-                          </S.TabCountBadge>
-                        )}
-                      </S.TabLabelWrap>
-                    </UnderlineTabButton>
-                  </CountryTabSubmenu>
-                  {showGroupDivider && <S.TabGroupDivider aria-hidden />}
-                </Fragment>
+                /* 2차 구역이 있는 탭(정부·행정·군사)은 hover·클릭으로 아래 메뉴가 펼쳐진다 — 없으면 단추 그대로 */
+                <CountryTabSubmenu key={key} tabKey={key} active={active}>
+                  <UnderlineTabButton
+                    id={tabId(key)}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    aria-controls={panelId(key)}
+                    tabIndex={active ? 0 : -1}
+                    $active={active}
+                    onClick={() => onSubTabChange(key)}
+                  >
+                    <span>{label}</span>
+                  </UnderlineTabButton>
+                </CountryTabSubmenu>
               )
             })}
           </S.TopUnderlineTabNav>
         </S.Left>
-
-        {emptyTabs.length > 0 && (
-          <S.EmptyTabsMenuWrap ref={menuRef}>
-            <S.EmptyTabsTriggerBtn
-              type="button"
-              $open={emptyMenuOpen}
-              aria-haspopup="menu"
-              aria-expanded={emptyMenuOpen}
-              onClick={() => setEmptyMenuOpen((prev) => !prev)}
-            >
-              <FiPlus size={11.5} aria-hidden />
-              <span>빈 탭 {emptyTabs.length}</span>
-              <FiChevronDown size={11.5} aria-hidden />
-            </S.EmptyTabsTriggerBtn>
-            {emptyMenuOpen && (
-              <S.EmptyTabsPopover role="menu" aria-label="미입력 도메인 탭 목록">
-                <S.EmptyTabsPopoverLabel>
-                  아직 기록이 없는 탭 바로 열기
-                </S.EmptyTabsPopoverLabel>
-                <S.EmptyTabsGrid>
-                  {emptyTabs.map((emptyTab) => (
-                    <S.EmptyTabOptionBtn
-                      key={emptyTab.key}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setEmptyMenuOpen(false)
-                        onSubTabChange(emptyTab.key)
-                      }}
-                    >
-                      <FiPlus size={10.5} aria-hidden />
-                      {emptyTab.label}
-                    </S.EmptyTabOptionBtn>
-                  ))}
-                </S.EmptyTabsGrid>
-              </S.EmptyTabsPopover>
-            )}
-          </S.EmptyTabsMenuWrap>
-        )}
       </S.Row>
     </S.StickyContainer>
   )

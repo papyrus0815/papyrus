@@ -5,13 +5,12 @@ import {
   FiArrowUpRight,
   FiChevronLeft,
   FiChevronRight,
-  FiEdit2,
   FiPlus,
   FiShield,
   FiUser,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled, { css, useTheme } from 'styled-components'
+import styled, { css, keyframes, useTheme } from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
@@ -30,13 +29,11 @@ import {
 import { primaryHouseLabel } from '@/entities/political-system/model/political-system'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { getUploadImageUrl } from '@/shared/api/upload'
-import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { pathKeys } from '@/shared/router'
 import {
   InstitutionAppointmentModal,
   type InstitutionAppointmentContextType,
 } from '@/shared/ui/institution-appointment-modal'
-import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 
 import type {
   CurrentCabinetSummary,
@@ -64,7 +61,7 @@ import {
 
 const NODE_HEIGHT = 54
 const NODE_GAP = 10
-const GUTTER = 62
+const GUTTER = 48
 const DEFAULT_COLLAPSED_BRANCHES = 14
 
 type MinistryDomainKey = 'security' | 'economy' | 'governance' | 'social'
@@ -901,7 +898,6 @@ export function ExecutiveMindMapBentoHero({
   historicalCountryId,
   countryName,
   countryIsoCode,
-  description,
   focusedTenureId,
   onActiveTenureChange,
   currentCabinetSummary,
@@ -909,7 +905,6 @@ export function ExecutiveMindMapBentoHero({
   recentElection,
   cabinetMindMapMode = false,
   onVisibilityChange,
-  onEditOverview,
   onOpenPoliticalSystem,
   onOpenCabinets,
   onOpenMinistries,
@@ -919,10 +914,13 @@ export function ExecutiveMindMapBentoHero({
 }: ExecutiveMindMapBentoHeroProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [proseExpanded, setProseExpanded] = useState(false)
   const [branchDomain, setBranchDomain] = useState<'cabinet' | 'military'>(
     'cabinet',
   )
+  const [slideMotion, setSlideMotion] = useState<{
+    dir: 'left' | 'right' | null
+    tick: number
+  }>({ dir: null, tick: 0 })
 
   // 인플레이스 임명 모달 상태 (대시보드 이탈 없이 빈 부처·사령부 즉시 임명)
   const [appointmentTarget, setAppointmentTarget] = useState<{
@@ -1081,23 +1079,18 @@ export function ExecutiveMindMapBentoHero({
   }, [mindmap.activePoliticalSystem])
 
   const activeElection = mindmap.linkedElection ?? nextElection ?? recentElection
-  const cleanDescription = description?.trim() ?? ''
-  const plainOverviewPreview = useMemo(() => {
-    if (!cleanDescription) return ''
-    return cleanDescription
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/&nbsp;/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-  }, [cleanDescription])
 
   const headPeriodSummary = useMemo(() => {
-    const h = mindmap.head
-    if (!h) return null
-    const start = formatShortMindMapDate(h.startDate)
-    const end = h.endDate ? formatShortMindMapDate(h.endDate) : '현재'
-    const elapsed = !h.endDate ? formatMindMapElapsed(h.startDate) : null
-    if (!start && !h.endDate) return null
+    const activeHead = mindmap.head
+    if (!activeHead) return null
+    const start = formatShortMindMapDate(activeHead.startDate)
+    const end = activeHead.endDate
+      ? formatShortMindMapDate(activeHead.endDate)
+      : '현재'
+    const elapsed = !activeHead.endDate
+      ? formatMindMapElapsed(activeHead.startDate)
+      : null
+    if (!start && !activeHead.endDate) return null
     return `${start || '?'} ~ ${end}${elapsed ? ` (${elapsed})` : ''}`
   }, [mindmap.head])
 
@@ -1163,53 +1156,20 @@ export function ExecutiveMindMapBentoHero({
 
   return (
     <BentoCard aria-label={`${countryName} 행정부 및 각 부처 조직도`}>
-      {/* 1. 상단 바: 행정부 타이틀 + 좌우 화살표 내각 전환기 (칩 리스트 없음) + 바로가기 */}
+      {/* 1. 상단 바: 행정부 타이틀 + 현재 내각 배지 + 바로가기 */}
       <BentoCardHeader>
         <HeroTitleCluster>
           <BentoCardTitleGroup>
             <BentoCardTitle>
               {branchDomain === 'military' ? '군 통수부' : '행정부'}
             </BentoCardTitle>
-            {mindmap.navigation ? (
-              <AdminArrowSwitcher aria-label="역대 행정부 좌우 전환">
-                <StepperArrowBtn
-                  type="button"
-                  disabled={!mindmap.navigation.onOlder}
-                  onClick={() => mindmap.navigation?.onOlder?.()}
-                  aria-label="이전 행정부"
-                  title={
-                    mindmap.navigation.olderLabel
-                      ? `이전: ${mindmap.navigation.olderLabel}`
-                      : '첫 기록입니다'
-                  }
-                >
-                  <FiChevronLeft size={14} />
-                </StepperArrowBtn>
-                <AdminSwitcherLabel>
-                  <strong>
-                    {mindmap.activeCabinetLabel ?? '현 행정부'}
-                  </strong>
-                  <small>
-                    {mindmap.navigation.currentOrdinalIndex}/
-                    {mindmap.navigation.total}
-                  </small>
-                </AdminSwitcherLabel>
-                <StepperArrowBtn
-                  type="button"
-                  disabled={!mindmap.navigation.onNewer}
-                  onClick={() => mindmap.navigation?.onNewer?.()}
-                  aria-label="다음 행정부"
-                  title={
-                    mindmap.navigation.newerLabel
-                      ? `다음: ${mindmap.navigation.newerLabel}`
-                      : '가장 최근 행정부입니다'
-                  }
-                >
-                  <FiChevronRight size={14} />
-                </StepperArrowBtn>
-              </AdminArrowSwitcher>
-            ) : mindmap.activeCabinetLabel ? (
-              <BentoCardBadge>{mindmap.activeCabinetLabel}</BentoCardBadge>
+            {mindmap.activeCabinetLabel ? (
+              <BentoCardBadge>
+                {mindmap.activeCabinetLabel}
+                {mindmap.navigation
+                  ? ` · ${mindmap.navigation.currentOrdinalIndex}/${mindmap.navigation.total}`
+                  : ''}
+              </BentoCardBadge>
             ) : null}
           </BentoCardTitleGroup>
 
@@ -1283,71 +1243,95 @@ export function ExecutiveMindMapBentoHero({
         </BentoHeaderActions>
       </BentoCardHeader>
 
-      {/* 2. 슬림 1줄 국가 핵심 개요 배너 — 소개가 있을 때만 */}
-      {plainOverviewPreview && (
-        <CompactOverviewStrip>
-          {proseExpanded ? (
-            <ExpandedProseWrap>
-              {isLikelyRichTextHtml(cleanDescription) ? (
-                <RichTextReadView html={cleanDescription} />
-              ) : (
-                <p>{cleanDescription}</p>
-              )}
-            </ExpandedProseWrap>
-          ) : (
-            <OneLineSummary onClick={() => setProseExpanded(true)}>
-              {plainOverviewPreview}
-            </OneLineSummary>
-          )}
-          <OverviewRightBtns>
-            {plainOverviewPreview.length > 95 && (
-              <MiniTextBtn
-                type="button"
-                onClick={() => setProseExpanded((prev) => !prev)}
-              >
-                {proseExpanded ? '접기' : '전문 보기'}
-              </MiniTextBtn>
-            )}
-            {onEditOverview && (
-              <MiniTextBtn type="button" onClick={onEditOverview}>
-                <FiEdit2 size={10.5} /> 소개 편집
-              </MiniTextBtn>
-            )}
-          </OverviewRightBtns>
-        </CompactOverviewStrip>
-      )}
+      {/* 2. 좌·우 사이드 화살표로 전환되는 중앙 수장 + 각 부처 마인드맵 스테이지 */}
+      <MindMapCarouselShell $withArrows={Boolean(mindmap.navigation)}>
+        {mindmap.navigation ? (
+          <StageEdgeArrowBtn
+            type="button"
+            $side="left"
+            disabled={!mindmap.navigation.onOlder}
+            onClick={() => {
+              if (!mindmap.navigation?.onOlder) return
+              setSlideMotion((prev) => ({ dir: 'left', tick: prev.tick + 1 }))
+              mindmap.navigation.onOlder()
+            }}
+            aria-label={
+              mindmap.navigation.olderLabel
+                ? `이전 행정부: ${mindmap.navigation.olderLabel}`
+                : '이전 행정부 없음'
+            }
+            title={
+              mindmap.navigation.olderLabel
+                ? `이전: ${mindmap.navigation.olderLabel}`
+                : '첫 행정부 기록입니다'
+            }
+          >
+            <FiChevronLeft size={22} />
+          </StageEdgeArrowBtn>
+        ) : null}
 
-      {/* 3. 중앙 국가 수장 + 좌·우 베지어 마인드맵 캔버스 */}
-      <MindMapDiagramStage
-        head={mindmap.head}
-        emptyHeadLabel={mindmap.defaultEmptyHeadTitle}
-        polityLabel={mindmap.activePolityLabel}
-        headPeriodSummary={headPeriodSummary}
-        headVoteShare={mindmap.headVoteShare}
-        ministersCount={
-          branchDomain === 'military'
-            ? mindmap.militaryBranches.filter((b) => Boolean(b.commanderName))
-                .length
-            : mindmap.members.length
-        }
-        departmentsCount={
-          branchDomain === 'military'
-            ? mindmap.militaryBranches.length
-            : mindmap.totalDepartmentsCount ||
-              mindmap.members.length + mindmap.vacantSlots.length
-        }
-        isHistorical={Boolean(historicalCountryId)}
-        cleanInstitutionalVacant={cabinetMindMapMode}
-        sovereignsAbove={sovereignsAbove}
-        cabinetsDuringReign={cabinetsDuringReign}
-        branches={activeBranches}
-        collapsedLimit={cabinetMindMapMode ? 10 : DEFAULT_COLLAPSED_BRANCHES}
-        onSelectPerson={onSelectPerson}
-        onClickEmptyHead={() => onOpenCabinets(null)}
-        onSelectVacant={handleOpenVacantAppointment}
-        onSelectMilitaryCommand={handleMilitaryBranchClick}
-        onSelectReignCabinet={(cabId) => mindmap.selectCabinet(cabId)}
-      />
+        <MindMapSlideTrack
+          key={slideMotion.tick}
+          $direction={slideMotion.dir}
+        >
+          <MindMapDiagramStage
+            head={mindmap.head}
+            emptyHeadLabel={mindmap.defaultEmptyHeadTitle}
+            polityLabel={mindmap.activePolityLabel}
+            headPeriodSummary={headPeriodSummary}
+            headVoteShare={mindmap.headVoteShare}
+            ministersCount={
+              branchDomain === 'military'
+                ? mindmap.militaryBranches.filter((branch) =>
+                    Boolean(branch.commanderName),
+                  ).length
+                : mindmap.members.length
+            }
+            departmentsCount={
+              branchDomain === 'military'
+                ? mindmap.militaryBranches.length
+                : mindmap.totalDepartmentsCount ||
+                  mindmap.members.length + mindmap.vacantSlots.length
+            }
+            isHistorical={Boolean(historicalCountryId)}
+            cleanInstitutionalVacant={cabinetMindMapMode}
+            sovereignsAbove={sovereignsAbove}
+            cabinetsDuringReign={cabinetsDuringReign}
+            branches={activeBranches}
+            collapsedLimit={cabinetMindMapMode ? 12 : DEFAULT_COLLAPSED_BRANCHES}
+            onSelectPerson={onSelectPerson}
+            onClickEmptyHead={() => onOpenCabinets(null)}
+            onSelectVacant={handleOpenVacantAppointment}
+            onSelectMilitaryCommand={handleMilitaryBranchClick}
+            onSelectReignCabinet={(cabId) => mindmap.selectCabinet(cabId)}
+          />
+        </MindMapSlideTrack>
+
+        {mindmap.navigation ? (
+          <StageEdgeArrowBtn
+            type="button"
+            $side="right"
+            disabled={!mindmap.navigation.onNewer}
+            onClick={() => {
+              if (!mindmap.navigation?.onNewer) return
+              setSlideMotion((prev) => ({ dir: 'right', tick: prev.tick + 1 }))
+              mindmap.navigation.onNewer()
+            }}
+            aria-label={
+              mindmap.navigation.newerLabel
+                ? `다음 행정부: ${mindmap.navigation.newerLabel}`
+                : '다음 행정부 없음'
+            }
+            title={
+              mindmap.navigation.newerLabel
+                ? `다음: ${mindmap.navigation.newerLabel}`
+                : '가장 최근 행정부입니다'
+            }
+          >
+            <FiChevronRight size={22} />
+          </StageEdgeArrowBtn>
+        ) : null}
+      </MindMapCarouselShell>
 
       {/* 4. 하단 권력 지형 인포그래픽 리본 (정당 비중 · 의회 의석 · 선거) */}
       {showPowerRibbon && (
@@ -1513,170 +1497,119 @@ const ModeSwitchBtn = styled.button<{ $active: boolean }>`
   cursor: pointer;
 `
 
-const RegimeStepper = styled.div`
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 2px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.06)'
-      : 'rgba(15, 23, 42, 0.045)'};
-  overflow: hidden;
+const slideFromLeft = keyframes`
+  from {
+    opacity: 0.45;
+    transform: translateX(-22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 `
 
-const StepperArrowBtn = styled.button`
-  width: 24px;
-  height: 24px;
+const slideFromRight = keyframes`
+  from {
+    opacity: 0.45;
+    transform: translateX(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+`
+
+const MindMapCarouselShell = styled.div<{ $withArrows: boolean }>`
+  position: relative;
+  padding: ${({ $withArrows }) => ($withArrows ? '0 48px' : '0')};
+
+  @media (max-width: 820px) {
+    padding: ${({ $withArrows }) => ($withArrows ? '0 38px' : '0')};
+  }
+`
+
+const MindMapSlideTrack = styled.div<{ $direction: 'left' | 'right' | null }>`
+  min-width: 0;
+  animation: ${({ $direction }) =>
+    $direction === 'left'
+      ? css`${slideFromLeft} 240ms cubic-bezier(0.22, 1, 0.36, 1)`
+      : $direction === 'right'
+        ? css`${slideFromRight} 240ms cubic-bezier(0.22, 1, 0.36, 1)`
+        : 'none'};
+`
+
+const StageEdgeArrowBtn = styled.button<{ $side: 'left' | 'right' }>`
+  position: absolute;
+  top: 50%;
+  ${({ $side }) => ($side === 'left' ? 'left: 0;' : 'right: 0;')}
+  transform: translateY(-50%);
+  z-index: 3;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
-`
-
-const StepperCount = styled.span`
-  padding: 0 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  ${DIGIT_DISPLAY}
-`
-
-const AdminArrowSwitcher = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px 3px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.14)'
-      : 'rgba(79, 70, 229, 0.065)'};
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(129, 140, 248, 0.24)'
-        : 'rgba(79, 70, 229, 0.14)'};
-`
-
-const AdminSwitcherLabel = styled.span`
+        ? 'rgba(255, 255, 255, 0.14)'
+        : 'rgba(15, 23, 42, 0.1)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(30, 41, 59, 0.92)'
+      : 'rgba(255, 255, 255, 0.96)'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 8px 24px -6px rgba(0, 0, 0, 0.55)'
+      : '0 6px 20px -6px rgba(15, 23, 42, 0.14)'};
   display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 0 8px;
-  font-size: 12px;
-  white-space: nowrap;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    transform ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease,
+    opacity ${MOTION.fast} ease;
 
-  strong {
-    font-weight: 750;
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
     color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(49, 46, 129, 0.55)' : '#ffffff'};
+    transform: translateY(-50%) scale(1.06);
   }
 
-  small {
-    font-size: 10.5px;
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    ${DIGIT_DISPLAY}
+  &:disabled {
+    opacity: 0.25;
+    cursor: default;
+    box-shadow: none;
   }
-`
 
-const CompactOverviewStrip = styled.div`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 12px;
-  margin: 0 0 8px;
-  border-radius: 10px;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-`
-
-const OneLineSummary = styled.p`
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-  flex: 1;
-  min-width: 0;
-`
-
-const ExpandedProseWrap = styled.div`
-  flex: 1;
-  min-width: 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  p {
-    margin: 0;
-  }
-`
-
-const OverviewRightBtns = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-`
-
-const MiniTextBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
+  @media (max-width: 820px) {
+    width: 32px;
+    height: 32px;
   }
 `
 
 const MindMapStage = styled.div`
   container-type: inline-size;
-  padding: 20px 18px 16px;
-  border-radius: 24px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'radial-gradient(ellipse 56% 72% at 50% 50%, rgba(99, 102, 241, 0.13), rgba(15, 23, 42, 0.35) 76%)'
-      : 'radial-gradient(ellipse 58% 74% at 50% 50%, rgba(99, 102, 241, 0.075), rgba(248, 250, 252, 0.65) 76%)'};
+  padding: 6px 4px 4px;
+  border-radius: 0;
+  background: transparent;
 `
 
 const MindMapGrid = styled.div<{ $hasBranches: boolean }>`
   display: grid;
   grid-template-columns: ${({ $hasBranches }) =>
     $hasBranches
-      ? `minmax(210px, 1fr) 264px minmax(210px, 1fr)`
+      ? `minmax(186px, 1fr) 244px minmax(186px, 1fr)`
       : 'minmax(0, 340px)'};
   gap: ${({ $hasBranches }) => ($hasBranches ? `${GUTTER}px` : '0')};
   align-items: center;
   justify-content: center;
 
-  @container (max-width: 820px) {
+  @container (max-width: 680px) {
     grid-template-columns: minmax(0, 1fr);
     gap: 14px;
   }
@@ -1685,7 +1618,7 @@ const MindMapGrid = styled.div<{ $hasBranches: boolean }>`
 const MindMapSideCol = styled.div<{ $side: 'left' | 'right' }>`
   min-width: 0;
 
-  @container (max-width: 820px) {
+  @container (max-width: 680px) {
     order: ${({ $side }) => ($side === 'left' ? 2 : 3)};
   }
 `
@@ -1696,7 +1629,7 @@ const CenterHubStack = styled.div`
   align-items: center;
   min-width: 0;
 
-  @container (max-width: 820px) {
+  @container (max-width: 680px) {
     order: 1;
   }
 `
@@ -1739,7 +1672,7 @@ const ConnectorSvg = styled.svg<{ $side: 'left' | 'right'; $muted: boolean }>`
     opacity: 0.72;
   }
 
-  @container (max-width: 820px) {
+  @container (max-width: 680px) {
     display: none;
   }
 `
@@ -2101,33 +2034,25 @@ const LeaderCenterCard = styled.button<{ $monarch: boolean }>`
   gap: 7px;
   width: 100%;
   padding: 20px 16px 16px;
-  border-radius: 26px;
+  border-radius: 24px;
   border: 1px solid
     ${({ theme, $monarch }) =>
       $monarch
         ? theme.mode === 'dark'
-          ? 'rgba(252, 211, 77, 0.35)'
-          : 'rgba(217, 119, 6, 0.24)'
+          ? 'rgba(252, 211, 77, 0.3)'
+          : 'rgba(217, 119, 6, 0.22)'
         : theme.mode === 'dark'
-          ? 'rgba(129, 140, 248, 0.3)'
-          : 'rgba(99, 102, 241, 0.18)'};
-  background: ${({ theme, $monarch }) =>
-    $monarch
-      ? theme.mode === 'dark'
-        ? 'linear-gradient(180deg, rgba(251, 191, 36, 0.1), rgba(17, 24, 39, 0.85))'
-        : 'linear-gradient(180deg, rgba(255, 251, 235, 0.95), #ffffff)'
-      : theme.mode === 'dark'
-        ? 'linear-gradient(180deg, rgba(99, 102, 241, 0.14), rgba(17, 24, 39, 0.88))'
-        : 'linear-gradient(180deg, rgba(238, 242, 255, 0.85), #ffffff)'};
+          ? 'rgba(255, 255, 255, 0.12)'
+          : 'rgba(15, 23, 42, 0.09)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.72)' : '#ffffff'};
   font-family: inherit;
   text-align: center;
   cursor: pointer;
-  box-shadow: ${({ theme, $monarch }) =>
+  box-shadow: ${({ theme }) =>
     theme.mode === 'dark'
-      ? '0 14px 32px -12px rgba(0, 0, 0, 0.5)'
-      : $monarch
-        ? '0 14px 32px -12px rgba(217, 119, 6, 0.18)'
-        : '0 14px 34px -12px rgba(79, 70, 229, 0.18)'};
+      ? '0 14px 32px -14px rgba(0, 0, 0, 0.5)'
+      : '0 10px 28px -14px rgba(15, 23, 42, 0.14)'};
   transition:
     border-color ${MOTION.fast} ease,
     transform ${MOTION.fast} ease;
@@ -2403,60 +2328,4 @@ const ElectionMetaLine = styled.span`
 const HeroFooterSlot = styled.div`
   padding: 12px 18px 14px;
   border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-`
-
-const CabinetSelectorStrip = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 22px 6px;
-  background: transparent;
-  overflow-x: auto;
-  scrollbar-width: thin;
-`
-
-const CabinetSelectorBtn = styled.button<{ $active: boolean }>`
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4.5px 12px 4.5px 5px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active
-        ? ledgerAccentBorder(theme.mode)
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.07)'
-          : 'rgba(15, 23, 42, 0.06)'};
-  background: ${({ theme, $active }) =>
-    $active
-      ? ledgerAccentSubtle(theme.mode)
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.04)'
-        : 'rgba(15, 23, 42, 0.032)'};
-  color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 11.5px;
-  white-space: nowrap;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition:
-    border-color ${MOTION.fast} ease,
-    background ${MOTION.fast} ease;
-
-  &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  }
-
-  .nm {
-    font-weight: 700;
-  }
-
-  small {
-    font-size: 10.5px;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    ${DIGIT_DISPLAY}
-  }
 `
