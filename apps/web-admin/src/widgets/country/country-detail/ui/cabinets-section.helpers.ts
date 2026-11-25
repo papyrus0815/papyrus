@@ -1501,7 +1501,13 @@ export function resolveReignEraLineForCabinetHead(
  *   예전엔 축이 끊김 없이 이어져 1901–1945 공백이 연속으로 읽혔다.
  */
 export type CabinetListMarker =
-  | { kind: 'polity'; key: string; label: string }
+  | {
+      kind: 'polity'
+      key: string
+      label: string
+      /** 같은 자리에서 군주도 바뀌면 한 줄로 합친다('일본 제국 · 군주 메이지') — 머리 3단 쌓임 방지 */
+      reignLabel?: string | null
+    }
   | { kind: 'reign'; key: string; label: string }
   | { kind: 'gap'; key: string; label: string; detail: string | null }
 
@@ -1643,20 +1649,25 @@ export function buildCabinetListMarkers(
     const prevRow = rowIndex > 0 ? rows[rowIndex - 1] : null
     const gapMarker = gapMarkerByIndex.get(rowIndex)
     if (gapMarker) markers.push(gapMarker)
+    const reignChanged = Boolean(
+      showReign &&
+        row.reignKey &&
+        row.reignLabel &&
+        (!prevRow || prevRow.reignKey !== row.reignKey),
+    )
     if (
       showPolity &&
       row.polityKey &&
       row.polityLabel &&
       (!prevRow || prevRow.polityKey !== row.polityKey)
     ) {
-      markers.push({ kind: 'polity', key: `polity-${row.id}`, label: row.polityLabel })
-    }
-    if (
-      showReign &&
-      row.reignKey &&
-      row.reignLabel &&
-      (!prevRow || prevRow.reignKey !== row.reignKey)
-    ) {
+      markers.push({
+        kind: 'polity',
+        key: `polity-${row.id}`,
+        label: row.polityLabel,
+        ...(reignChanged ? { reignLabel: row.reignLabel } : {}),
+      })
+    } else if (reignChanged && row.reignLabel) {
       markers.push({ kind: 'reign', key: `reign-${row.id}`, label: row.reignLabel })
     }
     if (markers.length > 0) markerMap.set(row.id, markers)

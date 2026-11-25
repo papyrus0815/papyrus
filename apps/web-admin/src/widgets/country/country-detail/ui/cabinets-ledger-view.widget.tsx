@@ -178,7 +178,8 @@ export function CabinetsLedgerView({
         <span>대수 · 직함</span>
         <span>수반 · 내각</span>
         <DesktopOnlyColHeader>취임 → 퇴임 · 정당</DesktopOnlyColHeader>
-        <RightHeaderCol>기록</RightHeaderCol>
+        {/* 이 열은 대개 수정 단추뿐이라 '기록' 머리가 빈 열을 약속했다 — 머리를 비운다 */}
+        <RightHeaderCol aria-hidden />
       </LedgerHeaderRow>
 
       <LedgerBody>
@@ -292,6 +293,12 @@ export function CabinetsLedgerView({
                     <span className="marker-sub">군주</span>
                   ) : null}
                   <span className="marker-label">{marker.label}</span>
+                  {marker.kind === 'polity' && marker.reignLabel ? (
+                    <span className="marker-reign">
+                      <span className="marker-sub">군주</span>
+                      {marker.reignLabel}
+                    </span>
+                  ) : null}
                   {marker.kind === 'gap' && marker.detail ? (
                     <span className="marker-sub">{marker.detail}</span>
                   ) : null}
@@ -545,15 +552,12 @@ const LedgerBody = styled.div`
   flex-direction: column;
 `
 
+/* 세기 머리는 면 없이 글자 + 선만 — 정치체 머리 · 공백 빗금 띠 · 행 줄무늬와 회색 면이 셋이나 겹쳐 무게를 다퉜다 */
 const CenturyDividerRow = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 16px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.025)'
-      : 'rgba(15, 23, 42, 0.022)'};
+  padding: 8px 16px 6px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
@@ -677,6 +681,18 @@ const MarkerDividerRow = styled.div<{ $kind: CabinetListMarker['kind'] }>`
     font-weight: ${({ $kind }) => ($kind === 'reign' ? 600 : 700)};
     color: ${({ $kind, theme }) =>
       $kind === 'polity' ? theme.colors.text.primary : theme.colors.text.secondary};
+  }
+  .marker-reign {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  .marker-reign::before {
+    content: '·';
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
   .marker-sub {
     ${DIGIT_DISPLAY}
@@ -979,10 +995,25 @@ const QuickEditBtn = styled.button`
   cursor: pointer;
   transition:
     background 0.12s ease,
-    color 0.12s ease;
+    color 0.12s ease,
+    opacity 0.12s ease;
 
   &:hover {
     background: ${({ theme }) => ledgerChipFill(theme.mode)};
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    opacity: 1;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  /* 마우스 기기에선 행에 올리거나 초점이 들어올 때만 — 19행 모두에 연필이 서 있던 것. 터치 기기는 늘 보인다 */
+  @media (hover: hover) {
+    opacity: 0;
+
+    ${LedgerRow}:hover &,
+    ${LedgerRow}:focus-within & {
+      opacity: 1;
+    }
   }
 `

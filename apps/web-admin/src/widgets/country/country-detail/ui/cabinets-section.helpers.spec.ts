@@ -475,7 +475,17 @@ describe('buildCabinetListMarkers — 행 사이 표지', () => {
       baseRow('b', { polityKey: '이탈리아 왕국', polityLabel: '이탈리아 왕국', reignKey: '비토리오 에마누엘레 2세', reignLabel: '비토리오 에마누엘레 2세' }),
       baseRow('c', { polityKey: '이탈리아 왕국', polityLabel: '이탈리아 왕국', reignKey: '비토리오 에마누엘레 3세', reignLabel: '비토리오 에마누엘레 3세' }),
     ])
-    expect(markers.get('b')?.map((marker) => marker.kind)).toEqual(['polity'])
+    expect(markers.get('a')).toEqual([
+      {
+        kind: 'polity',
+        key: 'polity-a',
+        label: '사르데냐 왕국',
+        reignLabel: '비토리오 에마누엘레 2세',
+      },
+    ])
+    expect(markers.get('b')).toEqual([
+      { kind: 'polity', key: 'polity-b', label: '이탈리아 왕국' },
+    ])
     expect(markers.get('c')?.map((marker) => marker.kind)).toEqual(['reign'])
   })
 

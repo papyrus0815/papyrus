@@ -145,6 +145,12 @@ export function CabinetsVerticalTimeline({
                   <span className="marker-text">
                     <FiFlag aria-hidden size={12} />
                     <strong>{marker.label}</strong>
+                    {marker.reignLabel ? (
+                      <span className="reign-inline">
+                        <span className="detail">군주</span>
+                        {marker.reignLabel}
+                      </span>
+                    ) : null}
                   </span>
                 ) : (
                   <span className="marker-text">
@@ -222,32 +228,34 @@ export function CabinetsVerticalTimeline({
                     ) : null}
                   </TextStack>
                   {row.transition || row.partyLabel ? (
+                    /* 원장과 같은 '취임 → 퇴임' 한 줄 + 정당 — 예전엔 '취임/퇴임/정당' 키 라벨이 행마다 셋씩 반복됐다 */
                     <AsideStack>
-                      {row.transition?.appointment ? (
-                        <span className="kv">
-                          <span className="key">취임</span>
-                          <span className="value">{row.transition.appointment}</span>
-                        </span>
-                      ) : null}
-                      {row.transition?.endReason ? (
-                        <span className="kv">
-                          <span className="key">퇴임</span>
-                          <span className="value">{row.transition.endReason}</span>
+                      {row.transition ? (
+                        <span
+                          className="transition"
+                          title={`취임 ${row.transition.appointment ?? '미상'} → 퇴임 ${row.transition.endReason ?? (row.isCurrent ? '현직' : '미상')}`}
+                        >
+                          {row.transition.appointment ?? '—'}
+                          {row.transition.endReason ? (
+                            <>
+                              <span className="arrow" aria-hidden>
+                                →
+                              </span>
+                              {row.transition.endReason}
+                            </>
+                          ) : null}
                         </span>
                       ) : null}
                       {row.partyLabel ? (
-                        <span className="kv">
-                          <span className="key">정당</span>
-                          <span className="value">
-                            <span
-                              className="party-dot"
-                              aria-hidden
-                              style={
-                                row.partyColor ? { background: row.partyColor } : undefined
-                              }
-                            />
-                            {row.partyLabel}
-                          </span>
+                        <span className="party" title={`정당 ${row.partyLabel}`}>
+                          <span
+                            className="party-dot"
+                            aria-hidden
+                            style={
+                              row.partyColor ? { background: row.partyColor } : undefined
+                            }
+                          />
+                          {row.partyLabel}
                         </span>
                       ) : null}
                     </AsideStack>
@@ -414,6 +422,20 @@ const MarkerRow = styled.li<{ $kind: CabinetListMarker['kind'] }>`
     `
         : ''}
   }
+  .reign-inline {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-left: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  .reign-inline::before {
+    content: '·';
+    margin-right: 4px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
   .marker-text strong {
     font-weight: ${({ $kind }) => ($kind === 'reign' ? 600 : 700)};
   }
@@ -489,9 +511,12 @@ const MainBtn = styled.button`
   }
 
   /* 넓은 칸: 오른쪽 셋째 칸에 취임 · 퇴임 · 정당 */
+  /* 넓은 칸: 셋째 칸(취임 → 퇴임 · 정당)을 본문 바로 옆에 — 본문 칸을 1fr로 두면 셋째 칸이 오른쪽 끝으로
+     밀려 1440px에서 본문과 170px 떨어졌다 */
   @container (min-width: 760px) {
-    grid-template-columns: auto minmax(0, 1fr) minmax(200px, 280px);
-    column-gap: 20px;
+    grid-template-columns: auto minmax(0, 380px) minmax(180px, 260px);
+    justify-content: start;
+    column-gap: 24px;
   }
 `
 
@@ -500,31 +525,35 @@ const AsideStack = styled.span`
   grid-column: 2;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  align-items: center;
+  gap: 4px 12px;
   min-width: 0;
   font-size: 12px;
   line-height: 1.45;
 
-  .kv {
+  .transition {
     display: inline-flex;
     align-items: baseline;
-    gap: 6px;
-    min-width: 0;
-  }
-  .key {
-    flex-shrink: 0;
-    font-size: 11px;
+    flex-wrap: wrap;
+    gap: 0 5px;
     font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    word-break: keep-all;
+  }
+  .arrow {
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
-  .value {
+  .party {
     display: inline-flex;
     align-items: center;
     gap: 5px;
     min-width: 0;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
     font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.secondary};
-    word-break: keep-all;
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
   .party-dot {
     flex-shrink: 0;
@@ -537,14 +566,11 @@ const AsideStack = styled.span`
   @container (min-width: 760px) {
     grid-column: 3;
     flex-direction: column;
+    align-items: flex-start;
     flex-wrap: nowrap;
-    gap: 3px;
+    gap: 5px;
     padding: 2px 0 0 14px;
     border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-
-    .key {
-      width: 26px;
-    }
   }
 `
 

@@ -2124,9 +2124,10 @@ export function CabinetsSection({
                         )?.label ?? null)
                       : null
 
-                    /* 군주 색 범례는 없앴다 — 군주 교체는 행 사이 표지가 글자로 말한다 */
+                    /* 군주 색 범례는 없앴다 — 군주 교체는 행 사이 표지가 글자로 말한다.
+                       소속 색 범례도 정치체 머리가 그려지면 같은 말을 두 번 하는 셈이라 뺀다 */
                     const hasLegendItems =
-                      cabinetTerritoryLegendEntries.length > 0
+                      cabinetTerritoryLegendEntries.length > 0 && !hasPolityMarkers
 
                     const hasActiveToolbarFilters = Boolean(
                       cabinetCountryFilter ||
@@ -2136,6 +2137,7 @@ export function CabinetsSection({
 
                     return (
                       <>
+                        <CabT.ToolbarContainer>
                         <CabS.CabListControlsRow>
                           <CabS.CabListSearchBox>
                             <CabS.CabListSearchIcon aria-hidden>
@@ -2384,6 +2386,7 @@ export function CabinetsSection({
                             </CabS.CabListRegisterBtn>
                           </div>
                         </CabS.CabListControlsRow>
+                        </CabT.ToolbarContainer>
 
                         {hasActiveToolbarFilters ? (
                           <div
@@ -2708,7 +2711,8 @@ export function CabinetsSection({
                             </div>
                           </>
                         )}
-                        {cabinetTerritoryLegendEntries.length > 0 && (
+                        {cabinetTerritoryLegendEntries.length > 0 &&
+                          !hasPolityMarkers && (
                           <button
                             type="button"
                             onClick={() =>
@@ -2739,6 +2743,7 @@ export function CabinetsSection({
                           </button>
                         )}
                         {showTimelineLegend &&
+                          !hasPolityMarkers &&
                           cabinetTerritoryLegendEntries.length > 0 && (
                             <CabS.CabTimelineLegendRow
                               role="list"
