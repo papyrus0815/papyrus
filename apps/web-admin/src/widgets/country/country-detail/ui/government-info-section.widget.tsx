@@ -5,7 +5,7 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FiAward, FiGlobe, FiGrid } from 'react-icons/fi'
+import { FiAward, FiGlobe, FiGrid, FiMaximize2, FiMinimize2 } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -18,6 +18,7 @@ import {
 } from '@/features/government-info/model/government-content-tab'
 import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
 import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
+import { GovSectionSwitcher } from '@/features/government-info/ui/gov-section-switcher'
 import {
   GovLedgerPage,
 } from '@/features/government-info/ui/government-ledger.styles'
@@ -32,7 +33,7 @@ import {
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { pathKeys } from '@/shared/router'
-import { SectionSubNav } from '@/shared/ui/section-sub-nav/section-sub-nav'
+import { useContentShellLayout } from '@/widgets/content-shell'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { SidePanel } from '@/shared/ui/side-panel'
 
@@ -54,6 +55,7 @@ export function GovernmentInfoSection({
   initialContentTab,
 }: GovernmentInfoSectionProps) {
   const navigate = useNavigate()
+  const shellLayout = useContentShellLayout()
   const [searchParams, setSearchParams] = useSearchParams()
   const cabinetIdQuery = searchParams.get('cabinetId')?.trim() || ''
   const unitIdQuery = searchParams.get('unitId')?.trim() || ''
@@ -333,25 +335,46 @@ export function GovernmentInfoSection({
   return (
     <>
       <GovLedgerPage>
-        {/* 하위 메뉴 한 줄 — 국가 상세 다른 탭과 같은 공용 부품(알약 하위 탭 + 오른쪽 도구) */}
-        <SectionSubNav<GovernmentContentTab>
-          ariaLabel="정부·행정 하위 메뉴"
-          tabs={GOVERNMENT_TAB_ORDER.map((tabKey) => ({
+        {/* 구역 제목 겸 전환 메뉴 — 예전 알약 하위 탭 줄이 국가 탭 아래 또 한 겹 띠를 깔아 지면이 좁아 보였다 */}
+        <GovSectionSwitcher<GovernmentContentTab>
+          ariaLabel="정부·행정 구역 바꾸기"
+          items={GOVERNMENT_TAB_ORDER.map((tabKey) => ({
             key: tabKey,
             label: GOV_TAB_META[tabKey].label,
-            title: GOV_TAB_META[tabKey].hint,
+            hint: GOV_TAB_META[tabKey].hint,
             count:
               typeof tabCountByKey[tabKey] === 'number' && (tabCountByKey[tabKey] ?? 0) > 0
                 ? tabCountByKey[tabKey]
                 : null,
           }))}
-          activeTab={contentTab}
-          onTabChange={(tabKey) => {
+          activeKey={contentTab}
+          onChange={(tabKey) => {
             setPositionFilterContext(null)
             switchSubTab(tabKey)
           }}
           actions={
-            effectiveCountryId ? (
+            <>
+            {shellLayout ? (
+              /* 넓게 보기 — 좌측 국가 목록 접기/펴기(셸 저장값 그대로). 지면이 자동으로 접지 않는 이유는 content-shell 참고 */
+              <WideViewToggle
+                type="button"
+                aria-pressed={shellLayout.listCollapsed}
+                title={
+                  shellLayout.listCollapsed
+                    ? '국가 목록을 다시 펼칩니다'
+                    : '국가 목록을 접고 이 지면을 넓게 봅니다'
+                }
+                onClick={() => shellLayout.toggleListCollapsed()}
+              >
+                {shellLayout.listCollapsed ? (
+                  <FiMinimize2 size={13} aria-hidden />
+                ) : (
+                  <FiMaximize2 size={13} aria-hidden />
+                )}
+                <span>{shellLayout.listCollapsed ? '목록 펼치기' : '넓게 보기'}</span>
+              </WideViewToggle>
+            ) : null}
+            {effectiveCountryId ? (
           <GovMorePopover
             ariaLabel="정부·행정 도구 및 사전 메뉴"
             title="관직 사전 · 직능 분류 · 전 국가 허브"
@@ -395,7 +418,8 @@ export function GovernmentInfoSection({
               },
             ]}
           />
-            ) : null
+            ) : null}
+            </>
           }
         />
 
@@ -582,4 +606,41 @@ const GovContentStage = styled.section`
   gap: 14px;
   width: 100%;
   min-width: 0;
+`
+
+/** '넓게 보기' — 좌측 목록 접기/펴기. 폰·태블릿(≤1024px)은 목록이 겹침 시트라 숨긴다 */
+const WideViewToggle = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(129,140,248,0.45)' : 'rgba(99,102,241,0.35)'};
+  }
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+
+  @media (max-width: 1024px) {
+    display: none;
+  }
 `

@@ -21,7 +21,7 @@
  *   레이아웃으로 올린 의미(사이드바 유지)가 사라진다. 대신 `countryListState`가 false면
  *   Provider가 쿼리를 끄므로 국가 지면 밖에서 국가·역사국가·대륙을 받지 않는다.
  */
-import React, { type ReactNode } from 'react'
+import React, { createContext, type ReactNode, useContext, useMemo } from 'react'
 
 import styled from 'styled-components'
 
@@ -32,6 +32,18 @@ import {
   type UseListCollapsedOptions,
 } from '../model/use-list-collapsed.hook'
 import * as S from './content-shell.styles'
+
+/**
+ * 우측 지면 깊은 곳(예: 정부·행정의 '넓게 보기' 단추)이 좌측 목록 접힘을 읽고 바꾸는 통로.
+ * 셸의 접힘 상태(localStorage 저장) 그대로 — 지면이 몰래 접었다 펴지 않는다. 자동 접힘은 목록↔상세 전환마다
+ * 국가 머리·탭이 340px씩 옆으로 튀어(layout-shift 0.17) 덜컹임을 되살렸다.
+ */
+const ContentShellLayoutContext = createContext<ContentShellRenderContext | null>(null)
+
+/** 셸 밖이면 null */
+export function useContentShellLayout(): ContentShellRenderContext | null {
+  return useContext(ContentShellLayoutContext)
+}
 
 export interface ContentShellRenderContext {
   /** 좌측 패널 접힘 여부 */
@@ -92,10 +104,13 @@ export function ContentShell({
 }: ContentShellProps) {
   const { collapsed, toggle } = useListCollapsed(listCollapsedConfig)
 
-  const ctx: ContentShellRenderContext = {
-    listCollapsed: collapsed,
-    toggleListCollapsed: toggle,
-  }
+  const ctx: ContentShellRenderContext = useMemo(
+    () => ({
+      listCollapsed: collapsed,
+      toggleListCollapsed: toggle,
+    }),
+    [collapsed, toggle],
+  )
 
   const resolvedLeft = typeof left === 'function' ? left(ctx) : left
   const resolvedRight = typeof right === 'function' ? right(ctx) : right
@@ -131,7 +146,9 @@ export function ContentShell({
     <Wrap>
       {/* 조건부로 감싸지 말 것 — 래퍼가 생겼다 사라지면 그 자리에서 자식이 재마운트된다 */}
       <CountryListStateProvider enabled={countryListState}>
-        {body}
+        <ContentShellLayoutContext.Provider value={fullScreen ? null : ctx}>
+          {body}
+        </ContentShellLayoutContext.Provider>
       </CountryListStateProvider>
     </Wrap>
   )
