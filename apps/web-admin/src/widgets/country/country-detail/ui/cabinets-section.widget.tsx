@@ -15,7 +15,7 @@ import React, {
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   FiArrowUpRight,
   FiCalendar,
@@ -391,6 +391,22 @@ function RelatedAchievementsBySameEventBlock({
   )
 }
 
+/** 가장 가까운 세로 스크롤 조상(없으면 문서) — 목록↔상세 전환 때 스크롤 위치를 맞추는 대상 */
+function findScrollParent(fromEl: HTMLElement | null): HTMLElement | null {
+  let node: HTMLElement | null = fromEl?.parentElement ?? null
+  while (node) {
+    const { overflowY } = getComputedStyle(node)
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+      node.scrollHeight > node.clientHeight + 1
+    ) {
+      return node
+    }
+    node = node.parentElement
+  }
+  return (document.scrollingElement as HTMLElement | null) ?? null
+}
+
 /** 재임 기록 상세 진입 시 스크롤을 목록에서의 위치로 두지 않고 최상단으로 맞춤 */
 function scrollCabinetDetailAreaToTop(fromEl: HTMLElement | null) {
   if (!fromEl) return
@@ -550,8 +566,22 @@ export function CabinetsSection({
     setRegimeFilterInUrl('')
   }, [setRegimeFilterInUrl])
 
+  /**
+   * 목록 ↔ 상세 전환 스크롤. 예전엔 (1) 나가는 목록이 0.1초 페이드 동안 자리를 차지해 상세가 그 아래(≈1,650px)에
+   * 먼저 그려지고 (2) 뒤로 단추 focus()가 그 자리로 스크롤했다가 (3) 목록이 빠지며 맨 위로 튀는 3단 점프였다
+   * (layout-shift 0.57). 이제 목록은 즉시 빠지고, 첫 페인트 전에 상세 머리로 맞추고, 돌아오면 목록 위치를 되살린다.
+   */
+  const sectionRootRef = useRef<HTMLDivElement>(null)
+  const listScrollMemoryRef = useRef<number | null>(null)
+  const cabinetViewRef = useRef(cabinetView)
+  cabinetViewRef.current = cabinetView
+
   const selectCabinetWithUrl = useCallback(
     (targetCabinetId: string) => {
+      const scroller = findScrollParent(sectionRootRef.current)
+      if (scroller && cabinetViewRef.current === 'list') {
+        listScrollMemoryRef.current = scroller.scrollTop
+      }
       setSelectedCabinetId(targetCabinetId)
       setSelectedMinisterId(null)
       setCabinetView('detail')
@@ -1948,6 +1978,38 @@ export function CabinetsSection({
     requestAnimationFrame(() => scrollCabinetDetailAreaToTop(el))
   }, [selectedHeadHistoryId, selectedHistoryId])
 
+  /* 첫 페인트 전에 스크롤을 맞춘다 — 상세로 들어가거나(전임·후임 이동 포함) 상세 머리를, 목록으로 돌아오면 떠난 자리를 */
+  const lastScrollSyncRef = useRef<{ view: 'list' | 'detail'; cabinetId: string | null }>({
+    view: cabinetView,
+    cabinetId: selectedCabinetId,
+  })
+  useLayoutEffect(() => {
+    const previous = lastScrollSyncRef.current
+    lastScrollSyncRef.current = { view: cabinetView, cabinetId: selectedCabinetId }
+    const sectionRoot = sectionRootRef.current
+    const scroller = findScrollParent(sectionRoot)
+    if (!sectionRoot || !scroller) return
+    if (cabinetView === 'detail') {
+      const enteredDetail = previous.view === 'list'
+      const switchedCabinet = previous.cabinetId !== selectedCabinetId
+      if (!enteredDetail && !switchedCabinet) return
+      const sectionTopInScroller =
+        sectionRoot.getBoundingClientRect().top -
+        scroller.getBoundingClientRect().top +
+        scroller.scrollTop
+      /* 구역이 지면 위쪽 가까이 있으면(국가 머리·하위 탭 아래) 지면 맨 위 — 하위 탭이 사라지지 않게 */
+      const target =
+        sectionTopInScroller <= 400 ? 0 : Math.max(0, sectionTopInScroller - 12)
+      /* 머리가 이미 보이면(위에 있으면) 건드리지 않는다 — 내려가기만 막고 올리기만 한다 */
+      if (scroller.scrollTop > target) scroller.scrollTop = target
+      return
+    }
+    if (previous.view === 'detail' && listScrollMemoryRef.current != null) {
+      scroller.scrollTop = listScrollMemoryRef.current
+      listScrollMemoryRef.current = null
+    }
+  }, [cabinetView, selectedCabinetId])
+
   useEffect(() => {
     let cancelRaf: (() => void) | undefined
     if (
@@ -1956,7 +2018,7 @@ export function CabinetsSection({
       hasSelectedCabinet
     ) {
       const id = requestAnimationFrame(() =>
-        cabDetailBackBtnRef.current?.focus(),
+        cabDetailBackBtnRef.current?.focus({ preventScroll: true }),
       )
       cancelRaf = () => cancelAnimationFrame(id)
     }
@@ -2094,11 +2156,12 @@ export function CabinetsSection({
   }
 
   return (
-    <CabS.CabinetsSectionRoot>
+    <CabS.CabinetsSectionRoot ref={sectionRootRef}>
       <CabS.CabinetDetailPrintGlobalStyle />
       {/* ── 포스트 상세 패턴: list view(카드 그리드) / detail view(행정부 상세) ── */}
-      {/* wait 제거: 리스트·상세 DOM이 커서 exit 끝날 때까지 다음 뷰가 안 뜨면 체감 지연이 큼 → sync + 짧은 opacity만 */}
-      <AnimatePresence mode="sync" initial={false}>
+      {/* AnimatePresence 제거 — sync 모드는 나가는 목록이 페이드 동안 자리를 차지해 상세가 그 아래에 먼저 그려졌다가
+          튀어 올랐다(덜컹). wait는 체감 지연. 나가는 뷰는 즉시 빼고, 들어오는 뷰만 짧게 페이드인한다. */}
+      <>
         {cabinetView === 'list' ? (
           <motion.div
             key="cab-list-view"
@@ -5985,7 +6048,7 @@ export function CabinetsSection({
             )}
           </motion.div>
         )}
-      </AnimatePresence>
+      </>
 
       {historyTargetTenure && (
         <ModalOverlay
