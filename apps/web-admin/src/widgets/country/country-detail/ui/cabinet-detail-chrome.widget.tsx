@@ -81,6 +81,12 @@ export type CabinetDetailChromeProps = {
   onBackToList?: () => void
   /** 취임 연도 기준 전 국가 동시대 내각 비교 허브로 이동 */
   onCompareContemporary?: (signedYear: number) => void
+  /**
+   * 수반 머리 카드가 보이는 동안 true — 머리 카드가 내각 이름을 보이고 전임·후임 이동도 머리 오른쪽에 두므로
+   * 여기서는 경로 아래 내각 이름 줄과 전임·후임 막대를 그리지 않는다(같은 말 세 번 · 이동 막대가 머리보다 먼저).
+   * 동일 임기 개각 탭은 그대로 둔다.
+   */
+  heroCarriesIdentity?: boolean
 }
 
 export function CabinetDetailChrome({
@@ -110,6 +116,7 @@ export function CabinetDetailChrome({
   onPrint,
   onBackToList,
   onCompareContemporary,
+  heroCarriesIdentity = false,
 }: CabinetDetailChromeProps) {
   const navigate = useNavigate()
   const cabinetSubtitle =
@@ -136,7 +143,8 @@ export function CabinetDetailChrome({
     !selectedMinisterId &&
     !isTenureHistoryArticleDetail &&
     Boolean(onNavigateCabinet) &&
-    (Boolean(prevCabinet) || Boolean(nextCabinet) || siblingCabinets.length > 1)
+    ((!heroCarriesIdentity && (Boolean(prevCabinet) || Boolean(nextCabinet))) ||
+      siblingCabinets.length > 1)
 
   return (
     <>
@@ -227,7 +235,7 @@ export function CabinetDetailChrome({
                 )
               })()}
           </CabS.CabDetailTopBarRow>
-          {!selectedMinisterId && cabinetSubtitle ? (
+          {!selectedMinisterId && !heroCarriesIdentity && cabinetSubtitle ? (
             <CabS.CabDetailTopBarSubtitle title={cabinetSubtitle}>
               {cabinetSubtitle}
             </CabS.CabDetailTopBarSubtitle>
@@ -356,6 +364,7 @@ export function CabinetDetailChrome({
 
       {showCabinetContinuityStrip && onNavigateCabinet ? (
         <ContinuityStripWrap aria-label="전임·후임 행정부 및 개각 연속 이동">
+          {heroCarriesIdentity ? null : (
           <ContinuityNavRow>
             <ContinuityNavBtn
               type="button"
@@ -400,6 +409,7 @@ export function CabinetDetailChrome({
               <FiChevronRight size={14} />
             </ContinuityNavBtn>
           </ContinuityNavRow>
+          )}
 
           {siblingCabinets.length > 1 ? (
             <ReshuffleSiblingBar role="tablist" aria-label="동일 수반 개각 내각 전환">

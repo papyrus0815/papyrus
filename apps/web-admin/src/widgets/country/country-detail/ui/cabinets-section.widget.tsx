@@ -1,7 +1,7 @@
 /**
  * 행정부(역대 내각) — 행정조직 탭 내 "행정부" 서브탭에서 표시.
  * 수반 재임별 행정부 등록·조회, 각료 추가.
- * 연표: 행정부 하나당 한 줄인 세로 연표(cabinets-vertical-timeline). 축 색 = 걸친 군주 재위(범례와 같은 색).
+ * 연표: 행정부 하나당 한 줄인 세로 연표(cabinets-vertical-timeline). 축은 중립 — 군주 교체·정치체 전환·기록 공백은 행 사이 표지.
  * 정권 선택 시 아래에 중앙부처 스타일 그리드로 해당 정권의 부처별 각료 표시(전자: 카테고리만, 사용자 등록 부처).
  */
 import React, {
@@ -21,6 +21,8 @@ import {
   FiCalendar,
   FiCheck,
   FiChevronDown,
+  FiChevronLeft,
+  FiChevronRight,
   FiEdit2,
   FiFileText,
   FiGrid,
@@ -28,6 +30,8 @@ import {
   FiLink,
   FiLink2,
   FiList,
+  FiLogIn,
+  FiLogOut,
   FiPlus,
   FiSearch,
   FiTrash2,
@@ -1272,6 +1276,23 @@ export function CabinetsSection({
     showCabinetTerritoryLabels,
     country.name,
   ])
+  /**
+   * 목록 전체가 같은 직함이면(일본 19행 모두 '내각총리대신') 요약 줄에 한 번만 쓰고 행마다 빼낸다 —
+   * 같은 말 19번, 폰에선 이 직함이 이름 옆에 안 들어가 행마다 한 줄씩 늘었다. 섞여 있으면(총리·정부수반) 행마다 둔다.
+   */
+  const uniformHeadTitle = useMemo(() => {
+    if (timelineCabinetsMerged.length < 3) return null
+    const titles = new Set(
+      timelineCabinetsMerged.map((cabinetItem) => {
+        const head = cabinetItem.headTenure
+        return head ? (head.positionDefinition?.title ?? head.title ?? '') : ''
+      }),
+    )
+    if (titles.size !== 1) return null
+    const onlyTitle = [...titles][0]
+    return onlyTitle ? onlyTitle : null
+  }, [timelineCabinetsMerged])
+
   /** 정치체 전환 머리가 그려지면 행마다 붙던 소속 칩·꼬리는 뺀다(19행 반복 → 바뀔 때 한 번) */
   const hasPolityMarkers = useMemo(
     () =>
@@ -1980,15 +2001,22 @@ export function CabinetsSection({
   const visibleSelectedCabinetMinisters = nonHeadMinisters.filter(
     (tenureItem) => isMinisterMatched(tenureItem),
   )
-  const sortedVisibleMinisters = useMemo(
-    () =>
-      [...visibleSelectedCabinetMinisters].sort((leftMin, rightMin) => {
-        const leftTime = getSignedDateChronologyKey(leftMin?.startDate, 0)
-        const rightTime = getSignedDateChronologyKey(rightMin?.startDate, 0)
-        return rightTime - leftTime
-      }),
-    [visibleSelectedCabinetMinisters],
-  )
+  /**
+   * 각료 순서 — 직위 서열(positionDefinition.rank, 미지정 999) → 임명일 오름차순.
+   * 예전엔 임명일 최신순이라 국무장관이 맨 아래, 막 교체된 장관이 맨 위였다(각료 명단이 아니라 인사 소식 순).
+   */
+  const sortedVisibleMinisters = useMemo(() => {
+    const rankOf = (tenureItem: GovernmentCabinetTenureItem) =>
+      (tenureItem?.positionDefinition as { rank?: number | null } | null | undefined)
+        ?.rank ?? 999
+    return [...visibleSelectedCabinetMinisters].sort((leftMin, rightMin) => {
+      const rankDiff = rankOf(leftMin) - rankOf(rightMin)
+      if (rankDiff !== 0) return rankDiff
+      const leftTime = getSignedDateChronologyKey(leftMin?.startDate, 0)
+      const rightTime = getSignedDateChronologyKey(rightMin?.startDate, 0)
+      return leftTime - rightTime
+    })
+  }, [visibleSelectedCabinetMinisters])
 
   const resolveMinisterDepartment = (
     tenureItem: GovernmentCabinetTenureItem,
@@ -2686,6 +2714,17 @@ export function CabinetsSection({
                           >
                             {filteredCabinets.length}개 행정부
                           </span>
+                          {uniformHeadTitle ? (
+                            <span
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: C.textMuted,
+                              }}
+                            >
+                              · 모두 {uniformHeadTitle}
+                            </span>
+                          ) : null}
                         </div>
                         {cabinetTimelineYearRange.minY != null && (
                           <>
@@ -2806,6 +2845,7 @@ export function CabinetsSection({
                         }
                         markersByCabinetId={cabinetListMarkers}
                         reignEraLineByCabinetId={reignEraLineByCabinetId}
+                        hidePositionTitle={Boolean(uniformHeadTitle)}
                         deletingCabinetId={deletingCabinetId}
                         onSelectCabinet={selectCabinetWithUrl}
                         onInspectPerson={setMentionPersonId}
@@ -2926,6 +2966,7 @@ export function CabinetsSection({
                           }
                         },
                       )}
+                      hidePosTitle={Boolean(uniformHeadTitle)}
                       onSelect={(cabinetId) => selectCabinetWithUrl(cabinetId)}
                       onEdit={(cabinetId, clickEvent) => {
                         const target = timelineCabinetsMerged.find(
@@ -2987,6 +3028,9 @@ export function CabinetsSection({
                   }
                   siblingCabinets={cabinetContinuityNav.siblingCabinets}
                   onNavigateCabinet={selectCabinetWithUrl}
+                  heroCarriesIdentity={
+                    !selectedHeadHistoryId && !selectedMinisterId
+                  }
                   onPrint={() => window.print()}
                   onBackToList={clearCabinetSelectionInUrl}
                   onCompareContemporary={(signedYear) =>
@@ -3154,7 +3198,7 @@ export function CabinetsSection({
                                   ) : null
                                 })()}
                               </CabS.MinisterProfileMeta>
-                              <CabS.MinisterProfileAction>
+                              <CabD.MinisterActions>
                                 <SubsectionAddBtn
                                   type="button"
                                   onClick={() => handleEditMinister(minister)}
@@ -3163,7 +3207,7 @@ export function CabinetsSection({
                                   <FiEdit2 size={13} strokeWidth={2.25} />
                                   임명 수정
                                 </SubsectionAddBtn>
-                                <SubsectionAddBtn
+                                <CabD.DetachBtn
                                   type="button"
                                   onClick={() =>
                                     void handleDetachMinisterFromCabinet(
@@ -3174,8 +3218,8 @@ export function CabinetsSection({
                                 >
                                   <FiX size={13} strokeWidth={2.25} />
                                   내각 제외
-                                </SubsectionAddBtn>
-                              </CabS.MinisterProfileAction>
+                                </CabD.DetachBtn>
+                              </CabD.MinisterActions>
                             </CabS.MinisterProfileBlock>
                           )}
 
@@ -3808,6 +3852,62 @@ export function CabinetsSection({
                                     )
                                   })()}
                               </CabD.HeroMeta>
+                              {/* 전임·후임 이동 — 예전엔 머리 위 56px 막대라 '누구의 내각인가'보다 이동 단추를 먼저 읽었다.
+                                  머리 오른쪽 빈 자리로(좁으면 아래 줄로 내려앉는다) */}
+                              {cabinetContinuityNav.prevCabinet ||
+                              cabinetContinuityNav.nextCabinet ? (
+                                <CabD.HeroNav aria-label="전임·후임 행정부 이동">
+                                  {cabinetContinuityNav.cabinetPositionBadge ? (
+                                    <span className="position">
+                                      {cabinetContinuityNav.cabinetPositionBadge}
+                                    </span>
+                                  ) : null}
+                                  <CabD.HeroNavBtn
+                                    type="button"
+                                    disabled={!cabinetContinuityNav.prevCabinet}
+                                    onClick={() =>
+                                      cabinetContinuityNav.prevCabinet &&
+                                      selectCabinetWithUrl(
+                                        cabinetContinuityNav.prevCabinet.id,
+                                      )
+                                    }
+                                    title={
+                                      cabinetContinuityNav.prevCabinet
+                                        ? `전임: ${cabinetContinuityNav.prevCabinet.label}`
+                                        : '기록된 전임 행정부가 없습니다'
+                                    }
+                                  >
+                                    <FiChevronLeft size={13} aria-hidden />
+                                    <span className="caption">전임</span>
+                                    <span className="label">
+                                      {cabinetContinuityNav.prevCabinet?.label ??
+                                        '없음'}
+                                    </span>
+                                  </CabD.HeroNavBtn>
+                                  <CabD.HeroNavBtn
+                                    type="button"
+                                    disabled={!cabinetContinuityNav.nextCabinet}
+                                    onClick={() =>
+                                      cabinetContinuityNav.nextCabinet &&
+                                      selectCabinetWithUrl(
+                                        cabinetContinuityNav.nextCabinet.id,
+                                      )
+                                    }
+                                    title={
+                                      cabinetContinuityNav.nextCabinet
+                                        ? `후임: ${cabinetContinuityNav.nextCabinet.label}`
+                                        : '기록된 후임 행정부가 없습니다'
+                                    }
+                                  >
+                                    <FiChevronRight size={13} aria-hidden />
+                                    <span className="caption">후임</span>
+                                    <span className="label">
+                                      {cabinetContinuityNav.nextCabinet?.label ??
+                                        '없음'}
+                                    </span>
+                                  </CabD.HeroNavBtn>
+                                </CabD.HeroNav>
+                              ) : null}
                             </CabD.HeroBlock>
                           )}
 
@@ -3901,20 +4001,15 @@ export function CabinetsSection({
                                     !showAppointmentCard || showEndQuickAdd
 
                                   return (
-                                    <CabS.CabDetailScrollSection id="cab-detail-tenure">
+                                    <CabD.TenurePair id="cab-detail-tenure">
                                       {showAppointmentCard ? (
-                                        <CabS.HeadTenureInfoSection $accent="mint">
+                                        <CabD.TenureCard>
                                           <CabS.CabDetailMinistersSectionHeader>
-                                            <span
+                                            <FiLogIn
+                                              size={15}
+                                              strokeWidth={2}
                                               aria-hidden
-                                              style={{
-                                                width: 8,
-                                                height: 8,
-                                                borderRadius: '50%',
-                                                background: '#6ee7b7',
-                                                flexShrink: 0,
-                                                display: 'inline-block',
-                                              }}
+                                              style={{ color: MAIN, flexShrink: 0 }}
                                             />
                                             <CabS.CabDetailMinistersSectionTitle>
                                               취임 정보
@@ -4153,22 +4248,17 @@ export function CabinetsSection({
                                               )}
                                             </>
                                           )}
-                                        </CabS.HeadTenureInfoSection>
+                                        </CabD.TenureCard>
                                       ) : null}
 
                                       {showEndCard ? (
-                                        <CabS.HeadTenureInfoSection $accent="rose">
+                                        <CabD.TenureCard>
                                           <CabS.CabDetailMinistersSectionHeader>
-                                            <span
+                                            <FiLogOut
+                                              size={15}
+                                              strokeWidth={2}
                                               aria-hidden
-                                              style={{
-                                                width: 8,
-                                                height: 8,
-                                                borderRadius: '50%',
-                                                background: '#fca5a5',
-                                                flexShrink: 0,
-                                                display: 'inline-block',
-                                              }}
+                                              style={{ color: MAIN, flexShrink: 0 }}
                                             />
                                             <CabS.CabDetailMinistersSectionTitle>
                                               퇴임 정보
@@ -4357,7 +4447,7 @@ export function CabinetsSection({
                                               )}
                                             </>
                                           )}
-                                        </CabS.HeadTenureInfoSection>
+                                        </CabD.TenureCard>
                                       ) : null}
 
                                       {showQuickAddRow ? (
@@ -4413,7 +4503,7 @@ export function CabinetsSection({
                                           ) : null}
                                         </CabD.TenureQuickAddRow>
                                       ) : null}
-                                    </CabS.CabDetailScrollSection>
+                                    </CabD.TenurePair>
                                   )
                                 })()}
 

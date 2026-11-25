@@ -28,12 +28,21 @@ import {
 } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
 
-const DeptJumpChip = styled.button`
+/**
+ * 직함이 부처 이름을 이미 말하면(법무부 → 법무장관) 부처 칩 글자를 빼고 ↗ 이동 단추만 남긴다 —
+ * '법무부 ↗ 법무장관'처럼 같은 말이 두 번 나왔다. 부처 이름 끝의 부·성·청·처·원을 뗀 줄기로 비교.
+ */
+function titleNamesDepartment(positionTitle: string, departmentName: string): boolean {
+  const stem = departmentName.replace(/(부|성|청|처|원|위원회)$/, '').trim()
+  return stem.length >= 2 && positionTitle.includes(stem)
+}
+
+const DeptJumpChip = styled.button<{ $iconOnly?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 1px 6px;
-  margin-right: 4px;
+  padding: ${({ $iconOnly }) => ($iconOnly ? '1px 3px' : '1px 6px')};
+  margin: ${({ $iconOnly }) => ($iconOnly ? '0 0 0 5px' : '0 4px 0 0')};
   border-radius: 4px;
   border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
   background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
@@ -194,6 +203,9 @@ export function CabinetMinisterCards({
                 name: tenure.administrationDepartment.name,
               }
             : null) ?? resolveDepartment?.(tenure) ?? null
+        const deptNamedByTitle = matchedDept
+          ? titleNamesDepartment(mPos, matchedDept.name)
+          : false
 
         return (
           <MinisterRow
@@ -229,22 +241,38 @@ export function CabinetMinisterCards({
             <CabS.MinisterCardInfo>
               <CabS.MinisterCardName>{mName}</CabS.MinisterCardName>
               <CabS.MinisterCardPos>
-                {matchedDept && onOpenDepartmentDetail ? (
+                {matchedDept && !deptNamedByTitle ? (
+                  onOpenDepartmentDetail ? (
+                    <DeptJumpChip
+                      type="button"
+                      title={`${matchedDept.name} 중앙부처 상세로 이동`}
+                      onClick={(clickEvent) => {
+                        clickEvent.stopPropagation()
+                        onOpenDepartmentDetail(matchedDept.id)
+                      }}
+                    >
+                      {matchedDept.name}
+                      <FiArrowUpRight size={10} aria-hidden />
+                    </DeptJumpChip>
+                  ) : (
+                    `${matchedDept.name} · `
+                  )
+                ) : null}
+                {mPos}
+                {matchedDept && deptNamedByTitle && onOpenDepartmentDetail ? (
                   <DeptJumpChip
                     type="button"
+                    $iconOnly
                     title={`${matchedDept.name} 중앙부처 상세로 이동`}
+                    aria-label={`${matchedDept.name} 중앙부처 상세로 이동`}
                     onClick={(clickEvent) => {
                       clickEvent.stopPropagation()
                       onOpenDepartmentDetail(matchedDept.id)
                     }}
                   >
-                    {matchedDept.name}
-                    <FiArrowUpRight size={10} />
+                    <FiArrowUpRight size={10} aria-hidden />
                   </DeptJumpChip>
-                ) : matchedDept ? (
-                  `${matchedDept.name} · `
                 ) : null}
-                {mPos}
                 {tenure.rankTitle ? ` (${tenure.rankTitle})` : ''}
                 {tenure.party?.name
                   ? ` · ${tenure.party.shortName || tenure.party.name}`

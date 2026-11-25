@@ -57,6 +57,38 @@ const InlineRoleSelect = styled.select`
   }
 `
 
+/**
+ * 읽기 화면에선 역할을 글자 꼬리표처럼, 행에 마우스를 올리거나 초점이 들어올 때만 고르기 칸·해제 단추로 —
+ * 예전엔 정당마다 선택 상자와 휴지통이 늘 펼쳐져 읽는 화면이 편집 화면처럼 보였다. 터치 기기는 늘 보인다.
+ */
+const PartyRow = styled(CabS.CabDetailPartyRow)`
+  @media (hover: hover) {
+    ${InlineRoleSelect} {
+      appearance: none;
+      border-color: transparent;
+      background: ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+      color: ${({ theme }) => theme.colors.text.secondary};
+    }
+    ${CabS.CabDetailPartyRemoveBtn} {
+      opacity: 0;
+      transition: opacity 0.12s ease;
+    }
+    &:hover ${InlineRoleSelect}, &:focus-within ${InlineRoleSelect} {
+      appearance: auto;
+      border-color: ${({ theme }) =>
+        getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
+      background: ${({ theme }) =>
+        getCabinetsSectionPalette(theme.mode === 'dark').inputBg};
+      color: ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').text};
+    }
+    &:hover ${CabS.CabDetailPartyRemoveBtn},
+      &:focus-within ${CabS.CabDetailPartyRemoveBtn} {
+      opacity: 1;
+    }
+  }
+`
+
 const HeadPartySuggestBanner = styled.div`
   display: flex;
   align-items: center;
@@ -272,7 +304,7 @@ export function CabinetPoliticalPartiesBlock({
                 (opt) => opt.value === link.role,
               )
               return (
-                <CabS.CabDetailPartyRow key={link.id}>
+                <PartyRow key={link.id}>
                   <CabS.CabDetailPartyRowMain>
                     {brandColor ? <BrandDot $color={brandColor} /> : null}
                     <CabS.CabDetailPartyName title={name}>
@@ -328,7 +360,7 @@ export function CabinetPoliticalPartiesBlock({
                   {notesText ? (
                     <CabS.CabDetailPartyNotes>{notesText}</CabS.CabDetailPartyNotes>
                   ) : null}
-                </CabS.CabDetailPartyRow>
+                </PartyRow>
               )
             })}
           </CabS.CabDetailPartyList>

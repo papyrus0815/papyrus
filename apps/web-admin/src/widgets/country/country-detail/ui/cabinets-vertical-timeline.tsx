@@ -90,10 +90,13 @@ function centuryLabel(signedYear: number): string {
 
 export function CabinetsVerticalTimeline({
   rows,
+  hidePosTitle = false,
   onSelect,
   onEdit,
 }: {
   rows: CabinetVerticalTimelineRow[]
+  /** 목록 전체가 같은 직함이라 요약 줄에 한 번 쓴 경우 — 행마다 직함을 빼낸다 */
+  hidePosTitle?: boolean
   onSelect: (cabinetId: string) => void
   onEdit: (cabinetId: string, clickEvent: React.MouseEvent) => void
 }) {
@@ -222,7 +225,7 @@ export function CabinetsVerticalTimeline({
                     ) : (
                       <NameLine>
                         <strong>{row.personName}</strong>
-                        <span className="pos">{row.posTitle}</span>
+                        {hidePosTitle ? null : <span className="pos">{row.posTitle}</span>}
                       </NameLine>
                     )}
                     {isContinuation ? (
@@ -318,11 +321,12 @@ const AXIS_COL_PX = 22
 /** 노드 세로 위치 — 이름 줄 가운데에 맞춤 */
 const NODE_TOP_PX = 20
 
+/* 위 여백 — 첫 세기 머리('19세기')가 요약 줄('19개 행정부 · 1885–1954')에 붙어 요약의 일부로 읽혔다 */
 const TimelineList = styled.ol`
   container-type: inline-size;
   list-style: none;
   margin: 0;
-  padding: 4px 0 8px;
+  padding: 14px 0 8px;
 `
 
 const CenturyHead = styled.li`
@@ -748,8 +752,14 @@ const EraLine = styled.span`
   word-break: keep-all;
 `
 
+/* 폰 폭에선 숨긴다 — 바로 위 '2년 4개월' 글자와 같은 말인데 막대만으로 한 줄을 먹었다 */
 const DurationTrack = styled.span`
   display: block;
+
+  @container (max-width: 560px) {
+    display: none;
+  }
+
   width: 100%;
   max-width: 260px;
   height: 4px;

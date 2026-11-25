@@ -63,6 +63,8 @@ export interface CabinetsLedgerViewProps {
   showTerritoryLabels: boolean
   /** 행 id → 그 행 앞에 그릴 표지(정치체 전환 · 군주 교체 · 기록 공백) */
   markersByCabinetId?: ReadonlyMap<string, CabinetListMarker[]>
+  /** 목록 전체가 같은 직함이라 요약 줄에 한 번 쓴 경우 — 행마다 직함을 빼고 열 머리도 '대수'로 */
+  hidePositionTitle?: boolean
   reignEraLineByCabinetId: ReadonlyMap<string, string>
   deletingCabinetId: string | null
   onSelectCabinet: (cabinetId: string) => void
@@ -149,6 +151,7 @@ export function CabinetsLedgerView({
   isHistoricalCountry,
   showTerritoryLabels,
   markersByCabinetId,
+  hidePositionTitle = false,
   reignEraLineByCabinetId,
   deletingCabinetId,
   onSelectCabinet,
@@ -175,7 +178,7 @@ export function CabinetsLedgerView({
     <LedgerShell role="region" aria-label="역대 행정부 원장 목록">
       <LedgerHeaderRow>
         <span>출범 · 존속 기간</span>
-        <span>대수 · 직함</span>
+        <span>{hidePositionTitle ? '대수' : '대수 · 직함'}</span>
         <span>수반 · 내각</span>
         <DesktopOnlyColHeader>취임 → 퇴임 · 정당</DesktopOnlyColHeader>
         {/* 이 열은 대개 수정 단추뿐이라 '기록' 머리가 빈 열을 약속했다 — 머리를 비운다 */}
@@ -361,7 +364,9 @@ export function CabinetsLedgerView({
                         제{reshuffleMeta.order}차
                       </ReshuffleBadge>
                     ) : null}
-                    <PositionTitleSpan>{positionTitle}</PositionTitleSpan>
+                    {hidePositionTitle ? null : (
+                      <PositionTitleSpan>{positionTitle}</PositionTitleSpan>
+                    )}
                   </PositionMainLine>
                   {territoryLabel && (
                     <TerritoryChip>
