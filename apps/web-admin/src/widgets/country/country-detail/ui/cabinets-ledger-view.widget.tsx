@@ -508,7 +508,7 @@ const LedgerHeaderRow = styled.div`
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 
   @container (max-width: 900px) {
-    grid-template-columns: 172px 156px minmax(0, 1fr) auto;
+    grid-template-columns: 192px 150px minmax(0, 1fr) auto;
 
     /* 넷째 열은 좁으면 수반 칸 아래로 내려가므로 머리에서 뺀다 */
     > ${DesktopOnlyColHeader} {
@@ -622,7 +622,7 @@ const LedgerRow = styled.div<{
   }
 
   @container (max-width: 900px) {
-    grid-template-columns: 172px 156px minmax(0, 1fr) auto;
+    grid-template-columns: 192px 150px minmax(0, 1fr) auto;
   }
 
   @container (max-width: 640px) {

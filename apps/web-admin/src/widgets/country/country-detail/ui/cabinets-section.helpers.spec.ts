@@ -393,6 +393,7 @@ describe('buildCabinetListMarkers — 행 사이 표지', () => {
     reignLabel: null,
     positionKey: '내각총리대신',
     ordinal: null,
+    subTermNumber: null,
     startSignedYear: null,
     endSignedYear: null,
     ...overrides,
@@ -444,5 +445,47 @@ describe('buildCabinetListMarkers — 행 사이 표지', () => {
     expect(markers.get('a')).toEqual([{ kind: 'polity', key: 'polity-a', label: '일본 제국' }])
     expect(markers.get('b')).toEqual([{ kind: 'polity', key: 'polity-b', label: '일본국' }])
     expect(markers.get('c')).toBeUndefined()
+  })
+
+  it('재집권(2기+)은 옛 대수를 다시 쓰므로 대수 흐름에서 빼 — 졸리티 제13대 5기가 가짜 공백을 만들지 않는다', () => {
+    const markers = buildCabinetListMarkers([
+      baseRow('orlando', { ordinal: 23, subTermNumber: 1, startSignedYear: 1917, endSignedYear: 1919 }),
+      baseRow('nitti', { ordinal: 24, startSignedYear: 1919, endSignedYear: 1920 }),
+      baseRow('giolitti', { ordinal: 13, subTermNumber: 5, startSignedYear: 1920, endSignedYear: 1921 }),
+      baseRow('bonomi', { ordinal: 25, subTermNumber: 1, startSignedYear: 1921, endSignedYear: 1922 }),
+    ])
+    expect(markers.size).toBe(0)
+  })
+
+  it('대수 공백은 직함 글자가 아니라 축 키로 잇는다(총리 제1대 → 정부수반 제23대)', () => {
+    const markers = buildCabinetListMarkers([
+      baseRow('cavour', { positionKey: 'HEAD_OF_GOVERNMENT', ordinal: 1, startSignedYear: 1861, endSignedYear: 1861 }),
+      baseRow('orlando', { positionKey: 'HEAD_OF_GOVERNMENT', ordinal: 23, startSignedYear: 1917, endSignedYear: 1919 }),
+    ])
+    expect(markers.get('orlando')?.[0]).toMatchObject({
+      kind: 'gap',
+      label: '제2~22대 미등록 (21대)',
+      detail: '1861–1917 · 56년',
+    })
+  })
+
+  it('같은 군주가 정치체만 바뀌어 이어지면 군주 표지를 다시 달지 않는다', () => {
+    const markers = buildCabinetListMarkers([
+      baseRow('a', { polityKey: '사르데냐 왕국', polityLabel: '사르데냐 왕국', reignKey: '비토리오 에마누엘레 2세', reignLabel: '비토리오 에마누엘레 2세' }),
+      baseRow('b', { polityKey: '이탈리아 왕국', polityLabel: '이탈리아 왕국', reignKey: '비토리오 에마누엘레 2세', reignLabel: '비토리오 에마누엘레 2세' }),
+      baseRow('c', { polityKey: '이탈리아 왕국', polityLabel: '이탈리아 왕국', reignKey: '비토리오 에마누엘레 3세', reignLabel: '비토리오 에마누엘레 3세' }),
+    ])
+    expect(markers.get('b')?.map((marker) => marker.kind)).toEqual(['polity'])
+    expect(markers.get('c')?.map((marker) => marker.kind)).toEqual(['reign'])
+  })
+
+  it('같은 해 여러 내각은 날짜·대수 순으로 이어 — 내림차순 화면에서도 가짜 공백이 없다', () => {
+    const descRows = [
+      baseRow('ninth', { ordinal: 9, startSignedYear: 1898, endSignedYear: 1900, startSortKey: 18981108 }),
+      baseRow('eighth', { ordinal: 8, startSignedYear: 1898, endSignedYear: 1898, startSortKey: 18980630 }),
+      baseRow('seventh', { ordinal: 7, startSignedYear: 1898, endSignedYear: 1898, startSortKey: 18980112 }),
+      baseRow('sixth', { ordinal: 6, startSignedYear: 1896, endSignedYear: 1898, startSortKey: 18960918 }),
+    ]
+    expect(buildCabinetListMarkers(descRows).size).toBe(0)
   })
 })

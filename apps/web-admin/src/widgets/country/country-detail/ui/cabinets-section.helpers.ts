@@ -1510,13 +1510,24 @@ export interface CabinetListMarkerInput {
   /** null이면 정치체 표지를 만들지 않는다(필터로 한 정치체만 볼 때 등) */
   polityKey: string | null
   polityLabel: string | null
+  /** 군주 표지 키 — 같은 군주가 정치체만 바뀌어 이어지면(사르데냐 왕 → 이탈리아 왕) 다시 달지 않도록 이름을 쓴다 */
   reignKey: string | null
   reignLabel: string | null
-  /** 대수 비교는 같은 직함 계열끼리만 — 총리 제10대와 대통령 제3대를 잇지 않는다 */
+  /**
+   * 대수 비교 계열 — 직함 글자가 아니라 축(정부수반 · 국가원수)으로 묶는다.
+   * 이탈리아는 같은 자리가 '총리'·'정부수반'으로 갈려 있어 글자로 비교하면 1861→1917 공백을 놓쳤다.
+   */
   positionKey: string
   ordinal: number | null
+  /** 재집권 회차(기) — 2기 이상은 첫 임기의 대수를 다시 쓰므로(졸리티 제13대 5기) 대수 흐름에서 뺀다 */
+  subTermNumber: number | null
   startSignedYear: number | null
   endSignedYear: number | null
+  /**
+   * 같은 해 안 순서까지 가르는 시작 정렬 키(부호 연·월·일, 예: 1898·01·12 → 18980112).
+   * 연도만으로 줄 세우면 1898년 세 내각(제7·8·9대)이 화면 순서(내림차순이면 거꾸로)를 따라가 '제7~8대 미등록'이 잡혔다.
+   */
+  startSortKey?: number | null
 }
 
 /** 대수 없이도 공백으로 볼 최소 햇수 */
@@ -1526,11 +1537,97 @@ function formatSignedYearLabel(signedYear: number): string {
   return signedYear < 0 ? `BC ${Math.abs(signedYear)}` : String(signedYear)
 }
 
-/** 행 id → 그 행 앞에 그릴 표지(그리는 순서: 공백 → 정치체 → 군주) */
+function formatGapYearSpan(fromYear: number | null, toYear: number | null): string | null {
+  if (fromYear == null || toYear == null || toYear <= fromYear) return null
+  return `${formatSignedYearLabel(fromYear)}–${formatSignedYearLabel(toYear)} · ${toYear - fromYear}년`
+}
+
+/**
+ * 행 id → 그 행 앞에 그릴 표지(그리는 순서: 공백 → 정치체 → 군주). rows는 **화면 순서**(오름·내림 어느 쪽이든).
+ *
+ * 공백은 시간순으로 훑어 찾는다:
+ * - 대수 공백: 같은 정치체·같은 축에서 '새 대수'(1기·회차 없음)만 이어 보며, 직전 새 대수보다 2 이상 뛰면 그 사이.
+ *   재집권(2기+)은 옛 대수를 다시 쓰므로 건너뛴다 — 안 그러면 제24대 뒤 제13대 5기가 '제14~23대 미등록'으로 잡혔다.
+ * - 햇수 공백: 시간순으로 이웃한 두 행 중 하나라도 대수가 없고 같은 정치체에서 10년 이상 비면.
+ * 표지는 그 쌍 가운데 화면에서 나중에 오는 행 앞에 단다(오름차순이면 새 행, 내림차순이면 옛 행).
+ */
 export function buildCabinetListMarkers(
   rows: readonly CabinetListMarkerInput[],
 ): Map<string, CabinetListMarker[]> {
-  const markerMap = new Map<string, CabinetListMarker[]>()
+  const gapMarkerByIndex = new Map<number, CabinetListMarker>()
+  const chronoIndexes = rows
+    .map((_row, displayIndex) => displayIndex)
+    .filter((displayIndex) => rows[displayIndex].startSignedYear != null)
+    .sort((leftIndex, rightIndex) => {
+      const leftRow = rows[leftIndex]
+      const rightRow = rows[rightIndex]
+      const leftKey = leftRow.startSortKey ?? (leftRow.startSignedYear as number) * 10000
+      const rightKey = rightRow.startSortKey ?? (rightRow.startSignedYear as number) * 10000
+      if (leftKey !== rightKey) return leftKey - rightKey
+      /* 날짜까지 같으면 대수 → 마지막으로 화면 순서 */
+      if (leftRow.ordinal != null && rightRow.ordinal != null && leftRow.ordinal !== rightRow.ordinal) {
+        return leftRow.ordinal - rightRow.ordinal
+      }
+      return leftIndex - rightIndex
+    })
+
+  const placeGap = (olderIndex: number, newerIndex: number, marker: CabinetListMarker) => {
+    const laterDisplayIndex = Math.max(olderIndex, newerIndex)
+    if (!gapMarkerByIndex.has(laterDisplayIndex)) {
+      gapMarkerByIndex.set(laterDisplayIndex, { ...marker, key: `gap-${rows[laterDisplayIndex].id}` })
+    }
+  }
+
+  const ordinalAnchorBySeries = new Map<string, number>()
+  chronoIndexes.forEach((displayIndex, chronoPos) => {
+    const row = rows[displayIndex]
+    const seriesKey = `${row.polityKey ?? ''}|${row.positionKey}`
+    const isFreshOrdinal =
+      row.ordinal != null && (row.subTermNumber == null || row.subTermNumber <= 1)
+
+    if (isFreshOrdinal) {
+      const anchorIndex = ordinalAnchorBySeries.get(seriesKey)
+      const anchorRow = anchorIndex != null ? rows[anchorIndex] : null
+      if (anchorRow?.ordinal != null && row.ordinal != null) {
+        const missingCount = row.ordinal - anchorRow.ordinal - 1
+        if (missingCount >= 1) {
+          const firstMissing = anchorRow.ordinal + 1
+          const lastMissing = row.ordinal - 1
+          placeGap(anchorIndex as number, displayIndex, {
+            kind: 'gap',
+            key: '',
+            label:
+              missingCount === 1
+                ? `제${firstMissing}대 미등록`
+                : `제${firstMissing}~${lastMissing}대 미등록 (${missingCount}대)`,
+            detail: formatGapYearSpan(anchorRow.endSignedYear, row.startSignedYear),
+          })
+        }
+      }
+      if (anchorRow?.ordinal == null || (row.ordinal as number) > anchorRow.ordinal) {
+        ordinalAnchorBySeries.set(seriesKey, displayIndex)
+      }
+    }
+
+    const prevChronoIndex = chronoPos > 0 ? chronoIndexes[chronoPos - 1] : null
+    if (prevChronoIndex == null) return
+    const prevRow = rows[prevChronoIndex]
+    if (prevRow.polityKey !== row.polityKey) return
+    if (prevRow.ordinal != null && row.ordinal != null) return
+    if (
+      prevRow.endSignedYear != null &&
+      row.startSignedYear != null &&
+      row.startSignedYear - prevRow.endSignedYear >= CABINET_GAP_MIN_YEARS
+    ) {
+      placeGap(prevChronoIndex, displayIndex, {
+        kind: 'gap',
+        key: '',
+        label: `${formatSignedYearLabel(prevRow.endSignedYear)}–${formatSignedYearLabel(row.startSignedYear)} 기록 없음`,
+        detail: `${row.startSignedYear - prevRow.endSignedYear}년`,
+      })
+    }
+  })
+
   const polityKeys = new Set(
     rows.map((row) => row.polityKey).filter((key): key is string => Boolean(key)),
   )
@@ -1540,64 +1637,12 @@ export function buildCabinetListMarkers(
   const showPolity = polityKeys.size >= 2
   const showReign = reignKeys.size >= 2
 
+  const markerMap = new Map<string, CabinetListMarker[]>()
   rows.forEach((row, rowIndex) => {
     const markers: CabinetListMarker[] = []
     const prevRow = rowIndex > 0 ? rows[rowIndex - 1] : null
-
-    if (prevRow) {
-      const samePolity = prevRow.polityKey === row.polityKey
-      const samePosition = prevRow.positionKey === row.positionKey
-      /* 정렬 방향(오름·내림)과 무관하게 앞선 쪽·나중 쪽을 가른다 */
-      const prevIsOlder =
-        prevRow.startSignedYear == null ||
-        row.startSignedYear == null ||
-        prevRow.startSignedYear <= row.startSignedYear
-      const olderRow = prevIsOlder ? prevRow : row
-      const newerRow = prevIsOlder ? row : prevRow
-      const yearSpan =
-        olderRow.endSignedYear != null &&
-        newerRow.startSignedYear != null &&
-        newerRow.startSignedYear > olderRow.endSignedYear
-          ? {
-              from: olderRow.endSignedYear,
-              to: newerRow.startSignedYear,
-            }
-          : null
-
-      if (samePolity && samePosition && prevRow.ordinal != null && row.ordinal != null) {
-        const lowOrdinal = Math.min(prevRow.ordinal, row.ordinal)
-        const highOrdinal = Math.max(prevRow.ordinal, row.ordinal)
-        const missingCount = highOrdinal - lowOrdinal - 1
-        if (missingCount >= 1) {
-          const firstMissing = lowOrdinal + 1
-          const lastMissing = highOrdinal - 1
-          markers.push({
-            kind: 'gap',
-            key: `gap-${row.id}`,
-            label:
-              missingCount === 1
-                ? `제${firstMissing}대 미등록`
-                : `제${firstMissing}~${lastMissing}대 미등록 (${missingCount}대)`,
-            detail: yearSpan
-              ? `${formatSignedYearLabel(yearSpan.from)}–${formatSignedYearLabel(yearSpan.to)} · ${yearSpan.to - yearSpan.from}년`
-              : null,
-          })
-        }
-      } else if (
-        samePolity &&
-        (prevRow.ordinal == null || row.ordinal == null) &&
-        yearSpan &&
-        yearSpan.to - yearSpan.from >= CABINET_GAP_MIN_YEARS
-      ) {
-        markers.push({
-          kind: 'gap',
-          key: `gap-${row.id}`,
-          label: `${formatSignedYearLabel(yearSpan.from)}–${formatSignedYearLabel(yearSpan.to)} 기록 없음`,
-          detail: `${yearSpan.to - yearSpan.from}년`,
-        })
-      }
-    }
-
+    const gapMarker = gapMarkerByIndex.get(rowIndex)
+    if (gapMarker) markers.push(gapMarker)
     if (
       showPolity &&
       row.polityKey &&
@@ -1606,7 +1651,6 @@ export function buildCabinetListMarkers(
     ) {
       markers.push({ kind: 'polity', key: `polity-${row.id}`, label: row.polityLabel })
     }
-
     if (
       showReign &&
       row.reignKey &&
@@ -1615,7 +1659,6 @@ export function buildCabinetListMarkers(
     ) {
       markers.push({ kind: 'reign', key: `reign-${row.id}`, label: row.reignLabel })
     }
-
     if (markers.length > 0) markerMap.set(row.id, markers)
   })
 

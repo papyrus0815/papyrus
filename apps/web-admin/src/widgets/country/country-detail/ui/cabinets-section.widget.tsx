@@ -1247,14 +1247,21 @@ export function CabinetsSection({
           id: String(cabinetItem.id),
           polityKey: polityLabel,
           polityLabel,
-          reignKey: reignLabel && reignLabel !== '—' ? monarchVisual!.monarchId : null,
+          reignKey: reignLabel && reignLabel !== '—' ? reignLabel : null,
           reignLabel: reignLabel && reignLabel !== '—' ? reignLabel : null,
           positionKey: head
-            ? (head.positionDefinition?.title ?? head.title ?? '')
+            ? (head.positionType ??
+              head.positionDefinition?.title ??
+              head.title ??
+              '')
             : '__collective__',
           ordinal: head?.ordinal ?? null,
+          subTermNumber: head?.subTermNumber ?? null,
           startSignedYear: startParts?.signedYear ?? null,
           endSignedYear: endParts?.signedYear ?? null,
+          startSortKey: startParts
+            ? startParts.signedYear * 10000 + startParts.month * 100 + startParts.day
+            : null,
         }
       }),
     )
