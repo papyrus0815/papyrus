@@ -104,6 +104,18 @@ export function GovernmentInfoSection({
     userManuallyPickedTabRef.current = false
   }, [effectiveCountryId])
 
+  /*
+   * URL → 구역 동기화. 머리 탭의 2차 메뉴(country-tab-submenu)가 ?sub=만 바꿔 같은 지면 안에서 구역을 옮기므로
+   * 처음 한 번만 읽던 contentTab이 URL을 따라오게 한다. sub가 없으면 기본 구역(행정부·내각).
+   */
+  useEffect(() => {
+    if (departmentIdQuery) return
+    const fromUrl: GovernmentContentTab | null =
+      validSubQuery ?? (rawSubQuery === '' && !initialContentTab ? 'cabinets' : null)
+    if (fromUrl && fromUrl !== contentTab) setContentTab(fromUrl)
+    // contentTab은 일부러 빼둔다 — 지면 안 전환(switchSubTab)이 URL보다 먼저 state를 바꾸는 순간 되돌리지 않게
+  }, [rawSubQuery, validSubQuery, departmentIdQuery, initialContentTab])
+
   const switchSubTab = useCallback(
     (
       nextTab: GovernmentContentTab,

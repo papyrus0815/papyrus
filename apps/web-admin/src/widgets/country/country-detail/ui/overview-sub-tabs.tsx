@@ -12,6 +12,7 @@ import { FiChevronDown, FiPlus } from 'react-icons/fi'
 
 import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
 
+import { CountryTabSubmenu } from './country-tab-submenu'
 import * as S from './overview-sub-tabs.styles'
 
 /**
@@ -180,25 +181,28 @@ export function OverviewSubTabs({
 
               return (
                 <Fragment key={key}>
-                  <UnderlineTabButton
-                    id={tabId(key)}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    aria-controls={panelId(key)}
-                    tabIndex={active ? 0 : -1}
-                    $active={active}
-                    onClick={() => onSubTabChange(key)}
-                  >
-                    <S.TabLabelWrap>
-                      <span>{label}</span>
-                      {count != null && count > 0 && (
-                        <S.TabCountBadge $active={active}>
-                          {count.toLocaleString('ko-KR')}
-                        </S.TabCountBadge>
-                      )}
-                    </S.TabLabelWrap>
-                  </UnderlineTabButton>
+                  {/* 2차 구역이 있는 탭(정부·행정·군사)은 hover·클릭으로 아래 메뉴가 펼쳐진다 — 없으면 단추 그대로 */}
+                  <CountryTabSubmenu tabKey={key} active={active}>
+                    <UnderlineTabButton
+                      id={tabId(key)}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      aria-controls={panelId(key)}
+                      tabIndex={active ? 0 : -1}
+                      $active={active}
+                      onClick={() => onSubTabChange(key)}
+                    >
+                      <S.TabLabelWrap>
+                        <span>{label}</span>
+                        {count != null && count > 0 && (
+                          <S.TabCountBadge $active={active}>
+                            {count.toLocaleString('ko-KR')}
+                          </S.TabCountBadge>
+                        )}
+                      </S.TabLabelWrap>
+                    </UnderlineTabButton>
+                  </CountryTabSubmenu>
                   {showGroupDivider && <S.TabGroupDivider aria-hidden />}
                 </Fragment>
               )
