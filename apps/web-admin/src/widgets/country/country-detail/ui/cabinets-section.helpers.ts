@@ -1488,3 +1488,153 @@ export function resolveReignEraLineForCabinetHead(
   }
   return null
 }
+
+/* ─────────────────────────── 목록 표지(정치체 전환 · 군주 교체 · 기록 공백) ─────────────────────────── */
+
+/**
+ * 행정부 목록(연표·원장) 행 사이에 끼우는 표지.
+ * - polity: 소속 정치체가 바뀌는 자리(일본 제국 → 일본국). 예전엔 19행 모두에 칩을 붙여 반복은 시끄럽고
+ *   정작 '바뀌는 순간'은 안 보였다 — 바뀔 때만 머리 한 번.
+ * - reign: 겹치는 군주가 바뀌는 자리(메이지 → 쇼와). 예전엔 축 색으로만 말했는데 군주 색 팔레트가 서로
+ *   거의 같은 주황이라 구분이 안 됐고 범례도 접혀 있었다 — 글자로.
+ * - gap: 같은 정치체·같은 직함인데 대수가 건너뛰거나(제10대 → 제43대) 대수 없이 10년 이상 비는 자리.
+ *   예전엔 축이 끊김 없이 이어져 1901–1945 공백이 연속으로 읽혔다.
+ */
+export type CabinetListMarker =
+  | { kind: 'polity'; key: string; label: string }
+  | { kind: 'reign'; key: string; label: string }
+  | { kind: 'gap'; key: string; label: string; detail: string | null }
+
+export interface CabinetListMarkerInput {
+  id: string
+  /** null이면 정치체 표지를 만들지 않는다(필터로 한 정치체만 볼 때 등) */
+  polityKey: string | null
+  polityLabel: string | null
+  reignKey: string | null
+  reignLabel: string | null
+  /** 대수 비교는 같은 직함 계열끼리만 — 총리 제10대와 대통령 제3대를 잇지 않는다 */
+  positionKey: string
+  ordinal: number | null
+  startSignedYear: number | null
+  endSignedYear: number | null
+}
+
+/** 대수 없이도 공백으로 볼 최소 햇수 */
+const CABINET_GAP_MIN_YEARS = 10
+
+function formatSignedYearLabel(signedYear: number): string {
+  return signedYear < 0 ? `BC ${Math.abs(signedYear)}` : String(signedYear)
+}
+
+/** 행 id → 그 행 앞에 그릴 표지(그리는 순서: 공백 → 정치체 → 군주) */
+export function buildCabinetListMarkers(
+  rows: readonly CabinetListMarkerInput[],
+): Map<string, CabinetListMarker[]> {
+  const markerMap = new Map<string, CabinetListMarker[]>()
+  const polityKeys = new Set(
+    rows.map((row) => row.polityKey).filter((key): key is string => Boolean(key)),
+  )
+  const reignKeys = new Set(
+    rows.map((row) => row.reignKey).filter((key): key is string => Boolean(key)),
+  )
+  const showPolity = polityKeys.size >= 2
+  const showReign = reignKeys.size >= 2
+
+  rows.forEach((row, rowIndex) => {
+    const markers: CabinetListMarker[] = []
+    const prevRow = rowIndex > 0 ? rows[rowIndex - 1] : null
+
+    if (prevRow) {
+      const samePolity = prevRow.polityKey === row.polityKey
+      const samePosition = prevRow.positionKey === row.positionKey
+      /* 정렬 방향(오름·내림)과 무관하게 앞선 쪽·나중 쪽을 가른다 */
+      const prevIsOlder =
+        prevRow.startSignedYear == null ||
+        row.startSignedYear == null ||
+        prevRow.startSignedYear <= row.startSignedYear
+      const olderRow = prevIsOlder ? prevRow : row
+      const newerRow = prevIsOlder ? row : prevRow
+      const yearSpan =
+        olderRow.endSignedYear != null &&
+        newerRow.startSignedYear != null &&
+        newerRow.startSignedYear > olderRow.endSignedYear
+          ? {
+              from: olderRow.endSignedYear,
+              to: newerRow.startSignedYear,
+            }
+          : null
+
+      if (samePolity && samePosition && prevRow.ordinal != null && row.ordinal != null) {
+        const lowOrdinal = Math.min(prevRow.ordinal, row.ordinal)
+        const highOrdinal = Math.max(prevRow.ordinal, row.ordinal)
+        const missingCount = highOrdinal - lowOrdinal - 1
+        if (missingCount >= 1) {
+          const firstMissing = lowOrdinal + 1
+          const lastMissing = highOrdinal - 1
+          markers.push({
+            kind: 'gap',
+            key: `gap-${row.id}`,
+            label:
+              missingCount === 1
+                ? `제${firstMissing}대 미등록`
+                : `제${firstMissing}~${lastMissing}대 미등록 (${missingCount}대)`,
+            detail: yearSpan
+              ? `${formatSignedYearLabel(yearSpan.from)}–${formatSignedYearLabel(yearSpan.to)} · ${yearSpan.to - yearSpan.from}년`
+              : null,
+          })
+        }
+      } else if (
+        samePolity &&
+        (prevRow.ordinal == null || row.ordinal == null) &&
+        yearSpan &&
+        yearSpan.to - yearSpan.from >= CABINET_GAP_MIN_YEARS
+      ) {
+        markers.push({
+          kind: 'gap',
+          key: `gap-${row.id}`,
+          label: `${formatSignedYearLabel(yearSpan.from)}–${formatSignedYearLabel(yearSpan.to)} 기록 없음`,
+          detail: `${yearSpan.to - yearSpan.from}년`,
+        })
+      }
+    }
+
+    if (
+      showPolity &&
+      row.polityKey &&
+      row.polityLabel &&
+      (!prevRow || prevRow.polityKey !== row.polityKey)
+    ) {
+      markers.push({ kind: 'polity', key: `polity-${row.id}`, label: row.polityLabel })
+    }
+
+    if (
+      showReign &&
+      row.reignKey &&
+      row.reignLabel &&
+      (!prevRow || prevRow.reignKey !== row.reignKey)
+    ) {
+      markers.push({ kind: 'reign', key: `reign-${row.id}`, label: row.reignLabel })
+    }
+
+    if (markers.length > 0) markerMap.set(row.id, markers)
+  })
+
+  return markerMap
+}
+
+/** 취임 방식 → 퇴임 사유 한 줄('의회 선출 → 사임 / 사퇴'). 둘 다 없으면 null */
+export function formatCabinetTransitionLine(
+  head: { appointmentMethod?: string | null; endReason?: string | null } | null | undefined,
+  labels: {
+    appointment: Readonly<Record<string, string>>
+    endReason: Readonly<Record<string, string>>
+  },
+): { appointment: string | null; endReason: string | null } | null {
+  if (!head) return null
+  const appointment = head.appointmentMethod
+    ? (labels.appointment[head.appointmentMethod] ?? null)
+    : null
+  const endReason = head.endReason ? (labels.endReason[head.endReason] ?? null) : null
+  if (!appointment && !endReason) return null
+  return { appointment, endReason }
+}

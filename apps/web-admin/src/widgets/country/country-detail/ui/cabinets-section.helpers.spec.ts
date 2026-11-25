@@ -1,4 +1,6 @@
 import {
+  buildCabinetListMarkers,
+  type CabinetListMarkerInput,
   buildCabinetTerritoryLegendEntries,
   buildCabinetTerritoryOrdinalMap,
   cabinetTimelineHeaderYearRange,
@@ -376,5 +378,71 @@ describe('개각 내각(cabinet.startDate 우선) 및 연호·연도 범위 계�
       },
     ])
     expect(range).toEqual({ minY: 2019, maxY: 2020 })
+  })
+})
+
+describe('buildCabinetListMarkers — 행 사이 표지', () => {
+  const baseRow = (
+    id: string,
+    overrides: Partial<CabinetListMarkerInput>,
+  ): CabinetListMarkerInput => ({
+    id,
+    polityKey: '일본 제국',
+    polityLabel: '일본 제국',
+    reignKey: null,
+    reignLabel: null,
+    positionKey: '내각총리대신',
+    ordinal: null,
+    startSignedYear: null,
+    endSignedYear: null,
+    ...overrides,
+  })
+
+  it('같은 정치체·직함에서 대수가 건너뛰면 미등록 구간과 연도를 표지로 단다(오름·내림 정렬 모두)', () => {
+    const older = baseRow('a', { ordinal: 10, startSignedYear: 1900, endSignedYear: 1901 })
+    const newer = baseRow('b', { ordinal: 43, startSignedYear: 1945, endSignedYear: 1945 })
+    const asc = buildCabinetListMarkers([older, newer]).get('b')
+    expect(asc).toEqual([
+      {
+        kind: 'gap',
+        key: 'gap-b',
+        label: '제11~42대 미등록 (32대)',
+        detail: '1901–1945 · 44년',
+      },
+    ])
+    const desc = buildCabinetListMarkers([newer, older]).get('a')
+    expect(desc?.[0]).toMatchObject({ kind: 'gap', label: '제11~42대 미등록 (32대)' })
+  })
+
+  it('대수가 이어지거나 직함이 다르면 공백 표지를 달지 않는다', () => {
+    const markers = buildCabinetListMarkers([
+      baseRow('a', { ordinal: 1, startSignedYear: 1885, endSignedYear: 1888 }),
+      baseRow('b', { ordinal: 2, startSignedYear: 1888, endSignedYear: 1889 }),
+      baseRow('c', { ordinal: 9, positionKey: '대통령', startSignedYear: 1950 }),
+    ])
+    expect(markers.size).toBe(0)
+  })
+
+  it('대수가 없으면 10년 이상 빈 자리만 기록 없음으로 표시한다', () => {
+    const markers = buildCabinetListMarkers([
+      baseRow('a', { startSignedYear: 1900, endSignedYear: 1905 }),
+      baseRow('b', { startSignedYear: 1910, endSignedYear: 1912 }),
+      baseRow('c', { startSignedYear: 1930, endSignedYear: 1931 }),
+    ])
+    expect(markers.get('b')).toBeUndefined()
+    expect(markers.get('c')).toEqual([
+      { kind: 'gap', key: 'gap-c', label: '1912–1930 기록 없음', detail: '18년' },
+    ])
+  })
+
+  it('정치체·군주 표지는 둘 이상일 때만, 바뀌는 자리에만 단다', () => {
+    const markers = buildCabinetListMarkers([
+      baseRow('a', { ordinal: 45, reignKey: 'showa', reignLabel: '쇼와' }),
+      baseRow('b', { ordinal: 46, polityKey: '일본국', polityLabel: '일본국', reignKey: 'showa', reignLabel: '쇼와' }),
+      baseRow('c', { ordinal: 47, polityKey: '일본국', polityLabel: '일본국', reignKey: 'showa', reignLabel: '쇼와' }),
+    ])
+    expect(markers.get('a')).toEqual([{ kind: 'polity', key: 'polity-a', label: '일본 제국' }])
+    expect(markers.get('b')).toEqual([{ kind: 'polity', key: 'polity-b', label: '일본국' }])
+    expect(markers.get('c')).toBeUndefined()
   })
 })

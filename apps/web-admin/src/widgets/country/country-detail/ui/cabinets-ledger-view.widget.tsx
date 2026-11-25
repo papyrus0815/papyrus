@@ -2,6 +2,12 @@
  * 국가 상세 → 정부·행정 → 행정부·내각 탭의 「원장 목록(Ledger)」 뷰.
  * 사건·전 국가 정부 카탈로그와 동일한 플랫 원장(Ledger) 디자인 언어로,
  * 내각 고유 기간(개각 구분)·집권여당·연호·각료·사건·조약 지표를 세기 구분선과 함께 밀도 있게 표시한다.
+ *
+ * - 주어는 연표와 같게 **수반 이름**, 내각 이름은 그 아래 부제(예전엔 내각명이 제목·'수반: …' 접두어 19회).
+ * - 넷째 열 '취임 → 퇴임 · 정당' — 취임 방식·퇴임 사유는 거의 모든 행에 채워져 있는데 어느 보기에도 안 보였다.
+ *   예전 넷째 열(정당·연호)은 표 폭 1060px 이하에서 통째로 숨어 1440px 화면에서도 안 나왔다 — 좁으면 수반 칸
+ *   아래로 내려앉게 바꿨다.
+ * - 행 사이 표지(정치체 전환 · 군주 교체 · 기록 공백)는 연표와 같은 buildCabinetListMarkers 결과를 받는다.
  */
 import React, { useMemo } from 'react'
 
@@ -30,21 +36,33 @@ import {
 import type { CabinetListItemDto } from '@/shared/api/person-career'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { resolveCabinetMinisterCount } from '@/shared/lib/ministry-department/department-cabinet-matcher'
+import {
+  APPOINTMENT_METHOD_LABELS,
+  TENURE_END_REASON_LABELS,
+} from '@/shared/lib/tenure-labels'
 import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
 import { computeCabinetReshuffleMetaMap } from '@/pages/government/government-helpers'
 
 import {
+  type CabinetListMarker,
+  formatCabinetTransitionLine,
   formatDate,
   getHeadTenureTerritoryLabel,
   getPersonName,
   resolveCabinetEffectiveDates,
 } from './cabinets-section.helpers'
+import {
+  approxDaysBetween,
+  formatTenureDuration,
+} from './cabinets-vertical-timeline'
 
 export interface CabinetsLedgerViewProps {
   items: readonly CabinetListItemDto[]
   countryName: string
   isHistoricalCountry: boolean
   showTerritoryLabels: boolean
+  /** 행 id → 그 행 앞에 그릴 표지(정치체 전환 · 군주 교체 · 기록 공백) */
+  markersByCabinetId?: ReadonlyMap<string, CabinetListMarker[]>
   reignEraLineByCabinetId: ReadonlyMap<string, string>
   deletingCabinetId: string | null
   onSelectCabinet: (cabinetId: string) => void
@@ -61,7 +79,7 @@ interface RulingPartySummary {
   extraCoalitionCount: number
 }
 
-function resolveCabinetRulingParty(
+export function resolveCabinetRulingParty(
   cabinetItem: CabinetListItemDto,
 ): RulingPartySummary | null {
   const parties = cabinetItem.politicalParties ?? []
@@ -130,6 +148,7 @@ export function CabinetsLedgerView({
   countryName,
   isHistoricalCountry,
   showTerritoryLabels,
+  markersByCabinetId,
   reignEraLineByCabinetId,
   deletingCabinetId,
   onSelectCabinet,
@@ -157,9 +176,9 @@ export function CabinetsLedgerView({
       <LedgerHeaderRow>
         <span>출범 · 존속 기간</span>
         <span>대수 · 직함</span>
-        <span>수반 · 행정부 명칭</span>
-        <DesktopOnlyCol>집권 여당 · 연호</DesktopOnlyCol>
-        <RightHeaderCol>구성 · 기록</RightHeaderCol>
+        <span>수반 · 내각</span>
+        <DesktopOnlyColHeader>취임 → 퇴임 · 정당</DesktopOnlyColHeader>
+        <RightHeaderCol>기록</RightHeaderCol>
       </LedgerHeaderRow>
 
       <LedgerBody>
@@ -178,6 +197,29 @@ export function CabinetsLedgerView({
           const shouldRenderCenturyHeader =
             showCenturyDividers &&
             (rowIndex === 0 || prevCentury?.key !== currentCentury.key)
+
+          const startPartsForDuration = effStart
+            ? parseSignedDateParts(effStart)
+            : null
+          const endPartsForDuration = effEnd ? parseSignedDateParts(effEnd) : null
+          const durationLabel =
+            startPartsForDuration && (endPartsForDuration || !isHistoricalCountry)
+              ? formatTenureDuration(
+                  approxDaysBetween(
+                    startPartsForDuration,
+                    endPartsForDuration ?? {
+                      signedYear: new Date().getFullYear(),
+                      month: new Date().getMonth() + 1,
+                      day: new Date().getDate(),
+                    },
+                  ),
+                )
+              : null
+          const transition = formatCabinetTransitionLine(headTenure, {
+            appointment: APPOINTMENT_METHOD_LABELS,
+            endReason: TENURE_END_REASON_LABELS,
+          })
+          const rowMarkers = markersByCabinetId?.get(cabinetItem.id) ?? []
 
           const ongoingLabel = isHistoricalCountry ? '' : '현재'
           const periodText = effStart
@@ -233,13 +275,6 @@ export function CabinetsLedgerView({
           const hasLinkageGroup = Boolean(cabinetItem.linkageGroup)
           const isDeleting = deletingCabinetId === cabinetItem.id
           const leaderPersonId = headTenure?.person?.id ?? null
-          const hasAnyMetric =
-            ministerCount > 0 ||
-            achievementCount > 0 ||
-            eventCount > 0 ||
-            treatyCount > 0 ||
-            hasLinkageGroup
-
           return (
             <React.Fragment key={cabinetItem.id}>
               {shouldRenderCenturyHeader ? (
@@ -250,6 +285,18 @@ export function CabinetsLedgerView({
                   <CenturyDividerLine />
                 </CenturyDividerRow>
               ) : null}
+
+              {rowMarkers.map((marker) => (
+                <MarkerDividerRow key={marker.key} $kind={marker.kind}>
+                  {marker.kind === 'reign' ? (
+                    <span className="marker-sub">군주</span>
+                  ) : null}
+                  <span className="marker-label">{marker.label}</span>
+                  {marker.kind === 'gap' && marker.detail ? (
+                    <span className="marker-sub">{marker.detail}</span>
+                  ) : null}
+                </MarkerDividerRow>
+              ))}
 
               <LedgerRow
                 role="button"
@@ -278,8 +325,13 @@ export function CabinetsLedgerView({
                 }}
               >
                 <PeriodCell>
-                  <IncumbentDot $incumbent={Boolean(effStart && !effEnd && !isHistoricalCountry)} />
-                  <span>{periodText}</span>
+                  <span className="period-line">
+                    <IncumbentDot $incumbent={Boolean(effStart && !effEnd && !isHistoricalCountry)} />
+                    <span>{periodText}</span>
+                  </span>
+                  {durationLabel ? (
+                    <span className="duration">{durationLabel}</span>
+                  ) : null}
                 </PeriodCell>
 
                 <PositionCell>
@@ -328,22 +380,29 @@ export function CabinetsLedgerView({
                     </MiniAvatarFallback>
                   )}
                   <LeaderTextStack>
+                    <LeaderNameText>{personDisplayName}</LeaderNameText>
                     {explicitCabinetName &&
                     explicitCabinetName !== personDisplayName ? (
-                      <>
-                        <LeaderNameText>{explicitCabinetName}</LeaderNameText>
-                        <CabinetSubName>
-                          {headTenure?.person ? `수반: ${personDisplayName}` : personDisplayName}
-                        </CabinetSubName>
-                      </>
-                    ) : (
-                      <LeaderNameText>{personDisplayName}</LeaderNameText>
-                    )}
+                      <CabinetSubName>{explicitCabinetName}</CabinetSubName>
+                    ) : null}
                   </LeaderTextStack>
                 </LeaderCell>
 
                 <DesktopOnlyCol>
                   <PartyEraStack>
+                    {transition ? (
+                      <TransitionText>
+                        {transition.appointment ?? '—'}
+                        {transition.endReason ? (
+                          <>
+                            <span className="arrow" aria-label="에서">
+                              →
+                            </span>
+                            {transition.endReason}
+                          </>
+                        ) : null}
+                      </TransitionText>
+                    ) : null}
                     {rulingParty ? (
                       <PartyBadge title={rulingParty.label}>
                         <PartyColorDot $color={rulingParty.color} />
@@ -358,7 +417,7 @@ export function CabinetsLedgerView({
                     {reignEraText ? (
                       <EraPill title={reignEraText}>{reignEraText}</EraPill>
                     ) : null}
-                    {!rulingParty && !reignEraText ? (
+                    {!transition && !rulingParty && !reignEraText ? (
                       <MutedDash>—</MutedDash>
                     ) : null}
                   </PartyEraStack>
@@ -395,7 +454,6 @@ export function CabinetsLedgerView({
                       <span>연계</span>
                     </AccentChip>
                   )}
-                  {!hasAnyMetric && <MutedDash>상세 →</MutedDash>}
                   {onEditCabinet && (
                     <QuickEditBtn
                       type="button"
@@ -434,9 +492,11 @@ const LedgerShell = styled.div`
   overflow: hidden;
 `
 
+const DesktopOnlyColHeader = styled.span``
+
 const LedgerHeaderRow = styled.div`
   display: grid;
-  grid-template-columns: 196px 200px minmax(200px, 1fr) 176px 176px;
+  grid-template-columns: 184px 168px minmax(180px, 1fr) minmax(180px, 0.9fr) auto;
   align-items: center;
   gap: 12px;
   padding: 9px 16px;
@@ -447,8 +507,13 @@ const LedgerHeaderRow = styled.div`
   background: ${({ theme }) => ledgerChipFill(theme.mode)};
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 
-  @container (max-width: 1060px) {
-    grid-template-columns: 196px 164px minmax(160px, 1fr) 132px;
+  @container (max-width: 900px) {
+    grid-template-columns: 172px 156px minmax(0, 1fr) auto;
+
+    /* 넷째 열은 좁으면 수반 칸 아래로 내려가므로 머리에서 뺀다 */
+    > ${DesktopOnlyColHeader} {
+      display: none;
+    }
   }
 
   @container (max-width: 640px) {
@@ -456,13 +521,20 @@ const LedgerHeaderRow = styled.div`
   }
 `
 
+/** 넷째 열(취임 → 퇴임 · 정당) — 좁으면 숨기지 않고 수반 칸 아래 둘째 줄로 내려앉는다 */
 const DesktopOnlyCol = styled.div`
   min-width: 0;
 
-  @container (max-width: 1060px) {
-    display: none;
+  @container (max-width: 900px) {
+    grid-column: 3 / 4;
+    grid-row: 2;
+  }
+  @container (max-width: 640px) {
+    grid-column: auto;
+    grid-row: auto;
   }
 `
+
 
 const RightHeaderCol = styled.span`
   text-align: right;
@@ -506,10 +578,11 @@ const LedgerRow = styled.div<{
   $reshuffleGrouped?: boolean
   $reshuffleContinuation?: boolean
 }>`
+  position: relative;
   display: grid;
-  grid-template-columns: 196px 200px minmax(200px, 1fr) 176px 176px;
+  grid-template-columns: 184px 168px minmax(180px, 1fr) minmax(180px, 0.9fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 4px 12px;
   width: 100%;
   padding: 10px 16px;
   padding-left: ${({ $reshuffleGrouped }) => ($reshuffleGrouped ? '13px' : '16px')};
@@ -548,8 +621,8 @@ const LedgerRow = styled.div<{
     outline-offset: -2px;
   }
 
-  @container (max-width: 1060px) {
-    grid-template-columns: 196px 164px minmax(160px, 1fr) 132px;
+  @container (max-width: 900px) {
+    grid-template-columns: 172px 156px minmax(0, 1fr) auto;
   }
 
   @container (max-width: 640px) {
@@ -561,15 +634,71 @@ const LedgerRow = styled.div<{
 
 const PeriodCell = styled.span`
   ${DIGIT_DISPLAY}
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  .period-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .duration {
+    padding-left: 13px;
+    font-size: 11px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+/** 행 사이 표지 — 정치체 전환(굵은 머리) · 군주 교체(옅은 머리) · 기록 공백(점선 띠) */
+const MarkerDividerRow = styled.div<{ $kind: CabinetListMarker['kind'] }>`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  padding: ${({ $kind }) => ($kind === 'polity' ? '10px 16px 8px' : '7px 16px')};
+  border-bottom: 1px ${({ $kind }) => ($kind === 'gap' ? 'dashed' : 'solid')}
+    ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ $kind, theme }) =>
+    $kind === 'gap'
+      ? `repeating-linear-gradient(135deg, transparent 0 6px, ${ledgerRowWash(theme.mode)} 6px 12px)`
+      : 'transparent'};
+  word-break: keep-all;
+
+  .marker-label {
+    font-size: ${({ $kind }) => ($kind === 'polity' ? 13 : 12)}px;
+    font-weight: ${({ $kind }) => ($kind === 'reign' ? 600 : 700)};
+    color: ${({ $kind, theme }) =>
+      $kind === 'polity' ? theme.colors.text.primary : theme.colors.text.secondary};
+  }
+  .marker-sub {
+    ${DIGIT_DISPLAY}
+    font-size: 11px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const TransitionText = styled.span`
   display: inline-flex;
-  align-items: center;
-  gap: 7px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 5px;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.45;
   color: ${({ theme }) => theme.colors.text.secondary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: keep-all;
+
+  .arrow {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 `
 
 const IncumbentDot = styled.span<{ $incumbent: boolean }>`
@@ -803,8 +932,11 @@ const MetaBadgeCell = styled.div`
   gap: 5px;
   flex-wrap: wrap;
 
+  /* 카드형(좁은 칸)에서는 기록 칩·수정 단추를 카드 오른쪽 위에 — 예전엔 연필 하나가 맨 아래 한 줄을 차지했다 */
   @container (max-width: 640px) {
-    justify-content: flex-start;
+    position: absolute;
+    top: 10px;
+    right: 10px;
   }
 `
 

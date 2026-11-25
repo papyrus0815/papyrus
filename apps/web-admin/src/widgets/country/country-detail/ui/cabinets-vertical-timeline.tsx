@@ -9,11 +9,13 @@
  * 예전 지그재그(한 줄 4칸 고정 + 사진 212px)는 1440px에서 글자 칸이 20px만 남아 이름이 사라졌고, 큰 연도가
  * 축 반대편 — 이웃 카드 옆 — 에 붙어 남의 연도로 읽혔다. 재임이 1년이든 20년이든 같은 칸이라 연표인데 기간이
  * 안 보였다. 여기서는 연도를 자기 줄 왼쪽에 두고, 이름을 가장 크게, 재임 길이는 막대로 그린다.
- * 축 색은 그 행정부가 걸친 군주 재위(범례와 같은 색)다 — 지그재그의 재위 띠를 축이 이어받는다.
+ * 축은 중립 회색이다 — 예전엔 군주 재위 색이었으나 팔레트가 거의 같은 주황이라 메이지·쇼와가 구분되지 않았다.
+ * 군주 교체·정치체 전환·기록 공백은 행 사이 표지(MarkerRow)가 글자로 말하고, 공백 구간 축은 점선이 된다.
+ * 넓은 칸(≥760px)에서는 오른쪽 셋째 칸에 취임 방식 · 퇴임 사유 · 정당을 둔다 — 1440px에서 비던 오른쪽 절반.
  */
 import React from 'react'
 
-import { FiAward, FiEdit2, FiUser } from 'react-icons/fi'
+import { FiAward, FiEdit2, FiFlag } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
@@ -23,6 +25,8 @@ import {
   ledgerHairlineStrong,
   ledgerHoverFill,
 } from '@/entities/event/ui/ledger-tokens'
+
+import type { CabinetListMarker } from './cabinets-section.helpers'
 
 export interface CabinetVerticalTimelineRow {
   id: string
@@ -38,9 +42,12 @@ export interface CabinetVerticalTimelineRow {
   thumbUrl: string | null
   /** 소속(국가·정체) 구분 색 — 사진 링·재임 막대 */
   ringColor: string | null
-  /** 군주 재위 범례 색 — 축 */
-  monarchLineHex: string | null
-  monarchId: string | null
+  /** 이 행 앞에 끼울 표지(정치체 전환 · 군주 교체 · 기록 공백) */
+  markers?: CabinetListMarker[]
+  /** 취임 방식 → 퇴임 사유 라벨 */
+  transition: { appointment: string | null; endReason: string | null } | null
+  partyLabel: string | null
+  partyColor: string | null
   /** 부호 있는 취임 연도(BC 음수) — 세기 묶음 */
   startSignedYear: number | null
   startYearLabel: string | null
@@ -91,6 +98,7 @@ export function CabinetsVerticalTimeline({
   onEdit: (cabinetId: string, clickEvent: React.MouseEvent) => void
 }) {
   const maxDays = Math.max(1, ...rows.map((row) => row.durationDays ?? 0))
+  const longestLabel = maxDays > 1 ? formatTenureDuration(maxDays) : null
   const centuries = new Set(
     rows.map((row) => (row.startSignedYear != null ? centuryLabel(row.startSignedYear) : '')),
   )
@@ -105,13 +113,12 @@ export function CabinetsVerticalTimeline({
         const century = row.startSignedYear != null ? centuryLabel(row.startSignedYear) : ''
         const centuryHead = showCenturyHeads && century && century !== prevCentury ? century : null
         prevCentury = century || prevCentury
-        /* 같은 사람이 잇달아 맡으면(이토 1·2·3차) 사진을 줄여 반복을 누그러뜨린다 */
+        /* 같은 사람이 잇달아 맡으면(이토 1·2·3차) '연임' 꼬리표 — 예전엔 사진을 30px로 줄였는데 크기 차이가
+           '덜 중요한 행'으로 읽혀서, 사진은 같은 크기로 두고 글자로 말한다 */
         const isRepeatPerson = Boolean(row.personId && prevRow?.personId === row.personId)
-        /* 축: 노드 아래는 이 줄의 군주 색, 노드 위는 윗줄 색을 이어받아 줄 경계에서 끊기지 않게 */
-        const axisColor = row.monarchLineHex
-        const axisTopColor = prevRow?.monarchLineHex ?? null
         const barPct =
           row.durationDays != null ? Math.max(2, Math.round((row.durationDays / maxDays) * 100)) : 0
+        const markers = row.markers ?? []
         return (
           <React.Fragment key={row.id}>
             {centuryHead ? (
@@ -119,6 +126,34 @@ export function CabinetsVerticalTimeline({
                 <span>{centuryHead}</span>
               </CenturyHead>
             ) : null}
+            {markers.map((marker) => (
+              <MarkerRow key={marker.key} $kind={marker.kind}>
+                <span aria-hidden />
+                <AxisCol
+                  aria-hidden
+                  $dashed={marker.kind === 'gap'}
+                  $first={rowIdx === 0}
+                  $last={false}
+                  $bare
+                />
+                {marker.kind === 'gap' ? (
+                  <span className="marker-text">
+                    <strong>{marker.label}</strong>
+                    {marker.detail ? <span className="detail">{marker.detail}</span> : null}
+                  </span>
+                ) : marker.kind === 'polity' ? (
+                  <span className="marker-text">
+                    <FiFlag aria-hidden size={12} />
+                    <strong>{marker.label}</strong>
+                  </span>
+                ) : (
+                  <span className="marker-text">
+                    <span className="detail">군주</span>
+                    <strong>{marker.label}</strong>
+                  </span>
+                )}
+              </MarkerRow>
+            ))}
             <TimelineRow>
               <YearCol>
                 <span className="year">{row.startYearLabel ?? '—'}</span>
@@ -126,9 +161,7 @@ export function CabinetsVerticalTimeline({
               </YearCol>
               <AxisCol
                 aria-hidden
-                $color={axisColor}
-                $topColor={axisTopColor}
-                $first={rowIdx === 0}
+                $first={rowIdx === 0 && markers.length === 0}
                 $last={rowIdx === rows.length - 1}
               >
                 <AxisNode $ring={row.ringColor} $current={row.isCurrent} />
@@ -140,8 +173,12 @@ export function CabinetsVerticalTimeline({
                   aria-label={row.ariaLabel}
                   onClick={() => onSelect(row.id)}
                 >
-                  <Avatar $ring={row.ringColor} $small={isRepeatPerson}>
-                    {row.thumbUrl ? <img src={row.thumbUrl} alt="" /> : <FiUser aria-hidden />}
+                  <Avatar $ring={row.ringColor}>
+                    {row.thumbUrl ? (
+                      <img src={row.thumbUrl} alt="" />
+                    ) : (
+                      <span className="initial">{row.personName.slice(0, 1) || '?'}</span>
+                    )}
                   </Avatar>
                   <TextStack>
                     <NameLine>
@@ -166,16 +203,15 @@ export function CabinetsVerticalTimeline({
                       ) : null}
                       {row.isCurrent ? <span className="current">현직</span> : null}
                     </MetaLine>
-                    {row.reignEraLine ? (
-                      <EraLine>
-                        {row.monarchLineHex ? (
-                          <span className="dot" style={{ background: row.monarchLineHex }} />
-                        ) : null}
-                        {row.reignEraLine}
-                      </EraLine>
-                    ) : null}
+                    {row.reignEraLine ? <EraLine>{row.reignEraLine}</EraLine> : null}
                     {barPct > 0 ? (
-                      <DurationTrack title={row.durationLabel ?? undefined}>
+                      <DurationTrack
+                        title={
+                          longestLabel
+                            ? `재임 ${row.durationLabel ?? ''} — 이 목록 최장(${longestLabel}) 대비`
+                            : undefined
+                        }
+                      >
                         <span
                           style={{
                             width: `${barPct}%`,
@@ -185,6 +221,37 @@ export function CabinetsVerticalTimeline({
                       </DurationTrack>
                     ) : null}
                   </TextStack>
+                  {row.transition || row.partyLabel ? (
+                    <AsideStack>
+                      {row.transition?.appointment ? (
+                        <span className="kv">
+                          <span className="key">취임</span>
+                          <span className="value">{row.transition.appointment}</span>
+                        </span>
+                      ) : null}
+                      {row.transition?.endReason ? (
+                        <span className="kv">
+                          <span className="key">퇴임</span>
+                          <span className="value">{row.transition.endReason}</span>
+                        </span>
+                      ) : null}
+                      {row.partyLabel ? (
+                        <span className="kv">
+                          <span className="key">정당</span>
+                          <span className="value">
+                            <span
+                              className="party-dot"
+                              aria-hidden
+                              style={
+                                row.partyColor ? { background: row.partyColor } : undefined
+                              }
+                            />
+                            {row.partyLabel}
+                          </span>
+                        </span>
+                      ) : null}
+                    </AsideStack>
+                  ) : null}
                 </MainBtn>
                 <EditBtn
                   type="button"
@@ -280,10 +347,12 @@ const YearCol = styled.div`
 `
 
 const AxisCol = styled.div<{
-  $color: string | null
-  $topColor: string | null
   $first: boolean
   $last: boolean
+  /** 기록 공백 구간 — 점선 */
+  $dashed?: boolean
+  /** 표지 줄 — 노드 없이 줄 전체 높이를 잇는다 */
+  $bare?: boolean
 }>`
   position: relative;
 
@@ -293,24 +362,75 @@ const AxisCol = styled.div<{
     position: absolute;
     left: 50%;
     top: ${({ $first }) => ($first ? `${NODE_TOP_PX}px` : '0')};
-    height: ${({ $first }) => ($first ? '0' : `${NODE_TOP_PX}px`)};
-    width: 3px;
-    margin-left: -1.5px;
-    background: ${({ theme, $topColor }) => $topColor ?? ledgerHairlineStrong(theme.mode)};
-    opacity: ${({ $topColor }) => ($topColor ? 0.75 : 1)};
+    height: ${({ $first, $bare }) => ($first ? '0' : $bare ? '100%' : `${NODE_TOP_PX}px`)};
+    width: 0;
+    margin-left: -1px;
+    border-left: 2px ${({ $dashed }) => ($dashed ? 'dashed' : 'solid')}
+      ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   }
-  /* 아래 이음 — 이 줄이 걸친 군주 재위 색 */
+  /* 아래 이음 */
   &::after {
     content: '';
+    display: ${({ $bare }) => ($bare ? 'none' : 'block')};
     position: absolute;
     left: 50%;
     top: ${NODE_TOP_PX}px;
     bottom: ${({ $last }) => ($last ? 'auto' : '0')};
     height: ${({ $last }) => ($last ? '0' : 'auto')};
-    width: 3px;
-    margin-left: -1.5px;
-    background: ${({ theme, $color }) => $color ?? ledgerHairlineStrong(theme.mode)};
-    opacity: ${({ $color }) => ($color ? 0.75 : 1)};
+    width: 0;
+    margin-left: -1px;
+    border-left: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+/** 행 사이 표지 — 정치체 전환(굵게) · 군주 교체(옅게) · 기록 공백(점선 축 + 회색 띠) */
+const MarkerRow = styled.li<{ $kind: CabinetListMarker['kind'] }>`
+  display: grid;
+  grid-template-columns: ${YEAR_COL_PX}px ${AXIS_COL_PX}px minmax(0, 1fr);
+  column-gap: 10px;
+  min-height: ${({ $kind }) => ($kind === 'gap' ? 44 : 30)}px;
+
+  .marker-text {
+    align-self: center;
+    display: inline-flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    width: fit-content;
+    max-width: 100%;
+    margin-left: 8px;
+    font-size: ${({ $kind }) => ($kind === 'polity' ? 13 : 12)}px;
+    line-height: 1.4;
+    word-break: keep-all;
+    color: ${({ theme, $kind }) =>
+      $kind === 'polity' ? theme.colors.text.primary : theme.colors.text.secondary};
+    ${({ $kind, theme }) =>
+      $kind === 'gap'
+        ? `
+      padding: 5px 10px;
+      border-radius: 8px;
+      border: 1px dashed ${ledgerHairlineStrong(theme.mode)};
+      background: ${ledgerHoverFill(theme.mode)};
+    `
+        : ''}
+  }
+  .marker-text strong {
+    font-weight: ${({ $kind }) => ($kind === 'reign' ? 600 : 700)};
+  }
+  .marker-text svg {
+    align-self: center;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  .detail {
+    ${DIGIT_DISPLAY}
+    font-size: 11.5px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  @container (max-width: 560px) {
+    grid-template-columns: 52px 18px minmax(0, 1fr);
+    column-gap: 8px;
   }
 `
 
@@ -340,9 +460,11 @@ const Body = styled.div`
 `
 
 const MainBtn = styled.button`
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 8px;
   width: 100%;
   padding: 8px 40px 10px 8px;
   border: none;
@@ -365,30 +487,89 @@ const MainBtn = styled.button`
     opacity: 0.5;
     cursor: progress;
   }
+
+  /* 넓은 칸: 오른쪽 셋째 칸에 취임 · 퇴임 · 정당 */
+  @container (min-width: 760px) {
+    grid-template-columns: auto minmax(0, 1fr) minmax(200px, 280px);
+    column-gap: 20px;
+  }
 `
 
-const Avatar = styled.span<{ $ring: string | null; $small: boolean }>`
+/** 취임 방식 · 퇴임 사유 · 정당 — 좁으면 본문 아래, 넓으면 오른쪽 칸 */
+const AsideStack = styled.span`
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+
+  .kv {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+  }
+  .key {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  .value {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    word-break: keep-all;
+  }
+  .party-dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  @container (min-width: 760px) {
+    grid-column: 3;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 3px;
+    padding: 2px 0 0 14px;
+    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+    .key {
+      width: 26px;
+    }
+  }
+`
+
+const Avatar = styled.span<{ $ring: string | null }>`
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: ${({ $small }) => ($small ? 30 : 44)}px;
-  height: ${({ $small }) => ($small ? 30 : 44)}px;
-  margin: ${({ $small }) => ($small ? '3px 7px 0' : '0')};
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   overflow: hidden;
   box-shadow: 0 0 0 2px ${({ theme, $ring }) => $ring ?? ledgerHairlineStrong(theme.mode)};
   background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#eef0f4')};
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-  svg {
-    width: 45%;
-    height: 45%;
+  /* 사진 없을 때 — 원장 보기와 같은 첫 글자 */
+  .initial {
+    font-size: 16px;
+    font-weight: 800;
   }
 `
 
@@ -419,9 +600,15 @@ const NameLine = styled.span`
     color: ${({ theme }) => theme.colors.text.secondary};
   }
   .again {
-    font-size: 11px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    align-self: center;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 17px;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   }
 `
 
@@ -432,11 +619,12 @@ const SubLine = styled.span`
   word-break: keep-all;
 `
 
+/* 구분점(·) 대신 간격으로 나눈다 — 좁은 칸에서 줄이 넘어가면 '· 2년 4개월'처럼 점이 줄 머리에 혼자 남았다 */
 const MetaLine = styled.span`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 2px 0;
+  gap: 2px 14px;
   font-size: 12px;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -448,11 +636,6 @@ const MetaLine = styled.span`
     gap: 4px;
     white-space: nowrap;
   }
-  > span + span::before {
-    content: '·';
-    margin: 0 7px;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
   .range {
     color: ${({ theme }) => theme.colors.text.secondary};
   }
@@ -463,19 +646,9 @@ const MetaLine = styled.span`
 `
 
 const EraLine = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   word-break: keep-all;
-
-  .dot {
-    flex-shrink: 0;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-  }
 `
 
 const DurationTrack = styled.span`

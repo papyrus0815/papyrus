@@ -21,7 +21,6 @@ import {
   FiCalendar,
   FiCheck,
   FiChevronDown,
-  FiClock,
   FiEdit2,
   FiFileText,
   FiGrid,
@@ -99,6 +98,8 @@ import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palett
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
+import { SearchableSelect } from '@/shared/ui/searchable-select'
+import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import {
   EmptyStateFill,
   EmptyStateSpotlight,
@@ -130,7 +131,10 @@ import {
   CabinetDetailChrome,
   type CabinetNavTarget,
 } from './cabinet-detail-chrome.widget'
-import { CabinetsLedgerView } from './cabinets-ledger-view.widget'
+import {
+  CabinetsLedgerView,
+  resolveCabinetRulingParty,
+} from './cabinets-ledger-view.widget'
 import {
   approxDaysBetween,
   CabinetsVerticalTimeline,
@@ -155,11 +159,12 @@ import {
 import {
   APPOINTMENT_METHOD_LABEL,
   END_REASON_LABEL,
+  buildCabinetListMarkers,
   buildCabinetTerritoryLegendEntries,
   buildCabinetTerritoryOrdinalMap,
+  formatCabinetTransitionLine,
   cabinetTimelineHeaderYearRange,
   cabinetTimelineMonarchRailGradient,
-  cabinetTimelineMonarchUiTint,
   calcAgeAtEndTenure,
   calcTenureDuration,
   formatCabinetHeadBreadcrumbLabel,
@@ -179,7 +184,12 @@ import {
   sovereignLegendPersonLabelFromMonarchTenure,
   stripHtmlToPlain,
 } from './cabinets-section.helpers'
+import {
+  APPOINTMENT_METHOD_LABELS,
+  TENURE_END_REASON_LABELS,
+} from '@/shared/lib/tenure-labels'
 import * as CabS from './cabinets-section.styled'
+import * as CabT from './cabinets-list-toolbar.styled'
 import { SubsectionAddBtn } from './country-politics-tab.styles'
 import { CabinetBulkMinisterModal } from './cabinet-bulk-minister-modal.widget'
 import {
@@ -1186,17 +1196,82 @@ export function CabinetsSection({
     [country, cabinetCountryFilter, historicalConstituentTabs.length],
   )
 
-  /** 요약 헤더 연도 범위 — 수반 재임 시작·종료 + 겹치는 군주 재위 구간 */
-  const cabinetTimelineYearRange = useMemo(() => {
-    const tenures = countryTenures as Parameters<
-      typeof cabinetTimelineHeaderYearRange
-    >[1]
-    return cabinetTimelineHeaderYearRange(
-      timelineCabinetsMerged,
-      tenures,
-      cabinetTimelineCountryScope,
+  /**
+   * 요약 헤더 연도 범위 — '19개 행정부' 바로 옆이라 **행정부 자신의** 출범~종료만 센다.
+   * 예전엔 겹치는 군주 재위까지 합쳐 일본이 '1867–1989'(실제 내각 1885–1954)로 보였다.
+   */
+  const cabinetTimelineYearRange = useMemo(
+    () =>
+      cabinetTimelineHeaderYearRange(
+        timelineCabinetsMerged,
+        null,
+        cabinetTimelineCountryScope,
+      ),
+    [timelineCabinetsMerged, cabinetTimelineCountryScope],
+  )
+
+  /** 행 사이 표지(정치체 전환 · 군주 교체 · 기록 공백) — 연표·원장 공용 */
+  const cabinetListMarkers = useMemo(() => {
+    const monarchLabelById = new Map(
+      cabinetTimelineMonarchVisuals.legend.map((entryItem) => [
+        entryItem.key,
+        entryItem.label,
+      ]),
     )
-  }, [timelineCabinetsMerged, countryTenures, cabinetTimelineCountryScope])
+    return buildCabinetListMarkers(
+      timelineCabinetsMerged.map((cabinetItem) => {
+        const head = cabinetItem.headTenure
+        const effDates = resolveCabinetEffectiveDates(cabinetItem)
+        const startParts = effDates.startDate
+          ? parseSignedDateParts(effDates.startDate)
+          : null
+        const endParts = effDates.endDate
+          ? parseSignedDateParts(effDates.endDate)
+          : null
+        const polityLabel = showCabinetTerritoryLabels
+          ? getHeadTenureTerritoryLabel(
+              head ?? {
+                country: cabinetItem.country,
+                historicalCountry: cabinetItem.historicalCountry,
+              },
+              country.name,
+            ) || null
+          : null
+        const monarchVisual = cabinetTimelineMonarchVisuals.byCabinetId.get(
+          cabinetItem.id,
+        )
+        const reignLabel = monarchVisual
+          ? (monarchLabelById.get(monarchVisual.monarchId) ?? null)
+          : null
+        return {
+          id: String(cabinetItem.id),
+          polityKey: polityLabel,
+          polityLabel,
+          reignKey: reignLabel && reignLabel !== '—' ? monarchVisual!.monarchId : null,
+          reignLabel: reignLabel && reignLabel !== '—' ? reignLabel : null,
+          positionKey: head
+            ? (head.positionDefinition?.title ?? head.title ?? '')
+            : '__collective__',
+          ordinal: head?.ordinal ?? null,
+          startSignedYear: startParts?.signedYear ?? null,
+          endSignedYear: endParts?.signedYear ?? null,
+        }
+      }),
+    )
+  }, [
+    timelineCabinetsMerged,
+    cabinetTimelineMonarchVisuals,
+    showCabinetTerritoryLabels,
+    country.name,
+  ])
+  /** 정치체 전환 머리가 그려지면 행마다 붙던 소속 칩·꼬리는 뺀다(19행 반복 → 바뀔 때 한 번) */
+  const hasPolityMarkers = useMemo(
+    () =>
+      [...cabinetListMarkers.values()].some((markerList) =>
+        markerList.some((marker) => marker.kind === 'polity'),
+      ),
+    [cabinetListMarkers],
+  )
 
   const isMinisterMatched = (t: GovernmentCabinetTenureItem) => {
     const q = ministerSearchQuery.trim().toLowerCase()
@@ -2042,11 +2117,9 @@ export function CabinetsSection({
                         )?.label ?? null)
                       : null
 
+                    /* 군주 색 범례는 없앴다 — 군주 교체는 행 사이 표지가 글자로 말한다 */
                     const hasLegendItems =
-                      cabinetTerritoryLegendEntries.length > 0 ||
-                      cabinetTimelineMonarchVisuals.legend.some(
-                        (legendEntry) => legendEntry.label !== '—',
-                      )
+                      cabinetTerritoryLegendEntries.length > 0
 
                     const hasActiveToolbarFilters = Boolean(
                       cabinetCountryFilter ||
@@ -2091,112 +2164,90 @@ export function CabinetsSection({
                           </CabS.CabListSearchBox>
 
                           {polityFilterOptions.length > 1 ? (
-                            <select
-                              aria-label="시대·정치체 필터"
-                              value={cabinetCountryFilter}
-                              onChange={(changeEvent) =>
-                                setCabinetCountryFilter(
-                                  changeEvent.target.value,
-                                )
-                              }
-                              style={{
-                                height: 34,
-                                maxWidth: 200,
-                                padding: '0 26px 0 10px',
-                                borderRadius: 8,
-                                border: `1px solid ${
-                                  cabinetCountryFilter
-                                    ? isDark
-                                      ? '#a5b4fc'
-                                      : MAIN
-                                    : palette.borderMid
-                                }`,
-                                background: 'transparent',
-                                color: cabinetCountryFilter
-                                  ? palette.text
-                                  : palette.textMuted,
-                                fontSize: 12.5,
-                                fontWeight: cabinetCountryFilter ? 700 : 600,
-                                cursor: 'pointer',
-                                outline: 'none',
-                              }}
-                            >
-                              {polityFilterOptions.map((optItem) => (
-                                <option
-                                  key={optItem.id || '__all__'}
-                                  value={optItem.id}
-                                >
-                                  {optItem.label}
-                                </option>
-                              ))}
-                            </select>
+                            /* 예전엔 브라우저 기본 <select> — 다크에서 OS 목록이 뜨고 앱 다른 고르기 칸과 모양이 달랐다 */
+                            <CabT.PolitySelectWrap>
+                              <SearchableSelect
+                                size="sm"
+                                ariaLabel="시대·정치체 필터"
+                                options={polityFilterOptions
+                                  .filter((optItem) => optItem.id !== '')
+                                  .map((optItem) => ({
+                                    value: optItem.id,
+                                    label: optItem.label,
+                                  }))}
+                                value={cabinetCountryFilter}
+                                onChange={(nextValue) =>
+                                  setCabinetCountryFilter(nextValue)
+                                }
+                                clearable
+                                placeholder={polityFilterOptions[0]?.label}
+                                searchPlaceholder="정치체 이름 검색…"
+                              />
+                            </CabT.PolitySelectWrap>
                           ) : null}
 
                           <div
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
+                              flexWrap: 'wrap',
+                              justifyContent: 'flex-end',
                               gap: 6,
                               marginLeft: 'auto',
-                              flexShrink: 0,
+                              maxWidth: '100%',
                             }}
                           >
+                            {/* 보기·정렬은 자주 바꾸는데 ⋯ 안에 숨어 있었다 — 밖으로 꺼내고, ⋯ 점은 진짜 필터에만 */}
+                            <CabT.SegmentWrap>
+                              <SegmentControl
+                                ariaLabel="목록 표시 방식"
+                                value={cabinetListLayout}
+                                onChange={(nextVal) =>
+                                  setCabinetListLayout(nextVal)
+                                }
+                                options={[
+                                  {
+                                    value: 'timeline',
+                                    label: (
+                                      <CabT.SegmentLabel title="연표 보기">
+                                        <FiGrid size={12} aria-hidden />
+                                        <span>연표</span>
+                                      </CabT.SegmentLabel>
+                                    ),
+                                  },
+                                  {
+                                    value: 'ledger',
+                                    label: (
+                                      <CabT.SegmentLabel title="원장(표) 보기">
+                                        <FiList size={12} aria-hidden />
+                                        <span>원장</span>
+                                      </CabT.SegmentLabel>
+                                    ),
+                                  },
+                                ]}
+                              />
+                              <SegmentControl
+                                ariaLabel="정렬 순서"
+                                value={cabinetSortOrder}
+                                onChange={(nextVal) =>
+                                  setCabinetSortOrder(nextVal)
+                                }
+                                options={[
+                                  { value: 'asc', label: '과거순' },
+                                  { value: 'desc', label: '최신순' },
+                                ]}
+                              />
+                            </CabT.SegmentWrap>
                             <GovMorePopover
-                              ariaLabel="행정부 목록 표시 및 필터 설정"
-                              title="표시 방식 · 정렬 · 상세 필터 · 군주 등록"
+                              ariaLabel="행정부 목록 상세 필터 · 설정"
+                              title="상세 필터 · 범례 · 군주 표시"
                               menuWidth={280}
                               hasActiveIndicator={
-                                cabinetListLayout !== 'timeline' ||
-                                cabinetSortOrder !== 'asc' ||
                                 Boolean(cabinetCategoryFilter) ||
                                 Boolean(activeRegimeFilter) ||
                                 showTimelineLegend ||
                                 includeCeremonialMonarchs
                               }
-                              segments={[
-                                {
-                                  key: 'cabinet-layout',
-                                  label: '목록 표시 방식',
-                                  value: cabinetListLayout,
-                                  options: [
-                                    {
-                                      value: 'timeline',
-                                      label: '타임라인',
-                                      icon: <FiGrid size={12} />,
-                                    },
-                                    {
-                                      value: 'ledger',
-                                      label: '원장 목록',
-                                      icon: <FiList size={12} />,
-                                    },
-                                  ],
-                                  onChange: (nextVal) =>
-                                    setCabinetListLayout(
-                                      nextVal as 'timeline' | 'ledger',
-                                    ),
-                                },
-                                {
-                                  key: 'cabinet-sort',
-                                  label: '정렬 순서',
-                                  value: cabinetSortOrder,
-                                  options: [
-                                    {
-                                      value: 'asc',
-                                      label: '과거순',
-                                      icon: <FiClock size={12} />,
-                                    },
-                                    {
-                                      value: 'desc',
-                                      label: '최신순',
-                                      icon: <FiClock size={12} />,
-                                    },
-                                  ],
-                                  onChange: (nextVal) =>
-                                    setCabinetSortOrder(
-                                      nextVal as 'asc' | 'desc',
-                                    ),
-                                },
-                              ]}
                               customContent={
                                 cabinetCategoryOptions.length > 1 ||
                                 politicalSystems.length > 0 ? (
@@ -2316,10 +2367,13 @@ export function CabinetsSection({
 
                             <CabS.CabListRegisterBtn
                               type="button"
+                              aria-label="행정부 · 내각 등록"
+                              title="행정부 · 내각 등록"
                               onClick={() => openCabinetRegisterModal()}
                             >
-                              <FiPlus size={14} />
-                              <span>행정부 · 내각 등록</span>
+                              <FiPlus size={14} aria-hidden />
+                              {/* 폰 폭에선 + 만 — 글자까지 넣으면 보기·정렬·⋯와 한 줄에 못 들어가 툴바가 3줄이 됐다 */}
+                              <CabT.RegisterLabel>행정부 · 내각 등록</CabT.RegisterLabel>
                             </CabS.CabListRegisterBtn>
                           </div>
                         </CabS.CabListControlsRow>
@@ -2647,11 +2701,7 @@ export function CabinetsSection({
                             </div>
                           </>
                         )}
-                        {(cabinetTerritoryLegendEntries.length > 0 ||
-                          (cabinetListLayout === 'timeline' &&
-                            cabinetTimelineMonarchVisuals.legend.some(
-                              (legendItem) => legendItem.label !== '—',
-                            ))) && (
+                        {cabinetTerritoryLegendEntries.length > 0 && (
                           <button
                             type="button"
                             onClick={() =>
@@ -2728,70 +2778,6 @@ export function CabinetsSection({
                               ))}
                             </CabS.CabTimelineLegendRow>
                           )}
-                        {showTimelineLegend &&
-                        cabinetListLayout === 'timeline' &&
-                        cabinetTimelineMonarchVisuals.legend.some(
-                          (entryItem) => entryItem.label !== '—',
-                        ) ? (
-                          <CabS.CabTimelineMonarchLegendBand
-                            role="list"
-                            aria-label="타임라인 군주 색 구분"
-                          >
-                            {cabinetTimelineMonarchVisuals.legend
-                              .filter((entryItem) => entryItem.label !== '—')
-                              .map((entryItem) => {
-                                const chip = cabinetTimelineMonarchUiTint(
-                                  entryItem.lineHex,
-                                  isDark,
-                                )
-                                return (
-                                  <div
-                                    key={entryItem.key}
-                                    role="listitem"
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 5,
-                                      flexShrink: 0,
-                                      maxWidth: '100%',
-                                      padding: '3px 9px 3px 7px',
-                                      borderRadius: 9999,
-                                      border: `1px solid ${chip.border}`,
-                                      background: chip.background,
-                                    }}
-                                    title={entryItem.label}
-                                  >
-                                    <span
-                                      aria-hidden
-                                      style={{
-                                        width: 6,
-                                        height: 6,
-                                        borderRadius: '50%',
-                                        background: entryItem.lineHex,
-                                        flexShrink: 0,
-                                        boxShadow: `0 0 0 1px ${chip.border}`,
-                                      }}
-                                    />
-                                    <span
-                                      style={{
-                                        fontSize: 10.5,
-                                        fontWeight: 600,
-                                        color: C.textMuted,
-                                        lineHeight: 1.3,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                        maxWidth: 188,
-                                        letterSpacing: '0.01em',
-                                      }}
-                                    >
-                                      {entryItem.label}
-                                    </span>
-                                  </div>
-                                )
-                              })}
-                          </CabS.CabTimelineMonarchLegendBand>
-                        ) : null}
                       </CabS.CabTimelineSummaryTopRow>
                     </CabS.CabTimelineSummaryHeader>
                     {cabinetListLayout === 'ledger' ? (
@@ -2799,7 +2785,10 @@ export function CabinetsSection({
                         items={timelineCabinetsMerged}
                         countryName={country.name}
                         isHistoricalCountry={isHistorical}
-                        showTerritoryLabels={showCabinetTerritoryLabels}
+                        showTerritoryLabels={
+                          showCabinetTerritoryLabels && !hasPolityMarkers
+                        }
+                        markersByCabinetId={cabinetListMarkers}
                         reignEraLineByCabinetId={reignEraLineByCabinetId}
                         deletingCabinetId={deletingCabinetId}
                         onSelectCabinet={selectCabinetWithUrl}
@@ -2815,7 +2804,8 @@ export function CabinetsSection({
                             item,
                             cabinetTerritoryOrdinalMap,
                           )
-                          const territoryLabel = showCabinetTerritoryLabels
+                          const territoryLabel =
+                            showCabinetTerritoryLabels && !hasPolityMarkers
                             ? getHeadTenureTerritoryLabel(
                                 head ?? {
                                   country: item.country,
@@ -2852,8 +2842,7 @@ export function CabinetsSection({
                                 },
                               )
                             : null
-                          const monarchVisual =
-                            cabinetTimelineMonarchVisuals.byCabinetId.get(item.id) ?? null
+                          const rulingParty = resolveCabinetRulingParty(item)
                           const reignEraLine =
                             reignEraLineByCabinetId.get(item.id) ?? null
                           return {
@@ -2872,8 +2861,17 @@ export function CabinetsSection({
                               ? getUploadImageUrl(head.person.profileImageUrl)
                               : null,
                             ringColor: itemPalette.line ?? null,
-                            monarchLineHex: monarchVisual?.lineHex ?? null,
-                            monarchId: monarchVisual?.monarchId ?? null,
+                            markers: cabinetListMarkers.get(String(item.id)),
+                            transition: formatCabinetTransitionLine(head, {
+                              appointment: APPOINTMENT_METHOD_LABELS,
+                              endReason: TENURE_END_REASON_LABELS,
+                            }),
+                            partyLabel: rulingParty
+                              ? rulingParty.extraCoalitionCount > 0
+                                ? `${rulingParty.label} 외 ${rulingParty.extraCoalitionCount}`
+                                : rulingParty.label
+                              : null,
+                            partyColor: rulingParty?.color ?? null,
                             startSignedYear: startParts?.signedYear ?? null,
                             startYearLabel: startParts
                               ? startParts.era === 'BC'
