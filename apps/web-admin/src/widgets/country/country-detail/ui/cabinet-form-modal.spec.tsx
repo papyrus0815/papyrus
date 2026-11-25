@@ -153,11 +153,18 @@ describe('CabinetFormModal — 정보 밀도 완화 · 점세개(⋯) 설정 메
     expect(leftPane).not.toBeNull()
     expect(rightPane).not.toBeNull()
 
+    // 좌측 = 무엇을·어디에·언제 → 누가, 우측 = 내각 자체 → 어떻게 시작·끝났나
     expect(
-      within(leftPane as HTMLElement).getByText('출범 · 수반'),
+      within(leftPane as HTMLElement).getByText('구분 · 소속 · 기간'),
     ).toBeInTheDocument()
     expect(
-      within(rightPane as HTMLElement).getByText('직책 · 명칭 · 정당'),
+      within(leftPane as HTMLElement).getByText('수반 · 직책 · 대수'),
+    ).toBeInTheDocument()
+    expect(
+      within(rightPane as HTMLElement).getByText('내각 · 정당 · 개요'),
+    ).toBeInTheDocument()
+    expect(
+      within(rightPane as HTMLElement).getByText('출범 · 취임 · 퇴임 경위'),
     ).toBeInTheDocument()
 
     // 헤더 점세개(⋯) 설정 메뉴 열기
@@ -224,8 +231,16 @@ describe('CabinetFormModal — 정보 밀도 완화 · 점세개(⋯) 설정 메
     expect(
       screen.getByPlaceholderText('출범 기조나 연립 구성 등 간단한 설명 (선택)'),
     ).toBeInTheDocument()
-    // 배경·상세 사유 메모도 버튼 없이 바로 칸으로
-    expect(screen.getByPlaceholderText('예: 거국연립내각 구성 배경')).toBeInTheDocument()
+    // 취임·퇴임 경위는 여러 줄 서술 칸(textarea), 방식·사유는 사건 모달식 칩 묶음
+    expect(screen.getByPlaceholderText('예: 거국연립내각 구성 배경').tagName).toBe('TEXTAREA')
+    expect(screen.getByRole('textbox', { name: '퇴임 경위' }).tagName).toBe('TEXTAREA')
+    const appointmentGroup = screen.getByRole('radiogroup', { name: '취임 방식' })
+    const parliamentChip = within(appointmentGroup).getByRole('radio', { name: '의회 선출' })
+    fireEvent.click(parliamentChip)
+    expect(parliamentChip).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(parliamentChip)
+    expect(parliamentChip).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('radiogroup', { name: '퇴임 사유' })).toBeInTheDocument()
   })
 
   it('군주 · 원수 재위 모드로 진입 시 군주 전용 직함 프리셋(국왕·황제 등)과 왕호 입력란을 제공하고 정당·내각명 필드는 숨긴다', () => {
