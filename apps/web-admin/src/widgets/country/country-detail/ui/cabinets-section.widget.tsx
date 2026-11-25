@@ -157,8 +157,6 @@ import {
   TL_TERRITORY_PALETTE,
 } from './cabinets-section.constants'
 import {
-  APPOINTMENT_METHOD_LABEL,
-  END_REASON_LABEL,
   buildCabinetListMarkers,
   buildCabinetTerritoryLegendEntries,
   buildCabinetTerritoryOrdinalMap,
@@ -190,6 +188,7 @@ import {
 } from '@/shared/lib/tenure-labels'
 import * as CabS from './cabinets-section.styled'
 import * as CabT from './cabinets-list-toolbar.styled'
+import * as CabD from './cabinet-detail.styled'
 import { SubsectionAddBtn } from './country-politics-tab.styles'
 import { CabinetBulkMinisterModal } from './cabinet-bulk-minister-modal.widget'
 import {
@@ -658,6 +657,8 @@ export function CabinetsSection({
   const [editingEndReason, setEditingEndReason] = useState<string>('')
   const [editingEndReasonDetail, setEditingEndReasonDetail] = useState('')
   const [editingNotes, setEditingNotes] = useState('')
+  /** 취임 경위(appointmentDetail) — 등록 모달의 '취임 경위' 칸과 같은 정본. notes는 '비고'로 분리 */
+  const [editingAppointmentDetail, setEditingAppointmentDetail] = useState('')
   const [editingTenureInfo, setEditingTenureInfo] = useState<{
     cabinetId: string
     mode: 'appointment' | 'end'
@@ -1678,6 +1679,9 @@ export function CabinetsSection({
         ...(mode === 'appointment'
           ? {
               appointmentMethod: (editingAppointmentMethod || undefined) as any,
+              appointmentDetail: optionalCabinetTenureRichText(
+                editingAppointmentDetail,
+              ),
               notes: optionalCabinetTenureRichText(editingNotes),
             }
           : {
@@ -3653,11 +3657,11 @@ export function CabinetsSection({
                         <>
                           {/* 수반 프로필 — 재임 기록 상세일 때는 숨김 */}
                           {!selectedHeadHistoryId && (
-                            <CabS.HeadProfileBlock
+                            <CabD.HeroBlock
                               id="cab-detail-profile"
                               style={{ scrollMarginTop: 12 }}
                             >
-                              <CabS.HeadProfileAvatar
+                              <CabD.HeroAvatar
                                 tabIndex={head?.person?.id ? 0 : undefined}
                                 role={head?.person?.id ? 'button' : undefined}
                                 onClick={() =>
@@ -3697,9 +3701,9 @@ export function CabinetsSection({
                                 ) : (
                                   <FiUser size={52} color={C.iconColor} />
                                 )}
-                              </CabS.HeadProfileAvatar>
-                              <CabS.HeadProfileMeta>
-                                <CabS.HeadProfileBadgeRow>
+                              </CabD.HeroAvatar>
+                              <CabD.HeroMeta>
+                                <CabD.HeroBadgeRow>
                                   {termBadge && (
                                     <CabS.HeadProfileDetailChipTerm>
                                       {termBadge}
@@ -3713,10 +3717,10 @@ export function CabinetsSection({
                                   <CabS.HeadProfileDetailChipPosition>
                                     {posTitle}
                                   </CabS.HeadProfileDetailChipPosition>
-                                </CabS.HeadProfileBadgeRow>
-                                <CabS.HeadProfileHeadline>
+                                </CabD.HeroBadgeRow>
+                                <CabD.HeroHeadline>
                                   {personName}
-                                </CabS.HeadProfileHeadline>
+                                </CabD.HeroHeadline>
                                 {explicitCabName && (
                                   <div
                                     style={{
@@ -3730,7 +3734,7 @@ export function CabinetsSection({
                                     {explicitCabName}
                                   </div>
                                 )}
-                                <CabS.HeadTenureRow>
+                                <CabD.HeroTenureRow>
                                   <CabS.HeadTenureDates>
                                     <FiCalendar size={10} />
                                     {startFull} – {endFull}
@@ -3748,7 +3752,7 @@ export function CabinetsSection({
                                         : `취임 ${ageAtStart}세`}
                                     </CabS.HeadTenureAge>
                                   )}
-                                </CabS.HeadTenureRow>
+                                </CabD.HeroTenureRow>
                                 {hasDistinctHeadTenureSpan && head?.startDate && (
                                   <div
                                     style={{
@@ -3803,8 +3807,8 @@ export function CabinetsSection({
                                       </div>
                                     )
                                   })()}
-                              </CabS.HeadProfileMeta>
-                            </CabS.HeadProfileBlock>
+                              </CabD.HeroMeta>
+                            </CabD.HeroBlock>
                           )}
 
                           {!selectedHeadHistoryId && (
@@ -3838,7 +3842,7 @@ export function CabinetsSection({
                                   {isLikelyRichTextHtml(
                                     selectedCabinet.description,
                                   ) ? (
-                                    <CabS.HeadTenureInfoRichColumn
+                                    <CabD.ProseColumn
                                       onClick={handleHistoryProseClick}
                                       role="presentation"
                                     >
@@ -3847,13 +3851,13 @@ export function CabinetsSection({
                                           selectedCabinet.description ?? '',
                                         )}
                                       />
-                                    </CabS.HeadTenureInfoRichColumn>
+                                    </CabD.ProseColumn>
                                   ) : (
-                                    <CabS.HeadTenureInfoRichColumn>
+                                    <CabD.ProseColumn>
                                       <CabS.HeadTenureInfoText>
                                         {selectedCabinet.description}
                                       </CabS.HeadTenureInfoText>
-                                    </CabS.HeadTenureInfoRichColumn>
+                                    </CabD.ProseColumn>
                                   )}
                                 </CabS.HeadTenureInfoSection>
                               )}
@@ -3862,6 +3866,9 @@ export function CabinetsSection({
                                 (() => {
                                   const hasAppointmentContent = Boolean(
                                     head.appointmentMethod ||
+                                      cabinetTenureDetailHasContent(
+                                        head.appointmentDetail,
+                                      ) ||
                                       cabinetTenureDetailHasContent(head.notes),
                                   )
                                   const isEditingAppointment = Boolean(
@@ -3887,8 +3894,11 @@ export function CabinetsSection({
                                     isEditingAppointment
                                   const showEndCard =
                                     hasEndContent || isEditingEnd
+                                  /* 현직(종료일 없음)에는 '퇴임 경위 추가'를 내밀지 않는다 */
+                                  const isIncumbentHead = !head.endDate && !head.endYear
+                                  const showEndQuickAdd = !showEndCard && !isIncumbentHead
                                   const showQuickAddRow =
-                                    !showAppointmentCard || !showEndCard
+                                    !showAppointmentCard || showEndQuickAdd
 
                                   return (
                                     <CabS.CabDetailScrollSection id="cab-detail-tenure">
@@ -3954,6 +3964,9 @@ export function CabinetsSection({
                                                   setEditingNotes(
                                                     head.notes ?? '',
                                                   )
+                                                  setEditingAppointmentDetail(
+                                                    head.appointmentDetail ?? '',
+                                                  )
                                                   setEditingTenureInfo({
                                                     cabinetId:
                                                       selectedCabinet.id,
@@ -3979,7 +3992,7 @@ export function CabinetsSection({
                                             >
                                               <div>
                                                 <CabS.HeadTenureInfoLabel>
-                                                  임명 방식
+                                                  취임 방식
                                                 </CabS.HeadTenureInfoLabel>
                                                 <CabS.CabinetSelectNative
                                                   value={
@@ -3996,7 +4009,7 @@ export function CabinetsSection({
                                                     선택 안 함
                                                   </option>
                                                   {Object.entries(
-                                                    APPOINTMENT_METHOD_LABEL,
+                                                    APPOINTMENT_METHOD_LABELS,
                                                   ).map(
                                                     ([
                                                       methodKey,
@@ -4014,14 +4027,16 @@ export function CabinetsSection({
                                               </div>
                                               <div>
                                                 <CabS.HeadTenureInfoLabel>
-                                                  취임 배경 / 비고
+                                                  취임 경위
                                                 </CabS.HeadTenureInfoLabel>
-                                                <CabS.HeadTenureInfoEditorWrap>
+                                                <CabD.ProseEditorWrap>
                                                   <RichTextEditor
-                                                    value={editingNotes}
-                                                    onChange={setEditingNotes}
+                                                    value={editingAppointmentDetail}
+                                                    onChange={
+                                                      setEditingAppointmentDetail
+                                                    }
                                                     showTitle={false}
-                                                    placeholder="취임 배경, 특이 사항 등"
+                                                    placeholder="어떻게 취임했나 — 연립 구성, 지명 배경 등"
                                                     onImageUpload={async (
                                                       file,
                                                     ) => {
@@ -4038,7 +4053,35 @@ export function CabinetsSection({
                                                       )
                                                     }}
                                                   />
-                                                </CabS.HeadTenureInfoEditorWrap>
+                                                </CabD.ProseEditorWrap>
+                                              </div>
+                                              <div>
+                                                <CabS.HeadTenureInfoLabel>
+                                                  비고
+                                                </CabS.HeadTenureInfoLabel>
+                                                <CabD.ProseEditorWrap>
+                                                  <RichTextEditor
+                                                    value={editingNotes}
+                                                    onChange={setEditingNotes}
+                                                    showTitle={false}
+                                                    placeholder="그 밖의 특이 사항 · 출처 메모"
+                                                    onImageUpload={async (
+                                                      file,
+                                                    ) => {
+                                                      const result =
+                                                        await uploadImage(
+                                                          file,
+                                                          'persons',
+                                                        )
+                                                      return (
+                                                        getUploadImageUrl(
+                                                          result.url,
+                                                        ) ||
+                                                        (result.url ?? '')
+                                                      )
+                                                    }}
+                                                  />
+                                                </CabD.ProseEditorWrap>
                                               </div>
                                             </div>
                                           ) : (
@@ -4051,41 +4094,60 @@ export function CabinetsSection({
                                                   }}
                                                 >
                                                   <CabS.HeadTenureInfoBadgeLabel>
-                                                    임명
+                                                    방식
                                                   </CabS.HeadTenureInfoBadgeLabel>
-                                                  {APPOINTMENT_METHOD_LABEL[
+                                                  {APPOINTMENT_METHOD_LABELS[
                                                     head.appointmentMethod
                                                   ] ?? head.appointmentMethod}
                                                 </CabS.HeadTenureInfoBadge>
+                                              )}
+                                              {cabinetTenureDetailHasContent(
+                                                head.appointmentDetail,
+                                              ) && (
+                                                <CabS.HeadTenureInfoRow $block>
+                                                  <CabS.HeadTenureInfoLabel>
+                                                    취임 경위
+                                                  </CabS.HeadTenureInfoLabel>
+                                                  {isLikelyRichTextHtml(head.appointmentDetail) ? (
+                                                    <CabD.ProseColumn
+                                                      onClick={handleHistoryProseClick}
+                                                      role="presentation"
+                                                    >
+                                                      <CabS.HeadTenureInfoRichProse
+                                                        html={String(head.appointmentDetail ?? '')}
+                                                      />
+                                                    </CabD.ProseColumn>
+                                                  ) : (
+                                                    <CabD.ProseColumn>
+                                                      <CabS.HeadTenureInfoText>
+                                                        {head.appointmentDetail}
+                                                      </CabS.HeadTenureInfoText>
+                                                    </CabD.ProseColumn>
+                                                  )}
+                                                </CabS.HeadTenureInfoRow>
                                               )}
                                               {cabinetTenureDetailHasContent(
                                                 head.notes,
                                               ) && (
                                                 <CabS.HeadTenureInfoRow $block>
                                                   <CabS.HeadTenureInfoLabel>
-                                                    취임 배경 / 비고
+                                                    비고
                                                   </CabS.HeadTenureInfoLabel>
-                                                  {isLikelyRichTextHtml(
-                                                    head.notes,
-                                                  ) ? (
-                                                    <CabS.HeadTenureInfoRichColumn
-                                                      onClick={
-                                                        handleHistoryProseClick
-                                                      }
+                                                  {isLikelyRichTextHtml(head.notes) ? (
+                                                    <CabD.ProseColumn
+                                                      onClick={handleHistoryProseClick}
                                                       role="presentation"
                                                     >
                                                       <CabS.HeadTenureInfoRichProse
-                                                        html={String(
-                                                          head.notes ?? '',
-                                                        )}
+                                                        html={String(head.notes ?? '')}
                                                       />
-                                                    </CabS.HeadTenureInfoRichColumn>
+                                                    </CabD.ProseColumn>
                                                   ) : (
-                                                    <CabS.HeadTenureInfoRichColumn>
+                                                    <CabD.ProseColumn>
                                                       <CabS.HeadTenureInfoText>
                                                         {head.notes}
                                                       </CabS.HeadTenureInfoText>
-                                                    </CabS.HeadTenureInfoRichColumn>
+                                                    </CabD.ProseColumn>
                                                   )}
                                                 </CabS.HeadTenureInfoRow>
                                               )}
@@ -4195,7 +4257,7 @@ export function CabinetsSection({
                                                     선택 안 함
                                                   </option>
                                                   {Object.entries(
-                                                    END_REASON_LABEL,
+                                                    TENURE_END_REASON_LABELS,
                                                   ).map(
                                                     ([
                                                       reasonKey,
@@ -4215,7 +4277,7 @@ export function CabinetsSection({
                                                 <CabS.HeadTenureInfoLabel>
                                                   퇴임 상세
                                                 </CabS.HeadTenureInfoLabel>
-                                                <CabS.HeadTenureInfoEditorWrap>
+                                                <CabD.ProseEditorWrap>
                                                   <RichTextEditor
                                                     value={
                                                       editingEndReasonDetail
@@ -4241,7 +4303,7 @@ export function CabinetsSection({
                                                       )
                                                     }}
                                                   />
-                                                </CabS.HeadTenureInfoEditorWrap>
+                                                </CabD.ProseEditorWrap>
                                               </div>
                                             </div>
                                           ) : (
@@ -4254,9 +4316,9 @@ export function CabinetsSection({
                                                   }}
                                                 >
                                                   <CabS.HeadTenureInfoBadgeLabel>
-                                                    퇴임
+                                                    사유
                                                   </CabS.HeadTenureInfoBadgeLabel>
-                                                  {END_REASON_LABEL[
+                                                  {TENURE_END_REASON_LABELS[
                                                     head.endReason
                                                   ] ?? head.endReason}
                                                 </CabS.HeadTenureInfoBadge>
@@ -4271,7 +4333,7 @@ export function CabinetsSection({
                                                   {isLikelyRichTextHtml(
                                                     head.endReasonDetail,
                                                   ) ? (
-                                                    <CabS.HeadTenureInfoRichColumn
+                                                    <CabD.ProseColumn
                                                       onClick={
                                                         handleHistoryProseClick
                                                       }
@@ -4283,13 +4345,13 @@ export function CabinetsSection({
                                                             '',
                                                         )}
                                                       />
-                                                    </CabS.HeadTenureInfoRichColumn>
+                                                    </CabD.ProseColumn>
                                                   ) : (
-                                                    <CabS.HeadTenureInfoRichColumn>
+                                                    <CabD.ProseColumn>
                                                       <CabS.HeadTenureInfoText>
                                                         {head.endReasonDetail}
                                                       </CabS.HeadTenureInfoText>
-                                                    </CabS.HeadTenureInfoRichColumn>
+                                                    </CabD.ProseColumn>
                                                   )}
                                                 </CabS.HeadTenureInfoRow>
                                               )}
@@ -4299,14 +4361,7 @@ export function CabinetsSection({
                                       ) : null}
 
                                       {showQuickAddRow ? (
-                                        <div
-                                          style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            flexWrap: 'wrap',
-                                            gap: 8,
-                                          }}
-                                        >
+                                        <CabD.TenureQuickAddRow>
                                           {!showAppointmentCard ? (
                                             <SubsectionAddBtn
                                               type="button"
@@ -4316,6 +4371,9 @@ export function CabinetsSection({
                                                 )
                                                 setEditingNotes(
                                                   head.notes ?? '',
+                                                )
+                                                setEditingAppointmentDetail(
+                                                  head.appointmentDetail ?? '',
                                                 )
                                                 setEditingTenureInfo({
                                                   cabinetId: selectedCabinet.id,
@@ -4330,7 +4388,7 @@ export function CabinetsSection({
                                               취임 경위 추가
                                             </SubsectionAddBtn>
                                           ) : null}
-                                          {!showEndCard ? (
+                                          {showEndQuickAdd ? (
                                             <SubsectionAddBtn
                                               type="button"
                                               onClick={() => {
@@ -4353,7 +4411,7 @@ export function CabinetsSection({
                                               퇴임 경위 추가
                                             </SubsectionAddBtn>
                                           ) : null}
-                                        </div>
+                                        </CabD.TenureQuickAddRow>
                                       ) : null}
                                     </CabS.CabDetailScrollSection>
                                   )

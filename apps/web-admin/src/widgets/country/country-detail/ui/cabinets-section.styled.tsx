@@ -1878,15 +1878,31 @@ export const EmptyStateBox = styled.div`
   text-align: center;
 `
 
+/**
+ * 상세의 빈 칸(정당·각료·재임 기록·사건·조약 0건) — 한 줄 점선 띠.
+ * 예전엔 아이콘+문구를 가운데 세운 112px+여백 블록이라 빈 칸 다섯 개가 화면 한 장(≈1,100px)을 먹었다.
+ * $padding은 옛 호출부 호환용으로 받기만 하고 쓰지 않는다.
+ */
 export const CabDetailEmptyStack = styled.div<{ $padding?: string }>`
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 112px;
+  justify-content: flex-start;
+  gap: 4px 10px;
+  min-height: 0;
   box-sizing: border-box;
-  padding: ${(p) => p.$padding ?? '24px 0 28px'};
+  padding: 11px 14px;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  border-radius: 10px;
+  text-align: left;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
 `
 
 export const CabDetailEmptyText = styled.p<{
@@ -1968,7 +1984,6 @@ export const CabDetailPartyEmptyHint = styled.span`
   line-height: 1.4;
   color: ${({ theme }) =>
     getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
-  max-width: 260px;
 `
 
 export const CabDetailPartyEmptyIconWrap = styled.span`
