@@ -276,6 +276,16 @@ export function CabinetsLedgerView({
           const hasLinkageGroup = Boolean(cabinetItem.linkageGroup)
           const isDeleting = deletingCabinetId === cabinetItem.id
           const leaderPersonId = headTenure?.person?.id ?? null
+          /* 같은 수반이 바로 앞 행에서 이어지면(요시다 3·4·5차) 사진·이름을 되풀이하지 않는다 —
+             단, 세기·정치체·공백 머리가 사이에 끼면 묶음을 끊어 머리 아래 첫 행엔 늘 얼굴이 오게 */
+          const prevLeaderPersonId =
+            rowIndex > 0 ? (items[rowIndex - 1].headTenure?.person?.id ?? null) : null
+          const isLeaderContinuation = Boolean(
+            leaderPersonId &&
+              leaderPersonId === prevLeaderPersonId &&
+              rowMarkers.length === 0 &&
+              !shouldRenderCenturyHeader,
+          )
           return (
             <React.Fragment key={cabinetItem.id}>
               {shouldRenderCenturyHeader ? (
@@ -362,7 +372,9 @@ export function CabinetsLedgerView({
                 </PositionCell>
 
                 <LeaderCell>
-                  {leaderPersonId && onInspectPerson ? (
+                  {isLeaderContinuation ? (
+                    <ContinuationSlot aria-hidden />
+                  ) : leaderPersonId && onInspectPerson ? (
                     <AvatarTriggerBtn
                       type="button"
                       title={`${personDisplayName} 인물 정보 미리보기`}
@@ -387,11 +399,22 @@ export function CabinetsLedgerView({
                     </MiniAvatarFallback>
                   )}
                   <LeaderTextStack>
-                    <LeaderNameText>{personDisplayName}</LeaderNameText>
-                    {explicitCabinetName &&
-                    explicitCabinetName !== personDisplayName ? (
-                      <CabinetSubName>{explicitCabinetName}</CabinetSubName>
-                    ) : null}
+                    {isLeaderContinuation ? (
+                      <>
+                        <LeaderNameText $continuation>
+                          {explicitCabinetName ?? personDisplayName}
+                        </LeaderNameText>
+                        <CabinetSubName>연임 · {personDisplayName}</CabinetSubName>
+                      </>
+                    ) : (
+                      <>
+                        <LeaderNameText>{personDisplayName}</LeaderNameText>
+                        {explicitCabinetName &&
+                        explicitCabinetName !== personDisplayName ? (
+                          <CabinetSubName>{explicitCabinetName}</CabinetSubName>
+                        ) : null}
+                      </>
+                    )}
                   </LeaderTextStack>
                 </LeaderCell>
 
@@ -854,6 +877,38 @@ const MiniAvatarFallback = styled.div`
   color: ${({ theme }) => ledgerAccent(theme.mode)};
 `
 
+/** 연임 행의 사진 자리 — 위 행 사진에서 내려오는 짧은 안내선 */
+const ContinuationSlot = styled.span`
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -14px;
+    height: 26px;
+    width: 2px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 12px;
+    width: 7px;
+    height: 7px;
+    margin-left: -3.5px;
+    border-radius: 50%;
+    border: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    box-sizing: border-box;
+  }
+`
+
 const LeaderTextStack = styled.div`
   display: flex;
   flex-direction: column;
@@ -861,9 +916,9 @@ const LeaderTextStack = styled.div`
   min-width: 0;
 `
 
-const LeaderNameText = styled.span`
-  font-size: 13px;
-  font-weight: 700;
+const LeaderNameText = styled.span<{ $continuation?: boolean }>`
+  font-size: ${({ $continuation }) => ($continuation ? 12.5 : 13)}px;
+  font-weight: ${({ $continuation }) => ($continuation ? 600 : 700)};
   color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;
   overflow: hidden;

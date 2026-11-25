@@ -105,6 +105,23 @@ export function CabinetsVerticalTimeline({
   /* 몇 줄 안 되면(독일 2개) 세기 머리가 줄마다 끼어 오히려 소음 — 6줄 이상일 때만 */
   const showCenturyHeads = centuries.size > 1 && rows.length >= 6
 
+  /**
+   * 같은 사람이 잇달아 맡은 행(요시다 3·4·5차)은 한 묶음 — 첫 행만 사진·이름, 다음 행들은 사진 자리에 가는
+   * 안내선과 '내각 이름 + 연임'만. 예전엔 같은 사진·이름이 네 번 반복됐다. 표지(정치체·군주·공백)나 세기 머리가
+   * 끼면 묶음을 끊는다 — 머리 바로 아래 사진 없는 행이 오면 누구 행인지 안 보인다.
+   */
+  const rowCentury = (row: CabinetVerticalTimelineRow) =>
+    row.startSignedYear != null ? centuryLabel(row.startSignedYear) : ''
+  const continuesPrevious = (rowIndex: number): boolean => {
+    if (rowIndex <= 0 || rowIndex >= rows.length) return false
+    const row = rows[rowIndex]
+    const prevRow = rows[rowIndex - 1]
+    if (!row.personId || row.personId !== prevRow.personId) return false
+    if ((row.markers ?? []).length > 0) return false
+    if (showCenturyHeads && rowCentury(row) && rowCentury(row) !== rowCentury(prevRow)) return false
+    return true
+  }
+
   let prevCentury: string | null = null
   return (
     <TimelineList aria-label="역대 행정부 연표">
@@ -113,9 +130,9 @@ export function CabinetsVerticalTimeline({
         const century = row.startSignedYear != null ? centuryLabel(row.startSignedYear) : ''
         const centuryHead = showCenturyHeads && century && century !== prevCentury ? century : null
         prevCentury = century || prevCentury
-        /* 같은 사람이 잇달아 맡으면(이토 1·2·3차) '연임' 꼬리표 — 예전엔 사진을 30px로 줄였는데 크기 차이가
-           '덜 중요한 행'으로 읽혀서, 사진은 같은 크기로 두고 글자로 말한다 */
-        const isRepeatPerson = Boolean(row.personId && prevRow?.personId === row.personId)
+        /* 같은 사람이 잇달아 맡으면 묶음의 이어지는 행 — 사진·이름 대신 안내선과 내각 이름 */
+        const isContinuation = continuesPrevious(rowIdx)
+        const hasContinuationBelow = continuesPrevious(rowIdx + 1)
         const barPct =
           row.durationDays != null ? Math.max(2, Math.round((row.durationDays / maxDays) * 100)) : 0
         const markers = row.markers ?? []
@@ -179,20 +196,38 @@ export function CabinetsVerticalTimeline({
                   aria-label={row.ariaLabel}
                   onClick={() => onSelect(row.id)}
                 >
-                  <Avatar $ring={row.ringColor}>
-                    {row.thumbUrl ? (
-                      <img src={row.thumbUrl} alt="" />
+                  <AvatarCell
+                    aria-hidden
+                    $continuation={isContinuation}
+                    $continuesBelow={hasContinuationBelow}
+                  >
+                    {isContinuation ? (
+                      <span className="guide-dot" />
                     ) : (
-                      <span className="initial">{row.personName.slice(0, 1) || '?'}</span>
+                      <Avatar $ring={row.ringColor}>
+                        {row.thumbUrl ? (
+                          <img src={row.thumbUrl} alt="" />
+                        ) : (
+                          <span className="initial">{row.personName.slice(0, 1) || '?'}</span>
+                        )}
+                      </Avatar>
                     )}
-                  </Avatar>
+                  </AvatarCell>
                   <TextStack>
-                    <NameLine>
-                      <strong>{row.personName}</strong>
-                      <span className="pos">{row.posTitle}</span>
-                      {isRepeatPerson ? <span className="again">연임</span> : null}
-                    </NameLine>
-                    {row.cabinetName || row.territoryLabel ? (
+                    {isContinuation ? (
+                      <NameLine $continuation>
+                        <strong>{row.cabinetName ?? row.personName}</strong>
+                        <span className="again">연임</span>
+                      </NameLine>
+                    ) : (
+                      <NameLine>
+                        <strong>{row.personName}</strong>
+                        <span className="pos">{row.posTitle}</span>
+                      </NameLine>
+                    )}
+                    {isContinuation ? (
+                      row.territoryLabel ? <SubLine>{row.territoryLabel}</SubLine> : null
+                    ) : row.cabinetName || row.territoryLabel ? (
                       <SubLine>
                         {[row.cabinetName, row.territoryLabel].filter(Boolean).join(' · ')}
                       </SubLine>
@@ -574,6 +609,42 @@ const AsideStack = styled.span`
   }
 `
 
+/** 사진 칸 — 묶음이면 사진 아래로(첫 행)·위아래로(이어지는 행) 안내선을 그어 한 사람의 연속 임기를 잇는다 */
+const AvatarCell = styled.span<{ $continuation: boolean; $continuesBelow: boolean }>`
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  width: 44px;
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    display: ${({ $continuation, $continuesBelow }) =>
+      $continuation || $continuesBelow ? 'block' : 'none'};
+    position: absolute;
+    left: 50%;
+    width: 2px;
+    margin-left: -1px;
+    border-radius: 1px;
+    /* MainBtn 위아래 여백(8+10)과 줄 사이 6px를 넘어 이웃 행 칸까지 닿게 */
+    top: ${({ $continuation }) => ($continuation ? '-26px' : '50px')};
+    bottom: ${({ $continuesBelow }) => ($continuesBelow ? '-26px' : 'calc(100% - 15px)')};
+    background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+
+  .guide-dot {
+    position: relative;
+    z-index: 1;
+    width: 9px;
+    height: 9px;
+    margin-top: 11px;
+    border-radius: 50%;
+    border: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    background: ${({ theme }) => theme.colors.background.primary};
+  }
+`
+
 const Avatar = styled.span<{ $ring: string | null }>`
   flex-shrink: 0;
   display: inline-flex;
@@ -607,15 +678,15 @@ const TextStack = styled.span`
   flex: 1;
 `
 
-const NameLine = styled.span`
+const NameLine = styled.span<{ $continuation?: boolean }>`
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 2px 8px;
 
   strong {
-    font-size: 15px;
-    font-weight: 700;
+    font-size: ${({ $continuation }) => ($continuation ? 14 : 15)}px;
+    font-weight: ${({ $continuation }) => ($continuation ? 650 : 700)};
     line-height: 1.35;
     color: ${({ theme }) => theme.colors.text.primary};
     word-break: keep-all;
