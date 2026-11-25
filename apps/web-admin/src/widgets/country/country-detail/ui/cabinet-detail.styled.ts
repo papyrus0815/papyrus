@@ -7,6 +7,7 @@
  *
  * cabinets-section.styled.tsx의 같은 부품을 styled()로 덮어써 쓴다(원본은 다른 지면 수정이 진행 중인 큰 파일).
  */
+import { motion } from 'framer-motion'
 import styled from 'styled-components'
 
 import * as CabS from './cabinets-section.styled'
@@ -227,5 +228,20 @@ export const DetachBtn = styled(SubsectionAddBtn)`
       theme.mode === 'dark' ? 'rgba(248,113,113,0.6)' : 'rgba(220,38,38,0.5)'};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(248,113,113,0.1)' : 'rgba(254,226,226,0.6)'};
+  }
+`
+
+/**
+ * 상세 뷰 뿌리. 아직 아무것도 없는 섹션(각료·재임 기록·사건·조약 0건)은 머리 줄만 남긴다 —
+ * 머리에 이미 '0건'이 있는데 그 아래 '…없습니다' 띠와 위아래 32/36px 여백까지 두면 빈 섹션 하나가 ≈150px,
+ * 네 개면 화면 하나(≈600px)가 '없음'이었다. 표시는 data-empty-note를 단 빈 띠에만(검색 결과 없음·오류 문구는 그대로).
+ */
+export const DetailRoot = styled(motion.div)`
+  [data-empty-note] {
+    display: none;
+  }
+  div:has(> [data-empty-note]) {
+    padding-top: 14px;
+    padding-bottom: 14px;
   }
 `

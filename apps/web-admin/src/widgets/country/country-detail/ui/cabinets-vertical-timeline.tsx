@@ -237,7 +237,29 @@ export function CabinetsVerticalTimeline({
                     ) : null}
                     <MetaLine>
                       <span className="range">{row.range}</span>
-                      {row.durationLabel ? <span>{row.durationLabel}</span> : null}
+                      {row.durationLabel ? (
+                        /* 재임 막대는 이 글자 바로 옆 — 예전엔 막대 혼자 한 줄을 써 19행이면 ≈230px였다 */
+                        <span className="duration">
+                          {row.durationLabel}
+                          {barPct > 0 ? (
+                            <DurationTrack
+                              aria-hidden
+                              title={
+                                longestLabel
+                                  ? `재임 ${row.durationLabel} — 이 목록 최장(${longestLabel}) 대비`
+                                  : undefined
+                              }
+                            >
+                              <span
+                                style={{
+                                  width: `${barPct}%`,
+                                  background: row.ringColor ?? undefined,
+                                }}
+                              />
+                            </DurationTrack>
+                          ) : null}
+                        </span>
+                      ) : null}
                       {row.ageAtStart != null ? <span>취임 {row.ageAtStart}세</span> : null}
                       {row.achievementCount > 0 ? (
                         <span className="award">
@@ -248,22 +270,6 @@ export function CabinetsVerticalTimeline({
                       {row.isCurrent ? <span className="current">현직</span> : null}
                     </MetaLine>
                     {row.reignEraLine ? <EraLine>{row.reignEraLine}</EraLine> : null}
-                    {barPct > 0 ? (
-                      <DurationTrack
-                        title={
-                          longestLabel
-                            ? `재임 ${row.durationLabel ?? ''} — 이 목록 최장(${longestLabel}) 대비`
-                            : undefined
-                        }
-                      >
-                        <span
-                          style={{
-                            width: `${barPct}%`,
-                            background: row.ringColor ?? undefined,
-                          }}
-                        />
-                      </DurationTrack>
-                    ) : null}
                   </TextStack>
                   {row.transition || row.partyLabel ? (
                     /* 원장과 같은 '취임 → 퇴임' 한 줄 + 정당 — 예전엔 '취임/퇴임/정당' 키 라벨이 행마다 셋씩 반복됐다 */
@@ -553,7 +559,7 @@ const MainBtn = styled.button`
   /* 넓은 칸: 셋째 칸(취임 → 퇴임 · 정당)을 본문 바로 옆에 — 본문 칸을 1fr로 두면 셋째 칸이 오른쪽 끝으로
      밀려 1440px에서 본문과 170px 떨어졌다 */
   @container (min-width: 760px) {
-    grid-template-columns: auto minmax(0, 380px) minmax(180px, 260px);
+    grid-template-columns: auto minmax(0, 440px) minmax(180px, 260px);
     justify-content: start;
     column-gap: 24px;
   }
@@ -752,18 +758,13 @@ const EraLine = styled.span`
   word-break: keep-all;
 `
 
-/* 폰 폭에선 숨긴다 — 바로 위 '2년 4개월' 글자와 같은 말인데 막대만으로 한 줄을 먹었다 */
+/* 날짜 줄 안의 짧은 막대(최장 재임 대비 길이). 폰 폭에선 숨긴다 — 같은 정보의 글자가 바로 옆 */
 const DurationTrack = styled.span`
-  display: block;
-
-  @container (max-width: 560px) {
-    display: none;
-  }
-
-  width: 100%;
-  max-width: 260px;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 72px;
   height: 4px;
-  margin-top: 4px;
+  margin-left: 6px;
   border-radius: 999px;
   background: ${({ theme }) => ledgerHairline(theme.mode)};
   overflow: hidden;
@@ -773,6 +774,10 @@ const DurationTrack = styled.span`
     height: 100%;
     border-radius: 999px;
     background: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  @container (max-width: 560px) {
+    display: none;
   }
 `
 

@@ -202,7 +202,7 @@ export function CabinetEventsSection({
           사건 불러오는 중…
         </CabS.CabMinistersLoadingBox>
       ) : links.length === 0 ? (
-        <CabS.CabDetailEmptyStack $padding="24px 0 28px">
+        <CabS.CabDetailEmptyStack $padding="24px 0 28px" data-empty-note="">
           <CabS.CabDetailPartyEmptyIconWrap aria-hidden>
             <FiCalendar size={26} strokeWidth={1.5} />
           </CabS.CabDetailPartyEmptyIconWrap>

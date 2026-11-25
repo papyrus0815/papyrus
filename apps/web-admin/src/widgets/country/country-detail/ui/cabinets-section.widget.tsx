@@ -3046,7 +3046,7 @@ export function CabinetsSection({
           </motion.div>
         ) : (
           /* ── 상세 뷰: 선택한 행정부 내용 ── */
-          <motion.div
+          <CabD.DetailRoot
             ref={cabinetDetailViewRootRef}
             key="cab-detail-view"
             data-cabinet-print-root=""
@@ -3644,7 +3644,7 @@ export function CabinetsSection({
                                 )}
                               </CabS.CabDetailMinistersSectionHeader>
                               {achievementCount === 0 ? (
-                                <CabS.CabDetailEmptyStack $padding="24px 0 28px">
+                                <CabS.CabDetailEmptyStack $padding="24px 0 28px" data-empty-note="">
                                   <CabS.CabDetailPartyEmptyIconWrap aria-hidden>
                                     <FiLayers
                                       size={26}
@@ -4925,7 +4925,10 @@ export function CabinetsSection({
                                       </SubsectionAddBtn>
                                     </CabS.CabDetailEmptyStack>
                                   ) : (
-                                    <CabS.CabDetailEmptyStack $padding="24px 0 28px">
+                                    <CabS.CabDetailEmptyStack
+                                      $padding="24px 0 28px"
+                                      data-empty-note={ministriesForCabinet.length === 0 ? '' : undefined}
+                                    >
                                       <CabS.CabDetailPartyEmptyIconWrap
                                         aria-hidden
                                       >
@@ -5425,7 +5428,7 @@ export function CabinetsSection({
                                     }
                                   />
                                 ) : (
-                                  <CabS.CabDetailEmptyStack $padding="24px 0 28px">
+                                  <CabS.CabDetailEmptyStack $padding="24px 0 28px" data-empty-note="">
                                     <CabS.CabDetailPartyEmptyIconWrap
                                       aria-hidden
                                     >
@@ -5503,7 +5506,7 @@ export function CabinetsSection({
                                     조약 불러오는 중…
                                   </CabS.CabMinistersLoadingBox>
                                 ) : cabinetTreaties.length === 0 ? (
-                                  <CabS.CabDetailEmptyStack $padding="24px 0 28px">
+                                  <CabS.CabDetailEmptyStack $padding="24px 0 28px" data-empty-note="">
                                     <CabS.CabDetailPartyEmptyIconWrap
                                       aria-hidden
                                     >
@@ -6046,7 +6049,7 @@ export function CabinetsSection({
                     })()}
               </>
             )}
-          </motion.div>
+          </CabD.DetailRoot>
         )}
       </>
 
