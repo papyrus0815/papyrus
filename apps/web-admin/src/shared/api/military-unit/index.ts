@@ -1,38 +1,230 @@
 import * as militaryUnitsApi from '@api/functional/military_units'
 
-import type {
-  CreateMilitaryUnitTransitionDto,
-  MilitaryBranch,
-  MilitaryUnitDateInput,
-  MilitaryUnitDatePartsDto,
-  MilitaryUnitDto,
-  MilitaryUnitEventLinkDto,
-  MilitaryUnitLineageDto,
-  MilitaryUnitTransitionKind,
-  MilitaryUnitType as ServerMilitaryUnitType,
-  UpdateMilitaryUnitTransitionDto,
-} from '../../../../api/src/libs/military/military-unit/presentation/dto'
 import type { AdministrationDepartmentTenureItem } from '../administration-department'
 import { getApiConnection } from '../client'
 
-export type MilitaryUnit = MilitaryUnitDto
-export type MilitaryUnitType = ServerMilitaryUnitType
-export type {
-  CreateMilitaryUnitTransitionDto,
-  MilitaryBranch,
-  MilitaryUnitDateInput,
-  MilitaryUnitDatePartsDto,
-  MilitaryUnitEventLinkDto,
-  MilitaryUnitLineageDto,
-  MilitaryUnitTransitionKind,
-  UpdateMilitaryUnitTransitionDto,
-}
 export type CreateMilitaryUnitInput = Parameters<
   typeof militaryUnitsApi.create
 >[1]
 export type UpdateMilitaryUnitInput = Parameters<
   typeof militaryUnitsApi.update
 >[2]
+
+export type MilitaryUnitType = NonNullable<CreateMilitaryUnitInput['unitType']>
+export type MilitaryBranch = NonNullable<CreateMilitaryUnitInput['branch']>
+export type MilitaryUnitJurisdictionGeometryDto = NonNullable<
+  CreateMilitaryUnitInput['jurisdictionGeometry']
+>
+
+export type CreateMilitaryUnitTransitionDto = Parameters<
+  typeof militaryUnitsApi.transitions.addTransition
+>[2]
+export type UpdateMilitaryUnitTransitionDto = Parameters<
+  typeof militaryUnitsApi.transitions.updateTransition
+>[2]
+export type MilitaryUnitTransitionKind = CreateMilitaryUnitTransitionDto['kind']
+
+export interface MilitaryUnitDatePartsDto {
+  era: 'BC' | 'AD'
+  year: number
+  month: number | null
+  day: number | null
+  precision: string | null
+}
+
+export interface MilitaryUnitDateInput {
+  era?: 'BC' | 'AD' | null
+  year?: number | null
+  month?: number | null
+  day?: number | null
+  precision?: string | null
+}
+
+export interface MilitaryUnitLineageDto {
+  transitionId: string
+  kind: MilitaryUnitTransitionKind
+  era: 'BC' | 'AD' | null
+  year: number | null
+  month: number | null
+  note: string | null
+  targetType: 'MILITARY_UNIT' | 'DEPARTMENT'
+  unit: {
+    id: string
+    name: string
+    abbreviation: string | null
+    unitType: MilitaryUnitType | null
+  } | null
+  department: {
+    id: string
+    name: string
+    abbreviation: string | null
+    kind: string
+  } | null
+}
+
+export interface MilitaryUnitEventLinkDto {
+  relationId: string
+  role: string
+  roleDescription?: string | null
+  event: {
+    id: string
+    title: string
+    startDate?: string | null
+    endDate?: string | null
+    startEra?: string | null
+    startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    startDatePrecision?: string | null
+    type?: string | null
+    kind?: string | null
+  }
+}
+
+export interface MilitaryUnitObservationDto {
+  id: string
+  metricKey: string
+  metricName?: string
+  metricLabelKo?: string
+  unit?: string | null
+  value?: string | null
+  low?: string | null
+  high?: string | null
+  approx: boolean
+  atLeast: boolean
+  qualifier?: string | null
+  note?: string | null
+  estimateRole?: 'PREFERRED' | 'ALTERNATIVE' | 'DISPUTED' | null
+  method?: 'COUNTED' | 'ESTIMATED' | 'EXTRAPOLATED' | 'OFFICIAL_CLAIM' | null
+  start?: MilitaryUnitDatePartsDto | null
+  end?: MilitaryUnitDatePartsDto | null
+}
+
+export interface MilitaryUnitDto {
+  id: string
+  name: string
+  nameLocal?: string | null
+  nameEn?: string | null
+  abbreviation?: string | null
+  unitType?: MilitaryUnitType | null
+  branch?: MilitaryBranch | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  isActive?: boolean | null
+  established?: MilitaryUnitDatePartsDto | null
+  disbanded?: MilitaryUnitDatePartsDto | null
+  establishedDate?: string | null
+  disbandedDate?: string | null
+  parentUnitId?: string | null
+  administrationDepartmentId?: string | null
+  nickname?: string | null
+  motto?: string | null
+  garrison?: string | null
+  garrisonLatitude?: number | null
+  garrisonLongitude?: number | null
+  strength?: string | null
+  insigniaUrl?: string | null
+  primaryMission?: string | null
+  jurisdiction?: string | null
+  jurisdictionGeometry?: MilitaryUnitJurisdictionGeometryDto | null
+  notableBattles?: string | null
+  honors?: string | null
+  description?: string | null
+  predecessors?: MilitaryUnitLineageDto[]
+  successors?: MilitaryUnitLineageDto[]
+  eventRelations?: MilitaryUnitEventLinkDto[]
+  tenures?: MilitaryUnitTenureItem[]
+  unitObservations?: MilitaryUnitObservationDto[]
+  assignedNavalVessels?: Array<{
+    id: string
+    name: string
+    vesselType?: string | null
+  }>
+  createdAt: string
+  updatedAt: string
+  country?: {
+    id: string
+    name: string
+    flagEmoji?: string | null
+  } | null
+  historicalCountry?: {
+    id: string
+    name: string
+    enName?: string | null
+    startEra?: string | null
+    startYear?: number | null
+    endEra?: string | null
+    endYear?: number | null
+  } | null
+  parentUnit?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    unitType?: MilitaryUnitType | null
+  } | null
+  administrationDepartment?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    kind?: string | null
+  } | null
+  subUnits?: Array<{
+    id: string
+    name: string
+    abbreviation?: string | null
+    unitType?: MilitaryUnitType | null
+    branch?: MilitaryBranch | null
+    isActive?: boolean | null
+    garrison?: string | null
+    garrisonLatitude?: number | null
+    garrisonLongitude?: number | null
+  }>
+  commanders?: Array<{
+    id: string
+    tenureId?: string | null
+    personId: string
+    rank?: string | null
+    role?: string | null
+    isCurrent?: boolean | null
+    startDate?: string | null
+    endDate?: string | null
+    termNumber?: number | null
+    person?: {
+      id: string
+      name: string
+      surname?: string | null
+    }
+  }>
+  sideDeployedUnits?: Array<{
+    id: string
+    role?: string | null
+    note?: string | null
+    parentUnitId?: string | null
+    commanderId?: string | null
+    side: {
+      id: string
+      name: string
+      outcome?: string | null
+      event: {
+        id: string
+        title: string
+        startDate?: string | null
+        endDate?: string | null
+        kind?: string | null
+        type?: string | null
+      }
+    }
+  }>
+  _count?: {
+    subUnits?: number
+    commanders?: number
+    tenures?: number
+    eventRelations?: number
+    sideDeployedUnits?: number
+  }
+}
+
+export type MilitaryUnit = MilitaryUnitDto
 
 export type MilitaryUnitTenureItem = AdministrationDepartmentTenureItem & {
   militaryUnitId?: string | null

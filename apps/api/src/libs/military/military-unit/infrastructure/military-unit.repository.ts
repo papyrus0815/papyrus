@@ -7,11 +7,15 @@ import {
 // eslint-disable-next-line @nx/enforce-module-boundaries
 import { PrismaService } from '@prisma/prisma.service'
 import {
+  CitationTargetType,
   MilitaryBranch as PrismaMilitaryBranch,
   MilitaryUnitType as PrismaMilitaryUnitType,
+  ObservationSubjectType,
+  Prisma as PrismaRuntime,
   type Era,
   type Prisma,
 } from '@prisma/client'
+import { removeObservationsForSubjects } from '../../../evidence/application/observation-cleanup'
 import {
   mapStructuredDateInput,
   structuredDateEndKey,
@@ -25,12 +29,129 @@ import type {
   MilitaryUnitDateInput,
   MilitaryUnitDatePartsDto,
   MilitaryUnitEventLinkDto,
+  MilitaryUnitJurisdictionGeometryDto,
   MilitaryUnitLineageDto,
+  MilitaryUnitObservationDto,
   MilitaryUnitTransitionKind,
   MilitaryUnitType,
   UpdateMilitaryUnitDto,
   UpdateMilitaryUnitTransitionDto,
 } from '../presentation/dto'
+
+function normalizeGarrisonCoordinates(
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+): { lat: number | null; lng: number | null } {
+  const hasLat = latitude !== null && latitude !== undefined
+  const hasLng = longitude !== null && longitude !== undefined
+  if (!hasLat && !hasLng) {
+    return { lat: null, lng: null }
+  }
+  if (hasLat !== hasLng) {
+    throw new BadRequestException(
+      '주둔지·본영 위도와 경도는 함께 입력하거나 함께 비워야 합니다.',
+    )
+  }
+  const latNum = Number(latitude)
+  const lngNum = Number(longitude)
+  if (
+    !Number.isFinite(latNum) ||
+    !Number.isFinite(lngNum) ||
+    latNum < -90 ||
+    latNum > 90 ||
+    lngNum < -180 ||
+    lngNum > 180
+  ) {
+    throw new BadRequestException(
+      '유효하지 않은 주둔지·본영 WGS84 위·경도 좌표입니다.',
+    )
+  }
+  return {
+    lat: Number(latNum.toFixed(7)),
+    lng: Number(lngNum.toFixed(7)),
+  }
+}
+
+function normalizeJurisdictionGeometry(
+  raw: unknown,
+  strict = false,
+): MilitaryUnitJurisdictionGeometryDto | null {
+  if (raw == null) return null
+  if (typeof raw !== 'object') {
+    if (strict) {
+      throw new BadRequestException('유효하지 않은 관할·작전구역 지도 도형입니다.')
+    }
+    return null
+  }
+  const candidate = raw as {
+    type?: unknown
+    coordinates?: unknown
+    color?: unknown
+  }
+  const geomType = candidate.type
+  if (geomType !== 'POLYGON' && geomType !== 'LINE') {
+    if (strict) {
+      throw new BadRequestException(
+        '관할·작전구역 도형 종류는 POLYGON 또는 LINE이어야 합니다.',
+      )
+    }
+    return null
+  }
+  if (!Array.isArray(candidate.coordinates)) {
+    if (strict) {
+      throw new BadRequestException('관할·작전구역 좌표 배열이 필요합니다.')
+    }
+    return null
+  }
+  const minPoints = geomType === 'POLYGON' ? 3 : 2
+  const coords: Array<[number, number]> = []
+  for (const pt of candidate.coordinates) {
+    if (!Array.isArray(pt) || pt.length < 2) {
+      if (strict) {
+        throw new BadRequestException('관할·작전구역 좌표 형식이 올바르지 않습니다.')
+      }
+      return null
+    }
+    const lat = Number(pt[0])
+    const lng = Number(pt[1])
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      if (strict) {
+        throw new BadRequestException(
+          '관할·작전구역 좌표가 WGS84 범위를 벗어났습니다.',
+        )
+      }
+      return null
+    }
+    coords.push([Number(lat.toFixed(6)), Number(lng.toFixed(6))])
+  }
+  if (coords.length < minPoints) {
+    if (strict) {
+      throw new BadRequestException(
+        geomType === 'POLYGON'
+          ? '다각형 관할구역은 최소 3개 이상의 꼭짓점이 필요합니다.'
+          : '전선·선형 작전구역은 최소 2개 이상의 지점이 필요합니다.',
+      )
+    }
+    return null
+  }
+  const color =
+    typeof candidate.color === 'string' &&
+    /^#[0-9a-fA-F]{6}$/.test(candidate.color.trim())
+      ? candidate.color.trim()
+      : null
+  return {
+    type: geomType,
+    coordinates: coords,
+    ...(color ? { color } : {}),
+  }
+}
 
 function parseOptionalUnitDate(
   value: string | null | undefined,
@@ -610,8 +731,35 @@ export class MilitaryUnitRepository {
         },
       }))
 
+    const mappedSubUnits = Array.isArray(unitRecord.subUnits)
+      ? unitRecord.subUnits.map((subItem: any) => ({
+          ...subItem,
+          garrisonLatitude:
+            subItem.garrisonLatitude != null
+              ? Number(subItem.garrisonLatitude)
+              : null,
+          garrisonLongitude:
+            subItem.garrisonLongitude != null
+              ? Number(subItem.garrisonLongitude)
+              : null,
+        }))
+      : unitRecord.subUnits
+
     return {
       ...unitRecord,
+      garrisonLatitude:
+        unitRecord.garrisonLatitude != null
+          ? Number(unitRecord.garrisonLatitude)
+          : null,
+      garrisonLongitude:
+        unitRecord.garrisonLongitude != null
+          ? Number(unitRecord.garrisonLongitude)
+          : null,
+      jurisdictionGeometry: normalizeJurisdictionGeometry(
+        unitRecord.jurisdictionGeometry,
+        false,
+      ),
+      ...(mappedSubUnits !== undefined ? { subUnits: mappedSubUnits } : {}),
       established,
       disbanded,
       establishedDate: signedEstablished ?? unitRecord.establishedDate ?? null,
@@ -792,6 +940,9 @@ export class MilitaryUnitRepository {
             unitType: true,
             branch: true,
             isActive: true,
+            garrison: true,
+            garrisonLatitude: true,
+            garrisonLongitude: true,
           },
         },
         administrationDepartment: {
@@ -974,6 +1125,9 @@ export class MilitaryUnitRepository {
             unitType: true,
             branch: true,
             isActive: true,
+            garrison: true,
+            garrisonLatitude: true,
+            garrisonLongitude: true,
           },
         },
         administrationDepartment: {
@@ -1216,9 +1370,66 @@ export class MilitaryUnitRepository {
       metricsBySideUnitId.set(obsRow.subjectId, list)
     }
 
+    const unitRawObservations =
+      this.prisma.observation?.findMany != null
+        ? await this.prisma.observation.findMany({
+            where: {
+              subjectType: ObservationSubjectType.MILITARY_UNIT,
+              subjectId: id,
+            },
+            include: {
+              metric: {
+                select: {
+                  key: true,
+                  name: true,
+                  unit: true,
+                  sortOrder: true,
+                },
+              },
+            },
+            orderBy: [
+              { startYear: 'asc' },
+              { sortOrder: 'asc' },
+              { createdAt: 'asc' },
+            ],
+          })
+        : []
+
+    const unitObservations: MilitaryUnitObservationDto[] =
+      unitRawObservations.map((obsItem) => ({
+        id: obsItem.id,
+        metricKey: obsItem.metric.key,
+        metricName: obsItem.metric.name,
+        unit: obsItem.metric.unit ?? null,
+        value: obsItem.value != null ? String(obsItem.value) : null,
+        low: obsItem.low != null ? String(obsItem.low) : null,
+        high: obsItem.high != null ? String(obsItem.high) : null,
+        approx: obsItem.approx,
+        atLeast: obsItem.atLeast,
+        qualifier: obsItem.qualifier ?? null,
+        note: obsItem.note ?? null,
+        estimateRole: obsItem.estimateRole ?? null,
+        method: obsItem.method ?? null,
+        start: toUnitDateParts(
+          obsItem.startEra,
+          obsItem.startYear,
+          obsItem.startMonth,
+          obsItem.startDay,
+          obsItem.startPrecision,
+        ),
+        end: toUnitDateParts(
+          obsItem.endEra,
+          obsItem.endYear,
+          obsItem.endMonth,
+          obsItem.endDay,
+          obsItem.endPrecision,
+        ),
+      }))
+
     const enriched = this.enrichUnitRecord(unitRecord)
     return {
       ...enriched,
+      unitObservations,
       sideDeployedUnits: unitRecord.sideDeployedUnits.map((deployed) => ({
         ...deployed,
         deployedWeapons: deployed.weaponsUsed,
@@ -1263,6 +1474,15 @@ export class MilitaryUnitRepository {
       data.administrationDepartmentId,
     )
 
+    const garrisonCoords = normalizeGarrisonCoordinates(
+      data.garrisonLatitude,
+      data.garrisonLongitude,
+    )
+    const jurisdictionGeom = normalizeJurisdictionGeometry(
+      data.jurisdictionGeometry,
+      data.jurisdictionGeometry !== undefined && data.jurisdictionGeometry !== null,
+    )
+
     const unitId = await this.prisma.$transaction(async (tx) => {
       const created = await tx.militaryUnit.create({
         data: {
@@ -1294,10 +1514,16 @@ export class MilitaryUnitRepository {
           nickname: data.nickname ?? null,
           motto: data.motto ?? null,
           garrison: data.garrison ?? null,
+          garrisonLatitude: garrisonCoords.lat,
+          garrisonLongitude: garrisonCoords.lng,
           strength: data.strength ?? null,
           insigniaUrl: data.insigniaUrl ?? null,
           primaryMission: data.primaryMission ?? null,
           jurisdiction: data.jurisdiction ?? null,
+          jurisdictionGeometry:
+            jurisdictionGeom != null
+              ? (jurisdictionGeom as unknown as Prisma.InputJsonValue)
+              : PrismaRuntime.DbNull,
           notableBattles: data.notableBattles ?? null,
           honors: data.honors ?? null,
           description: data.description,
@@ -1337,6 +1563,8 @@ export class MilitaryUnitRepository {
         disbandedDate: true,
         parentUnitId: true,
         administrationDepartmentId: true,
+        garrisonLatitude: true,
+        garrisonLongitude: true,
       },
     })
     if (!existing) {
@@ -1452,11 +1680,41 @@ export class MilitaryUnitRepository {
     if (data.nickname !== undefined) updateData.nickname = data.nickname
     if (data.motto !== undefined) updateData.motto = data.motto
     if (data.garrison !== undefined) updateData.garrison = data.garrison
+    if (
+      data.garrisonLatitude !== undefined ||
+      data.garrisonLongitude !== undefined
+    ) {
+      const nextLat =
+        data.garrisonLatitude !== undefined
+          ? data.garrisonLatitude
+          : existing.garrisonLatitude != null
+            ? Number(existing.garrisonLatitude)
+            : null
+      const nextLng =
+        data.garrisonLongitude !== undefined
+          ? data.garrisonLongitude
+          : existing.garrisonLongitude != null
+            ? Number(existing.garrisonLongitude)
+            : null
+      const coords = normalizeGarrisonCoordinates(nextLat, nextLng)
+      updateData.garrisonLatitude = coords.lat
+      updateData.garrisonLongitude = coords.lng
+    }
     if (data.strength !== undefined) updateData.strength = data.strength
     if (data.insigniaUrl !== undefined) updateData.insigniaUrl = data.insigniaUrl
     if (data.primaryMission !== undefined)
       updateData.primaryMission = data.primaryMission
     if (data.jurisdiction !== undefined) updateData.jurisdiction = data.jurisdiction
+    if (data.jurisdictionGeometry !== undefined) {
+      const geom = normalizeJurisdictionGeometry(
+        data.jurisdictionGeometry,
+        data.jurisdictionGeometry !== null,
+      )
+      updateData.jurisdictionGeometry =
+        geom != null
+          ? (geom as unknown as Prisma.InputJsonValue)
+          : PrismaRuntime.DbNull
+    }
     if (data.notableBattles !== undefined)
       updateData.notableBattles = data.notableBattles
     if (data.honors !== undefined) updateData.honors = data.honors
@@ -1534,6 +1792,27 @@ export class MilitaryUnitRepository {
           `「${existing.name}」에 걸린 기록이 있어 지울 수 없습니다 — ${blockers.join(' · ')}. 먼저 옮기거나 끊어 주세요.`,
         )
       }
+    }
+    if (typeof this.prisma.$transaction === 'function') {
+      await this.prisma.$transaction(async (tx) => {
+        if ('observation' in tx && tx.observation) {
+          await removeObservationsForSubjects(
+            tx,
+            ObservationSubjectType.MILITARY_UNIT,
+            [id],
+          )
+        }
+        if ('citation' in tx && tx.citation) {
+          await tx.citation.deleteMany({
+            where: {
+              targetType: CitationTargetType.MILITARY_UNIT,
+              targetId: id,
+            },
+          })
+        }
+        await tx.militaryUnit.delete({ where: { id } })
+      })
+      return
     }
     await this.prisma.militaryUnit.delete({
       where: { id },

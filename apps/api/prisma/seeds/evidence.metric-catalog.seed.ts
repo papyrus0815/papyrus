@@ -189,7 +189,7 @@ const METRICS: MetricSeed[] = [
     valueKind: COUNT,
     aggregation: SUM,
     unit: 'person',
-    definition: '군사 행동으로 인한 민간인 사망.',
+    definition: '전쟁·무력 충돌·진압 등으로 인한 비전투 민간인 사망. 전투원 사망과 구분될 때 쓴다.',
   },
   {
     key: 'civilian.wounded',
@@ -198,7 +198,7 @@ const METRICS: MetricSeed[] = [
     valueKind: COUNT,
     aggregation: SUM,
     unit: 'person',
-    definition: '군사 행동으로 인한 민간인 부상.',
+    definition: '전쟁·무력 충돌·진압 등으로 인한 비전투 민간인 부상. 전투원 부상과 구분될 때 쓴다.',
   },
   {
     key: 'civilian.displaced',
@@ -414,6 +414,142 @@ const METRICS: MetricSeed[] = [
     dimension: MetricDimension.CHAMBER,
     definition:
       '그 시점에 이 정당이 어느 원(院)에서 가진 의석. 선거 집계로 못 담는 경우(임명직 상원·탈당·보궐·단일 명부 신임 투표)용 — 원은 필수 차원, 정원은 원의 정원 이력에서 읽는다.',
+  },
+  // ── 보편 인명·치안 지표 (시위·유혈 충돌·테러·재해·범죄·사고 공통 — sortOrder 유지를 위해 끝에 추가) ──
+  {
+    key: 'human.deaths',
+    name: '사망자',
+    domain: 'human',
+    valueKind: COUNT,
+    aggregation: SUM,
+    unit: 'person',
+    definition:
+      '사건으로 인한 사망자 수(시위·유혈 충돌·테러·재해·범죄·사고 등 군·민 구분 없이 집계된 사망 포함). 정규군 전사자나 민간인 사망이 별도로 나뉠 때만 세부 지표를 쓴다.',
+  },
+  {
+    key: 'human.wounded',
+    name: '부상자',
+    domain: 'human',
+    valueKind: COUNT,
+    aggregation: SUM,
+    unit: 'person',
+    definition:
+      '사건으로 인한 부상자 수(시위·유혈 충돌·테러·재해·범죄·사고 등 생존 부상자). 정규군 전투 부상자와 구분될 때만 군 부상자를 따로 쓴다.',
+  },
+  {
+    key: 'human.missing',
+    name: '실종자',
+    domain: 'human',
+    valueKind: COUNT,
+    aggregation: SUM,
+    unit: 'person',
+    definition:
+      '사건·재해·사고·충돌로 행방불명된 인원(정규군 작전 실종자는 military.missing).',
+  },
+  {
+    key: 'human.casualties',
+    name: '사상자 합계',
+    domain: 'human',
+    valueKind: COUNT,
+    aggregation: SUM,
+    unit: 'person',
+    definition:
+      '사망·부상·실종이 사료에서 구분되지 않고 합산으로만 전해지는 인명 피해 총수. 구성 단서는 qualifier에 적는다.',
+  },
+  {
+    key: 'security.personnel',
+    name: '경찰·치안 병력',
+    domain: 'society',
+    valueKind: COUNT,
+    aggregation: MAX,
+    unit: 'person',
+    definition:
+      '시위 진압·치안 유지·검거 등에 투입된 경찰·헌병·경비대·준군사 행동대 인원(정규군 작전 병력은 military.personnel).',
+  },
+  // ── 군사 사령부·부대 정원·실병력·인원 구성·편제 장비 정수 (sortOrder 유지를 위해 끝에 추가) ──
+  {
+    key: 'military.unit.authorized_wartime',
+    name: '전시 완편 정원',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'person',
+    definition:
+      '동원·전시 편제표(TO&E / KStN 등)상 부대에 인가된 완편 병력 정원. 실제 보유 병력(실병력)과 구분해 적는다.',
+  },
+  {
+    key: 'military.unit.authorized_peacetime',
+    name: '평시 편제 정원',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'person',
+    definition:
+      '평시 상비 편제표상 부대에 인가된 정원.',
+  },
+  {
+    key: 'military.unit.actual_strength',
+    name: '실병력(현원)',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'person',
+    definition:
+      '특정 시점에 부대가 실제로 보유한 현원 병력(손실·미충원 반영). 시점은 측정값의 start로 기록한다.',
+  },
+  {
+    key: 'military.unit.officers',
+    name: '장교',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'person',
+    definition: '부대 편제 정원 또는 현원 중 장교(장성·영관·위관) 인원.',
+  },
+  {
+    key: 'military.unit.ncos',
+    name: '부사관',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'person',
+    definition: '부대 편제 정원 또는 현원 중 부사관(하사관·준사관 포함) 인원.',
+  },
+  {
+    key: 'military.unit.enlisted',
+    name: '병(사병)',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'person',
+    definition: '부대 편제 정원 또는 현원 중 병사 인원.',
+  },
+  {
+    key: 'military.unit.combat_personnel',
+    name: '전투병력',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'person',
+    definition: '보병·기갑·수색 등 일선 전투원 수(후방 지원·보급·행정 인원과 구분될 때 기록).',
+  },
+  {
+    key: 'military.unit.sub_units_count',
+    name: '예하 편제 수',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'unit',
+    definition: '산하 주력 제대(사단·여단·연대·대대·비행대·전대 등) 수. 제대 단위는 단서(qualifier)에 명시한다.',
+  },
+  {
+    key: 'military.afv',
+    name: '장갑차·보병전투차',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: MAX,
+    unit: 'afv',
+    definition: '반궤도·차륜형 장갑차(APC), 보병전투차(IFV), 장갑수색차량 등 비전차 장갑전투차량 수.',
   },
 ]
 

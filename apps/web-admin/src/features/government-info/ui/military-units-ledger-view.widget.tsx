@@ -3,11 +3,14 @@ import {
   FiAnchor,
   FiArrowDown,
   FiArrowUp,
+  FiArrowUpRight,
   FiAward,
   FiCompass,
   FiCrosshair,
+  FiEdit2,
   FiGitCommit,
   FiLayers,
+  FiMapPin,
   FiNavigation,
   FiPlus,
   FiShield,
@@ -141,6 +144,8 @@ export interface MilitaryUnitsLedgerViewProps {
     unitItem: LedgerMilitaryUnitItem,
     evt?: MouseEvent<HTMLTableRowElement>,
   ) => void
+  onEditUnit?: (unitId: string) => void
+  onCreateSubUnit?: (unitItem: LedgerMilitaryUnitItem) => void
   onAddRoot?: () => void
 }
 
@@ -267,8 +272,11 @@ export function MilitaryUnitsLedgerView({
   echelonOrder,
   resolveEffectiveDepartment,
   onSelectUnit,
+  onEditUnit,
+  onCreateSubUnit,
   onAddRoot,
 }: MilitaryUnitsLedgerViewProps) {
+  const hasRowActions = Boolean(onEditUnit || onCreateSubUnit)
   const [sortField, setSortField] = useState<SortField>('echelon')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
@@ -426,9 +434,12 @@ export function MilitaryUnitsLedgerView({
                 <Th style={{ width: 170 }}>상급 편제 · 소관 부처</Th>
               ) : null}
               {!compact ? (
-                <Th style={{ width: 158, textAlign: 'right' }}>
+                <Th style={{ width: 168, textAlign: 'right' }}>
                   지휘관 · 개편 · 전과
                 </Th>
+              ) : null}
+              {hasRowActions ? (
+                <Th style={{ width: 44, textAlign: 'right' }} aria-label="관리" />
               ) : null}
             </tr>
           </thead>
@@ -465,13 +476,17 @@ export function MilitaryUnitsLedgerView({
               const predCount = (unitRow.predecessors ?? []).length
               const succCount = (unitRow.successors ?? []).length
               const lineageTotal = predCount + succCount
-              const battleCount = (unitRow.sideDeployedUnits ?? []).length
+              const battleCount =
+                (unitRow.sideDeployedUnits ?? []).length +
+                (unitRow.eventRelations ?? []).length
               const vesselCount = (
                 unitRow.assignedNavalVessels ??
                 unitRow.navalVessels ??
                 []
               ).length
               const commanderText = resolveLeadCommanderLabel(unitRow)
+              const garrisonText = unitRow.garrison?.trim() || null
+              const nicknameText = unitRow.nickname?.trim() || null
               const isSelected = selectedUnitId === unitRow.id
               const isHighCommand =
                 unitRow.unitType != null &&
@@ -525,16 +540,29 @@ export function MilitaryUnitsLedgerView({
                       )}
                       <NameCellBody>
                         <NamePrimary>
-                          <span>{unitRow.name}</span>
+                          <NameTitleSpan>{unitRow.name}</NameTitleSpan>
                           {unitRow.abbreviation?.trim() ? (
                             <AbbrTag>({unitRow.abbreviation.trim()})</AbbrTag>
                           ) : null}
+                          {nicknameText ? (
+                            <NicknameTag>&ldquo;{nicknameText}&rdquo;</NicknameTag>
+                          ) : null}
+                          <DetailOpenIcon aria-hidden="true">
+                            <FiArrowUpRight size={12} />
+                          </DetailOpenIcon>
                         </NamePrimary>
                         {(showConstituentPolityBadge ||
+                          garrisonText ||
                           (compact && (parentRef || effDept))) && (
                           <SubInfoRow>
                             {showConstituentPolityBadge ? (
                               <EraTag>{unitRow.historicalCountry!.name}</EraTag>
+                            ) : null}
+                            {garrisonText ? (
+                              <GarrisonHint>
+                                <FiMapPin size={10} />
+                                {garrisonText}
+                              </GarrisonHint>
                             ) : null}
                             {compact && parentRef ? (
                               <ParentHint>↳ {parentRef.name}</ParentHint>
@@ -638,6 +666,47 @@ export function MilitaryUnitsLedgerView({
                           <DashText>—</DashText>
                         ) : null}
                       </MetricGroup>
+                    </Td>
+                  ) : null}
+                  {hasRowActions ? (
+                    <Td
+                      style={{ textAlign: 'right' }}
+                      onClick={(evt) => evt.stopPropagation()}
+                    >
+                      <PopoverMenu
+                        size="sm"
+                        ariaLabel={`${unitRow.name} 관리 메뉴`}
+                        title="상세 보기 · 수정 · 예하 추가"
+                        minWidth={168}
+                        items={[
+                          {
+                            id: 'open-detail',
+                            label: '상세 페이지 열기',
+                            icon: <FiArrowUpRight size={12.5} />,
+                            onSelect: () => onSelectUnit(unitRow),
+                          },
+                          ...(onEditUnit
+                            ? [
+                                {
+                                  id: 'edit-unit',
+                                  label: '사령부·부대 수정',
+                                  icon: <FiEdit2 size={12.5} />,
+                                  onSelect: () => onEditUnit(unitRow.id),
+                                },
+                              ]
+                            : []),
+                          ...(onCreateSubUnit
+                            ? [
+                                {
+                                  id: 'add-sub-unit',
+                                  label: '예하 부대 추가',
+                                  icon: <FiPlus size={12.5} />,
+                                  onSelect: () => onCreateSubUnit(unitRow),
+                                },
+                              ]
+                            : []),
+                        ]}
+                      />
                     </Td>
                   ) : null}
                 </Tr>
@@ -837,12 +906,33 @@ const LedgerUnitThumbIcon = styled.span<{ $highCommand?: boolean }>`
 
 const NamePrimary = styled.div`
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.35;
+`
+
+const NameTitleSpan = styled.span`
+  transition: color 0.12s ease;
+
+  ${Tr}:hover & {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const DetailOpenIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  opacity: 0;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  transition: opacity 0.12s ease, transform 0.12s ease;
+
+  ${Tr}:hover & {
+    opacity: 0.9;
+    transform: translate(1px, -1px);
+  }
 `
 
 const AbbrTag = styled.span`
@@ -851,12 +941,26 @@ const AbbrTag = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+const NicknameTag = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
 const SubInfoRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   margin-top: 2px;
+`
+
+const GarrisonHint = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const EraTag = styled.span`

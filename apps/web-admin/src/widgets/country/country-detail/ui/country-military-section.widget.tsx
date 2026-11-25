@@ -1,31 +1,30 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { FiBarChart2, FiExternalLink, FiPlus } from 'react-icons/fi'
+import { FiExternalLink, FiPlus } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import {
   fetchCountryScopedMilitaryUnits,
-  HIGH_AND_OPERATIONAL_UNIT_TYPES,
   militaryUnitQueryKeys,
 } from '@/entities/military-unit'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
 import { GovernmentMilitaryTab } from '@/features/government-info/ui/government-military-tab.widget'
 import { EVENTS_LIMIT_ALL, getAllEvents } from '@/shared/api/events'
-import { type MilitaryUnit } from '@/shared/api/military-unit'
 import {
   administrationDepartmentsByCountryQueryKey,
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { pathKeys } from '@/shared/router'
 import { PopoverMenu } from '@/shared/ui/popover-menu'
-import { AddButton } from '@/shared/ui/section-page-layout'
 import { SectionSubNav } from '@/shared/ui/section-sub-nav/section-sub-nav'
 
-import * as DashboardStyles from './country-detail-dashboard.styles'
-import { countryTabCanvasPadding } from './country-ledger-primitives'
+import {
+  countryTabCanvasPadding,
+  LedgerPrimaryButton,
+} from './country-ledger-primitives'
 import { CountryMilitaryWarsPanel } from './country-military-wars-panel'
 import { MilitaryUnitFormModal } from './military-unit-form.modal'
 
@@ -47,9 +46,6 @@ export function CountryMilitarySection({
   const subQuery: MilitarySubTab =
     searchParams.get('sub') === 'wars' && !unitIdQuery ? 'wars' : 'units'
 
-  const [focusMilitaryUnitId, setFocusMilitaryUnitId] = useState<string | null>(
-    unitIdQuery || null,
-  )
   const [militaryUnitModalOpen, setMilitaryUnitModalOpen] = useState(false)
   const [militaryUnitEditingId, setMilitaryUnitEditingId] = useState<
     string | null
@@ -65,13 +61,27 @@ export function CountryMilitarySection({
   const [militaryBranchDefault, setMilitaryBranchDefault] = useState<
     string | null
   >(null)
-  const [showHeadlineStats, setShowHeadlineStats] = useState(false)
+
+  const openUnitDetailPage = useCallback(
+    (targetUnitId: string, replace = false) => {
+      navigate(pathKeys.militaryUnitDetail(targetUnitId), {
+        replace,
+        state: {
+          fromCountry: {
+            id: country.id,
+            name: country.name,
+          },
+        },
+      })
+    },
+    [navigate, country.id, country.name],
+  )
 
   useEffect(() => {
     if (unitIdQuery) {
-      setFocusMilitaryUnitId(unitIdQuery)
+      openUnitDetailPage(unitIdQuery, true)
     }
-  }, [unitIdQuery])
+  }, [unitIdQuery, openUnitDetailPage])
 
   const { data: linkedHistoricalCountries = [] } =
     useHistoricalCountriesByModernCountry(
@@ -153,58 +163,13 @@ export function CountryMilitarySection({
   })
 
   const headlineStats = useMemo(() => {
-    const units = (unitsSummaryQuery.data ?? []) as Array<
-      Omit<MilitaryUnit, 'tenures' | 'commanders' | 'sideDeployedUnits'> & {
-        tenures?: Array<{ id: string }>
-        commanders?: Array<{ id: string; tenureId?: string | null }>
-        sideDeployedUnits?: Array<{ id: string }>
-      }
-    >
-    let highCommandAndOps = 0
-    let commanderTenures = 0
-    let orbatDeployments = 0
-
-    for (const unitItem of units) {
-      if (
-        unitItem.unitType &&
-        HIGH_AND_OPERATIONAL_UNIT_TYPES.has(unitItem.unitType)
-      ) {
-        highCommandAndOps += 1
-      }
-      const tCount = unitItem.tenures?.length ?? 0
-      const legacyCount = (unitItem.commanders ?? []).filter(
-        (cmdItem) => !cmdItem.tenureId,
-      ).length
-      commanderTenures += tCount + legacyCount
-      orbatDeployments += unitItem.sideDeployedUnits?.length ?? 0
-    }
-
+    const units = unitsSummaryQuery.data ?? []
     const milEvents = militaryEventsSummaryQuery.data ?? []
-    const warCount = milEvents.filter((ev) => ev.type === 'WAR').length
-
     return {
       totalUnits: units.length,
-      highCommandAndOps,
-      commanderTenures,
-      orbatDeployments,
       totalMilitaryEvents: milEvents.length,
-      warCount,
     }
   }, [unitsSummaryQuery.data, militaryEventsSummaryQuery.data])
-
-  const syncSelectedUnitParam = useCallback(
-    (unitId: string | null) => {
-      const nextParams = new URLSearchParams(searchParams)
-      if (unitId) {
-        nextParams.set('unitId', unitId)
-        nextParams.delete('sub')
-      } else {
-        nextParams.delete('unitId')
-      }
-      setSearchParams(nextParams, { replace: true })
-    },
-    [searchParams, setSearchParams],
-  )
 
   const handleSubTabChange = (nextTab: MilitarySubTab) => {
     const nextParams = new URLSearchParams(searchParams)
@@ -239,14 +204,14 @@ export function CountryMilitarySection({
           actions={
             <>
               {subQuery === 'wars' ? (
-                <AddButton
+                <LedgerPrimaryButton
                   type="button"
                   onClick={() => navigate(pathKeys.events.create())}
                 >
                   <FiPlus size={14} /> 군사 사건 등록
-                </AddButton>
+                </LedgerPrimaryButton>
               ) : (
-                <AddButton
+                <LedgerPrimaryButton
                   type="button"
                   onClick={() => {
                     setMilitaryUnitEditingId(null)
@@ -260,21 +225,13 @@ export function CountryMilitarySection({
                   }}
                 >
                   <FiPlus size={14} /> 사령부·부대 등록
-                </AddButton>
+                </LedgerPrimaryButton>
               )}
 
               <PopoverMenu
                 ariaLabel="군사 화면 설정 및 이동 메뉴"
-                title="요약 지표 표시 · 군사 카탈로그 이동"
-                active={showHeadlineStats}
+                title="군사 사건 등록 · 군사 총람 이동"
                 items={[
-                  {
-                    id: 'toggle-summary',
-                    label: '요약 지표 카드 표시',
-                    icon: <FiBarChart2 size={13} />,
-                    checked: showHeadlineStats,
-                    onSelect: () => setShowHeadlineStats((prev) => !prev),
-                  },
                   {
                     id: 'alt-create',
                     label:
@@ -313,108 +270,19 @@ export function CountryMilitarySection({
           }
         />
 
-        {showHeadlineStats ? (
-          <DashboardStyles.SectionHeadlineStrip aria-label="군사 전력 요약 지표">
-            <DashboardStyles.SectionHeadlineCell>
-              <DashboardStyles.SectionHeadlineLabel>
-                전체 사령부 · 편제
-              </DashboardStyles.SectionHeadlineLabel>
-              <DashboardStyles.SectionHeadlineValue
-                $muted={headlineStats.totalUnits === 0}
-              >
-                {headlineStats.totalUnits > 0 ? (
-                  <>
-                    {headlineStats.totalUnits.toLocaleString('ko-KR')}
-                    <DashboardStyles.SectionHeadlineUnit>
-                      개
-                    </DashboardStyles.SectionHeadlineUnit>
-                  </>
-                ) : (
-                  '미등록'
-                )}
-              </DashboardStyles.SectionHeadlineValue>
-            </DashboardStyles.SectionHeadlineCell>
-
-            <DashboardStyles.SectionHeadlineCell>
-              <DashboardStyles.SectionHeadlineLabel>
-                상급지휘부 · 작전제대
-              </DashboardStyles.SectionHeadlineLabel>
-              <DashboardStyles.SectionHeadlineValue
-                $muted={headlineStats.highCommandAndOps === 0}
-              >
-                {headlineStats.highCommandAndOps > 0 ? (
-                  <>
-                    {headlineStats.highCommandAndOps.toLocaleString('ko-KR')}
-                    <DashboardStyles.SectionHeadlineUnit>
-                      개
-                    </DashboardStyles.SectionHeadlineUnit>
-                  </>
-                ) : (
-                  '없음'
-                )}
-              </DashboardStyles.SectionHeadlineValue>
-            </DashboardStyles.SectionHeadlineCell>
-
-            <DashboardStyles.SectionHeadlineCell>
-              <DashboardStyles.SectionHeadlineLabel>
-                역대 지휘관 · 참모
-              </DashboardStyles.SectionHeadlineLabel>
-              <DashboardStyles.SectionHeadlineValue
-                $muted={headlineStats.commanderTenures === 0}
-              >
-                {headlineStats.commanderTenures > 0 ? (
-                  <>
-                    {headlineStats.commanderTenures.toLocaleString('ko-KR')}
-                    <DashboardStyles.SectionHeadlineUnit>
-                      건
-                    </DashboardStyles.SectionHeadlineUnit>
-                  </>
-                ) : (
-                  '미등록'
-                )}
-              </DashboardStyles.SectionHeadlineValue>
-            </DashboardStyles.SectionHeadlineCell>
-
-            <DashboardStyles.SectionHeadlineCell>
-              <DashboardStyles.SectionHeadlineLabel>
-                참전 · 관여 군사사건
-              </DashboardStyles.SectionHeadlineLabel>
-              <DashboardStyles.SectionHeadlineValue
-                $muted={headlineStats.totalMilitaryEvents === 0}
-              >
-                {headlineStats.totalMilitaryEvents > 0 ? (
-                  <>
-                    {headlineStats.totalMilitaryEvents.toLocaleString('ko-KR')}
-                    <DashboardStyles.SectionHeadlineUnit>
-                      건
-                    </DashboardStyles.SectionHeadlineUnit>
-                  </>
-                ) : (
-                  '없음'
-                )}
-              </DashboardStyles.SectionHeadlineValue>
-            </DashboardStyles.SectionHeadlineCell>
-          </DashboardStyles.SectionHeadlineStrip>
-        ) : null}
-
         {subQuery === 'wars' ? (
           <CountryMilitaryWarsPanel
             country={country}
             linkedHistoricalCountryIds={relatedHistoricalIds}
             units={unitsSummaryQuery.data ?? []}
-            onSelectUnit={(targetUnitId) => {
-              setFocusMilitaryUnitId(targetUnitId)
-              syncSelectedUnitParam(targetUnitId)
-            }}
+            onSelectUnit={(targetUnitId) => openUnitDetailPage(targetUnitId)}
           />
         ) : (
           <GovernmentMilitaryTab
             country={country}
             effectiveCountryId={country.id}
-            focusUnitId={focusMilitaryUnitId}
             hidePrimaryCta
-            onConsumedFocusUnit={() => setFocusMilitaryUnitId(null)}
-            onSelectedUnitChange={syncSelectedUnitParam}
+            onOpenUnitDetail={(targetUnitId) => openUnitDetailPage(targetUnitId)}
             onCreateUnit={(defaults) => {
               setMilitaryUnitEditingId(null)
               setMilitaryDeptDefaultId(

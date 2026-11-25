@@ -398,7 +398,12 @@ export const MILITARY_BRANCHES: ReadonlyArray<{
   },
 ]
 
-export type FormSectionKey = 'basic' | 'command' | 'context'
+export type FormSectionKey =
+  | 'basic'
+  | 'spatial'
+  | 'strength'
+  | 'command'
+  | 'records'
 
 export const FORM_SECTION_META: ReadonlyArray<{
   key: FormSectionKey
@@ -407,16 +412,90 @@ export const FORM_SECTION_META: ReadonlyArray<{
 }> = [
   { key: 'basic', id: 'military-unit-section-basic', label: '기본 정보' },
   {
-    key: 'command',
-    id: 'military-unit-section-command',
-    label: '소속 · 지휘 계통',
+    key: 'spatial',
+    id: 'military-unit-section-spatial',
+    label: '시기 · 위치 지도',
   },
   {
-    key: 'context',
-    id: 'military-unit-section-context',
-    label: '시기 · 소재지 · 설명',
+    key: 'strength',
+    id: 'military-unit-section-strength',
+    label: '병력 · 전력',
+  },
+  {
+    key: 'command',
+    id: 'military-unit-section-command',
+    label: '소속 · 인물 · 사건',
+  },
+  {
+    key: 'records',
+    id: 'military-unit-section-records',
+    label: '임무 · 전투 · 수훈',
   },
 ]
+
+export function defaultCommanderTitleForUnitType(
+  unitType: MilitaryUnitType | '' | null | undefined,
+  roleKind: 'COMMANDER' | 'STAFF' | 'MEMBER' = 'COMMANDER',
+): string {
+  if (roleKind === 'STAFF') {
+    if (unitType === 'GENERAL_STAFF') return '차장 · 작전부장'
+    return '참모장'
+  }
+  if (roleKind === 'MEMBER') {
+    return '주요 복무 · 창설 참여'
+  }
+  switch (unitType) {
+    case 'SUPREME_COMMAND':
+      return '총사령관'
+    case 'GENERAL_STAFF':
+      return '참모총장'
+    case 'SERVICE_HQ':
+      return '총사령관 · 참모총장'
+    case 'THEATER':
+      return '전구사령관'
+    case 'ARMY_GROUP':
+      return '집단군사령관'
+    case 'FRONT':
+      return '전선군사령관'
+    case 'MILITARY_DISTRICT':
+      return '군관구사령관'
+    case 'FIELD_ARMY':
+      return '사령관'
+    case 'CORPS':
+    case 'AIR_CORPS':
+      return '군단장'
+    case 'DIVISION':
+      return '사단장'
+    case 'BRIGADE':
+      return '여단장'
+    case 'REGIMENT':
+      return '연대장'
+    case 'BATTALION':
+      return '대대장'
+    case 'COMPANY':
+      return '중대장'
+    case 'FLEET':
+      return '함대사령관'
+    case 'AIR_FLEET':
+      return '항공함대사령관'
+    case 'WING':
+      return '비행단장'
+    case 'SQUADRON':
+      return '전대장'
+    default:
+      return '사령관'
+  }
+}
+
+export function isHighCommandUnitType(
+  unitType: MilitaryUnitType | '' | null | undefined,
+): boolean {
+  return (
+    unitType === 'SUPREME_COMMAND' ||
+    unitType === 'GENERAL_STAFF' ||
+    unitType === 'SERVICE_HQ'
+  )
+}
 
 export function inferMilitaryUnitMetaFromName(
   nameValue: string,

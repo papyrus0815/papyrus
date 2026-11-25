@@ -33,8 +33,15 @@ export function MilitaryUnitDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
-  const listSearch =
-    (location.state as { listSearch?: string } | null)?.listSearch ?? ''
+  const locationState = location.state as {
+    listSearch?: string
+    fromCountry?: {
+      id: string
+      name?: string | null
+    }
+  } | null
+  const listSearch = locationState?.listSearch ?? ''
+  const fromCountry = locationState?.fromCountry ?? null
 
   const detailActionsRef = useRef<MilitaryUnitDetailActionsHandle | null>(null)
   const [loadedUnit, setLoadedUnit] =
@@ -54,10 +61,10 @@ export function MilitaryUnitDetailPage() {
   const handleSelectUnit = useCallback(
     (nextUnitId: string) => {
       navigate(pathKeys.militaryUnitDetail(nextUnitId), {
-        state: { listSearch },
+        state: locationState ?? undefined,
       })
     },
-    [navigate, listSearch],
+    [navigate, locationState],
   )
 
   const handleEditUnit = useCallback((targetUnitId: string) => {
@@ -73,11 +80,15 @@ export function MilitaryUnitDetailPage() {
   }, [])
 
   const handleDeleted = useCallback(() => {
+    if (fromCountry?.id) {
+      navigate(pathKeys.countryMilitary(fromCountry.id), { replace: true })
+      return
+    }
     navigate(
       listSearch ? `${pathKeys.military()}${listSearch}` : pathKeys.military(),
       { replace: true },
     )
-  }, [navigate, listSearch])
+  }, [navigate, listSearch, fromCountry])
 
   if (!unitId) {
     return (
@@ -103,7 +114,17 @@ export function MilitaryUnitDetailPage() {
     <PageCanvas>
       <TopBar>
         <TopBarLeft>
-          {listSearch ? (
+          {fromCountry?.id ? (
+            <LedgerToolbarButton
+              type="button"
+              onClick={() => navigate(pathKeys.countryMilitary(fromCountry.id))}
+            >
+              <FiArrowLeft size={14} />
+              {fromCountry.name
+                ? `${fromCountry.name} 편제 · 사령부`
+                : '편제 · 사령부'}
+            </LedgerToolbarButton>
+          ) : listSearch ? (
             <LedgerToolbarButton
               type="button"
               onClick={() => navigate(`${pathKeys.military()}${listSearch}`)}
@@ -113,9 +134,17 @@ export function MilitaryUnitDetailPage() {
           ) : (
             <LedgerToolbarButton
               type="button"
-              onClick={() => goBackOr(navigate, pathKeys.military())}
+              onClick={() =>
+                goBackOr(
+                  navigate,
+                  countryIdForLink
+                    ? pathKeys.countryMilitary(countryIdForLink)
+                    : pathKeys.military(),
+                )
+              }
             >
-              <FiArrowLeft size={14} /> 이전 화면
+              <FiArrowLeft size={14} />
+              {countryName ? `${countryName} 편제 · 사령부` : '군사 총람'}
             </LedgerToolbarButton>
           )}
         </TopBarLeft>
@@ -173,15 +202,10 @@ export function MilitaryUnitDetailPage() {
                   ? [
                       {
                         id: 'country-tab',
-                        label: `${countryName} 군사 탭 열기`,
+                        label: `${countryName} 편제·사령부 탭 열기`,
                         icon: <FiGlobe size={13} />,
                         onSelect: () =>
-                          navigate(
-                            pathKeys.countryMilitary(
-                              countryIdForLink,
-                              loadedUnit.id,
-                            ),
-                          ),
+                          navigate(pathKeys.countryMilitary(countryIdForLink)),
                       },
                     ]
                   : []),

@@ -61,6 +61,14 @@ import {
   type AdministrationDepartmentEventRole,
   EVENT_DEPARTMENT_ROLE_LABEL,
 } from '@/shared/api/administration-department'
+import {
+  addEventSideUnit,
+  type EventSide,
+  listEventSides,
+  removeEventSideUnit,
+  type SideUnitRole,
+  syncEventSides,
+} from '@/shared/api/event-sides'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import {
   militaryUnitApi,
@@ -79,11 +87,14 @@ import {
   EventPickerModal,
   type EventPickerSelection,
 } from '@/shared/ui/event-picker-modal/event-picker-modal'
-import { HeadquartersMapPreview } from '@/shared/ui/headquarters-location-field'
 import {
   type EditableInstitutionTenure,
   InstitutionAppointmentModal,
 } from '@/shared/ui/institution-appointment-modal'
+import {
+  type SubUnitMapPin,
+  UnitSpatialMapCard,
+} from '@/shared/ui/jurisdiction-map-field'
 import { PopoverMenu } from '@/shared/ui/popover-menu'
 import { notify } from '@/shared/ui/toast'
 import {
@@ -95,6 +106,7 @@ import {
   LedgerCompactAction,
   LedgerPrimaryButton,
 } from '@/widgets/country/country-detail/ui/country-ledger-primitives'
+import { hydrateStrengthSnapshots } from '@/widgets/country/country-detail/ui/military-unit-form/strength-snapshots-editor'
 import {
   CountryInlineModal,
   type CountryInlineModalTarget,
@@ -171,7 +183,6 @@ export const MilitaryUnitDetailContent = forwardRef<
   const isCompact = variant !== 'page'
 
   const [activeTab, setActiveTab] = useState<DetailTabKey>('overview')
-  const [showMapPreview, setShowMapPreview] = useState(false)
   const [inspectPersonId, setInspectPersonId] = useState<string | null>(null)
   const [countryModalTarget, setCountryModalTarget] =
     useState<CountryInlineModalTarget | null>(null)
@@ -224,14 +235,26 @@ export const MilitaryUnitDetailContent = forwardRef<
   const [eventRoleDesc, setEventRoleDesc] = useState('')
   const [eventLinkBusy, setEventLinkBusy] = useState(false)
 
+  // 참전 전투·작전(SideDeployedUnit) 직접 연결
+  const [deploymentPickerOpen, setDeploymentPickerOpen] = useState(false)
+  const [pendingDeploymentEvent, setPendingDeploymentEvent] =
+    useState<EventPickerSelection | null>(null)
+  const [pendingEventSides, setPendingEventSides] = useState<EventSide[]>([])
+  const [selectedDeploySideId, setSelectedDeploySideId] = useState('')
+  const [autoSideName, setAutoSideName] = useState('')
+  const [deployRole, setDeployRole] = useState<SideUnitRole>('MAIN_EFFORT')
+  const [deployNote, setDeployNote] = useState('')
+  const [deployBusy, setDeployBusy] = useState(false)
+
   // 부대 변경 시 UI 상태 초기화
   useEffect(() => {
     setActiveTab('overview')
-    setShowMapPreview(false)
     setAddTransitionOpen(false)
     setEditingTransitionId(null)
     setPendingEvent(null)
     setEditingEventLink(null)
+    setPendingDeploymentEvent(null)
+    setPendingEventSides([])
     setCommanderSearch('')
     setCollapsedSubIds(new Set())
   }, [unitId])
@@ -644,6 +667,94 @@ export const MilitaryUnitDetailContent = forwardRef<
     }
   }
 
+  const handleSelectDeploymentEvent = async (picked: EventPickerSelection) => {
+    setPendingDeploymentEvent(picked)
+    const fallbackSide =
+      (unit?.historicalCountry?.name ?? unit?.country?.name)
+        ? `${unit?.historicalCountry?.name ?? unit?.country?.name} 측`
+        : '참전 진영'
+    setAutoSideName(fallbackSide)
+    setDeployRole('MAIN_EFFORT')
+    setDeployNote('')
+    try {
+      const sides = await listEventSides(picked.id)
+      setPendingEventSides(sides)
+      if (sides.length > 0) {
+        const matched = sides.find((side) =>
+          (side.participants ?? []).some(
+            (p) =>
+              (unit?.historicalCountryId &&
+                p.historicalCountryId === unit.historicalCountryId) ||
+              (unit?.countryId && p.countryId === unit.countryId),
+          ),
+        )
+        setSelectedDeploySideId((matched ?? sides[0]).id)
+      } else {
+        setSelectedDeploySideId('')
+      }
+    } catch {
+      setPendingEventSides([])
+      setSelectedDeploySideId('')
+    }
+  }
+
+  const handleSaveDeploymentLink = async () => {
+    if (!unit || !pendingDeploymentEvent || deployBusy) return
+    setDeployBusy(true)
+    try {
+      let sideIdToUse = selectedDeploySideId
+      if (!sideIdToUse) {
+        const createdSides = await syncEventSides(pendingDeploymentEvent.id, [
+          {
+            name: autoSideName.trim() || '참전 진영',
+            level: 'COUNTRY',
+          },
+        ])
+        sideIdToUse = createdSides[0]?.id ?? ''
+      }
+      if (!sideIdToUse) {
+        notify.error('투입할 사건 진영을 생성·선택하지 못했습니다.')
+        return
+      }
+      await addEventSideUnit(pendingDeploymentEvent.id, sideIdToUse, {
+        militaryUnitId: unit.id,
+        role: deployRole,
+        note: deployNote.trim() || null,
+      })
+      setPendingDeploymentEvent(null)
+      setPendingEventSides([])
+      await invalidateUnitData()
+      void queryClient.invalidateQueries({ queryKey: ['events'] })
+      notify.success(`‘${pendingDeploymentEvent.title}’ 참전 전투서열에 연결했습니다.`)
+    } catch (err) {
+      notify.error(getApiErrorMessage(err, '참전 사건 연결에 실패했습니다.'))
+    } finally {
+      setDeployBusy(false)
+    }
+  }
+
+  const handleRemoveDeploymentLink = async (
+    eventId: string,
+    deploymentId: string,
+    eventTitle: string,
+  ) => {
+    const ok = await confirm({
+      title: '참전 전투서열 투입 해제',
+      message: `‘${eventTitle}’ 전투서열에서 이 부대를 제외하시겠습니까?`,
+      confirmLabel: '제외',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      await removeEventSideUnit(eventId, deploymentId)
+      await invalidateUnitData()
+      void queryClient.invalidateQueries({ queryKey: ['events'] })
+      notify.success('참전 연결이 해제되었습니다.')
+    } catch (err) {
+      notify.error(getApiErrorMessage(err, '참전 연결 해제에 실패했습니다.'))
+    }
+  }
+
   if (detailQuery.isLoading) {
     return (
       <S.LoadingBox>사령부·부대 상세 정보를 불러오는 중입니다…</S.LoadingBox>
@@ -720,6 +831,49 @@ export const MilitaryUnitDetailContent = forwardRef<
   const eventRelations = unit.eventRelations ?? []
   const vessels = unit.assignedNavalVessels ?? unit.navalVessels ?? []
   const candidateLineageDepartments = departmentsForLineageQuery.data ?? []
+
+  const unitObservations = unit.unitObservations ?? []
+  const hydratedSnapshots =
+    unitObservations.length > 0
+      ? hydrateStrengthSnapshots(unitObservations, unit.branch ?? '')
+      : []
+
+  const headlineStrengthText =
+    hydratedSnapshots[0]?.totalStrength
+      ? `${
+          hydratedSnapshots[0].basisKind === 'peacetime'
+            ? '평시 정원'
+            : hydratedSnapshots[0].basisKind === 'actual'
+              ? '실병력'
+              : '완편 정원'
+        } ${hydratedSnapshots[0].totalStrength}명`
+      : unit.strength?.trim()
+        ? unit.strength.trim().split('\n')[0].slice(0, 60)
+        : null
+
+  const subUnitPins: SubUnitMapPin[] = sortedSubUnits
+    .map((sub): SubUnitMapPin | null => {
+      const fullSub = unitByIdMap.get(sub.id)
+      const lat = sub.garrisonLatitude ?? fullSub?.garrisonLatitude ?? null
+      const lng = sub.garrisonLongitude ?? fullSub?.garrisonLongitude ?? null
+      if (
+        typeof lat !== 'number' ||
+        typeof lng !== 'number' ||
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng)
+      ) {
+        return null
+      }
+      return {
+        id: sub.id,
+        name: sub.name,
+        abbreviation: sub.abbreviation ?? null,
+        garrison: sub.garrison ?? fullSub?.garrison ?? null,
+        lat,
+        lng,
+      }
+    })
+    .filter((item): item is SubUnitMapPin => item !== null)
 
   const contextMetaCards: Array<{ label: string; body: string }> = []
   if (unit.primaryMission?.trim()) {
@@ -980,42 +1134,34 @@ export const MilitaryUnitDetailContent = forwardRef<
                 <FiMapPin size={11.5} /> 주둔지 · 병력 규모
               </S.SpecLabel>
               <S.SpecValue>
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: 6,
-                  }}
-                >
-                  <span>
-                    {[
-                      unit.garrison ? unit.garrison : null,
-                      unit.strength ? `규모 ${unit.strength}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || <S.MutedSpan>미등록</S.MutedSpan>}
-                  </span>
-                  {unit.garrison?.trim() ? (
-                    <LedgerCompactAction
-                      type="button"
-                      onClick={() => setShowMapPreview((prev) => !prev)}
-                    >
-                      {showMapPreview ? '지도 닫기' : '지도 보기'}
-                    </LedgerCompactAction>
-                  ) : null}
-                </span>
+                {[
+                  unit.garrison ? unit.garrison : null,
+                  headlineStrengthText,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || <S.MutedSpan>미등록</S.MutedSpan>}
               </S.SpecValue>
             </S.SpecCell>
           </S.SpecStrip>
 
-          {showMapPreview && unit.garrison?.trim() ? (
+          {Boolean(
+            unit.garrison?.trim() ||
+              (unit.garrisonLatitude != null &&
+                unit.garrisonLongitude != null) ||
+              unit.jurisdictionGeometry ||
+              subUnitPins.length > 0,
+          ) ? (
             <S.MapPreviewSection>
-              <HeadquartersMapPreview
-                headquarters={unit.garrison}
+              <UnitSpatialMapCard
+                unitName={unit.name}
                 countryName={countryName}
-                departmentName={unit.name}
-                showHeadline
+                garrison={unit.garrison}
+                garrisonLatitude={unit.garrisonLatitude}
+                garrisonLongitude={unit.garrisonLongitude}
+                jurisdictionGeometry={unit.jurisdictionGeometry}
+                subUnitPins={subUnitPins}
+                compact={isCompact}
+                onSelectSubUnit={onSelectUnit}
               />
             </S.MapPreviewSection>
           ) : null}
@@ -1708,6 +1854,72 @@ export const MilitaryUnitDetailContent = forwardRef<
               </S.LedgerSection>
             ) : null}
 
+            {/* 정밀 병력 · 전력 편제 현황 */}
+            {hydratedSnapshots.length > 0 || unit.strength?.trim() ? (
+              <S.LedgerSection>
+                <S.SectionHead>
+                  <S.SectionHeadTitle>
+                    병력 · 편제 전력 현황
+                  </S.SectionHeadTitle>
+                </S.SectionHead>
+                {hydratedSnapshots.length > 0 ? (
+                  <S.ContextMetaGrid>
+                    {hydratedSnapshots.map((snap) => {
+                      const basisKo =
+                        snap.basisKind === 'peacetime'
+                          ? '평시 편제 정원'
+                          : snap.basisKind === 'actual'
+                            ? '실병력 (현원)'
+                            : '전시 완편 정원'
+                      const dateTag = snap.year.trim()
+                        ? `${snap.era === 'BC' ? 'BC ' : ''}${snap.year}${snap.month ? `.${snap.month}` : ''}${snap.day ? `.${snap.day}` : ''}`
+                        : null
+                      const personnelLines = [
+                        snap.totalStrength ? `총병력 ${snap.totalStrength}명` : null,
+                        snap.officers ? `장교 ${snap.officers}명` : null,
+                        snap.ncos ? `부사관 ${snap.ncos}명` : null,
+                        snap.enlisted ? `병 ${snap.enlisted}명` : null,
+                        snap.combatPersonnel
+                          ? `전투원 ${snap.combatPersonnel}명`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                      const equipmentLines = [
+                        snap.subUnitsCount
+                          ? `예하 ${snap.subUnitsCount}개 ${snap.subUnitsLabel || '편제'}`
+                          : null,
+                        snap.tanks ? `전차·돌격포 ${snap.tanks}대` : null,
+                        snap.afvs ? `장갑차·IFV ${snap.afvs}대` : null,
+                        snap.artillery ? `화포·박격포 ${snap.artillery}문` : null,
+                        snap.aircraft ? `항공기 ${snap.aircraft}기` : null,
+                        snap.vessels ? `함정 ${snap.vessels}척` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                      return (
+                        <S.ContextMetaCard key={snap.localId}>
+                          <S.ContextMetaLabel>
+                            {[basisKo, dateTag].filter(Boolean).join(' · ')}
+                          </S.ContextMetaLabel>
+                          <S.ContextMetaBody>
+                            {[personnelLines, equipmentLines, snap.basisNote]
+                              .filter(Boolean)
+                              .join('\n')}
+                          </S.ContextMetaBody>
+                        </S.ContextMetaCard>
+                      )
+                    })}
+                  </S.ContextMetaGrid>
+                ) : null}
+                {unit.strength?.trim() ? (
+                  <S.DescriptionProse style={{ whiteSpace: 'pre-wrap' }}>
+                    {unit.strength.trim()}
+                  </S.DescriptionProse>
+                ) : null}
+              </S.LedgerSection>
+            ) : null}
+
             {/* 부대 소개 · 임무 · 제원 */}
             {contextMetaCards.length > 0 || unit.description ? (
               <S.LedgerSection>
@@ -2168,7 +2380,81 @@ export const MilitaryUnitDetailContent = forwardRef<
                 <S.SectionHeadTitle>
                   참전 작전 · 전투 투입 기록 ({deployments.length}건)
                 </S.SectionHeadTitle>
+                <LedgerCompactAction
+                  type="button"
+                  onClick={() => setDeploymentPickerOpen(true)}
+                >
+                  <FiPlus size={12} /> 참전 전투·작전 연결
+                </LedgerCompactAction>
               </S.SectionHead>
+
+              {pendingDeploymentEvent ? (
+                <S.SectionBody style={{ paddingBottom: 0 }}>
+                  <S.InlineFormBox>
+                    <S.InlineFormRow>
+                      <strong style={{ fontSize: 12.5 }}>
+                        {pendingDeploymentEvent.title}
+                      </strong>
+                      {pendingEventSides.length > 0 ? (
+                        <S.FormSelect
+                          aria-label="투입 진영"
+                          value={selectedDeploySideId}
+                          onChange={(e) =>
+                            setSelectedDeploySideId(e.target.value)
+                          }
+                        >
+                          {pendingEventSides.map((sideItem) => (
+                            <option key={sideItem.id} value={sideItem.id}>
+                              진영: {sideItem.name}
+                            </option>
+                          ))}
+                        </S.FormSelect>
+                      ) : (
+                        <S.FormInput
+                          type="text"
+                          placeholder="자동 생성할 진영명"
+                          value={autoSideName}
+                          onChange={(e) => setAutoSideName(e.target.value)}
+                          style={{ maxWidth: 160 }}
+                        />
+                      )}
+                      <S.FormSelect
+                        aria-label="작전 역할"
+                        value={deployRole}
+                        onChange={(e) =>
+                          setDeployRole(e.target.value as SideUnitRole)
+                        }
+                      >
+                        <option value="MAIN_EFFORT">주공</option>
+                        <option value="SUPPORTING">조공·지원</option>
+                        <option value="DEFENSE">수비·방어</option>
+                        <option value="RESERVE">예비</option>
+                        <option value="OTHER">기타</option>
+                      </S.FormSelect>
+                      <S.FormInput
+                        type="text"
+                        placeholder="작전 메모 (예: 민스크 포위 돌파)"
+                        value={deployNote}
+                        onChange={(e) => setDeployNote(e.target.value)}
+                      />
+                      <LedgerCompactAction
+                        type="button"
+                        $primary
+                        disabled={deployBusy}
+                        onClick={() => void handleSaveDeploymentLink()}
+                      >
+                        {deployBusy ? '저장 중…' : '투입 저장'}
+                      </LedgerCompactAction>
+                      <LedgerCompactAction
+                        type="button"
+                        onClick={() => setPendingDeploymentEvent(null)}
+                      >
+                        취소
+                      </LedgerCompactAction>
+                    </S.InlineFormRow>
+                  </S.InlineFormBox>
+                </S.SectionBody>
+              ) : null}
 
               {deployments.length === 0 ? (
                 <S.SectionEmpty>
@@ -2189,6 +2475,7 @@ export const MilitaryUnitDetailContent = forwardRef<
                             <th>부대 전과 · 투입 병기 · 기동</th>
                           </>
                         ) : null}
+                        <th style={{ width: 52, textAlign: 'right' }}>관리</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2389,6 +2676,26 @@ export const MilitaryUnitDetailContent = forwardRef<
                                 </td>
                               </>
                             ) : null}
+                            <td style={{ textAlign: 'right' }}>
+                              <PopoverMenu
+                                size="sm"
+                                ariaLabel={`${ev.title} 참전 관리`}
+                                items={[
+                                  {
+                                    id: 'remove-dep',
+                                    label: '참전 연결 해제',
+                                    icon: <FiTrash2 size={12} />,
+                                    danger: true,
+                                    onSelect: () =>
+                                      void handleRemoveDeploymentLink(
+                                        ev.id,
+                                        dep.id,
+                                        ev.title,
+                                      ),
+                                  },
+                                ]}
+                              />
+                            </td>
                           </tr>
                         )
                       })}
@@ -2432,6 +2739,19 @@ export const MilitaryUnitDetailContent = forwardRef<
         }}
         excludeEventIds={eventRelations.map((relItem) => relItem.event.id)}
         title="군사 지령 · 작전 사건 선택"
+      />
+
+      <EventPickerModal
+        isOpen={deploymentPickerOpen}
+        onClose={() => setDeploymentPickerOpen(false)}
+        onSelect={(selectedEv) => {
+          setDeploymentPickerOpen(false)
+          void handleSelectDeploymentEvent(selectedEv)
+        }}
+        excludeEventIds={deployments
+          .map((depItem) => depItem.side?.event?.id)
+          .filter((id): id is string => Boolean(id))}
+        title="참전 전투 · 작전 사건 선택"
       />
 
       <PersonInlineModal

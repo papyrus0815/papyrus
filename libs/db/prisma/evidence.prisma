@@ -89,6 +89,8 @@ enum ObservationSubjectType {
   PERSON
   /// 정당 — 당원 수·지부 수·재정 (docs/political-party-model-review.md §4.9)
   POLITICAL_PARTY
+  /// 군사 사령부·부대 — 평시/전시 정원·실병력·장교/부사관/병·편제 장비 정수
+  MILITARY_UNIT
 }
 
 /// 인용의 대상 타입 (폴리모픽)
@@ -131,6 +133,8 @@ enum CitationTargetType {
   PARTY_LINK
   /// 정당 계보 한 줄(전신·후신·합당·분당)
   PARTY_TRANSITION
+  /// 군사 사령부·부대 본체
+  MILITARY_UNIT
 }
 
 /// 지표 값의 성격 — 화면이 숫자를 어떻게 읽고 합칠지 정한다

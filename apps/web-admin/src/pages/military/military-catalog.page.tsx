@@ -97,8 +97,6 @@ import {
 } from '@/widgets/country/country-inline-modal/country-inline-modal'
 import type { CreateSubUnitDefaults } from '@/widgets/military-unit-detail'
 
-import { MilitaryUnitDetailDrawer } from './components/military-unit-detail-drawer'
-
 type BranchTabKey = MilitaryBranchTabKey
 type EchelonTierFilter = MilitaryEchelonTierFilter
 type CatalogViewMode = 'ledger' | 'tree'
@@ -170,7 +168,6 @@ export function MilitaryCatalogPage() {
     Set<string>
   >(new Set())
 
-  const [previewUnitId, setPreviewUnitId] = useState<string | null>(null)
   const [unitFormOpen, setUnitFormOpen] = useState(false)
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null)
   const [formDefaults, setFormDefaults] = useState<CreateSubUnitDefaults>({})
@@ -703,14 +700,10 @@ export function MilitaryCatalogPage() {
   }
 
   const handleSelectUnitRow = useCallback(
-    (unitItem: LedgerMilitaryUnitItem, evt?: React.MouseEvent) => {
-      if (evt?.metaKey || evt?.ctrlKey) {
-        navigate(pathKeys.militaryUnitDetail(unitItem.id), {
-          state: { listSearch: location.search },
-        })
-        return
-      }
-      setPreviewUnitId(unitItem.id)
+    (unitItem: LedgerMilitaryUnitItem) => {
+      navigate(pathKeys.militaryUnitDetail(unitItem.id), {
+        state: { listSearch: location.search },
+      })
     },
     [navigate, location.search],
   )
@@ -1195,8 +1188,26 @@ export function MilitaryCatalogPage() {
           <MilitaryUnitsLedgerView
             units={filteredUnits}
             allUnits={allUnits}
-            selectedUnitId={previewUnitId}
             showCountryColumn
+            onEditUnit={(targetId) => {
+              setEditingUnitId(targetId)
+              setFormDefaults({})
+              setUnitFormOpen(true)
+            }}
+            onCreateSubUnit={(parentItem) => {
+              setEditingUnitId(null)
+              setFormDefaults({
+                parentUnitId: parentItem.id,
+                countryId: parentItem.countryId ?? null,
+                historicalCountryId: parentItem.historicalCountryId ?? null,
+                administrationDepartmentId:
+                  parentItem.administrationDepartmentId ??
+                  parentItem.administrationDepartment?.id ??
+                  null,
+                branch: parentItem.branch ?? null,
+              })
+              setUnitFormOpen(true)
+            }}
             onCountryClick={(targetCountryId) => {
               const matchedUnit = allUnits.find(
                 (unitCandidate) =>
@@ -1270,15 +1281,7 @@ export function MilitaryCatalogPage() {
                       <TreeUnitRow
                         type="button"
                         $depth={depth}
-                        onClick={(evt) => {
-                          if (evt.metaKey || evt.ctrlKey) {
-                            navigate(pathKeys.militaryUnitDetail(node.id), {
-                              state: { listSearch: location.search },
-                            })
-                            return
-                          }
-                          handleSelectUnitRow(node)
-                        }}
+                        onClick={() => handleSelectUnitRow(node)}
                       >
                         <TreeRowLeft>
                           {depth > 0 ? (
@@ -1354,23 +1357,6 @@ export function MilitaryCatalogPage() {
           </CountryTreeContainer>
         )}
       </LedgerSurfacePanel>
-
-      <MilitaryUnitDetailDrawer
-        unitId={previewUnitId}
-        listSearch={location.search}
-        onClose={() => setPreviewUnitId(null)}
-        onSelectUnit={(nextId) => setPreviewUnitId(nextId)}
-        onEditUnit={(targetId) => {
-          setEditingUnitId(targetId)
-          setFormDefaults({})
-          setUnitFormOpen(true)
-        }}
-        onCreateSubUnit={(defaults) => {
-          setEditingUnitId(null)
-          setFormDefaults(defaults)
-          setUnitFormOpen(true)
-        }}
-      />
 
       <MilitaryUnitFormModal
         isOpen={unitFormOpen}

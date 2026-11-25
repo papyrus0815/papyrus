@@ -859,14 +859,19 @@ model MilitaryUnit {
   motto    String? @db.VarChar(500)
   /// 주둔지·본부·작전 거점 (자유 서술)
   garrison String? @db.VarChar(500)
-  /// 병력·편제 정원 요약 (자유 서술, 예: "약 130만 명 · 49개 사단")
-  strength String? @db.VarChar(200)
+  /// 주둔지·본영 대표 위치 좌표(WGS84) — 둘 다 있거나 둘 다 없다(서비스가 짝으로 검증)
+  garrisonLatitude  Decimal? @map("garrison_latitude") @db.Decimal(10, 7)
+  garrisonLongitude Decimal? @map("garrison_longitude") @db.Decimal(10, 7)
+  /// 병력·편제 상세 서술 (정량 수치는 Observation[subjectType=MILITARY_UNIT] 정본에 저장)
+  strength String? @db.Text
   /// 휘장·식별표지 이미지 URL
   insigniaUrl String? @map("insignia_url") @db.VarChar(500)
   /// 주요 임무
   primaryMission String? @map("primary_mission") @db.Text
-  /// 관할 구역·작전 구역
+  /// 관할 구역·작전 구역 서술
   jurisdiction   String? @db.Text
+  /// 관할·작전 구역 지도 도형 JSON — { type: 'POLYGON' | 'LINE', coordinates: [[lat, lng], ...], color?: string }
+  jurisdictionGeometry Json? @map("jurisdiction_geometry") @db.Json
   /// 주요 전투·작전 이력
   notableBattles String? @map("notable_battles") @db.Text
   /// 훈장·표창 등

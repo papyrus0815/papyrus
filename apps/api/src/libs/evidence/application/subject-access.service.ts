@@ -126,6 +126,15 @@ export class SubjectAccessService {
         if (!row) throw notFound()
         return { kind: 'unowned' }
       }
+      case ObservationSubjectType.MILITARY_UNIT: {
+        /* 군사 사령부·부대는 계정 소유가 없는 공유 정본 */
+        const row = await this.prisma.militaryUnit.findUnique({
+          where: { id: subjectId },
+          select: { id: true },
+        })
+        if (!row) throw notFound()
+        return { kind: 'unowned' }
+      }
     }
   }
 

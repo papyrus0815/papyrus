@@ -1,7 +1,9 @@
 import type {
   MilitaryUnitDatePartsDto,
   MilitaryUnitEventLinkDto,
+  MilitaryUnitJurisdictionGeometryDto,
   MilitaryUnitLineageDto,
+  MilitaryUnitObservationDto,
   MilitaryUnitTenureItem,
 } from '@/shared/api/military-unit'
 
@@ -17,13 +19,17 @@ export interface MilitaryUnitDetailResponse {
   nickname?: string | null
   motto?: string | null
   garrison?: string | null
+  garrisonLatitude?: number | null
+  garrisonLongitude?: number | null
   strength?: string | null
   primaryMission?: string | null
   jurisdiction?: string | null
+  jurisdictionGeometry?: MilitaryUnitJurisdictionGeometryDto | null
   notableBattles?: string | null
   honors?: string | null
   insigniaUrl?: string | null
   description?: string | null
+  unitObservations?: MilitaryUnitObservationDto[]
   established?: MilitaryUnitDatePartsDto | null
   disbanded?: MilitaryUnitDatePartsDto | null
   establishedDate?: string | null
@@ -57,6 +63,9 @@ export interface MilitaryUnitDetailResponse {
     abbreviation?: string | null
     unitType?: string | null
     branch?: string | null
+    garrison?: string | null
+    garrisonLatitude?: number | null
+    garrisonLongitude?: number | null
   }>
   predecessors?: MilitaryUnitLineageDto[]
   successors?: MilitaryUnitLineageDto[]

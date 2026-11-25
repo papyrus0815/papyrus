@@ -79,6 +79,21 @@ export interface EventSideInput {
   logistics?: string | null
 }
 
+/** 사건의 진영 목록 조회 — GET /events/:eventId/sides */
+export async function listEventSides(eventId: string): Promise<EventSide[]> {
+  const conn = getApiConnection()
+  const res = await fetch(`${conn.host}/events/${encodeURIComponent(eventId)}/sides`, {
+    method: 'GET',
+    headers: conn.headers as HeadersInit,
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    throw new Error(`진영 목록을 불러오지 못했습니다 (${res.status})`)
+  }
+  const data = (await res.json()) as { data?: EventSide[] } & EventSide[]
+  return Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []
+}
+
 /** 진영 목록 동기화 — 배열 순서 = 표시 순서. 빠진 진영은 지워지고(그 진영의 측정값도) 소속만 풀린다 */
 export async function syncEventSides(eventId: string, sides: EventSideInput[]): Promise<EventSide[]> {
   const conn = getApiConnection()

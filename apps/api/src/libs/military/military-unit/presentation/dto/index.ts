@@ -110,6 +110,30 @@ export interface MilitaryUnitCommanderInput {
   termNumber?: number | null
 }
 
+export interface MilitaryUnitJurisdictionGeometryDto {
+  type: 'POLYGON' | 'LINE'
+  coordinates: Array<[number, number]>
+  color?: string | null
+}
+
+export interface MilitaryUnitObservationDto {
+  id: string
+  metricKey: string
+  metricName: string
+  unit: string | null
+  value: string | null
+  low: string | null
+  high: string | null
+  approx: boolean
+  atLeast: boolean
+  qualifier: string | null
+  note: string | null
+  estimateRole: 'PREFERRED' | 'ALTERNATIVE' | 'DISPUTED' | null
+  method: 'COUNTED' | 'ESTIMATED' | 'EXTRAPOLATED' | 'OFFICIAL_CLAIM' | null
+  start: MilitaryUnitDatePartsDto | null
+  end: MilitaryUnitDatePartsDto | null
+}
+
 // Response DTO
 export interface MilitaryUnitDto {
   id: string
@@ -134,10 +158,13 @@ export interface MilitaryUnitDto {
   nickname?: string | null
   motto?: string | null
   garrison?: string | null
+  garrisonLatitude?: number | null
+  garrisonLongitude?: number | null
   strength?: string | null
   insigniaUrl?: string | null
   primaryMission?: string | null
   jurisdiction?: string | null
+  jurisdictionGeometry?: MilitaryUnitJurisdictionGeometryDto | null
   notableBattles?: string | null
   honors?: string | null
   description?: string | null
@@ -145,6 +172,8 @@ export interface MilitaryUnitDto {
   successors?: MilitaryUnitLineageDto[]
   eventRelations?: MilitaryUnitEventLinkDto[]
   tenures?: any[]
+  /** 부대 자체의 시기별 정량 병력·편제 장비 측정값 (subjectType = MILITARY_UNIT) */
+  unitObservations?: MilitaryUnitObservationDto[]
   /** 배속 함선(해군 ORBAT) — 조회 전용 */
   assignedNavalVessels?: Array<{
     id: string
@@ -188,6 +217,9 @@ export interface MilitaryUnitDto {
     unitType?: MilitaryUnitType | null
     branch?: MilitaryBranch | null
     isActive?: boolean | null
+    garrison?: string | null
+    garrisonLatitude?: number | null
+    garrisonLongitude?: number | null
   }>
   commanders?: Array<{
     id: string
@@ -249,10 +281,13 @@ export interface CreateMilitaryUnitDto {
   nickname?: (string & tags.MaxLength<200>) | null
   motto?: (string & tags.MaxLength<500>) | null
   garrison?: (string & tags.MaxLength<500>) | null
-  strength?: (string & tags.MaxLength<200>) | null
+  garrisonLatitude?: number | null
+  garrisonLongitude?: number | null
+  strength?: string | null
   insigniaUrl?: (string & tags.MaxLength<500>) | null
   primaryMission?: string | null
   jurisdiction?: string | null
+  jurisdictionGeometry?: MilitaryUnitJurisdictionGeometryDto | null
   notableBattles?: string | null
   honors?: string | null
   description?: string | null
@@ -281,10 +316,13 @@ export interface UpdateMilitaryUnitDto {
   nickname?: (string & tags.MaxLength<200>) | null
   motto?: (string & tags.MaxLength<500>) | null
   garrison?: (string & tags.MaxLength<500>) | null
-  strength?: (string & tags.MaxLength<200>) | null
+  garrisonLatitude?: number | null
+  garrisonLongitude?: number | null
+  strength?: string | null
   insigniaUrl?: (string & tags.MaxLength<500>) | null
   primaryMission?: string | null
   jurisdiction?: string | null
+  jurisdictionGeometry?: MilitaryUnitJurisdictionGeometryDto | null
   notableBattles?: string | null
   honors?: string | null
   description?: string | null
