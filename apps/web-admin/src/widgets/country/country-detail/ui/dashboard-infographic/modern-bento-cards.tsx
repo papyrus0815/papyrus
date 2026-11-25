@@ -14,10 +14,21 @@ import {
 } from 'react-icons/fi'
 import styled, { useTheme } from 'styled-components'
 
-import { useAdministrativeDivisions } from '@/entities/country/api.administrative-divisions'
+import {
+  type AdministrativeDivision,
+  useAdministrativeDivisions,
+} from '@/entities/country/api.administrative-divisions'
+import { useInfrastructures } from '@/entities/country/api.infrastructure'
+import { useNaturalFeatures } from '@/entities/country/api.natural-feature'
 import type { ExportImport } from '@/entities/country/api.trade'
 import { toPyramidRows } from '@/entities/country/model/population-pyramid'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  formatTradeValue,
+  VALUE_SCALE_MULTIPLIER,
+} from '@/entities/trade/vocab'
+import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import {
   formatPeriod,
   GOVERNMENT_FORM_LABEL,
@@ -1154,19 +1165,22 @@ export function DemographicsBentoCard({
               key: 'young',
               label: '유소년 (0–19)',
               value: young,
-              color: theme.mode === 'dark' ? '#38bdf8' : '#0284c7',
+              color: theme.mode === 'dark' ? '#38bdf8' : '#0ea5e9',
+              gradient: 'linear-gradient(90deg, #0ea5e9, #38bdf8)',
             },
             {
               key: 'working',
               label: '생산연령 (20–59)',
               value: working,
-              color: ledgerAccent(theme.mode),
+              color: theme.mode === 'dark' ? '#34d399' : '#10b981',
+              gradient: 'linear-gradient(90deg, #10b981, #06b6d4)',
             },
             {
               key: 'senior',
               label: '고령 (60+)',
               value: senior,
-              color: theme.mode === 'dark' ? '#fbbf24' : '#d97706',
+              color: theme.mode === 'dark' ? '#fbbf24' : '#f59e0b',
+              gradient: 'linear-gradient(90deg, #f59e0b, #fb7185)',
             },
           ]
         : []
@@ -1178,15 +1192,8 @@ export function DemographicsBentoCard({
     }
   }, [demographicIndicators, theme.mode])
 
-  if (!latestDemo && !latestPyramid && ethnicityCount === 0) {
-    return (
-      <EmptyBentoCard
-        title="인구 구조"
-        text="연령대·성별 인구나 출생률·기대수명 같은 인구 지표를 넣으면 인구 피라미드와 추이가 그려집니다."
-        actionLabel="인구 자료 입력"
-        onAction={onOpenDataManager}
-      />
-    )
+  if (!latestDemo && !latestPyramid) {
+    return null
   }
 
   const maxSide = latestPyramid
@@ -1229,11 +1236,6 @@ export function DemographicsBentoCard({
           ) : null}
         </BentoCardTitleGroup>
         <BentoHeaderActions>
-          {ethnicityCount > 0 ? (
-            <BentoActionBtn type="button" onClick={onOpenEthnicity}>
-              민족 {ethnicityCount} <FiArrowUpRight size={11} />
-            </BentoActionBtn>
-          ) : null}
           <BentoActionBtn type="button" $accent onClick={onOpenPyramid}>
             인구 상세 <FiArrowUpRight size={11} />
           </BentoActionBtn>
@@ -1376,59 +1378,98 @@ export function TradeAndIndustryBentoCard({
   )
 
   if (!latestTrade && companyCount === 0) {
-    return (
-      <EmptyBentoCard
-        title="교역 · 기업"
-        text="연도별 수출·수입이나 이 나라 기업을 등록하면 무역수지와 품목·업종 구성이 그려집니다."
-        actionLabel="교역 자료 입력"
-        onAction={onOpenTrade}
-      />
-    )
+    return null
   }
 
-  const expVal =
+  const rawExpVal =
     latestTrade?.exportValue != null ? Number(latestTrade.exportValue) : 0
-  const impVal =
+  const rawImpVal =
     latestTrade?.importValue != null ? Number(latestTrade.importValue) : 0
+  const scaleMult =
+    latestTrade?.valueScale &&
+    latestTrade.valueScale in VALUE_SCALE_MULTIPLIER
+      ? VALUE_SCALE_MULTIPLIER[
+          latestTrade.valueScale as keyof typeof VALUE_SCALE_MULTIPLIER
+        ]
+      : 1
+  const expVal = rawExpVal * scaleMult
+  const impVal = rawImpVal * scaleMult
+  const isUsdTrade =
+    !latestTrade?.currencyCode || latestTrade.currencyCode === 'USD'
+  const formatScaledTrade = (scaledVal: number) => {
+    if (isUsdTrade) return formatMetricValue(scaledVal, '$')
+    const suffix = latestTrade?.currencyCode
+      ? ` ${latestTrade.currencyCode}`
+      : ''
+    return `${formatTradeValue(scaledVal)}${suffix}`
+  }
   const maxTrade = Math.max(1, expVal, impVal)
+  const totalTradeVol = expVal + impVal
+  const expSharePct =
+    totalTradeVol > 0 ? Math.round((expVal / totalTradeVol) * 100) : 50
   const balance = expVal - impVal
 
-  const compSlices: SegmentSlice[] = activeComp
-    ? activeComp.slices.slice(0, 5).map((sl) => ({
-        key: sl.key,
-        label: sl.name,
-        value: sl.pct,
-        color: sl.color,
-        meta: `${sl.pct.toFixed(1)}%`,
-      }))
-    : []
+  const VIBRANT_COMMODITY_PALETTE = [
+    {
+      solid: '#4f46e5',
+      grad: 'linear-gradient(90deg, #4f46e5, #818cf8)',
+    },
+    {
+      solid: '#0ea5e9',
+      grad: 'linear-gradient(90deg, #0284c7, #38bdf8)',
+    },
+    {
+      solid: '#f59e0b',
+      grad: 'linear-gradient(90deg, #d97706, #fbbf24)',
+    },
+    {
+      solid: '#10b981',
+      grad: 'linear-gradient(90deg, #059669, #34d399)',
+    },
+    {
+      solid: '#ec4899',
+      grad: 'linear-gradient(90deg, #db2777, #f472b6)',
+    },
+  ]
 
-  const sectorSlices: SegmentSlice[] = companiesBySector
-    .slice(0, 5)
-    .map((s, idx) => ({
-      key: s.label,
-      label: s.label,
-      value: s.count,
-      color: PARTY_FALLBACK_PALETTE[idx % PARTY_FALLBACK_PALETTE.length],
-    }))
+  const compSlices: SegmentSlice[] = activeComp
+    ? activeComp.slices.slice(0, 5).map((sl, idx) => {
+        const pal =
+          VIBRANT_COMMODITY_PALETTE[idx % VIBRANT_COMMODITY_PALETTE.length]
+        return {
+          key: sl.key,
+          label: sl.name,
+          value: sl.pct,
+          color: pal.solid,
+          gradient: pal.grad,
+          meta: `${sl.pct.toFixed(1)}%`,
+        }
+      })
+    : []
+  const maxCompPct = Math.max(1, ...compSlices.map((sl) => sl.value))
 
   return (
     <BentoCard aria-label="대외 교역 수지 및 주력 품목 도넛 인포그래픽">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>교역 · 기업</BentoCardTitle>
+          <BentoCardTitle>교역 · 주력 산업</BentoCardTitle>
           {latestTrade ? (
-            <BentoCardBadge>{latestTrade.year}년</BentoCardBadge>
+            <BentoCardBadge>
+              {latestTrade.year}년
+              {companyCount > 0 ? ` · 기업 ${companyCount}` : ''}
+            </BentoCardBadge>
+          ) : companyCount > 0 ? (
+            <BentoCardBadge>기업 {companyCount}개사</BentoCardBadge>
           ) : null}
         </BentoCardTitleGroup>
         <BentoHeaderActions>
-          {companyCount > 0 ? (
-            <BentoActionBtn type="button" onClick={onOpenCompanies}>
-              기업 {companyCount}
-            </BentoActionBtn>
-          ) : null}
-          <BentoActionBtn type="button" $accent onClick={onOpenTrade}>
-            교역 상세 <FiArrowUpRight size={11} />
+          <BentoActionBtn
+            type="button"
+            $accent
+            onClick={latestTrade ? onOpenTrade : onOpenCompanies}
+          >
+            {latestTrade ? '교역 상세' : '기업 목록'}{' '}
+            <FiArrowUpRight size={11} />
           </BentoActionBtn>
         </BentoHeaderActions>
       </BentoCardHeader>
@@ -1437,32 +1478,34 @@ export function TradeAndIndustryBentoCard({
         {latestTrade ? (
           <TradeBalanceBtn type="button" onClick={onOpenTrade}>
             <TradeDirRow>
-              <TradeDirLabel>수출</TradeDirLabel>
+              <TradeDirLabel style={{ color: '#059669' }}>수출</TradeDirLabel>
               <TradeBarTrack>
                 <TradeBarFill
                   $tone="export"
                   style={{ width: `${Math.max(4, (expVal / maxTrade) * 100)}%` }}
                 />
               </TradeBarTrack>
-              <TradeDirVal>{formatMetricValue(expVal, 'USD')}</TradeDirVal>
+              <TradeDirVal>{formatScaledTrade(expVal)}</TradeDirVal>
             </TradeDirRow>
 
             <TradeDirRow>
-              <TradeDirLabel>수입</TradeDirLabel>
+              <TradeDirLabel style={{ color: '#e11d48' }}>수입</TradeDirLabel>
               <TradeBarTrack>
                 <TradeBarFill
                   $tone="import"
                   style={{ width: `${Math.max(4, (impVal / maxTrade) * 100)}%` }}
                 />
               </TradeBarTrack>
-              <TradeDirVal>{formatMetricValue(impVal, 'USD')}</TradeDirVal>
+              <TradeDirVal>{formatScaledTrade(impVal)}</TradeDirVal>
             </TradeDirRow>
 
             <BalanceCallout $surplus={balance >= 0}>
-              <span>{balance >= 0 ? '무역흑자' : '무역적자'}</span>
+              <span>
+                {balance >= 0 ? '무역흑자' : '무역적자'} · 수출 비중 {expSharePct}%
+              </span>
               <strong>
                 {balance >= 0 ? '+' : '−'}
-                {formatMetricValue(Math.abs(balance), 'USD')}
+                {formatScaledTrade(Math.abs(balance))}
               </strong>
             </BalanceCallout>
           </TradeBalanceBtn>
@@ -1470,7 +1513,7 @@ export function TradeAndIndustryBentoCard({
 
         {compSlices.length > 0 ? (
           <div>
-            <BentoSubLabel style={{ marginBottom: 7 }}>
+            <BentoSubLabel style={{ marginBottom: 8 }}>
               <span>
                 {tradeDir === 'EXPORT' ? '주력 수출 품목' : '주력 수입 품목'}
               </span>
@@ -1492,252 +1535,1163 @@ export function TradeAndIndustryBentoCard({
                   </MiniDirBtn>
                 </MiniDirSwitch>
               ) : activeComp?.coverage != null ? (
-                <span>커버리지 {Math.round(activeComp.coverage)}%</span>
+                <span>비중 합계 {Math.round(activeComp.coverage)}%</span>
               ) : null}
             </BentoSubLabel>
             <AgeCohortDonutRow>
               <MiniDonutRing
                 slices={compSlices}
-                size={64}
-                strokeWidth={9}
+                size={72}
+                strokeWidth={9.5}
                 centerValue={
                   activeComp?.coverage != null
                     ? `${Math.round(activeComp.coverage)}%`
                     : `${compSlices.length}종`
                 }
+                centerLabel="주력"
               />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <StackedSegmentBar slices={compSlices} height={8} />
-              </div>
+              <CommodityBarsCol>
+                {compSlices.map((sl) => (
+                  <CommodityBarRow key={sl.key}>
+                    <span className="lb">
+                      <i style={{ background: sl.color }} />
+                      {sl.label}
+                    </span>
+                    <div className="track">
+                      <div
+                        className="fill"
+                        style={{
+                          width: `${Math.max(8, Math.round((sl.value / maxCompPct) * 100))}%`,
+                          background: sl.gradient ?? sl.color,
+                        }}
+                      />
+                    </div>
+                    <strong className="pct">{sl.meta}</strong>
+                  </CommodityBarRow>
+                ))}
+              </CommodityBarsCol>
             </AgeCohortDonutRow>
           </div>
+        ) : companiesBySector.length > 0 ? (
+          <StackedSegmentBar
+            slices={companiesBySector.slice(0, 5).map((secItem, idx) => ({
+              key: secItem.label,
+              label: secItem.label,
+              value: secItem.count,
+              color:
+                PARTY_FALLBACK_PALETTE[idx % PARTY_FALLBACK_PALETTE.length],
+            }))}
+            height={9}
+          />
         ) : null}
 
-        {sectorSlices.length > 0 ? (
-          <>
-            {latestTrade ? <BentoDivider /> : null}
-            <div>
-              <BentoSubLabel style={{ marginBottom: 6 }}>
-                <span>등록 기업 현황 ({companyCount}개사)</span>
-              </BentoSubLabel>
-              <StackedSegmentBar slices={sectorSlices} height={7} />
-            </div>
-          </>
+        {companyCount > 0 ? (
+          <SummaryLinkRow type="button" onClick={onOpenCompanies}>
+            <span>등록 기업 · 법인</span>
+            <strong>
+              총 {companyCount.toLocaleString('ko-KR')}개사 보기{' '}
+              <FiArrowUpRight size={11} />
+            </strong>
+          </SummaryLinkRow>
         ) : null}
       </BentoCardBody>
     </BentoCard>
   )
 }
 
-/* ─── 6. Lineage Spine + Century Event Rhythm + Military Force Card ──────── */
+/* ─── 6A. Zone 1 — Modern Country Identity & Key Facts Ledger Card ────────── */
 
-export function ModernHistoryForceBentoCard({
+export function ModernIdentityLedgerCard({
+  description,
+  activePolitySeats,
+  currentHeads,
+  currentCabinet,
+  historicalHeadCount = 0,
+  popNum,
+  popYearNote,
+  areaNum,
+  densityText,
+  capitalText,
+  cityCount,
+  continentComparison,
+  economicIndicators,
+  developmentIndicators = [],
+  bondYields,
+  onEditOverview,
+  onOpenPoliticalSystem,
+  onOpenCabinets,
+  onOpenHeadsTab,
+  onSelectPerson,
+  onOpenDemographics,
+  onOpenRegions,
+  onOpenEconomics,
+  onOpenBonds,
+}: {
+  description?: string | null
+  activePolitySeats: CivicInstitutionalSnapshot['activePolitySeats']
+  currentHeads: CurrentHead[]
+  currentCabinet: CurrentCabinetSummary | null
+  historicalHeadCount?: number
+  popNum: number | null
+  popYearNote: string | null
+  areaNum: number | null
+  densityText: string | null
+  capitalText: string
+  cityCount: number
+  continentComparison: ContinentComparison
+  economicIndicators: EconomicIndicator[]
+  developmentIndicators?: DevelopmentIndicator[]
+  bondYields: BondYield[]
+  onEditOverview?: () => void
+  onOpenPoliticalSystem: () => void
+  onOpenCabinets: (cabinetId?: string | null) => void
+  onOpenHeadsTab: () => void
+  onSelectPerson: (personId: string) => void
+  onOpenDemographics: () => void
+  onOpenRegions: () => void
+  onOpenEconomics: () => void
+  onOpenBonds: () => void
+}) {
+  const [proseExpanded, setProseExpanded] = useState(false)
+  const cleanDescription = description?.trim() ?? ''
+  const plainPreview = useMemo(() => {
+    if (!cleanDescription) return ''
+    return cleanDescription
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }, [cleanDescription])
+
+  const polityBadges = useMemo(() => {
+    if (!activePolitySeats) return []
+    const items: string[] = []
+    if (activePolitySeats.stateStructure) {
+      items.push(
+        STATE_STRUCTURE_LABEL[
+          activePolitySeats.stateStructure as keyof typeof STATE_STRUCTURE_LABEL
+        ] ?? activePolitySeats.stateStructure,
+      )
+    }
+    if (activePolitySeats.governmentForm) {
+      items.push(
+        GOVERNMENT_FORM_LABEL[
+          activePolitySeats.governmentForm as keyof typeof GOVERNMENT_FORM_LABEL
+        ] ?? activePolitySeats.governmentForm,
+      )
+    }
+    if (activePolitySeats.legislatureType) {
+      items.push(
+        LEGISLATURE_TYPE_LABEL[
+          activePolitySeats.legislatureType as keyof typeof LEGISLATURE_TYPE_LABEL
+        ] ?? activePolitySeats.legislatureType,
+      )
+    }
+    if (activePolitySeats.partySystem) {
+      items.push(
+        PARTY_SYSTEM_LABEL[
+          activePolitySeats.partySystem as keyof typeof PARTY_SYSTEM_LABEL
+        ] ?? activePolitySeats.partySystem,
+      )
+    }
+    return items
+  }, [activePolitySeats])
+
+  const macroSummary = useMemo(() => {
+    const sortedEco = [...economicIndicators].sort(
+      (left, right) => right.year - left.year,
+    )
+    const gdpRow = sortedEco.find(
+      (row) => row.gdp != null && Number.isFinite(Number(row.gdp)),
+    )
+    const capRow = sortedEco.find(
+      (row) =>
+        row.gdpPerCapita != null && Number.isFinite(Number(row.gdpPerCapita)),
+    )
+    const growthRow = sortedEco.find(
+      (row) =>
+        row.gdpGrowthRate != null && Number.isFinite(Number(row.gdpGrowthRate)),
+    )
+    const sortedDev = [...developmentIndicators]
+      .filter((dev) => dev.hdi != null && Number.isFinite(Number(dev.hdi)))
+      .sort((left, right) => right.year - left.year)
+    const hdiRow = sortedDev[0] ?? null
+
+    const y10Rows = [...bondYields]
+      .filter(
+        (bond) =>
+          bond.maturity === 'Y10' &&
+          bond.yieldRate != null &&
+          Number.isFinite(Number(bond.yieldRate)),
+      )
+      .sort((left, right) => right.year - left.year)
+    const latestY10 = y10Rows[0] ?? null
+
+    const byYear = new Map<number, Set<string>>()
+    for (const row of bondYields) {
+      if (row.yieldRate == null || !Number.isFinite(Number(row.yieldRate))) {
+        continue
+      }
+      const set = byYear.get(row.year) ?? new Set<string>()
+      set.add(row.maturity)
+      byYear.set(row.year, set)
+    }
+    const hasYieldCurve = [...byYear.values()].some((set) => set.size >= 2)
+
+    return {
+      gdpVal: gdpRow?.gdp != null ? Number(gdpRow.gdp) : null,
+      gdpYear: gdpRow?.year ?? capRow?.year ?? null,
+      gdpPerCapVal:
+        capRow?.gdpPerCapita != null ? Number(capRow.gdpPerCapita) : null,
+      growthVal:
+        growthRow?.gdpGrowthRate != null
+          ? Number(growthRow.gdpGrowthRate)
+          : null,
+      hdiVal: hdiRow?.hdi != null ? Number(hdiRow.hdi) : null,
+      hdiYear: hdiRow?.year ?? null,
+      y10Val: latestY10?.yieldRate != null ? Number(latestY10.yieldRate) : null,
+      y10Year: latestY10?.year ?? null,
+      hasYieldCurve,
+    }
+  }, [economicIndicators, developmentIndicators, bondYields])
+
+  const hasEcoCol =
+    macroSummary.gdpVal != null ||
+    macroSummary.gdpPerCapVal != null ||
+    macroSummary.growthVal != null
+  const hasBondOrHdiCol =
+    macroSummary.hdiVal != null ||
+    macroSummary.y10Val != null ||
+    macroSummary.hasYieldCurve
+
+  const colCount = 3 + (hasEcoCol ? 1 : 0) + (hasBondOrHdiCol ? 1 : 0)
+
+  const headCellLabel =
+    activePolitySeats?.governmentForm === 'PRESIDENTIAL'
+      ? '현직 대통령 · 행정부'
+      : activePolitySeats?.governmentForm === 'PARLIAMENTARY' ||
+          activePolitySeats?.governmentForm === 'CONSTITUTIONAL_MONARCHY'
+        ? '현직 수반 · 내각'
+        : '현직 수반 · 행정부'
+
+  const primaryHead = currentHeads[0] ?? null
+  const secondaryHead = currentHeads[1] ?? null
+  const primaryHeadAvatar = primaryHead?.profileImageUrl
+    ? getUploadImageUrl(primaryHead.profileImageUrl)
+    : null
+
+  const hasTopStrip =
+    polityBadges.length > 0 ||
+    Boolean(activePolitySeats?.lowerSeats) ||
+    Boolean(activePolitySeats?.upperSeats) ||
+    Boolean(plainPreview)
+
+  return (
+    <BentoCard aria-label="국가 핵심 제원 요약">
+      {hasTopStrip ? (
+        <IdentityTopBar>
+          <IdentityTopBadges>
+            {polityBadges.map((badge) => (
+              <IdentityPolityBtn
+                key={badge}
+                type="button"
+                onClick={onOpenPoliticalSystem}
+              >
+                {badge}
+              </IdentityPolityBtn>
+            ))}
+            {activePolitySeats?.lowerSeats ? (
+              <BentoPill>
+                {activePolitySeats.lowerName ||
+                  primaryHouseLabel(activePolitySeats.legislatureType ?? null)}{' '}
+                {activePolitySeats.lowerSeats.toLocaleString('ko-KR')}석
+              </BentoPill>
+            ) : null}
+            {activePolitySeats?.upperSeats ? (
+              <BentoPill>
+                {activePolitySeats.upperName || '상원'}{' '}
+                {activePolitySeats.upperSeats.toLocaleString('ko-KR')}석
+              </BentoPill>
+            ) : null}
+          </IdentityTopBadges>
+
+          {plainPreview ? (
+            <IdentityProseBlock>
+              {proseExpanded ? (
+                <div className="full">
+                  {isLikelyRichTextHtml(cleanDescription) ? (
+                    <RichTextReadView html={cleanDescription} />
+                  ) : (
+                    <p>{cleanDescription}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="clamp">{plainPreview}</p>
+              )}
+              <div className="actions">
+                {plainPreview.length > 110 ? (
+                  <TextActionBtn
+                    type="button"
+                    onClick={() => setProseExpanded((prev) => !prev)}
+                  >
+                    {proseExpanded ? '접기' : '전문 보기'}
+                  </TextActionBtn>
+                ) : null}
+                {onEditOverview ? (
+                  <TextActionBtn type="button" onClick={onEditOverview}>
+                    <FiEdit2 size={10.5} /> 소개 편집
+                  </TextActionBtn>
+                ) : null}
+              </div>
+            </IdentityProseBlock>
+          ) : null}
+        </IdentityTopBar>
+      ) : null}
+
+      <IdentityFactsGrid $cols={colCount}>
+        {/* 1. 현직 수반 · 행정부 */}
+        <IdentityFactCell
+          type="button"
+          onClick={() => {
+            if (primaryHead?.personId) {
+              onSelectPerson(primaryHead.personId)
+            } else if (currentCabinet) {
+              onOpenCabinets(currentCabinet.cabinetId)
+            } else if (historicalHeadCount > 0) {
+              onOpenHeadsTab()
+            } else {
+              onOpenCabinets(null)
+            }
+          }}
+        >
+          <IdentityFactTop>
+            <SparkTitle>{headCellLabel}</SparkTitle>
+            {currentCabinet ? (
+              <DeltaChip>각료 {currentCabinet.ministerCount}명</DeltaChip>
+            ) : null}
+          </IdentityFactTop>
+          {primaryHead ? (
+            <IdentityLeaderInline>
+              <HeadAvatar>
+                {primaryHeadAvatar ? (
+                  <img src={primaryHeadAvatar} alt="" />
+                ) : (
+                  <FiUser size={14} />
+                )}
+              </HeadAvatar>
+              <div className="meta">
+                <strong>{primaryHead.personName}</strong>
+                <span>
+                  {primaryHead.positionTitle}
+                  {secondaryHead
+                    ? ` · ${secondaryHead.positionTitle} ${secondaryHead.personName}`
+                    : currentCabinet
+                      ? ` · ${currentCabinet.name}`
+                      : ''}
+                </span>
+              </div>
+            </IdentityLeaderInline>
+          ) : currentCabinet ? (
+            <>
+              <SparkBigNum>{currentCabinet.name}</SparkBigNum>
+              <ScaleCellSub>내각·행정 상세 보기 →</ScaleCellSub>
+            </>
+          ) : (
+            <>
+              <SparkBigNum>
+                <EmptyValueText>현직 미등록</EmptyValueText>
+              </SparkBigNum>
+              <ScaleCellSub>
+                {historicalHeadCount > 0
+                  ? `전신 국가 수반 ${historicalHeadCount}명 기록됨 →`
+                  : '+ 현직 수반 · 행정부 등록'}
+              </ScaleCellSub>
+            </>
+          )}
+        </IdentityFactCell>
+
+        {/* 2. 인구 규모 */}
+        <IdentityFactCell
+          type="button"
+          onClick={onOpenDemographics}
+          title={popNum != null ? `인구 ${formatPopulation(popNum)}명` : undefined}
+        >
+          <IdentityFactTop>
+            <SparkTitle>인구 규모</SparkTitle>
+            {continentComparison.populationRank != null &&
+            continentComparison.populationRankTotal ? (
+              <DeltaChip>
+                대륙 {continentComparison.populationRank}/
+                {continentComparison.populationRankTotal}위
+              </DeltaChip>
+            ) : null}
+          </IdentityFactTop>
+          <SparkBigNum>
+            {popNum != null ? (
+              `${formatPopulationKo(popNum)} 명`
+            ) : (
+              <EmptyValueText>미기재</EmptyValueText>
+            )}
+          </SparkBigNum>
+          <ScaleCellSub>
+            {popNum != null
+              ? `${formatPopulation(popNum)}명${popYearNote ? ` · ${popYearNote}` : ''}`
+              : '인구 지표 보기'}
+          </ScaleCellSub>
+        </IdentityFactCell>
+
+        {/* 3. 영토 면적 · 밀도 · 수도 */}
+        <IdentityFactCell type="button" onClick={onOpenRegions}>
+          <IdentityFactTop>
+            <SparkTitle>영토 면적 · 밀도</SparkTitle>
+            {continentComparison.areaRank != null &&
+            continentComparison.areaRankTotal ? (
+              <DeltaChip>
+                면적 {continentComparison.areaRank}/
+                {continentComparison.areaRankTotal}위
+              </DeltaChip>
+            ) : null}
+          </IdentityFactTop>
+          <SparkBigNum>
+            {areaNum != null ? (
+              `${formatAreaValue(areaNum)} km²`
+            ) : (
+              <EmptyValueText>미기재</EmptyValueText>
+            )}
+          </SparkBigNum>
+          <ScaleCellSub>
+            {[
+              densityText ? `밀도 ${densityText}` : null,
+              capitalText
+                ? `수도 ${capitalText}`
+                : cityCount > 0
+                  ? `행정구역 ${cityCount}곳`
+                  : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || '지리·행정구역 보기'}
+          </ScaleCellSub>
+        </IdentityFactCell>
+
+        {/* 4. 경제 규모 (데이터가 있을 때만 표시) */}
+        {hasEcoCol ? (
+          <IdentityFactCell type="button" onClick={onOpenEconomics}>
+            <IdentityFactTop>
+              <SparkTitle>
+                거시경제{macroSummary.gdpYear ? ` (${macroSummary.gdpYear})` : ''}
+              </SparkTitle>
+              {macroSummary.growthVal != null ? (
+                <DeltaChip>
+                  성장 {macroSummary.growthVal >= 0 ? '+' : ''}
+                  {macroSummary.growthVal.toFixed(1)}%
+                </DeltaChip>
+              ) : null}
+            </IdentityFactTop>
+            <SparkBigNum>
+              {macroSummary.gdpVal != null
+                ? formatMetricValue(macroSummary.gdpVal, 'USD')
+                : macroSummary.gdpPerCapVal != null
+                  ? formatMetricValue(macroSummary.gdpPerCapVal, 'USD_CAPITA')
+                  : `${macroSummary.growthVal?.toFixed(1)}%`}
+            </SparkBigNum>
+            <ScaleCellSub>
+              {macroSummary.gdpVal != null && macroSummary.gdpPerCapVal != null
+                ? `1인당 ${formatMetricValue(macroSummary.gdpPerCapVal, 'USD_CAPITA')}`
+                : '경제 지표 상세 →'}
+            </ScaleCellSub>
+          </IdentityFactCell>
+        ) : null}
+
+        {/* 5. 국채 금리 · HDI (데이터가 있을 때만 표시) */}
+        {hasBondOrHdiCol ? (
+          <IdentityFactCell
+            type="button"
+            onClick={
+              macroSummary.hasYieldCurve || macroSummary.y10Val != null
+                ? onOpenBonds
+                : onOpenEconomics
+            }
+          >
+            <IdentityFactTop>
+              <SparkTitle>
+                {macroSummary.hasYieldCurve
+                  ? '국채 수익률곡선'
+                  : macroSummary.hdiVal != null
+                    ? `인간개발지수${macroSummary.hdiYear ? ` (${macroSummary.hdiYear})` : ''}`
+                    : '10년물 국채금리'}
+              </SparkTitle>
+              {macroSummary.hdiVal != null && macroSummary.hasYieldCurve ? (
+                <DeltaChip>HDI {macroSummary.hdiVal.toFixed(3)}</DeltaChip>
+              ) : macroSummary.y10Year ? (
+                <DeltaChip>{macroSummary.y10Year}년</DeltaChip>
+              ) : null}
+            </IdentityFactTop>
+            {macroSummary.hasYieldCurve ? (
+              <>
+                <SparkBigNum>
+                  {macroSummary.y10Val != null
+                    ? `10Y ${macroSummary.y10Val.toFixed(2)}%`
+                    : '만기 구조'}
+                </SparkBigNum>
+                <SovereignYieldCurveSvg bondYields={bondYields} height={36} />
+              </>
+            ) : (
+              <>
+                <SparkBigNum>
+                  {macroSummary.hdiVal != null
+                    ? macroSummary.hdiVal.toFixed(3)
+                    : `${macroSummary.y10Val!.toFixed(2)}%`}
+                </SparkBigNum>
+                <ScaleCellSub>
+                  {macroSummary.hdiVal != null && macroSummary.y10Val != null
+                    ? `국채 10Y ${macroSummary.y10Val.toFixed(2)}%`
+                    : '통계 탭에서 보기 →'}
+                </ScaleCellSub>
+              </>
+            )}
+          </IdentityFactCell>
+        ) : null}
+      </IdentityFactsGrid>
+    </BentoCard>
+  )
+}
+
+/* ─── 6A-Hero. Top-Left Hero — Sovereign Polity Form & Executive Leaders ───── */
+
+export function ModernGovernanceAndLeadersHeroCard({
+  description,
+  activePolitySeats,
+  currentHeads,
+  currentCabinet,
+  historicalHeadCount = 0,
+  timeline,
+  regimeEras = [],
+  hideIncumbentHeads = false,
+  onEditOverview,
+  onOpenPoliticalSystem,
+  onOpenCabinets,
+  onOpenHeadsTab,
+  onSelectPerson,
+}: {
+  description?: string | null
+  activePolitySeats: CivicInstitutionalSnapshot['activePolitySeats']
+  currentHeads: CurrentHead[]
+  currentCabinet: CurrentCabinetSummary | null
+  historicalHeadCount?: number
+  timeline: ExecutiveTimelineItem[]
+  regimeEras?: RegimeEraBand[]
+  activeTenureId?: string | null
+  hideIncumbentHeads?: boolean
+  onFocusTenure?: (tenureId: string) => void
+  onEditOverview?: () => void
+  onOpenPoliticalSystem: () => void
+  onOpenCabinets: (cabinetId?: string | null) => void
+  onOpenHeadsTab: () => void
+  onSelectPerson: (personId: string) => void
+}) {
+  const theme = useTheme()
+  const [proseExpanded, setProseExpanded] = useState(false)
+
+  const cleanDescription = description?.trim() ?? ''
+  const plainPreview = useMemo(() => {
+    if (!cleanDescription) return ''
+    return cleanDescription
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }, [cleanDescription])
+
+  const polityCells = useMemo(() => {
+    const structLabel = activePolitySeats?.stateStructure
+      ? (STATE_STRUCTURE_LABEL[
+          activePolitySeats.stateStructure as keyof typeof STATE_STRUCTURE_LABEL
+        ] ?? activePolitySeats.stateStructure)
+      : null
+    const govLabel = activePolitySeats?.governmentForm
+      ? (GOVERNMENT_FORM_LABEL[
+          activePolitySeats.governmentForm as keyof typeof GOVERNMENT_FORM_LABEL
+        ] ?? activePolitySeats.governmentForm)
+      : null
+    const legLabel = activePolitySeats?.legislatureType
+      ? (LEGISLATURE_TYPE_LABEL[
+          activePolitySeats.legislatureType as keyof typeof LEGISLATURE_TYPE_LABEL
+        ] ?? activePolitySeats.legislatureType)
+      : null
+    const partySysLabel = activePolitySeats?.partySystem
+      ? (PARTY_SYSTEM_LABEL[
+          activePolitySeats.partySystem as keyof typeof PARTY_SYSTEM_LABEL
+        ] ?? activePolitySeats.partySystem)
+      : null
+
+    const seatSubParts: string[] = []
+    if (activePolitySeats?.lowerSeats) {
+      seatSubParts.push(
+        `${activePolitySeats.lowerName || primaryHouseLabel(activePolitySeats.legislatureType ?? null)} ${activePolitySeats.lowerSeats.toLocaleString('ko-KR')}석`,
+      )
+    }
+    if (activePolitySeats?.upperSeats) {
+      seatSubParts.push(
+        `${activePolitySeats.upperName || '상원'} ${activePolitySeats.upperSeats.toLocaleString('ko-KR')}석`,
+      )
+    }
+
+    return [
+      {
+        key: 'struct',
+        kicker: '국가 구조',
+        value: structLabel,
+        sub: structLabel ? '주권 편제' : '미등록',
+      },
+      {
+        key: 'gov',
+        kicker: '정부 형태',
+        value: govLabel,
+        sub: govLabel ? '권력 분립' : '미등록',
+      },
+      {
+        key: 'leg',
+        kicker: '입법 의회',
+        value: legLabel,
+        sub: seatSubParts.length > 0 ? seatSubParts.join(' · ') : '정원 미기재',
+      },
+      {
+        key: 'party',
+        kicker: '정당 체제',
+        value: partySysLabel,
+        sub: partySysLabel ? '경쟁 구도' : '미등록',
+      },
+    ]
+  }, [activePolitySeats])
+
+  const modernHeadRecordsCount = useMemo(
+    () => timeline.filter((row) => !row.isHistoricalPolity).length,
+    [timeline],
+  )
+  const activeRegimeEra = useMemo(() => {
+    if (regimeEras.length === 0) return null
+    const openEra = [...regimeEras]
+      .reverse()
+      .find((era) => era.endYear == null)
+    return openEra ?? regimeEras[regimeEras.length - 1]
+  }, [regimeEras])
+
+  return (
+    <BentoCard aria-label="국가 형태 및 통치 체제 요약">
+      <BentoCardHeader>
+        <BentoCardTitleGroup>
+          <BentoCardTitle>
+            {hideIncumbentHeads
+              ? '국가 체제 · 통치 개요'
+              : '국가 형태 · 국가수반'}
+          </BentoCardTitle>
+          {regimeEras.length > 0 ? (
+            <BentoCardBadge>헌정 {regimeEras.length}기</BentoCardBadge>
+          ) : modernHeadRecordsCount > 0 ? (
+            <BentoCardBadge>현대 수반 {modernHeadRecordsCount}건</BentoCardBadge>
+          ) : null}
+        </BentoCardTitleGroup>
+        <BentoHeaderActions>
+          <BentoActionBtn
+            type="button"
+            $accent
+            onClick={onOpenPoliticalSystem}
+          >
+            정체·헌정 <FiArrowUpRight size={11} />
+          </BentoActionBtn>
+        </BentoHeaderActions>
+      </BentoCardHeader>
+
+      {/* 1. 국가 형태 4칸 헌정 매트릭스 */}
+      <PolityMatrixGrid>
+        {polityCells.map((cell) => (
+          <PolityMatrixCell
+            key={cell.key}
+            type="button"
+            $empty={!cell.value}
+            onClick={onOpenPoliticalSystem}
+          >
+            <span className="kicker">{cell.kicker}</span>
+            <strong className="val">{cell.value ?? '미기재'}</strong>
+            <small className="sub">{cell.sub}</small>
+          </PolityMatrixCell>
+        ))}
+      </PolityMatrixGrid>
+
+      <BentoCardBody style={{ gap: 12 }}>
+        {/* 국가 소개 요약(있을 때만) */}
+        {plainPreview ? (
+          <IdentityProseBlock>
+            {proseExpanded ? (
+              <div className="full">
+                {isLikelyRichTextHtml(cleanDescription) ? (
+                  <RichTextReadView html={cleanDescription} />
+                ) : (
+                  <p>{cleanDescription}</p>
+                )}
+              </div>
+            ) : (
+              <p className="clamp">{plainPreview}</p>
+            )}
+            <div className="actions">
+              {plainPreview.length > 110 ? (
+                <TextActionBtn
+                  type="button"
+                  onClick={() => setProseExpanded((prev) => !prev)}
+                >
+                  {proseExpanded ? '접기' : '전문 보기'}
+                </TextActionBtn>
+              ) : null}
+              {onEditOverview ? (
+                <TextActionBtn type="button" onClick={onEditOverview}>
+                  <FiEdit2 size={10.5} /> 소개 편집
+                </TextActionBtn>
+              ) : null}
+            </div>
+          </IdentityProseBlock>
+        ) : null}
+
+        {/* 2. 현직 국가수반 스포트라이트 (하단 2층 마인드맵이 없을 때만 노출하여 중복 방지) */}
+        {!hideIncumbentHeads ? (
+          <div>
+            <BentoSubLabel style={{ marginBottom: 6 }}>
+              <span>현직 국가수반 · 행정부</span>
+              {currentCabinet ? (
+                <InlineCabinetLink
+                  type="button"
+                  onClick={() => onOpenCabinets(currentCabinet.cabinetId)}
+                >
+                  {currentCabinet.name} · 각료 {currentCabinet.ministerCount}명{' '}
+                  <FiArrowUpRight size={10.5} />
+                </InlineCabinetLink>
+              ) : null}
+            </BentoSubLabel>
+
+            {currentHeads.length > 0 ? (
+              <HeadsGrid>
+                {currentHeads.slice(0, 2).map((head) => {
+                  const avatar = head.profileImageUrl
+                    ? getUploadImageUrl(head.profileImageUrl)
+                    : null
+                  return (
+                    <HeadCardBtn
+                      key={head.tenureId}
+                      type="button"
+                      onClick={() => {
+                        if (head.personId) onSelectPerson(head.personId)
+                        else onOpenHeadsTab()
+                      }}
+                    >
+                      <HeadAvatar>
+                        {avatar ? (
+                          <img src={avatar} alt="" />
+                        ) : (
+                          <FiUser size={15} />
+                        )}
+                      </HeadAvatar>
+                      <HeadMeta>
+                        <HeadRole>{head.positionTitle}</HeadRole>
+                        <HeadName>{head.personName}</HeadName>
+                        {head.startDate ? (
+                          <HeadSince>
+                            {String(head.startDate).slice(0, 10)} 취임
+                          </HeadSince>
+                        ) : null}
+                      </HeadMeta>
+                    </HeadCardBtn>
+                  )
+                })}
+              </HeadsGrid>
+            ) : currentCabinet ? (
+              <IncumbentEmptyStrip
+                type="button"
+                onClick={() => onOpenCabinets(currentCabinet.cabinetId)}
+              >
+                <strong>{currentCabinet.name}</strong>
+                <span>각료 {currentCabinet.ministerCount}명 상세 보기 →</span>
+              </IncumbentEmptyStrip>
+            ) : (
+              <IncumbentEmptyStrip
+                type="button"
+                onClick={() => onOpenCabinets(null)}
+              >
+                <span>현직 국가수반 미등록</span>
+                <strong>+ 현직 수반 · 행정부 등록</strong>
+              </IncumbentEmptyStrip>
+            )}
+          </div>
+        ) : null}
+
+        {/* 3. 현행 헌정 체제 & 수반 연표 1줄 앵커 요약 (복잡한 알약 구름 제거) */}
+        {activeRegimeEra || modernHeadRecordsCount > 0 || historicalHeadCount > 0 ? (
+          <SummaryLinkRow
+            type="button"
+            onClick={
+              modernHeadRecordsCount > 0 || historicalHeadCount > 0
+                ? onOpenHeadsTab
+                : onOpenPoliticalSystem
+            }
+          >
+            <span>
+              {activeRegimeEra
+                ? `현행 체제: ${activeRegimeEra.label} (${activeRegimeEra.startYear}–${activeRegimeEra.endYear ?? '현재'})`
+                : '역대 국가수반 · 정권 연표'}
+            </span>
+            <strong>
+              {modernHeadRecordsCount > 0
+                ? `현대 수반 ${modernHeadRecordsCount}건 연표`
+                : historicalHeadCount > 0
+                  ? `전신 국가 수반 ${historicalHeadCount}건`
+                  : `헌정 ${regimeEras.length}기 보기`}{' '}
+              <FiArrowUpRight size={11} />
+            </strong>
+          </SummaryLinkRow>
+        ) : null}
+      </BentoCardBody>
+    </BentoCard>
+  )
+}
+
+/* ─── 6B. Zone 2 — Direct Lineage & Historical Polities Card ──────────────── */
+
+export function ModernLineageCard({
   countryName,
   historicalCountries,
-  eventCount,
-  centuryBuckets,
-  domainBreakdown,
-  milestoneEvents = [],
-  militaryCount,
-  highCommandCount,
-  militaryBranchBreakdown,
-  warSummary,
   onOpenHistoricalTab,
   onSelectHistoricalCountry,
-  onSelectCentury,
-  onSelectCell,
-  onSelectEvent,
-  onOpenEvents,
-  onOpenMilitary,
 }: {
   countryName: string
   historicalCountries: NonNullable<UnifiedCountry['historicalCountries']>
-  eventCount: number
-  centuryBuckets: CenturyDomainBucket[]
-  domainBreakdown: Array<{ domain: string; count: number }>
-  milestoneEvents?: MilestoneEventItem[]
-  militaryCount: number
-  highCommandCount: number
-  militaryBranchBreakdown: MilitaryBranchSummary[]
-  warSummary: WarOutcomeSummary
   onOpenHistoricalTab: () => void
   onSelectHistoricalCountry: (id: string) => void
-  onSelectCentury: (century: number) => void
-  onSelectCell?: (century: number, domain: string) => void
-  onSelectEvent?: (eventId: string) => void
-  onOpenEvents: () => void
-  onOpenMilitary: () => void
 }) {
-  const lineageChain = useMemo(() => {
-    const preds = historicalCountries.filter(
-      (h) => h.linkKind === 'PREDECESSOR',
-    )
-    const pool = preds.length > 0 ? preds : historicalCountries
-    return [...pool]
-      .sort((a, b) => {
-        const rA = getCountryYearRange(a)
-        const rB = getCountryYearRange(b)
-        return (rA.start ?? 9999) - (rB.start ?? 9999)
-      })
-      .slice(-6)
-  }, [historicalCountries])
-
-  const lineageSpanBars = useMemo(() => {
+  const { directPreds, otherPolities, spanBars } = useMemo(() => {
     const nowYr = new Date().getFullYear()
-    const withRange = lineageChain
+    const MINOR_SUBPOLITY_RE =
+      /(공국|대공국|선제후국|변경백|백작령|주교후국|자유도시|제국도시|영지)/
+
+    const sortChrono = (
+      arr: NonNullable<UnifiedCountry['historicalCountries']>,
+    ) =>
+      [...arr].sort((left, right) => {
+        const rA = getCountryYearRange(left)
+        const rB = getCountryYearRange(right)
+        return (
+          (rA.start ?? 9999) - (rB.start ?? 9999) ||
+          (rA.end ?? nowYr) - (rB.end ?? nowYr)
+        )
+      })
+
+    const explicitPreds = historicalCountries.filter(
+      (hist) => hist.linkKind === 'PREDECESSOR',
+    )
+
+    let displayPreds: NonNullable<UnifiedCountry['historicalCountries']>
+    let others: NonNullable<UnifiedCountry['historicalCountries']>
+
+    if (explicitPreds.length > 0) {
+      const sortedExplicit = sortChrono(explicitPreds)
+      displayPreds = sortedExplicit.slice(-5)
+      const pickedIds = new Set(displayPreds.map((hist) => hist.id))
+      others = [...historicalCountries]
+        .filter((hist) => !pickedIds.has(hist.id))
+        .sort((left, right) => {
+          const rA = getCountryYearRange(left)
+          const rB = getCountryYearRange(right)
+          return (rB.end ?? rB.start ?? -9999) - (rA.end ?? rA.start ?? -9999)
+        })
+    } else {
+      // 실DB에서 linkKind가 비어 내려오는 경우: 현대 국호 연관성·주권국 격·최근 종식 연도 순으로 핵심 계보 최대 5개 선정
+      const coreKeyword = countryName.trim()
+      const ranked = [...historicalCountries].sort((left, right) => {
+        const rA = getCountryYearRange(left)
+        const rB = getCountryYearRange(right)
+        const endA = rA.end ?? rA.start ?? -9999
+        const endB = rB.end ?? rB.start ?? -9999
+        const nameMatchA =
+          coreKeyword.length >= 2 && left.name.includes(coreKeyword) ? 1 : 0
+        const nameMatchB =
+          coreKeyword.length >= 2 && right.name.includes(coreKeyword) ? 1 : 0
+        const minorPenaltyA = MINOR_SUBPOLITY_RE.test(left.name) ? 1 : 0
+        const minorPenaltyB = MINOR_SUBPOLITY_RE.test(right.name) ? 1 : 0
+        // 같은 시기(25년 이내)에 종식된 경우 국호 직계 정치체를 제후국·소공국보다 우선
+        if (Math.abs(endA - endB) <= 25) {
+          if (nameMatchA !== nameMatchB) return nameMatchB - nameMatchA
+          if (minorPenaltyA !== minorPenaltyB) {
+            return minorPenaltyA - minorPenaltyB
+          }
+        }
+        if (endA !== endB) return endB - endA
+        if (nameMatchA !== nameMatchB) return nameMatchB - nameMatchA
+        if (minorPenaltyA !== minorPenaltyB) {
+          return minorPenaltyA - minorPenaltyB
+        }
+        return (rB.start ?? -9999) - (rA.start ?? -9999)
+      })
+
+      const topPrimary = ranked.slice(0, 5)
+      displayPreds = sortChrono(topPrimary)
+      const pickedIds = new Set(displayPreds.map((hist) => hist.id))
+      others = ranked.filter((hist) => !pickedIds.has(hist.id))
+    }
+
+    const withRange = displayPreds
       .map((hc) => {
-        const r = getCountryYearRange(hc)
-        if (r.start == null) return null
-        const end = r.end ?? nowYr
+        const range = getCountryYearRange(hc)
+        if (range.start == null) return null
+        const end = range.end ?? nowYr
         return {
           id: hc.id,
           name: hc.name,
           periodLabel: formatCountryPeriod(hc),
-          start: r.start,
-          end: Math.max(r.start + 1, end),
-          years: Math.max(1, end - r.start),
+          start: range.start,
+          end: Math.max(range.start + 1, end),
+          years: Math.max(1, end - range.start),
         }
       })
-      .filter((x): x is NonNullable<typeof x> => x !== null)
-    if (withRange.length === 0) return null
-    const minY = Math.min(...withRange.map((w) => w.start))
-    const maxY = Math.max(nowYr, ...withRange.map((w) => w.end))
-    const totalSpan = Math.max(10, maxY - minY)
-    return {
-      minY,
-      maxY,
-      items: withRange.map((w) => ({
-        ...w,
-        leftPct: ((w.start - minY) / totalSpan) * 100,
-        widthPct: Math.max(2.5, ((w.end - w.start) / totalSpan) * 100),
-      })),
-    }
-  }, [lineageChain])
+      .filter((item): item is NonNullable<typeof item> => item !== null)
 
-  if (
-    lineageChain.length === 0 &&
-    centuryBuckets.length === 0 &&
-    milestoneEvents.length === 0 &&
-    militaryCount === 0
-  ) {
-    return (
-      <EmptyBentoCard
-        title="역사 · 군사"
-        text="사건, 과거 국가, 군 편제를 연결하면 국가 계보 막대와 세기별 사건 지도, 군사력이 여기 모입니다."
-        actionLabel="사건 탭으로"
-        onAction={onOpenEvents}
-      />
-    )
-  }
+    let bars: {
+      minY: number
+      maxY: number
+      items: Array<
+        (typeof withRange)[number] & { leftPct: number; widthPct: number }
+      >
+    } | null = null
+
+    if (withRange.length >= 2) {
+      const minY = Math.min(...withRange.map((item) => item.start))
+      const maxY = Math.max(nowYr, ...withRange.map((item) => item.end))
+      const totalSpan = Math.max(10, maxY - minY)
+      bars = {
+        minY,
+        maxY,
+        items: withRange.map((item) => ({
+          ...item,
+          leftPct: ((item.start - minY) / totalSpan) * 100,
+          widthPct: Math.max(2.5, ((item.end - item.start) / totalSpan) * 100),
+        })),
+      }
+    }
+
+    return {
+      directPreds: displayPreds,
+      otherPolities: others,
+      spanBars: bars,
+    }
+  }, [historicalCountries, countryName])
+
+  if (historicalCountries.length === 0) return null
 
   return (
-    <BentoCard aria-label="통사 국가 계보 및 사건·군사 리듬">
+    <BentoCard aria-label="전신 국가 계보 및 관련 역사 정치체">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>역사 · 군사</BentoCardTitle>
-          {eventCount > 0 ? (
-            <BentoCardBadge>사건 {eventCount}건</BentoCardBadge>
-          ) : null}
+          <BentoCardTitle>국가 계보 · 과거 정치체</BentoCardTitle>
+          <BentoCardBadge>{historicalCountries.length}개국</BentoCardBadge>
         </BentoCardTitleGroup>
         <BentoHeaderActions>
-          {historicalCountries.length > 0 ? (
-            <BentoActionBtn type="button" onClick={onOpenHistoricalTab}>
-              과거국가 {historicalCountries.length}{' '}
-              <FiArrowUpRight size={11} />
-            </BentoActionBtn>
-          ) : null}
-          <BentoActionBtn type="button" $accent onClick={onOpenEvents}>
-            사건 연표 <FiArrowUpRight size={11} />
+          <BentoActionBtn type="button" $accent onClick={onOpenHistoricalTab}>
+            과거국가 전체 <FiArrowUpRight size={11} />
           </BentoActionBtn>
         </BentoHeaderActions>
       </BentoCardHeader>
 
       <BentoCardBody>
-        {/* 1. 직계 전신 → 현대 국가 타임라인 스파인 & 비례 존속 스팬 바 */}
-        {lineageChain.length > 0 ? (
-          <div>
-            <BentoSubLabel style={{ marginBottom: 7 }}>
-              <span>국가 계승 스파인 · 존속 연대기</span>
-              {historicalCountries.length > lineageChain.length ? (
-                <span>최근 {lineageChain.length}대 표시</span>
-              ) : null}
+        {spanBars ? (
+          <LineageGanttWrap>
+            <BentoSubLabel style={{ marginBottom: 2 }}>
+              <span>{spanBars.minY}년</span>
+              <span>시대 계승 타임라인 →</span>
+              <span>{spanBars.maxY}년</span>
             </BentoSubLabel>
-            <LineageSpineRow>
-              {lineageChain.map((hc) => (
-                <React.Fragment key={hc.id}>
-                  <LineageNodePill
-                    type="button"
-                    onClick={() => onSelectHistoricalCountry(hc.id)}
-                  >
-                    <strong>{hc.name}</strong>
-                    <small>{formatCountryPeriod(hc)}</small>
-                  </LineageNodePill>
-                  <SpineArrow aria-hidden="true">→</SpineArrow>
-                </React.Fragment>
-              ))}
-              <LineageCurrentPill>{countryName}</LineageCurrentPill>
-            </LineageSpineRow>
-
-            {lineageSpanBars && lineageSpanBars.items.length >= 2 ? (
-              <LineageGanttWrap>
-                {lineageSpanBars.items.map((bar, idx) => (
-                  <LineageGanttRowBtn
-                    key={bar.id}
-                    type="button"
-                    onClick={() => onSelectHistoricalCountry(bar.id)}
-                    title={`${bar.name} (${bar.periodLabel} · 약 ${bar.years}년)`}
-                  >
-                    <span className="nm">{bar.name}</span>
-                    <div className="track">
-                      <div
-                        className="fill"
-                        style={{
-                          left: `${bar.leftPct.toFixed(2)}%`,
-                          width: `${bar.widthPct.toFixed(2)}%`,
-                          opacity: 0.55 + (idx / lineageSpanBars.items.length) * 0.45,
-                        }}
-                      />
-                    </div>
-                    <span className="dur">{bar.years}년</span>
-                  </LineageGanttRowBtn>
-                ))}
-              </LineageGanttWrap>
-            ) : null}
-          </div>
+            {spanBars.items.map((bar, idx) => {
+              const LINEAGE_ERA_GRADIENTS = [
+                'linear-gradient(90deg, #d97706, #fbbf24)',
+                'linear-gradient(90deg, #e11d48, #fb7185)',
+                'linear-gradient(90deg, #7c3aed, #a78bfa)',
+                'linear-gradient(90deg, #0284c7, #38bdf8)',
+                'linear-gradient(90deg, #059669, #34d399)',
+              ]
+              const LINEAGE_ERA_DOTS = [
+                '#d97706',
+                '#e11d48',
+                '#7c3aed',
+                '#0284c7',
+                '#059669',
+              ]
+              const gradBg =
+                LINEAGE_ERA_GRADIENTS[idx % LINEAGE_ERA_GRADIENTS.length]
+              const dotHex = LINEAGE_ERA_DOTS[idx % LINEAGE_ERA_DOTS.length]
+              return (
+                <LineageGanttRowBtn
+                  key={bar.id}
+                  type="button"
+                  onClick={() => onSelectHistoricalCountry(bar.id)}
+                  title={`${bar.name} (${bar.periodLabel} · 약 ${bar.years}년)`}
+                >
+                  <span className="nm">
+                    <i style={{ background: dotHex }} />
+                    {bar.name}
+                  </span>
+                  <div className="track">
+                    <div
+                      className="fill"
+                      style={{
+                        left: `${bar.leftPct.toFixed(2)}%`,
+                        width: `${Math.max(4, bar.widthPct).toFixed(2)}%`,
+                        background: gradBg,
+                      }}
+                    />
+                  </div>
+                  <span className="dur">{bar.periodLabel}</span>
+                </LineageGanttRowBtn>
+              )
+            })}
+          </LineageGanttWrap>
+        ) : directPreds.length > 0 ? (
+          <LineageSpineRow>
+            {directPreds.map((hc) => (
+              <React.Fragment key={hc.id}>
+                <LineageNodePill
+                  type="button"
+                  onClick={() => onSelectHistoricalCountry(hc.id)}
+                >
+                  <strong>{hc.name}</strong>
+                  <small>{formatCountryPeriod(hc)}</small>
+                </LineageNodePill>
+                <SpineArrow aria-hidden="true">→</SpineArrow>
+              </React.Fragment>
+            ))}
+            <LineageCurrentPill>{countryName}</LineageCurrentPill>
+          </LineageSpineRow>
         ) : null}
 
-        {/* 2. 세기×분야 히트맵 매트릭스 & 분수령 사건 핀 */}
-        {centuryBuckets.length > 0 || milestoneEvents.length > 0 ? (
-          <>
-            {lineageChain.length > 0 ? <BentoDivider /> : null}
-            <CenturyEventMatrixAndMilestones
-              buckets={centuryBuckets}
-              domainBreakdown={domainBreakdown}
-              milestones={milestoneEvents}
-              onSelectCentury={onSelectCentury}
-              onSelectCell={onSelectCell}
-              onSelectEvent={onSelectEvent}
-            />
-          </>
+        {otherPolities.length > 0 ? (
+          <SummaryLinkRow type="button" onClick={onOpenHistoricalTab}>
+            <span>기타 연관 · 구성 정치체</span>
+            <strong>
+              외 {otherPolities.length.toLocaleString('ko-KR')}개국 전체 보기{' '}
+              <FiArrowUpRight size={11} />
+            </strong>
+          </SummaryLinkRow>
         ) : null}
+      </BentoCardBody>
+    </BentoCard>
+  )
+}
 
-        {/* 3. 군사 전력 · 참전 요약 */}
-        {militaryCount > 0 || warSummary.totalMilitaryEvents > 0 ? (
-          <>
-            {lineageChain.length > 0 ||
-            centuryBuckets.length > 0 ||
-            milestoneEvents.length > 0 ? (
-              <BentoDivider />
-            ) : null}
-            <MilitaryForceInfographicBlock
-              militaryCount={militaryCount}
-              highCommandCount={highCommandCount}
-              branchBreakdown={militaryBranchBreakdown}
-              warSummary={warSummary}
-              onOpenMilitary={onOpenMilitary}
-            />
-          </>
-        ) : null}
+/* ─── 6C. Zone 3 — Historical Events & Milestones Card ────────────────────── */
+
+export function ModernEventsCard({
+  eventCount,
+  centuryBuckets,
+  domainBreakdown,
+  milestoneEvents = [],
+  warSummary,
+  onSelectCentury,
+  onSelectCell,
+  onSelectEvent,
+  onOpenEvents,
+}: {
+  eventCount: number
+  centuryBuckets: CenturyDomainBucket[]
+  domainBreakdown: Array<{ domain: string; count: number }>
+  milestoneEvents?: MilestoneEventItem[]
+  warSummary?: WarOutcomeSummary
+  onSelectCentury: (century: number) => void
+  onSelectCell?: (century: number, domain: string) => void
+  onSelectEvent?: (eventId: string) => void
+  onOpenEvents: () => void
+  onOpenMilitary?: () => void
+}) {
+  if (
+    eventCount === 0 ||
+    (centuryBuckets.length === 0 && milestoneEvents.length === 0)
+  ) {
+    return null
+  }
+
+  return (
+    <BentoCard aria-label="역사 연표 및 시대별 핵심 사건 흐름">
+      <BentoCardHeader>
+        <BentoCardTitleGroup>
+          <BentoCardTitle>역사 연표 · 핵심 전환점</BentoCardTitle>
+          <BentoCardBadge>수록 {eventCount.toLocaleString('ko-KR')}건</BentoCardBadge>
+          {warSummary && warSummary.totalMilitaryEvents > 0 ? (
+            <BentoPill>
+              전쟁 {warSummary.wars} · 전투 {warSummary.battles}
+            </BentoPill>
+          ) : null}
+        </BentoCardTitleGroup>
+        <BentoHeaderActions>
+          <BentoActionBtn type="button" $accent onClick={onOpenEvents}>
+            전체 연표 <FiArrowUpRight size={11} />
+          </BentoActionBtn>
+        </BentoHeaderActions>
+      </BentoCardHeader>
+
+      <EventsCardSubtitle>
+        국가에 기록된 사건들이 어떤 시대·분야에 집중되었는지와 연대기 순 결정적 전환점을 보여줍니다.
+      </EventsCardSubtitle>
+
+      <BentoCardBody>
+        <CenturyEventMatrixAndMilestones
+          buckets={centuryBuckets}
+          domainBreakdown={domainBreakdown}
+          milestones={milestoneEvents}
+          onSelectCentury={onSelectCentury}
+          onSelectCell={onSelectCell}
+          onSelectEvent={onSelectEvent}
+        />
+      </BentoCardBody>
+    </BentoCard>
+  )
+}
+
+/* ─── 6D. Zone 4 — Standalone Military Force Card ─────────────────────────── */
+
+export function MilitaryForceBentoCard({
+  militaryCount,
+  highCommandCount,
+  militaryBranchBreakdown,
+  warSummary,
+  onOpenMilitary,
+}: {
+  militaryCount: number
+  highCommandCount: number
+  militaryBranchBreakdown: MilitaryBranchSummary[]
+  warSummary: WarOutcomeSummary
+  onOpenMilitary: () => void
+}) {
+  if (militaryCount === 0 && warSummary.totalMilitaryEvents === 0) {
+    return null
+  }
+
+  return (
+    <BentoCard aria-label="군사 전력 및 참전 전적">
+      <BentoCardHeader>
+        <BentoCardTitleGroup>
+          <BentoCardTitle>군사 · 전적</BentoCardTitle>
+          {militaryCount > 0 ? (
+            <BentoCardBadge>편제 {militaryCount}</BentoCardBadge>
+          ) : null}
+        </BentoCardTitleGroup>
+        <BentoHeaderActions>
+          <BentoActionBtn type="button" $accent onClick={onOpenMilitary}>
+            군사 상세 <FiArrowUpRight size={11} />
+          </BentoActionBtn>
+        </BentoHeaderActions>
+      </BentoCardHeader>
+      <BentoCardBody>
+        <MilitaryForceInfographicBlock
+          militaryCount={militaryCount}
+          highCommandCount={highCommandCount}
+          branchBreakdown={militaryBranchBreakdown}
+          warSummary={warSummary}
+          onOpenMilitary={onOpenMilitary}
+          hideSubHeader
+        />
       </BentoCardBody>
     </BentoCard>
   )
@@ -1745,17 +2699,37 @@ export function ModernHistoryForceBentoCard({
 
 /* ─── 7. Clean Compact Locator Map & Administrative Divisions Card ───────── */
 
+export interface GeoHeroScaleMetrics {
+  popNum: number | null
+  popYearNote?: string | null
+  areaNum: number | null
+  densityText: string | null
+  continentComparison: ContinentComparison
+  economicIndicators?: EconomicIndicator[]
+  developmentIndicators?: DevelopmentIndicator[]
+  bondYields?: BondYield[]
+  onOpenDemographics: () => void
+  onOpenEconomics: () => void
+  onOpenBonds: () => void
+}
+
 export function CompactGeoBentoCard({
   country,
   cityCount,
+  scaleMetrics,
   onOpenRegions,
 }: {
   country: UnifiedCountry
   cityCount: number
+  scaleMetrics?: GeoHeroScaleMetrics
   onOpenRegions: (divisionId?: string) => void
 }) {
-  const theme = useTheme()
-  const [geoMode, setGeoMode] = useState<'atlas' | 'roadmap' | 'hybrid'>('atlas')
+  const validCoord = clampValidWgs84(country.latitude, country.longitude)
+  const [geoMode, setGeoMode] = useState<'roadmap' | 'hybrid'>('roadmap')
+
+  React.useEffect(() => {
+    setGeoMode('roadmap')
+  }, [country.id])
 
   const divisionsQuery = useAdministrativeDivisions(
     country.type === 'historical'
@@ -1763,13 +2737,118 @@ export function CompactGeoBentoCard({
       : { countryId: country.id },
     null,
   )
+  const { data: naturalFeatures = [] } = useNaturalFeatures(
+    country.type === 'modern' ? country.id : undefined,
+  )
+  const { data: infrastructures = [] } = useInfrastructures(
+    country.type === 'modern' ? country.id : undefined,
+  )
 
-  const topDivisions = useMemo(() => {
+  const { topDivisions, totalDivisionCount } = useMemo(() => {
     const raw = divisionsQuery.data ?? []
-    return raw.slice(0, 8)
+    const countTree = (nodes: AdministrativeDivision[]): number => {
+      let total = 0
+      for (const node of nodes) {
+        total += 1
+        if (node.children?.length) total += countTree(node.children)
+      }
+      return total
+    }
+    return {
+      topDivisions: raw.slice(0, 8),
+      totalDivisionCount: countTree(raw),
+    }
   }, [divisionsQuery.data])
 
-  const validCoord = clampValidWgs84(country.latitude, country.longitude)
+  const geoPoiChips = useMemo(() => {
+    const chips: Array<{ id: string; label: string }> = []
+    for (const nf of naturalFeatures) {
+      if (chips.length >= 8) break
+      chips.push({ id: `nf-${nf.id}`, label: nf.name })
+    }
+    for (const infra of infrastructures) {
+      if (chips.length >= 8) break
+      chips.push({ id: `inf-${infra.id}`, label: infra.name })
+    }
+    return chips
+  }, [naturalFeatures, infrastructures])
+
+  const resolvedGeoCount =
+    country.type === 'modern'
+      ? totalDivisionCount + naturalFeatures.length + infrastructures.length ||
+        cityCount
+      : totalDivisionCount || cityCount
+
+  const macroStats = useMemo(() => {
+    if (!scaleMetrics) return null
+    const eco = [...(scaleMetrics.economicIndicators ?? [])].sort(
+      (left, right) => right.year - left.year,
+    )
+    const gdpRow = eco.find(
+      (row) => row.gdp != null && Number.isFinite(Number(row.gdp)),
+    )
+    const capRow = eco.find(
+      (row) =>
+        row.gdpPerCapita != null && Number.isFinite(Number(row.gdpPerCapita)),
+    )
+    const growthRow = eco.find(
+      (row) =>
+        row.gdpGrowthRate != null && Number.isFinite(Number(row.gdpGrowthRate)),
+    )
+    const dev = [...(scaleMetrics.developmentIndicators ?? [])]
+      .filter((row) => row.hdi != null && Number.isFinite(Number(row.hdi)))
+      .sort((left, right) => right.year - left.year)
+    const hdiRow = dev[0] ?? null
+
+    const bonds = scaleMetrics.bondYields ?? []
+    const y10Rows = [...bonds]
+      .filter(
+        (bond) =>
+          bond.maturity === 'Y10' &&
+          bond.yieldRate != null &&
+          Number.isFinite(Number(bond.yieldRate)),
+      )
+      .sort((left, right) => right.year - left.year)
+    const latestY10 = y10Rows[0] ?? null
+
+    const byYear = new Map<number, Set<string>>()
+    for (const row of bonds) {
+      if (row.yieldRate == null || !Number.isFinite(Number(row.yieldRate))) {
+        continue
+      }
+      const set = byYear.get(row.year) ?? new Set<string>()
+      set.add(row.maturity)
+      byYear.set(row.year, set)
+    }
+    const hasYieldCurve = [...byYear.values()].some((set) => set.size >= 2)
+
+    return {
+      gdpVal: gdpRow?.gdp != null ? Number(gdpRow.gdp) : null,
+      gdpYear: gdpRow?.year ?? capRow?.year ?? null,
+      gdpPerCapVal:
+        capRow?.gdpPerCapita != null ? Number(capRow.gdpPerCapita) : null,
+      growthVal:
+        growthRow?.gdpGrowthRate != null
+          ? Number(growthRow.gdpGrowthRate)
+          : null,
+      hdiVal: hdiRow?.hdi != null ? Number(hdiRow.hdi) : null,
+      hdiYear: hdiRow?.year ?? null,
+      y10Val: latestY10?.yieldRate != null ? Number(latestY10.yieldRate) : null,
+      y10Year: latestY10?.year ?? null,
+      hasYieldCurve,
+      bonds,
+    }
+  }, [scaleMetrics])
+
+  if (
+    !scaleMetrics &&
+    country.type === 'modern' &&
+    !validCoord &&
+    resolvedGeoCount === 0 &&
+    topDivisions.length === 0
+  ) {
+    return null
+  }
   const mapSpec = useMemo(
     () =>
       buildHeadquartersGoogleMapsSpec({
@@ -1783,37 +2862,19 @@ export function CompactGeoBentoCard({
     [country, validCoord, geoMode],
   )
 
-  const svgPin = useMemo(() => {
-    if (!validCoord) return { x: 180, y: 88, hasExact: false }
-    // Equirectangular projection into 360 x 180 box
-    const x = Math.max(18, Math.min(342, ((validCoord.lng + 180) / 360) * 360))
-    const y = Math.max(16, Math.min(164, ((90 - validCoord.lat) / 180) * 180))
-    return { x, y, hasExact: true }
-  }, [validCoord])
-
-  const coordLabel = validCoord
-    ? `${Math.abs(validCoord.lat).toFixed(2)}°${validCoord.lat >= 0 ? 'N' : 'S'} · ${Math.abs(validCoord.lng).toFixed(2)}°${validCoord.lng >= 0 ? 'E' : 'W'}`
-    : '좌표 미기재'
-
   return (
     <BentoCard aria-label="지리 위치 및 최상위 행정구역">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <FiGlobe size={13.5} />
-          <BentoCardTitle>지리</BentoCardTitle>
-          {cityCount > 0 ? (
-            <BentoCardBadge>{cityCount}곳</BentoCardBadge>
+          <BentoCardTitle>
+            {scaleMetrics ? '지리 · 영토 · 핵심 제원' : '지리 · 행정구역'}
+          </BentoCardTitle>
+          {resolvedGeoCount > 0 ? (
+            <BentoCardBadge>{resolvedGeoCount}건</BentoCardBadge>
           ) : null}
         </BentoCardTitleGroup>
         <BentoHeaderActions>
           <MiniDirSwitch>
-            <MiniDirBtn
-              type="button"
-              $active={geoMode === 'atlas'}
-              onClick={() => setGeoMode('atlas')}
-            >
-              벡터
-            </MiniDirBtn>
             <MiniDirBtn
               type="button"
               $active={geoMode === 'roadmap'}
@@ -1840,127 +2901,7 @@ export function CompactGeoBentoCard({
       </BentoCardHeader>
 
       <MapIframeWrap>
-        {geoMode === 'atlas' ? (
-          <VectorGeoAtlasBox onClick={() => onOpenRegions()}>
-            <svg viewBox="0 0 360 180" preserveAspectRatio="xMidYMid slice" aria-hidden>
-              {[30, 60, 90, 120, 150].map((gy) => (
-                <line
-                  key={`lat-${gy}`}
-                  x1="0"
-                  y1={gy}
-                  x2="360"
-                  y2={gy}
-                  stroke={
-                    gy === 90
-                      ? ledgerHairlineStrong(theme.mode)
-                      : ledgerHairline(theme.mode)
-                  }
-                  strokeWidth={gy === 90 ? '1' : '0.7'}
-                  strokeDasharray={gy === 90 ? undefined : '2.5 3.5'}
-                />
-              ))}
-              {[60, 120, 180, 240, 300].map((gx) => (
-                <line
-                  key={`lng-${gx}`}
-                  x1={gx}
-                  y1="0"
-                  x2={gx}
-                  y2="180"
-                  stroke={
-                    gx === 180
-                      ? ledgerHairlineStrong(theme.mode)
-                      : ledgerHairline(theme.mode)
-                  }
-                  strokeWidth={gx === 180 ? '1' : '0.7'}
-                  strokeDasharray={gx === 180 ? undefined : '2.5 3.5'}
-                />
-              ))}
-              {/*
-                좌표가 없으면 조준선·핀을 그리지 않는다 — 예전엔 좌표가 없어도 지도 한가운데(경도 0·적도 근처)에
-                핀을 찍어, 독일·일본·케냐가 모두 같은 '위치'로 보였다. 위치는 '지도' 보기가 국가 이름으로 찾는다.
-              */}
-              {svgPin.hasExact ? (
-                <>
-                {/* Reticle crosshairs */}
-                <line
-                  x1={svgPin.x}
-                  y1="0"
-                  x2={svgPin.x}
-                  y2="180"
-                  stroke={ledgerAccent(theme.mode)}
-                  strokeOpacity="0.45"
-                  strokeWidth="0.9"
-                  strokeDasharray="3 3"
-                />
-                <line
-                  x1="0"
-                  y1={svgPin.y}
-                  x2="360"
-                  y2={svgPin.y}
-                  stroke={ledgerAccent(theme.mode)}
-                  strokeOpacity="0.45"
-                  strokeWidth="0.9"
-                  strokeDasharray="3 3"
-                />
-                {/* Surrounding division orbit nodes */}
-                {topDivisions.slice(0, 6).map((div, idx, arr) => {
-                  const ang = -Math.PI / 2 + (idx * 2 * Math.PI) / arr.length
-                  const ox = Math.max(16, Math.min(344, svgPin.x + Math.cos(ang) * 34))
-                  const oy = Math.max(16, Math.min(164, svgPin.y + Math.sin(ang) * 24))
-                  return (
-                    <g key={div.id}>
-                      <line
-                        x1={svgPin.x}
-                        y1={svgPin.y}
-                        x2={ox}
-                        y2={oy}
-                        stroke={ledgerAccent(theme.mode)}
-                        strokeOpacity="0.28"
-                        strokeWidth="0.9"
-                      />
-                      <circle
-                        cx={ox}
-                        cy={oy}
-                        r="2.6"
-                        fill={theme.mode === 'dark' ? '#38bdf8' : '#0284c7'}
-                      />
-                    </g>
-                  )
-                })}
-                <circle
-                  cx={svgPin.x}
-                  cy={svgPin.y}
-                  r="13"
-                  fill={ledgerAccent(theme.mode)}
-                  fillOpacity="0.16"
-                  stroke={ledgerAccent(theme.mode)}
-                  strokeOpacity="0.55"
-                  strokeWidth="1"
-                />
-                <circle
-                  cx={svgPin.x}
-                  cy={svgPin.y}
-                  r="4.5"
-                  fill={ledgerAccent(theme.mode)}
-                  stroke={ledgerBackground(theme.mode)}
-                  strokeWidth="1.5"
-                />
-                </>
-              ) : null}
-            </svg>
-            <VectorGeoHud>
-              <span>
-                <strong>{country.capital || country.name}</strong>
-                {country.isoCode ? ` · ${country.isoCode}` : ''}
-              </span>
-              <span>
-                {svgPin.hasExact
-                  ? coordLabel
-                  : '좌표 미기재 — ‘지도’에서 국가 이름으로 위치를 봅니다'}
-              </span>
-            </VectorGeoHud>
-          </VectorGeoAtlasBox>
-        ) : mapSpec ? (
+        {mapSpec ? (
           <>
             <iframe
               title={`${country.name} 위치 지도`}
@@ -1980,34 +2921,191 @@ export function CompactGeoBentoCard({
         ) : null}
       </MapIframeWrap>
 
-      <BentoCardBody style={{ gap: 8, paddingTop: 12 }}>
-        <BentoSubLabel>
-          <span>
-            <FiMapPin size={11} style={{ marginRight: 3, verticalAlign: -1 }} />
-            {country.capital ? `수도: ${country.capital}` : '광역 행정구역'}
-          </span>
-          {topDivisions.length > 0 ? (
-            <span>상위 {topDivisions.length}개 표시</span>
-          ) : null}
-        </BentoSubLabel>
+      {scaleMetrics ? (
+        <GeoScaleStripGrid>
+          <GeoScaleCell
+            type="button"
+            onClick={scaleMetrics.onOpenDemographics}
+            title={
+              scaleMetrics.popNum != null
+                ? `인구 ${formatPopulation(scaleMetrics.popNum)}명`
+                : undefined
+            }
+          >
+            <IdentityFactTop>
+              <SparkTitle>인구 규모</SparkTitle>
+              {scaleMetrics.continentComparison.populationRank != null &&
+              scaleMetrics.continentComparison.populationRankTotal ? (
+                <DeltaChip>
+                  대륙 {scaleMetrics.continentComparison.populationRank}/
+                  {scaleMetrics.continentComparison.populationRankTotal}위
+                </DeltaChip>
+              ) : null}
+            </IdentityFactTop>
+            <SparkBigNum>
+              {scaleMetrics.popNum != null ? (
+                `${formatPopulationKo(scaleMetrics.popNum)} 명`
+              ) : (
+                <EmptyValueText>미기재</EmptyValueText>
+              )}
+            </SparkBigNum>
+            <ScaleCellSub>
+              {scaleMetrics.popNum != null
+                ? `${formatPopulation(scaleMetrics.popNum)}명${scaleMetrics.popYearNote ? ` · ${scaleMetrics.popYearNote}` : ''}`
+                : '인구 지표 보기'}
+            </ScaleCellSub>
+          </GeoScaleCell>
 
-        {topDivisions.length > 0 ? (
-          <DivisionChipsWrap>
-            {topDivisions.map((div) => (
-              <DivisionChipBtn
-                key={div.id}
-                type="button"
-                onClick={() => onOpenRegions(div.id)}
-              >
-                {div.name}
-              </DivisionChipBtn>
-            ))}
-          </DivisionChipsWrap>
-        ) : (
-          <ScaleCellSub>
-            지리·행정구역 탭에서 광역 주·도·행정구역과 자연 지리를 관리할 수 있습니다.
-          </ScaleCellSub>
-        )}
+          <GeoScaleCell type="button" onClick={() => onOpenRegions()}>
+            <IdentityFactTop>
+              <SparkTitle>영토 면적</SparkTitle>
+              {scaleMetrics.continentComparison.areaRank != null &&
+              scaleMetrics.continentComparison.areaRankTotal ? (
+                <DeltaChip>
+                  대륙 {scaleMetrics.continentComparison.areaRank}/
+                  {scaleMetrics.continentComparison.areaRankTotal}위
+                </DeltaChip>
+              ) : null}
+            </IdentityFactTop>
+            <SparkBigNum>
+              {scaleMetrics.areaNum != null ? (
+                `${formatAreaValue(scaleMetrics.areaNum)} km²`
+              ) : (
+                <EmptyValueText>미기재</EmptyValueText>
+              )}
+            </SparkBigNum>
+            <ScaleCellSub>
+              {scaleMetrics.densityText
+                ? `밀도 ${scaleMetrics.densityText}`
+                : '지리·행정구역 보기'}
+            </ScaleCellSub>
+          </GeoScaleCell>
+
+          {macroStats &&
+          (macroStats.gdpVal != null ||
+            macroStats.gdpPerCapVal != null ||
+            macroStats.growthVal != null) ? (
+            <GeoScaleCell
+              type="button"
+              $spanFull={
+                !(
+                  macroStats.hdiVal != null ||
+                  macroStats.y10Val != null ||
+                  macroStats.hasYieldCurve
+                )
+              }
+              onClick={scaleMetrics.onOpenEconomics}
+            >
+              <IdentityFactTop>
+                <SparkTitle>
+                  거시경제{macroStats.gdpYear ? ` (${macroStats.gdpYear})` : ''}
+                </SparkTitle>
+                {macroStats.growthVal != null ? (
+                  <DeltaChip>
+                    성장 {macroStats.growthVal >= 0 ? '+' : ''}
+                    {macroStats.growthVal.toFixed(1)}%
+                  </DeltaChip>
+                ) : null}
+              </IdentityFactTop>
+              <SparkBigNum>
+                {macroStats.gdpVal != null
+                  ? formatMetricValue(macroStats.gdpVal, 'USD')
+                  : macroStats.gdpPerCapVal != null
+                    ? formatMetricValue(macroStats.gdpPerCapVal, 'USD_CAPITA')
+                    : `${macroStats.growthVal?.toFixed(1)}%`}
+              </SparkBigNum>
+              <ScaleCellSub>
+                {macroStats.gdpVal != null && macroStats.gdpPerCapVal != null
+                  ? `1인당 ${formatMetricValue(macroStats.gdpPerCapVal, 'USD_CAPITA')}`
+                  : '경제 지표 상세 →'}
+              </ScaleCellSub>
+            </GeoScaleCell>
+          ) : null}
+
+          {macroStats &&
+          (macroStats.hdiVal != null ||
+            macroStats.y10Val != null ||
+            macroStats.hasYieldCurve) ? (
+            <GeoScaleCell
+              type="button"
+              $spanFull={
+                !(
+                  macroStats.gdpVal != null ||
+                  macroStats.gdpPerCapVal != null ||
+                  macroStats.growthVal != null
+                )
+              }
+              onClick={
+                macroStats.hasYieldCurve || macroStats.y10Val != null
+                  ? scaleMetrics.onOpenBonds
+                  : scaleMetrics.onOpenEconomics
+              }
+            >
+              <IdentityFactTop>
+                <SparkTitle>
+                  {macroStats.hasYieldCurve
+                    ? '국채 수익률곡선'
+                    : macroStats.hdiVal != null
+                      ? `인간개발지수${macroStats.hdiYear ? ` (${macroStats.hdiYear})` : ''}`
+                      : '10년물 국채금리'}
+                </SparkTitle>
+                {macroStats.hdiVal != null && macroStats.hasYieldCurve ? (
+                  <DeltaChip>HDI {macroStats.hdiVal.toFixed(3)}</DeltaChip>
+                ) : macroStats.y10Year ? (
+                  <DeltaChip>{macroStats.y10Year}년</DeltaChip>
+                ) : null}
+              </IdentityFactTop>
+              {macroStats.hasYieldCurve ? (
+                <>
+                  <SparkBigNum>
+                    {macroStats.y10Val != null
+                      ? `10Y ${macroStats.y10Val.toFixed(2)}%`
+                      : '만기 구조'}
+                  </SparkBigNum>
+                  <SovereignYieldCurveSvg
+                    bondYields={macroStats.bonds}
+                    height={34}
+                  />
+                </>
+              ) : (
+                <>
+                  <SparkBigNum>
+                    {macroStats.hdiVal != null
+                      ? macroStats.hdiVal.toFixed(3)
+                      : `${macroStats.y10Val!.toFixed(2)}%`}
+                  </SparkBigNum>
+                  <ScaleCellSub>
+                    {macroStats.hdiVal != null && macroStats.y10Val != null
+                      ? `국채 10Y ${macroStats.y10Val.toFixed(2)}%`
+                      : '통계 탭에서 보기 →'}
+                  </ScaleCellSub>
+                </>
+              )}
+            </GeoScaleCell>
+          ) : null}
+        </GeoScaleStripGrid>
+      ) : null}
+
+      <BentoCardBody style={{ gap: 8, paddingTop: 10 }}>
+        <SummaryLinkRow type="button" onClick={() => onOpenRegions()}>
+          <span>
+            <FiMapPin size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
+            {[
+              country.capital ? `수도 ${country.capital}` : null,
+              totalDivisionCount > 0
+                ? `행정구역 ${totalDivisionCount}곳`
+                : null,
+              naturalFeatures.length + infrastructures.length > 0
+                ? `자연지리·시설 ${naturalFeatures.length + infrastructures.length}건`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || '광역 행정구역 · 지리 정보'}
+          </span>
+          <strong>
+            지리 상세 <FiArrowUpRight size={11} />
+          </strong>
+        </SummaryLinkRow>
       </BentoCardBody>
     </BentoCard>
   )
@@ -2109,30 +3207,40 @@ const PeriodSpan = styled.span`
 const HeadsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 8px;
+  gap: 10px;
 `
 
 const HeadCardBtn = styled.button`
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 16px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(129, 140, 248, 0.22)'
+        : 'rgba(99, 102, 241, 0.14)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(30, 41, 59, 0.5))'
+      : 'linear-gradient(135deg, rgba(238, 242, 255, 0.72), rgba(248, 250, 252, 0.9))'};
   text-align: left;
   font-family: inherit;
   cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    transform 0.16s ease;
 
   &:hover {
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    transform: translateY(-1px);
   }
 `
 
 const HeadAvatar = styled.div`
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
@@ -2140,7 +3248,11 @@ const HeadAvatar = styled.div`
   align-items: center;
   justify-content: center;
   background: ${({ theme }) => ledgerBackground(theme.mode)};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border: 2px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(129, 140, 248, 0.35)'
+        : 'rgba(99, 102, 241, 0.22)'};
   color: ${({ theme }) => theme.colors.text.tertiary};
 
   img {
@@ -2184,14 +3296,18 @@ const ElectionBarBtn = styled.button`
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  padding: 7px 10px;
-  border-radius: 7px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 9px 12px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.04)'
+      : 'rgba(15, 23, 42, 0.032)'};
   color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
+  transition: border-color 0.15s ease;
 
   &:hover {
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
@@ -2395,22 +3511,25 @@ const PyramidHalf = styled.div<{ $align: 'left' | 'right' }>`
   display: flex;
   justify-content: ${({ $align }) =>
     $align === 'right' ? 'flex-end' : 'flex-start'};
-  height: 9px;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  border-radius: 2px;
+  height: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.05)'
+      : 'rgba(15, 23, 42, 0.045)'};
+  border-radius: 999px;
   overflow: hidden;
 `
 
 const PyramidBarMale = styled.div`
   height: 100%;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#60a5fa' : '#3b82f6')};
-  border-radius: 2px 0 0 2px;
+  background: linear-gradient(90deg, #38bdf8 0%, #3b82f6 52%, #4f46e5 100%);
+  border-radius: 999px 0 0 999px;
 `
 
 const PyramidBarFemale = styled.div`
   height: 100%;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#f472b6' : '#ec4899')};
-  border-radius: 0 2px 2px 0;
+  background: linear-gradient(90deg, #f43f5e 0%, #ec4899 52%, #f472b6 100%);
+  border-radius: 0 999px 999px 0;
 `
 
 const PyramidBracket = styled.span`
@@ -2431,10 +3550,12 @@ const DemoMetricBox = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 7px 9px;
-  border-radius: 7px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 9px 11px;
+  border-radius: 13px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.035)'
+      : 'rgba(15, 23, 42, 0.028)'};
 
   span {
     font-size: 10px;
@@ -2474,21 +3595,86 @@ const TradeDirLabel = styled.span`
 `
 
 const TradeBarTrack = styled.div`
-  height: 10px;
+  height: 11px;
   border-radius: 999px;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(15, 23, 42, 0.055)'};
   overflow: hidden;
 `
 
 const TradeBarFill = styled.div<{ $tone: 'export' | 'import' }>`
   height: 100%;
   border-radius: 999px;
-  background: ${({ theme, $tone }) =>
+  background: ${({ $tone }) =>
     $tone === 'export'
-      ? ledgerAccent(theme.mode)
-      : theme.mode === 'dark'
-        ? '#94a3b8'
-        : '#64748b'};
+      ? 'linear-gradient(90deg, #10b981 0%, #06b6d4 100%)'
+      : 'linear-gradient(90deg, #6366f1 0%, #f43f5e 100%)'};
+`
+
+const CommodityBarsCol = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+`
+
+const CommodityBarRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(84px, 112px) 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+
+  .lb {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+  }
+
+  .track {
+    height: 7px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : 'rgba(15, 23, 42, 0.05)'};
+  }
+
+  .fill {
+    height: 100%;
+    border-radius: 999px;
+  }
+
+  .pct {
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+    white-space: nowrap;
+    ${DIGIT_DISPLAY}
+  }
+`
+
+const EventsCardSubtitle = styled.p`
+  margin: -6px 0 0;
+  padding: 0 0 12px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const TradeDirVal = styled.span`
@@ -2581,10 +3767,15 @@ const LineageCurrentPill = styled.span`
 
 const MapIframeWrap = styled.div`
   position: relative;
-  width: 100%;
-  height: 204px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  margin: 2px 0 4px;
+  height: 208px;
+  border-radius: 18px;
+  overflow: hidden;
   background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'inset 0 0 0 1px rgba(255, 255, 255, 0.09)'
+      : 'inset 0 0 0 1px rgba(15, 23, 42, 0.08)'};
 
   iframe {
     width: 100%;
@@ -2596,18 +3787,26 @@ const MapIframeWrap = styled.div`
 
 const ExternalMapAnchor = styled.a`
   position: absolute;
-  right: 8px;
-  bottom: 8px;
+  right: 10px;
+  bottom: 10px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.14)'
+        : 'rgba(15, 23, 42, 0.08)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(15, 23, 42, 0.84)'
+      : 'rgba(255, 255, 255, 0.92)'};
+  backdrop-filter: blur(6px);
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 650;
   text-decoration: none;
 
   &:hover {
@@ -2618,19 +3817,26 @@ const ExternalMapAnchor = styled.a`
 const DivisionChipsWrap = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
 `
 
 const DivisionChipBtn = styled.button`
-  padding: 2.5px 8px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.05)'
+      : 'rgba(15, 23, 42, 0.042)'};
   color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
 
   &:hover {
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
@@ -2744,10 +3950,13 @@ const MiniPyramidBtn = styled.button`
   flex-direction: column;
   gap: 5px;
   width: 100%;
-  padding: 9px 10px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 11px 12px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.035)'
+      : 'rgba(15, 23, 42, 0.028)'};
   font-family: inherit;
   cursor: pointer;
 
@@ -2768,10 +3977,13 @@ const TradeBalanceBtn = styled.button`
   flex-direction: column;
   gap: 7px;
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 11px 14px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.035)'
+      : 'rgba(15, 23, 42, 0.028)'};
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -2783,42 +3995,49 @@ const TradeBalanceBtn = styled.button`
 
 const MiniDirSwitch = styled.span`
   display: inline-flex;
-  padding: 1.5px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 2.5px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(15, 23, 42, 0.045)'};
 `
 
 const MiniDirBtn = styled.button<{ $active: boolean }>`
-  height: 19px;
-  padding: 0 7px;
+  height: 21px;
+  padding: 0 9px;
   border: none;
-  border-radius: 3.5px;
+  border-radius: 999px;
   background: ${({ theme, $active }) =>
-    $active ? ledgerBackground(theme.mode) : 'transparent'};
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.28)'
+        : '#ffffff'
+      : 'transparent'};
+  box-shadow: ${({ theme, $active }) =>
+    $active && theme.mode !== 'dark'
+      ? '0 1px 3px rgba(15, 23, 42, 0.08)'
+      : 'none'};
   color: ${({ theme, $active }) =>
     $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
   font-family: inherit;
   font-size: 10.5px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  font-weight: ${({ $active }) => ($active ? 700 : 550)};
   cursor: pointer;
 `
 
 const LineageGanttWrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 9px;
-  padding-top: 8px;
-  border-top: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
+  gap: 5px;
 `
 
 const LineageGanttRowBtn = styled.button`
   display: grid;
-  grid-template-columns: 112px 1fr 48px;
+  grid-template-columns: minmax(112px, 160px) 1fr auto;
   align-items: center;
-  gap: 8px;
-  padding: 2px 4px;
+  gap: 10px;
+  padding: 3px 5px;
   border: none;
   border-radius: 4px;
   background: transparent;
@@ -2831,19 +4050,32 @@ const LineageGanttRowBtn = styled.button`
   }
 
   .nm {
-    font-size: 11px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.secondary};
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 650;
+    color: ${({ theme }) => theme.colors.text.primary};
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
   }
 
   .track {
     position: relative;
-    height: 7px;
+    height: 10px;
     border-radius: 999px;
-    background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.055)'
+        : 'rgba(15, 23, 42, 0.05)'};
     overflow: hidden;
   }
 
@@ -2852,15 +4084,20 @@ const LineageGanttRowBtn = styled.button`
     top: 0;
     bottom: 0;
     border-radius: 999px;
-    background: ${({ theme }) => ledgerAccent(theme.mode)};
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
 
   .dur {
     text-align: right;
+    white-space: nowrap;
     font-size: 10.5px;
     font-weight: 700;
     color: ${({ theme }) => theme.colors.text.tertiary};
     ${DIGIT_DISPLAY}
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 112px 1fr auto;
   }
 `
 
@@ -2971,7 +4208,7 @@ function buildBrokenYearAxis(
       }
     }
   }
-  ticks = ticks.filter((tick) => tick.pct <= 90)
+  ticks = ticks.filter((tick) => tick.pct <= 78)
   ticks.push({ year: maxY, pct: 100 })
 
   return { toPct, gaps, ticks }
@@ -3104,8 +4341,63 @@ export function ModernExecutiveSpectrumCard({
     }
 
 
-    const recentChips = [...timeline]
-      .sort((a, b) => (b.endYear ?? nowYr) - (a.endYear ?? nowYr) || b.startYear - a.startYear)
+    // 동일 인물(연임·겸직: 조지 워싱턴 1·2기, 프로이센 국왕+독일 황제 겸직 등)을 하나의 칩으로 병합 후 최근 10명 추출
+    const byLeader = new Map<
+      string,
+      ExecutiveTimelineItem & {
+        minStart: number
+        maxEnd: number | null
+        hasOpenEnd: boolean
+        recordIds: string[]
+      }
+    >()
+    for (const item of timeline) {
+      const leaderKey = item.personId
+        ? `pid:${item.personId}`
+        : `nm:${item.personName.replace(/\s+/g, '')}`
+      const existing = byLeader.get(leaderKey)
+      if (!existing) {
+        byLeader.set(leaderKey, {
+          ...item,
+          minStart: item.startYear,
+          maxEnd: item.endYear,
+          hasOpenEnd: item.endYear == null,
+          recordIds: [item.recordId],
+        })
+      } else {
+        existing.minStart = Math.min(existing.minStart, item.startYear)
+        if (item.endYear == null) {
+          existing.hasOpenEnd = true
+          existing.maxEnd = null
+        } else if (!existing.hasOpenEnd) {
+          existing.maxEnd = Math.max(
+            existing.maxEnd ?? item.endYear,
+            item.endYear,
+          )
+        }
+        existing.recordIds.push(item.recordId)
+        // 더 최근 재임이거나 이미지·정당색이 있는 행의 메타를 우선 반영
+        if (
+          (item.endYear ?? nowYr) >= (existing.endYear ?? nowYr) ||
+          (!existing.profileImageUrl && item.profileImageUrl)
+        ) {
+          existing.recordId = item.recordId
+          existing.profileImageUrl =
+            item.profileImageUrl ?? existing.profileImageUrl
+          existing.partyColor = item.partyColor ?? existing.partyColor
+          existing.partyName = item.partyName ?? existing.partyName
+          existing.ordinal = item.ordinal ?? existing.ordinal
+        }
+      }
+    }
+
+    const recentChips = [...byLeader.values()]
+      .sort(
+        (left, right) =>
+          (right.hasOpenEnd ? nowYr + 1 : (right.maxEnd ?? right.minStart)) -
+            (left.hasOpenEnd ? nowYr + 1 : (left.maxEnd ?? left.minStart)) ||
+          right.minStart - left.minStart,
+      )
       .slice(0, 10)
       .reverse()
 
@@ -3113,14 +4405,7 @@ export function ModernExecutiveSpectrumCard({
   }, [timeline, regimeEras, theme.mode])
 
   if (!model) {
-    return (
-      <EmptyBentoCard
-        title="역대 국가수반"
-        text="대통령·총리·군주의 재임을 기록하면 역대 수반의 집권 기간이 한 줄 막대로 그려집니다."
-        actionLabel="재임 기록하기"
-        onAction={onOpenCabinets}
-      />
-    )
+    return null
   }
 
   const hoveredItem =
@@ -3219,8 +4504,11 @@ export function ModernExecutiveSpectrumCard({
                       }}
                       onMouseEnter={() => setHoveredId(seg.recordId)}
                       onMouseLeave={() => setHoveredId(null)}
-                      onClick={() => onFocusTenure(seg.recordId)}
-                      title={`${seg.ordinal != null ? `제${seg.ordinal}대 ` : ''}${seg.personName}${seg.partyName ? ` (${seg.partyName})` : ''} · ${seg.startYear}–${seg.endYear ?? '현직'} — 클릭 시 상단 마인드맵 전환`}
+                      onClick={() => {
+                        onFocusTenure(seg.recordId)
+                        if (seg.personId) onSelectPerson(seg.personId)
+                      }}
+                      title={`${seg.ordinal != null ? `제${seg.ordinal}대 ` : ''}${seg.personName}${seg.partyName ? ` (${seg.partyName})` : ''} · ${seg.startYear}–${seg.endYear ?? '현직'}`}
                     />
                   )
                 })}
@@ -3247,17 +4535,27 @@ export function ModernExecutiveSpectrumCard({
 
         <ExecQuickChipsRow>
           {model.recentChips.map((chip) => {
-            const isSelected = chip.recordId === activeTenureId
+            const isSelected = Boolean(
+              activeTenureId && chip.recordIds.includes(activeTenureId),
+            )
             const avatar = chip.profileImageUrl
               ? getUploadImageUrl(chip.profileImageUrl)
               : null
+            const spanShort = chip.hasOpenEnd
+              ? `${chip.minStart}–현직`
+              : chip.maxEnd != null && chip.maxEnd !== chip.minStart
+                ? `${chip.minStart}–${chip.maxEnd}`
+                : `${chip.minStart}`
             return (
               <ExecChipGroup key={chip.recordId} $active={isSelected}>
                 <ExecLeaderChipBtn
                   type="button"
                   $active={isSelected}
-                  onClick={() => onFocusTenure(chip.recordId)}
-                  title="클릭 시 상단 행정부 마인드맵 전환"
+                  onClick={() => {
+                    onFocusTenure(chip.recordId)
+                    if (chip.personId) onSelectPerson(chip.personId)
+                  }}
+                  title={`${chip.personName} (${spanShort}) 인물 정보 보기`}
                 >
                   <span className="av">
                     {avatar ? (
@@ -3276,7 +4574,7 @@ export function ModernExecutiveSpectrumCard({
                     {chip.ordinal != null ? `${chip.ordinal}대 ` : ''}
                     {chip.personName}
                   </strong>
-                  <small>{chip.startYear}</small>
+                  <small>{spanShort}</small>
                 </ExecLeaderChipBtn>
                 {chip.personId ? (
                   <ExecPersonPinBtn
@@ -3578,8 +4876,11 @@ export function ParliamentAndPartyBentoCard({
   civicSnapshot,
   currentCabinet,
   electionCount,
+  modernElectionCount,
+  historicalElectionCount = 0,
   nextElection,
   recentElection,
+  polityScope = 'modern',
   onOpenElections,
   onOpenPoliticalSystem,
   onOpenPartyCatalog,
@@ -3588,15 +4889,19 @@ export function ParliamentAndPartyBentoCard({
   civicSnapshot: CivicInstitutionalSnapshot
   currentCabinet: CurrentCabinetSummary | null
   electionCount: number
+  modernElectionCount?: number
+  historicalElectionCount?: number
   nextElection: ElectionSummary | null
   recentElection: ElectionSummary | null
+  polityScope?: 'modern' | 'historical'
   onOpenElections: (electionId?: string) => void
-  onOpenPoliticalSystem: () => void
+  onOpenPoliticalSystem?: () => void
   onOpenPartyCatalog: () => void
 }) {
   const theme = useTheme()
   const seatsInfo = civicSnapshot.activePolitySeats
   const latestLegId = civicSnapshot.latestLegislativeElectionId
+  const resolvedModernElectionCount = modernElectionCount ?? electionCount
 
   const latestLegQuery = useQuery({
     queryKey: ['election-detail-dashboard', latestLegId],
@@ -3606,36 +4911,48 @@ export function ParliamentAndPartyBentoCard({
   })
 
   const partyMetaById = useMemo(
-    () => new Map(parties.map((p) => [p.id, p])),
+    () => new Map(parties.map((party) => [party.id, party])),
     [parties],
+  )
+
+  const scopedParties = useMemo(
+    () =>
+      polityScope === 'historical'
+        ? parties
+        : parties.filter(
+            (party) => !party.historicalCountryId || !party.dissolvedDate,
+          ),
+    [parties, polityScope],
   )
 
   const activeParties = useMemo(
-    () => parties.filter((p) => !p.dissolvedDate),
-    [parties],
+    () => scopedParties.filter((party) => !party.dissolvedDate),
+    [scopedParties],
   )
 
-  /*
-   * 스펙트럼 모수 — 활동 중 정당이 3곳 이상이면 현재 지형, 아니면 역대 전체.
-   * 예전엔 활동 정당이 1곳이라도 있으면 그것만 세서, 정당 13곳(해산 12)인 독일이 '좌파 1당' 한 색 막대가 됐다.
-   */
-  const spectrumUsesActive = activeParties.length >= 3
+  const historicalPartyCount =
+    polityScope === 'modern'
+      ? Math.max(0, parties.length - scopedParties.length)
+      : 0
+
+  const spectrumSource =
+    activeParties.length > 0 ? activeParties : scopedParties
   const spectrumSlices = useMemo<SegmentSlice[]>(() => {
     const counts = new Map<string, number>()
-    for (const p of spectrumUsesActive ? activeParties : parties) {
-      const pos = p.position ?? 'UNCLASSIFIED'
+    for (const party of spectrumSource) {
+      const pos = party.position ?? 'UNCLASSIFIED'
       counts.set(pos, (counts.get(pos) ?? 0) + 1)
     }
     const list: SegmentSlice[] = []
     for (const pos of SPECTRUM_ORDER) {
-      const c = counts.get(pos) ?? 0
-      if (c > 0) {
+      const cnt = counts.get(pos) ?? 0
+      if (cnt > 0) {
         list.push({
           key: pos,
           label: POLITICAL_POSITION_LABEL[pos],
-          value: c,
+          value: cnt,
           color: POLITICAL_POSITION_COLOR[pos],
-          meta: `${c}당`,
+          meta: `${cnt}당`,
         })
       }
     }
@@ -3645,19 +4962,18 @@ export function ParliamentAndPartyBentoCard({
         key: 'UNCLASSIFIED',
         label: '기타·미분류',
         value: unc,
-        color: theme.mode === 'dark' ? '#64748b' : '#94a3b8',
+        color: theme.mode === 'dark' ? '#818cf8' : '#6366f1',
         meta: `${unc}당`,
       })
     }
     return list
-  }, [spectrumUsesActive, activeParties, parties, theme.mode])
+  }, [spectrumSource, theme.mode])
 
   const { hemicycleSpec, governanceBalance } = useMemo(() => {
     const lowerSeats = seatsInfo?.lowerSeats ?? null
     const upperSeats = seatsInfo?.upperSeats ?? null
     const totalLegSeats = lowerSeats ?? upperSeats ?? null
 
-    // 1순위: 최신 국회의원/의회 선거 실제 정당별 의석(seatsWon)
     const legDetail = latestLegQuery.data
     const seatRows = (legDetail?.partyResults ?? []).filter(
       (pr) => (pr.seatsWon ?? 0) > 0,
@@ -3685,20 +5001,22 @@ export function ParliamentAndPartyBentoCard({
             posWeight: pos ? (POSITION_SORT_WEIGHT[pos] ?? 5) : 5.5,
           }
         })
-        .sort((a, b) => a.posWeight - b.posWeight || b.seats - a.seats)
+        .sort(
+          (left, right) =>
+            left.posWeight - right.posWeight || right.seats - left.seats,
+        )
 
-      const sumWon = enriched.reduce((acc, r) => acc + r.seats, 0)
+      const sumWon = enriched.reduce((sumAcc, row) => sumAcc + row.seats, 0)
       const resolvedTotal = Math.max(
         sumWon,
         legDetail.totalSeats ?? totalLegSeats ?? sumWon,
       )
       const majority = Math.floor(resolvedTotal / 2) + 1
 
-      // 여소야대 / 여대야소 판별 (내각 제1집권당 또는 내각 참여정당 기준)
       const rulingPartyIds = new Set(
         (currentCabinet?.partyDistribution ?? [])
           .map((pd) => pd.partyId)
-          .filter((id): id is string => Boolean(id)),
+          .filter((pid): pid is string => Boolean(pid)),
       )
       let balanceBadge: {
         tone: 'majority' | 'divided' | 'plurality'
@@ -3707,8 +5025,8 @@ export function ParliamentAndPartyBentoCard({
 
       if (rulingPartyIds.size > 0) {
         const rulingSeats = enriched
-          .filter((r) => rulingPartyIds.has(r.partyId))
-          .reduce((acc, r) => acc + r.seats, 0)
+          .filter((row) => rulingPartyIds.has(row.partyId))
+          .reduce((sumAcc, row) => sumAcc + row.seats, 0)
         if (rulingSeats >= majority) {
           balanceBadge = {
             tone: 'majority',
@@ -3725,7 +5043,9 @@ export function ParliamentAndPartyBentoCard({
         }
       }
       if (!balanceBadge) {
-        const largest = [...enriched].sort((a, b) => b.seats - a.seats)[0]
+        const largest = [...enriched].sort(
+          (left, right) => right.seats - left.seats,
+        )[0]
         if (largest) {
           balanceBadge = {
             tone: largest.seats >= majority ? 'majority' : 'plurality',
@@ -3739,12 +5059,12 @@ export function ParliamentAndPartyBentoCard({
 
       return {
         hemicycleSpec: {
-          slices: enriched.map((r) => ({
-            key: r.partyId,
-            label: r.label,
-            value: r.seats,
-            color: r.color,
-            meta: `${r.seats}석`,
+          slices: enriched.map((row) => ({
+            key: row.partyId,
+            label: row.label,
+            value: row.seats,
+            color: row.color,
+            meta: `${row.seats}석`,
           })),
           totalSeats: resolvedTotal,
           subCaption: `과반 ${majority}석 · ${legDetail.shortName || legDetail.name}`,
@@ -3754,173 +5074,123 @@ export function ParliamentAndPartyBentoCard({
       }
     }
 
-    if (currentCabinet && currentCabinet.partyDistribution.length > 0) {
-      const slices: SegmentSlice[] = currentCabinet.partyDistribution.map(
-        (pd, idx) => ({
-          key: pd.partyId ?? `cab-${idx}`,
-          label: pd.partyName,
-          value: pd.count,
-          color:
-            pd.color ||
-            PARTY_FALLBACK_PALETTE[idx % PARTY_FALLBACK_PALETTE.length],
-          meta: `각료 ${pd.count}`,
-        }),
-      )
+    // 정당별 선거 의석 집계가 미입력된 경우에도 헌정 의회 정원(양원/단원)을 반원 다이어그램으로 시각화
+    if (lowerSeats && lowerSeats > 0) {
+      const lowerLabel =
+        seatsInfo?.lowerName ||
+        primaryHouseLabel(seatsInfo?.legislatureType ?? null)
+      if (upperSeats && upperSeats > 0) {
+        const upperLabel = seatsInfo?.upperName || '상원'
+        const lowerMajority = Math.floor(lowerSeats / 2) + 1
+        return {
+          hemicycleSpec: {
+            slices: [
+              {
+                key: 'lower-house',
+                label: lowerLabel,
+                value: lowerSeats,
+                color: '#4f46e5',
+                meta: `${lowerSeats.toLocaleString('ko-KR')}석`,
+              },
+              {
+                key: 'upper-house',
+                label: upperLabel,
+                value: upperSeats,
+                color: '#0ea5e9',
+                meta: `${upperSeats.toLocaleString('ko-KR')}석`,
+              },
+            ],
+            totalSeats: lowerSeats + upperSeats,
+            subCaption: `양원 정원 · ${lowerLabel} 과반 ${lowerMajority}석`,
+            showMajority: false,
+          },
+          governanceBalance: null,
+        }
+      }
+      const majority = Math.floor(lowerSeats / 2) + 1
       return {
         hemicycleSpec: {
-          slices,
-          totalSeats: totalLegSeats ?? currentCabinet.ministerCount,
-          subCaption: totalLegSeats
-            ? `${seatsInfo?.lowerName || '의회'} 정원 (내각 정당비)`
-            : `${currentCabinet.name} 각료`,
-          showMajority: Boolean(totalLegSeats),
-        },
-        governanceBalance: null,
-      }
-    }
-
-    if (spectrumSlices.length > 0) {
-      return {
-        hemicycleSpec: {
-          slices: spectrumSlices,
-          totalSeats:
-            totalLegSeats ??
-            (activeParties.length > 0 ? activeParties.length : parties.length),
-          subCaption: totalLegSeats
-            ? `과반 ${Math.floor(totalLegSeats / 2) + 1}석`
-            : '등록 정당 분포',
-          showMajority: Boolean(totalLegSeats),
-        },
-        governanceBalance: null,
-      }
-    }
-
-    if (lowerSeats || upperSeats) {
-      const houseSlices: SegmentSlice[] = []
-      if (lowerSeats) {
-        houseSlices.push({
-          key: 'lower',
-          label: seatsInfo?.lowerName || '하원·단원',
-          value: lowerSeats,
-          color: ledgerAccent(theme.mode),
-          meta: `${lowerSeats}석`,
-        })
-      }
-      if (upperSeats) {
-        houseSlices.push({
-          key: 'upper',
-          label: seatsInfo?.upperName || '상원',
-          value: upperSeats,
-          color: theme.mode === 'dark' ? '#38bdf8' : '#0284c7',
-          meta: `${upperSeats}석`,
-        })
-      }
-      return {
-        hemicycleSpec: {
-          slices: houseSlices,
-          totalSeats: (lowerSeats ?? 0) + (upperSeats ?? 0),
-          subCaption: upperSeats && lowerSeats ? '양원 합계 의석' : '법정 의석 정원',
-          showMajority: !(upperSeats && lowerSeats),
+          slices: [
+            {
+              key: 'majority-threshold',
+              label: '과반 기준',
+              value: majority,
+              color: '#4f46e5',
+              meta: `${majority.toLocaleString('ko-KR')}석`,
+            },
+            {
+              key: 'remaining-seats',
+              label: '잔여 정원',
+              value: Math.max(1, lowerSeats - majority),
+              color: '#0ea5e9',
+              meta: `${Math.max(0, lowerSeats - majority).toLocaleString('ko-KR')}석`,
+            },
+          ],
+          totalSeats: lowerSeats,
+          subCaption: `과반 ${majority}석 · ${lowerLabel} 정원`,
+          showMajority: true,
         },
         governanceBalance: null,
       }
     }
 
     return { hemicycleSpec: null, governanceBalance: null }
-  }, [
-    seatsInfo,
-    latestLegQuery.data,
-    partyMetaById,
-    currentCabinet,
-    spectrumSlices,
-    activeParties.length,
-    parties.length,
-    theme.mode,
-  ])
-
-  const polityTags = useMemo(() => {
-    if (!seatsInfo) return []
-    const tags: string[] = []
-    if (seatsInfo.governmentForm) {
-      tags.push(
-        GOVERNMENT_FORM_LABEL[
-          seatsInfo.governmentForm as keyof typeof GOVERNMENT_FORM_LABEL
-        ] ?? seatsInfo.governmentForm,
-      )
-    }
-    if (seatsInfo.legislatureType) {
-      tags.push(
-        LEGISLATURE_TYPE_LABEL[
-          seatsInfo.legislatureType as keyof typeof LEGISLATURE_TYPE_LABEL
-        ] ?? seatsInfo.legislatureType,
-      )
-    }
-    if (seatsInfo.partySystem) {
-      tags.push(
-        PARTY_SYSTEM_LABEL[
-          seatsInfo.partySystem as keyof typeof PARTY_SYSTEM_LABEL
-        ] ?? seatsInfo.partySystem,
-      )
-    }
-    if (seatsInfo.stateStructure) {
-      tags.push(
-        STATE_STRUCTURE_LABEL[
-          seatsInfo.stateStructure as keyof typeof STATE_STRUCTURE_LABEL
-        ] ?? seatsInfo.stateStructure,
-      )
-    }
-    return tags
-  }, [seatsInfo])
+  }, [seatsInfo, latestLegQuery.data, partyMetaById, currentCabinet])
 
   const featuredElection = nextElection ?? recentElection
+
+  if (
+    scopedParties.length === 0 &&
+    resolvedModernElectionCount === 0 &&
+    !hemicycleSpec
+  ) {
+    return null
+  }
 
   return (
     <BentoCard aria-label="의회 의석 아치 및 정당·선거 인포그래픽">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>의회 · 정당</BentoCardTitle>
+          <BentoCardTitle>의회 · 정당 · 선거</BentoCardTitle>
           <BentoCardBadge>
-            정당 {parties.length} · 선거 {electionCount}
+            {[
+              scopedParties.length > 0 ? `정당 ${scopedParties.length}` : null,
+              resolvedModernElectionCount > 0
+                ? `선거 ${resolvedModernElectionCount}`
+                : null,
+              scopedParties.length === 0 &&
+              resolvedModernElectionCount === 0 &&
+              hemicycleSpec
+                ? `${hemicycleSpec.totalSeats.toLocaleString('ko-KR')}석`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </BentoCardBadge>
         </BentoCardTitleGroup>
         <BentoHeaderActions>
-          <BentoActionBtn type="button" onClick={onOpenPoliticalSystem}>
-            정체·의회
-          </BentoActionBtn>
-          <BentoActionBtn type="button" onClick={onOpenPartyCatalog}>
-            정당 편람
-          </BentoActionBtn>
           <BentoActionBtn
             type="button"
             $accent
-            onClick={() => onOpenElections()}
+            onClick={() =>
+              scopedParties.length === 0 &&
+              resolvedModernElectionCount === 0 &&
+              onOpenPoliticalSystem
+                ? onOpenPoliticalSystem()
+                : onOpenElections()
+            }
           >
-            선거·정당 <FiArrowUpRight size={11} />
+            정당·선거 <FiArrowUpRight size={11} />
           </BentoActionBtn>
         </BentoHeaderActions>
       </BentoCardHeader>
 
       <BentoCardBody>
-        {polityTags.length > 0 || governanceBalance ? (
+        {governanceBalance ? (
           <BadgeCluster>
-            {governanceBalance ? (
-              <GovernanceBalanceChip $tone={governanceBalance.tone}>
-                {governanceBalance.text}
-              </GovernanceBalanceChip>
-            ) : null}
-            {polityTags.map((tg) => (
-              <ArchBadge key={tg}>{tg}</ArchBadge>
-            ))}
-            {seatsInfo?.lowerSeats ? (
-              <BentoPill>
-                {seatsInfo.lowerName || '하원'} {seatsInfo.lowerSeats}석
-              </BentoPill>
-            ) : null}
-            {seatsInfo?.upperSeats ? (
-              <BentoPill>
-                {seatsInfo.upperName || '상원'} {seatsInfo.upperSeats}석
-              </BentoPill>
-            ) : null}
+            <GovernanceBalanceChip $tone={governanceBalance.tone}>
+              {governanceBalance.text}
+            </GovernanceBalanceChip>
           </BadgeCluster>
         ) : null}
 
@@ -3939,26 +5209,64 @@ export function ParliamentAndPartyBentoCard({
           <ParliamentRightCol>
             {spectrumSlices.length > 0 ? (
               <div>
-                <BentoSubLabel style={{ marginBottom: 5 }}>
+                <BentoSubLabel style={{ marginBottom: 6 }}>
                   <span>
-                    이념 스펙트럼 · {spectrumUsesActive ? '현재 활동' : '역대'}
+                    이념 스펙트럼 ·{' '}
+                    {polityScope === 'historical'
+                      ? '당대 정당'
+                      : activeParties.length > 0
+                        ? '현재 활동'
+                        : '등록 정당'}
                   </span>
                   <span>
-                    활동 {activeParties.length} · 해산{' '}
-                    {parties.length - activeParties.length}
+                    {polityScope === 'historical'
+                      ? `총 ${scopedParties.length}당`
+                      : `활동 ${activeParties.length}${
+                          scopedParties.length - activeParties.length > 0
+                            ? ` · 해산 ${scopedParties.length - activeParties.length}`
+                            : ''
+                        }`}
                   </span>
                 </BentoSubLabel>
-                <StackedSegmentBar
-                  slices={spectrumSlices}
-                  height={8}
-                />
+                <StackedSegmentBar slices={spectrumSlices} height={10} />
               </div>
+            ) : hemicycleSpec ? (
+              <ScaleCellSub>
+                등록된 원내 정당·선거 결과를 추가하면 정당별 의석 분포가 표시됩니다.
+              </ScaleCellSub>
+            ) : null}
+
+            {spectrumSource.length <= 8 && spectrumSource.length > 0 ? (
+              <DivisionChipsWrap>
+                {spectrumSource.map((partyItem, idx) => {
+                  const partyDotColor =
+                    partyItem.brandColor ||
+                    (partyItem.position
+                      ? POLITICAL_POSITION_COLOR[partyItem.position]
+                      : null) ||
+                    PARTY_FALLBACK_PALETTE[idx % PARTY_FALLBACK_PALETTE.length]
+                  return (
+                    <PartyColorChipBtn
+                      key={partyItem.id}
+                      type="button"
+                      onClick={onOpenPartyCatalog}
+                    >
+                      <i style={{ background: partyDotColor }} />
+                      {partyItem.shortName || partyItem.name}
+                    </PartyColorChipBtn>
+                  )
+                })}
+              </DivisionChipsWrap>
             ) : null}
 
             {civicSnapshot.turnoutSparkPoints.length > 0 ? (
               <div>
-                <BentoSubLabel style={{ marginBottom: 4 }}>
-                  <span>역대 선거 투표율 추이</span>
+                <BentoSubLabel style={{ marginBottom: 5 }}>
+                  <span>
+                    {polityScope === 'historical'
+                      ? '역대 선거 투표율 추이'
+                      : '역대 현대 선거 투표율'}
+                  </span>
                   {civicSnapshot.avgTurnout != null ? (
                     <span>평균 {civicSnapshot.avgTurnout.toFixed(1)}%</span>
                   ) : null}
@@ -3966,11 +5274,12 @@ export function ParliamentAndPartyBentoCard({
                 <MiniSvgSparkline
                   points={civicSnapshot.turnoutSparkPoints}
                   color={theme.mode === 'dark' ? '#38bdf8' : '#0284c7'}
-                  height={44}
-                  formatValue={(v) => `${v.toFixed(1)}%`}
+                  height={48}
+                  formatValue={(val) => `${val.toFixed(1)}%`}
                 />
               </div>
-            ) : civicSnapshot.electionTypeCounts.length > 0 ? (
+            ) : civicSnapshot.electionTypeCounts.length > 0 &&
+              resolvedModernElectionCount > 0 ? (
               <ElectionTypePills>
                 {civicSnapshot.electionTypeCounts.slice(0, 4).map((et) => (
                   <BentoPill key={et.type}>
@@ -3996,13 +5305,22 @@ export function ParliamentAndPartyBentoCard({
                   {featuredElection.pollDate.slice(0, 10)}
                 </PeriodSpan>
               </ElectionBarBtn>
-            ) : parties.length === 0 && electionCount === 0 ? (
-              <EmptyInlinePrompt
-                type="button"
-                onClick={() => onOpenElections()}
-              >
-                <FiPlus size={12} /> 정당 · 역대 선거 기록 등록하기
-              </EmptyInlinePrompt>
+            ) : null}
+
+            {historicalPartyCount > 0 || historicalElectionCount > 0 ? (
+              <ScaleCellSub>
+                전신 국가 기록 별도 보관:{' '}
+                {[
+                  historicalPartyCount > 0
+                    ? `과거 정당 ${historicalPartyCount}곳`
+                    : null,
+                  historicalElectionCount > 0
+                    ? `과거 선거 ${historicalElectionCount}회`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </ScaleCellSub>
             ) : null}
           </ParliamentRightCol>
         </ParliamentSplitGrid>
@@ -4034,142 +5352,172 @@ export function DiplomacyTreatyLawBentoCard({
 }) {
   const theme = useTheme()
 
-  const treatySlices = useMemo<SegmentSlice[]>(() => {
+  const docSlices = useMemo<SegmentSlice[]>(() => {
+    const out: SegmentSlice[] = []
+    if (lawCount > 0) {
+      out.push({
+        key: 'LAWS',
+        label: '헌법·법령',
+        value: lawCount,
+        color: '#7c3aed',
+        gradient: 'linear-gradient(90deg, #7c3aed, #a78bfa)',
+        meta: `${lawCount}건`,
+      })
+    }
     const map = new Map<string, number>()
     for (const tr of civicSnapshot.recentTreaties) {
       map.set(tr.type, (map.get(tr.type) ?? 0) + 1)
     }
-    return [...map.entries()].map(([type, count]) => ({
-      key: type,
-      label:
-        TREATY_TYPE_LABELS[type as TreatyType] ?? type,
-      value: count,
-      color: treatyTypeTone(type as TreatyType, theme.mode),
-      meta: `${count}건`,
-    }))
-  }, [civicSnapshot.recentTreaties, theme.mode])
+    const TREATY_FALLBACK_COLORS = [
+      '#0ea5e9',
+      '#10b981',
+      '#f59e0b',
+      '#ec4899',
+    ]
+    let colorIdx = 0
+    for (const [type, count] of map.entries()) {
+      const baseTone = treatyTypeTone(type as TreatyType, theme.mode)
+      const vividTone =
+        type === 'OTHER'
+          ? TREATY_FALLBACK_COLORS[colorIdx % TREATY_FALLBACK_COLORS.length]
+          : baseTone
+      colorIdx += 1
+      out.push({
+        key: type,
+        label: TREATY_TYPE_LABELS[type as TreatyType] ?? type,
+        value: count,
+        color: vividTone,
+        meta: `${count}건`,
+      })
+    }
+    return out
+  }, [civicSnapshot.recentTreaties, lawCount, theme.mode])
 
   if (treatyCount === 0 && lawCount === 0 && ethnicityCount === 0) {
-    return (
-      <EmptyBentoCard
-        title="조약 · 법령 · 민족"
-        text="맺은 조약, 헌법·법률, 구성 민족을 등록하면 유형 분포와 주요 목록이 여기 모입니다."
-        actionLabel="조약 등록"
-        onAction={onOpenTreaties}
-      />
-    )
+    return null
   }
 
+  const dynamicTitleParts = [
+    lawCount > 0 ? '헌법·법령' : null,
+    treatyCount > 0 ? '조약' : null,
+    ethnicityCount > 0 ? '민족' : null,
+  ].filter(Boolean)
+  const dynamicBadgeParts = [
+    lawCount > 0 ? `법령 ${lawCount}` : null,
+    treatyCount > 0 ? `조약 ${treatyCount}` : null,
+    ethnicityCount > 0 ? `민족 ${ethnicityCount}` : null,
+  ].filter(Boolean)
+
   return (
-    <BentoCard aria-label="외교 조약, 법령 및 구성 민족 현황">
+    <BentoCard aria-label="헌법·법령, 외교 조약 및 구성 민족 현황">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>조약 · 법령 · 민족</BentoCardTitle>
-          <BentoCardBadge>
-            조약 {treatyCount} · 법령 {lawCount} · 민족 {ethnicityCount}
-          </BentoCardBadge>
+          <BentoCardTitle>{dynamicTitleParts.join(' · ')}</BentoCardTitle>
+          <BentoCardBadge>{dynamicBadgeParts.join(' · ')}</BentoCardBadge>
         </BentoCardTitleGroup>
         <BentoHeaderActions>
-          <BentoActionBtn type="button" onClick={onOpenLaws}>
-            법령 {lawCount}
-          </BentoActionBtn>
-          <BentoActionBtn type="button" onClick={onOpenEthnicity}>
-            민족 {ethnicityCount}
-          </BentoActionBtn>
-          <BentoActionBtn type="button" $accent onClick={onOpenTreaties}>
-            조약 <FiArrowUpRight size={11} />
+          <BentoActionBtn
+            type="button"
+            $accent
+            onClick={
+              lawCount > 0
+                ? onOpenLaws
+                : treatyCount > 0
+                  ? onOpenTreaties
+                  : onOpenEthnicity
+            }
+          >
+            {lawCount > 0 ? '법령 상세' : treatyCount > 0 ? '조약 상세' : '민족 구성'}{' '}
+            <FiArrowUpRight size={11} />
           </BentoActionBtn>
         </BentoHeaderActions>
       </BentoCardHeader>
 
       <BentoCardBody>
-        {treatySlices.length > 0 ? (
-          <div>
-            <BentoSubLabel style={{ marginBottom: 5 }}>
-              <span>주요 체결 조약 유형 분포</span>
-              <span>총 {treatyCount}건</span>
-            </BentoSubLabel>
-            <StackedSegmentBar slices={treatySlices} height={7} />
-          </div>
+        {docSlices.length > 0 ? (
+          <StackedSegmentBar slices={docSlices} height={9} />
         ) : null}
 
-        {civicSnapshot.recentTreaties.length > 0 ? (
-          <CivicLedgerList>
-            {civicSnapshot.recentTreaties.slice(0, 4).map((tr) => {
-              const tone = treatyTypeTone(tr.type as TreatyType, theme.mode)
-              const typeText =
-                TREATY_TYPE_LABELS[tr.type as TreatyType] ?? tr.type
-              return (
-                <CivicLedgerRowBtn
-                  key={tr.id}
-                  type="button"
-                  onClick={() => onSelectTreaty(tr.id)}
-                >
-                  <span className="tag" style={{ color: tone }}>
-                    {typeText}
-                  </span>
-                  <strong className="nm">{tr.name}</strong>
-                  <span className="yr">{tr.yearLabel ?? '—'}</span>
-                </CivicLedgerRowBtn>
-              )
-            })}
-          </CivicLedgerList>
-        ) : null}
+        <CivicLedgerList>
+          {civicSnapshot.recentLaws.slice(0, 2).map((lw) => (
+            <CivicLedgerRowBtn key={lw.id} type="button" onClick={onOpenLaws}>
+              <span className="tag law">법령</span>
+              <strong className="nm">{lw.title}</strong>
+              <span className="yr">{lw.yearLabel ?? '—'}</span>
+            </CivicLedgerRowBtn>
+          ))}
+          {civicSnapshot.recentTreaties.slice(0, 2).map((tr) => {
+            const tone =
+              tr.type === 'OTHER'
+                ? '#0ea5e9'
+                : treatyTypeTone(tr.type as TreatyType, theme.mode)
+            const typeText =
+              TREATY_TYPE_LABELS[tr.type as TreatyType] ?? tr.type
+            return (
+              <CivicLedgerRowBtn
+                key={tr.id}
+                type="button"
+                onClick={() => onSelectTreaty(tr.id)}
+              >
+                <span className="tag" style={{ color: tone }}>
+                  {typeText}
+                </span>
+                <strong className="nm">{tr.name}</strong>
+                <span className="yr">{tr.yearLabel ?? '—'}</span>
+              </CivicLedgerRowBtn>
+            )
+          })}
+        </CivicLedgerList>
 
-        {civicSnapshot.recentLaws.length > 0 ? (
-          <>
-            {civicSnapshot.recentTreaties.length > 0 ? <BentoDivider /> : null}
-            <div>
-              <BentoSubLabel style={{ marginBottom: 5 }}>
-                <span>주요 헌법 · 제정 법령</span>
-                <span>총 {lawCount}건</span>
-              </BentoSubLabel>
-              <CivicLedgerList>
-                {civicSnapshot.recentLaws.slice(0, 3).map((lw) => (
-                  <CivicLedgerRowBtn
-                    key={lw.id}
-                    type="button"
-                    onClick={onOpenLaws}
-                  >
-                    <span className="tag law">법령</span>
-                    <strong className="nm">{lw.title}</strong>
-                    <span className="yr">{lw.yearLabel ?? '—'}</span>
-                  </CivicLedgerRowBtn>
-                ))}
-              </CivicLedgerList>
-            </div>
-          </>
-        ) : null}
-
-        {civicSnapshot.ethnicGroups.length > 0 ? (
-          <>
-            {civicSnapshot.recentTreaties.length > 0 ||
-            civicSnapshot.recentLaws.length > 0 ? (
-              <BentoDivider />
-            ) : null}
-            <div>
-              <BentoSubLabel style={{ marginBottom: 6 }}>
-                <span>등록 구성 민족 ({ethnicityCount})</span>
-              </BentoSubLabel>
-              <DivisionChipsWrap>
-                {civicSnapshot.ethnicGroups.map((eg) => (
-                  <DivisionChipBtn
-                    key={eg.id}
-                    type="button"
-                    onClick={onOpenEthnicity}
-                  >
-                    {eg.name}
-                    {eg.nameLocal ? ` (${eg.nameLocal})` : ''}
-                  </DivisionChipBtn>
-                ))}
-              </DivisionChipsWrap>
-            </div>
-          </>
+        {ethnicityCount > 0 ? (
+          <SummaryLinkRow type="button" onClick={onOpenEthnicity}>
+            <span>구성 민족</span>
+            <strong>
+              {ethnicityCount}개 집단 보기 <FiArrowUpRight size={11} />
+            </strong>
+          </SummaryLinkRow>
         ) : null}
       </BentoCardBody>
     </BentoCard>
   )
 }
+
+const PartyColorChipBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(15, 23, 42, 0.07)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.045)'
+      : 'rgba(255, 255, 255, 0.9)'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+
+  i {
+    width: 7.5px;
+    height: 7.5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    transform: translateY(-0.5px);
+  }
+`
 
 /* ─── Styled Helpers for Cards 8 ~ 11 ────────────────────────────────────── */
 
@@ -4316,27 +5664,38 @@ const ExecQuickChipsRow = styled.div`
 const ExecLeaderChipBtn = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px 3px 4px;
+  gap: 6px;
+  padding: 4px 10px 4px 5px;
   border-radius: 999px;
   border: 1px solid
     ${({ theme, $active }) =>
-      $active ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.07)'
+          : 'rgba(15, 23, 42, 0.06)'};
   background: ${({ theme, $active }) =>
-    $active ? ledgerAccentSubtle(theme.mode) : ledgerSubtleFill(theme.mode)};
+    $active
+      ? ledgerAccentSubtle(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.04)'
+        : 'rgba(15, 23, 42, 0.03)'};
   color: ${({ theme, $active }) =>
     $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
   font-family: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 
   &:hover {
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
   }
 
   .av {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     overflow: hidden;
     display: inline-flex;
@@ -4473,10 +5832,12 @@ const ParliamentSplitGrid = styled.div<{ $hasHemicycle: boolean }>`
 `
 
 const ParliamentLeftBox = styled.div`
-  padding: 4px 6px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 6px 8px;
+  border-radius: 16px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.035)'
+      : 'rgba(15, 23, 42, 0.026)'};
 `
 
 const ParliamentRightCol = styled.div`
@@ -4495,25 +5856,34 @@ const ElectionTypePills = styled.div`
 const CivicLedgerList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 `
 
 const CivicLedgerRowBtn = styled.button`
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  padding: 5.5px 8px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.038)'
+      : 'rgba(15, 23, 42, 0.028)'};
   font-family: inherit;
   text-align: left;
   cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 
   &:hover {
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.12)'
+        : 'rgba(79, 70, 229, 0.055)'};
   }
 
   .tag {
@@ -4730,4 +6100,398 @@ const GovernanceBalanceChip = styled.span<{
           ? '#fbbf24'
           : '#b45309'
         : ledgerAccent(theme.mode)};
+`
+
+/* ─── Zone 1 Identity & Zone 2 Lineage Styled Helpers ────────────────────── */
+
+const IdentityTopBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 16px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+`
+
+const IdentityTopBadges = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+const IdentityPolityBtn = styled.button`
+  padding: 2.5px 8.5px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const IdentityProseBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  p.clamp {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .full {
+    font-size: 13px;
+    line-height: 1.65;
+    color: ${({ theme }) => theme.colors.text.secondary};
+
+    p {
+      margin: 0;
+      white-space: pre-wrap;
+    }
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+`
+
+const IdentityFactsGrid = styled.div<{ $cols: number }>`
+  display: grid;
+  grid-template-columns: repeat(${({ $cols }) => $cols}, minmax(0, 1fr));
+
+  @media (max-width: 1120px) {
+    grid-template-columns: repeat(
+      ${({ $cols }) => Math.min(3, $cols)},
+      minmax(0, 1fr)
+    );
+  }
+
+  @media (max-width: 820px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 540px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const IdentityFactCell = styled.button`
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 13px 16px;
+  border: none;
+  border-right: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: background 0.14s ease;
+
+  &:last-child {
+    border-right: none;
+  }
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  @media (max-width: 820px) and (min-width: 541px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+    &:nth-child(n + 3) {
+      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+    }
+  }
+
+  @media (max-width: 540px) {
+    border-right: none;
+    & + & {
+      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+    }
+  }
+`
+
+const IdentityFactTop = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+`
+
+const IdentityLeaderInline = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+
+  .meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5px;
+    min-width: 0;
+  }
+
+  .meta strong {
+    font-size: 14.5px;
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .meta span {
+    font-size: 11px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`
+
+const RelatedPolitiesBlock = styled.div<{ $withDivider: boolean }>`
+  ${({ $withDivider, theme }) =>
+    $withDivider
+      ? `
+    padding-top: 10px;
+    border-top: 1px dashed ${ledgerHairline(theme.mode)};
+  `
+      : ''}
+`
+
+const PolityMatrixGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  padding: 0 0 8px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const PolityMatrixCell = styled.button<{ $empty?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.04)'
+      : 'rgba(15, 23, 42, 0.032)'};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.12)'
+        : 'rgba(79, 70, 229, 0.055)'};
+    transform: translateY(-0.5px);
+  }
+
+  .kicker {
+    font-size: 10px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  .val {
+    font-size: 13px;
+    font-weight: 800;
+    color: ${({ theme, $empty }) =>
+      $empty ? theme.colors.text.tertiary : ledgerAccent(theme.mode)};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .sub {
+    font-size: 10px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    ${DIGIT_DISPLAY}
+  }
+`
+
+const InlineCabinetLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  ${DIGIT_DISPLAY}
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const IncumbentEmptyStrip = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(15, 23, 42, 0.1)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.03)'
+      : 'rgba(248, 250, 252, 0.8)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+
+  strong {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    font-weight: 700;
+  }
+
+  &:hover {
+    border-style: solid;
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const GeoScaleStripGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  padding: 8px 0 4px;
+
+  @media (max-width: 520px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const GeoScaleCell = styled.button<{ $spanFull?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 11px 14px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.04)'
+      : 'rgba(15, 23, 42, 0.03)'};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  grid-column: ${({ $spanFull }) => ($spanFull ? '1 / -1' : 'auto')};
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.12)'
+        : 'rgba(79, 70, 229, 0.055)'};
+    transform: translateY(-0.5px);
+  }
+
+  @media (max-width: 520px) {
+    grid-column: auto;
+  }
+`
+
+const SummaryLinkRow = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 13px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.038)'
+      : 'rgba(15, 23, 42, 0.028)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  strong {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    font-weight: 700;
+    ${DIGIT_DISPLAY}
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.12)'
+        : 'rgba(79, 70, 229, 0.055)'};
+  }
 `

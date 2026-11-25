@@ -36,7 +36,9 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import {
   type CalendarEventItem,
+  type CivicInstitutionalSnapshot,
   type CompletenessField,
+  type ElectionSummary,
   type MilestoneEventItem,
   type PersonSpotlightItem,
   type PersonSpotlightSummary,
@@ -46,6 +48,7 @@ import {
   formatPersonSubLabel,
   pickWithKindQuota,
   resolveActivityTimestamp,
+  resolveEventTurningLabel,
 } from './use-country-dashboard-stats'
 
 /** 역대 수반 한 줄 — 재위·재임을 한 모양으로 */
@@ -184,10 +187,11 @@ function personNameOf(person: LoosePerson | null | undefined): string {
  * 오가도 다시 받지 않는다.
  */
 export function useHistoricalCountryDashboard(
-  country: UnifiedCountry,
+  country: UnifiedCountry | null,
   description: string | null | undefined,
 ) {
-  const id = country.id
+  const id = country?.id ?? ''
+  const hasId = Boolean(id)
 
   const [
     personsQuery,
@@ -210,6 +214,7 @@ export function useHistoricalCountryDashboard(
       {
         queryKey: historicalDashboardKeys.persons(id),
         queryFn: () => getPersonsByHistoricalCountryUnion(id),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
@@ -217,6 +222,7 @@ export function useHistoricalCountryDashboard(
         queryKey: historicalDashboardKeys.events(id),
         queryFn: () =>
           getAllEventsExhaustive({ countryId: id, includeSubEvents: true }),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
@@ -226,42 +232,50 @@ export function useHistoricalCountryDashboard(
             historicalCountryId: id,
             includeConstituents: true,
           }),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
         queryKey: historicalDashboardKeys.transitions(id),
         queryFn: () => getTransitionsByHistoricalCountryId(id),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
         queryKey: historicalDashboardKeys.memberships(id),
         queryFn: () => getMembershipsByHistoricalCountryId(id),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
         queryKey: historicalDashboardKeys.relations(id),
         queryFn: () => getRelationsByHistoricalCountryId(id),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
         queryKey: historicalDashboardKeys.treaties(id),
         queryFn: () => treatyApi.getAll({ historicalCountryId: id, take: 1 }),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
         /* 건국 카드와 같은 키 — historical-founding-cards의 foundingSummaryKey */
         queryKey: ['historical-countries', id, 'founding-summary'],
         queryFn: () => getHistoricalCountryFoundingSummary(id),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
         queryKey: historicalDashboardKeys.allCountries,
         queryFn: getAllHistoricalCountries,
+        enabled: hasId,
         staleTime: 1000 * 60 * 30,
       },
       {
         queryKey: politicalSystemKeys.list({ historicalCountryId: id }),
         queryFn: () => listPoliticalSystems({ historicalCountryId: id }),
+        enabled: hasId,
         staleTime: 1000 * 60,
       },
       {
@@ -272,16 +286,19 @@ export function useHistoricalCountryDashboard(
           administrationDepartmentApi.getByHistoricalCountryId(id, {
             includeConstituents: true,
           }),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
         queryKey: ['laws', `h:${id}`],
         queryFn: () => getLaws({ historicalCountryId: id }),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
         queryKey: ['ethnicities', 'by-historical-country', id],
         queryFn: () => ethnicityApi.getAll({ historicalCountryId: id }),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
@@ -292,11 +309,13 @@ export function useHistoricalCountryDashboard(
         ],
         queryFn: () =>
           cityApi.getAdministrativeDivisions({ historicalCountryId: id }),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
       {
         queryKey: ['elections', 'list', `h:${id}`],
         queryFn: () => getElections({ historicalCountryId: id }),
+        enabled: hasId,
         staleTime: STALE_MS,
       },
     ],
@@ -310,38 +329,29 @@ export function useHistoricalCountryDashboard(
       Array.from(
         new Set(
           constituentPolities
-            .map((p) => p.id)
+            .map((polity) => polity.id)
             .filter((pid): pid is string => Boolean(pid)),
         ),
       ).sort(),
     [constituentPolities],
   )
-  const constituentKey = constituentIds.join(',')
 
-  const militaryUnitsQuery = useQuery({
-    queryKey: [
-      'military-units',
-      'country-scope',
-      'hist',
-      id,
-      constituentKey,
-    ] as const,
-    queryFn: async () => {
-      const targetIds = Array.from(new Set([id, ...constituentIds]))
-      const batches = await Promise.all(
-        targetIds.map((hid) =>
-          militaryUnitApi.getAll({ historicalCountryId: hid }),
-        ),
-      )
-      const dedup = new Map<string, (typeof batches)[0][number]>()
-      for (const list of batches) {
-        for (const u of list) dedup.set(u.id, u)
-      }
-      return [...dedup.values()]
-    },
-    enabled: Boolean(id),
-    staleTime: 1000 * 60 * 2,
+  const allMilitaryUnitsQuery = useQuery({
+    queryKey: ['military-units', 'all'] as const,
+    queryFn: () => militaryUnitApi.getAll(),
+    enabled: hasId,
+    staleTime: 1000 * 60 * 5,
   })
+
+  const scopedMilitaryUnits = useMemo(() => {
+    if (!id || !Array.isArray(allMilitaryUnitsQuery.data)) return []
+    const targetIdSet = new Set([id, ...constituentIds])
+    return allMilitaryUnitsQuery.data.filter(
+      (unit) =>
+        Boolean(unit.historicalCountryId) &&
+        targetIdSet.has(unit.historicalCountryId!),
+    )
+  }, [id, constituentIds, allMilitaryUnitsQuery.data])
 
   const transitions: HistoricalCountryTransitionDto[] = useMemo(
     () => (Array.isArray(transitionsQuery.data) ? transitionsQuery.data : []),
@@ -409,7 +419,9 @@ export function useHistoricalCountryDashboard(
   ])
 
   /* 역대 수반 — 국가원수·정부수반 축만, 같은 인물·같은 시작의 중복 행은 하나로 */
-  const span = getCountryYearRange(country)
+  const span = country
+    ? getCountryYearRange(country)
+    : { start: null, end: null }
   const rulers = useMemo<HistoricalRulerItem[]>(() => {
     const seen = new Set<string>()
     const rows: HistoricalRulerItem[] = []
@@ -493,7 +505,8 @@ export function useHistoricalCountryDashboard(
           warAcc.battles += 1
         }
         const selfHist = asArray(event.relatedHistoricalCountries).find(
-          (h) => h.id && constituentSet.has(String(h.id)) && h.sideOutcome,
+          (hist) =>
+            hist.id && constituentSet.has(String(hist.id)) && hist.sideOutcome,
         )
         const outcome = selfHist?.sideOutcome ?? null
         if (outcome === 'VICTORY') warAcc.victories += 1
@@ -504,7 +517,9 @@ export function useHistoricalCountryDashboard(
       const matched = /^(-?)(\d{1,6})-/.exec(String(event.startDate ?? ''))
       if (!matched) continue
       const year = Number(matched[2])
+      const maxReasonableYear = new Date().getFullYear() + 10
       if (!Number.isFinite(year) || year === 0) continue
+      if (matched[1] !== '-' && year > maxReasonableYear) continue
       const century =
         matched[1] === '-' ? -Math.ceil(year / 100) : Math.ceil(year / 100)
       const prev = byCentury.get(century) ?? { total: 0, domains: {} }
@@ -527,7 +542,7 @@ export function useHistoricalCountryDashboard(
       })),
       eventDomainBreakdown: [...byDomain.entries()]
         .map(([domain, count]) => ({ domain, count }))
-        .sort((a, b) => b.count - a.count),
+        .sort((left, right) => right.count - left.count),
       warSummary: warAcc,
     }
   }, [eventsQuery.data, id, constituentIds])
@@ -549,7 +564,7 @@ export function useHistoricalCountryDashboard(
 
   /* 최근 활동 — 이 나라에 걸린 인물·사건·통치·법령을 종류별 최소 몫(pickWithKindQuota)으로 배분해 최신순 정렬 */
   const recentActivity = useMemo<RecentActivityItem[]>(() => {
-    const currentCountryName = country.name
+    const currentCountryName = country?.name ?? ''
     const personItems = asArray(personsQuery.data)
       .map<RecentActivityItem>((person) => {
         const { activityAt, isUpdated } = resolveActivityTimestamp(person)
@@ -706,7 +721,7 @@ export function useHistoricalCountryDashboard(
       archiveItems,
     )
   }, [
-    country.name,
+    country?.name,
     personsQuery.data,
     eventsQuery.data,
     tenuresQuery.data,
@@ -751,7 +766,7 @@ export function useHistoricalCountryDashboard(
   const electionCount = elections.length
   const departmentCount = departments.length
   const { militaryCount, highCommandCount, militaryBranchBreakdown } = useMemo(() => {
-    if (!id || !Array.isArray(militaryUnitsQuery.data)) {
+    if (!id || scopedMilitaryUnits.length === 0) {
       return {
         militaryCount: 0,
         highCommandCount: 0,
@@ -774,19 +789,19 @@ export function useHistoricalCountryDashboard(
     ])
     let highCmd = 0
     const byBranch = new Map<string, number>()
-    for (const u of militaryUnitsQuery.data) {
-      if (u.unitType && HIGH_CMD_TYPES.has(u.unitType)) highCmd += 1
-      const br = u.branch ?? 'OTHER'
+    for (const unit of scopedMilitaryUnits) {
+      if (unit.unitType && HIGH_CMD_TYPES.has(unit.unitType)) highCmd += 1
+      const br = unit.branch ?? 'OTHER'
       byBranch.set(br, (byBranch.get(br) ?? 0) + 1)
     }
     return {
-      militaryCount: militaryUnitsQuery.data.length,
+      militaryCount: scopedMilitaryUnits.length,
       highCommandCount: highCmd,
       militaryBranchBreakdown: [...byBranch.entries()]
         .map(([branch, count]) => ({ branch, count }))
-        .sort((a, b) => b.count - a.count),
+        .sort((left, right) => right.count - left.count),
     }
-  }, [id, militaryUnitsQuery.data])
+  }, [id, scopedMilitaryUnits])
   const administrationCount = departments.length + politicalSystems.length
   const lawCount = laws.length
   const ethnicityCount = ethnicities.length
@@ -913,7 +928,7 @@ export function useHistoricalCountryDashboard(
     tenures: tenuresQuery.isLoading,
     administration:
       departmentsQuery.isLoading || politicalSystemsQuery.isLoading,
-    military: militaryUnitsQuery.isLoading,
+    military: allMilitaryUnitsQuery.isLoading,
     laws: lawsQuery.isLoading,
     ethnicity: ethnicityQuery.isLoading,
     regions: divisionsQuery.isLoading,
@@ -979,7 +994,7 @@ export function useHistoricalCountryDashboard(
         item: {
           id: pid,
           name: personNameOf(p),
-          subLabel: formatPersonSubLabel(p, null, country.name),
+          subLabel: formatPersonSubLabel(p, null, country?.name ?? null),
           profileImageUrl: img,
           polityName: null,
           roleKind,
@@ -988,17 +1003,17 @@ export function useHistoricalCountryDashboard(
       }
     })
 
-    scored.sort((a, b) => b.score - a.score)
+    scored.sort((left, right) => right.score - left.score)
     const eraSlices = [...eraMap.entries()]
-      .sort((a, b) => b[1] - a[1])
+      .sort((left, right) => right[1] - left[1])
       .slice(0, 5)
       .map(([label, count]) => ({ key: label, label, count }))
 
     return {
       featured: scored
-        .filter((s) => Boolean(s.item.id))
+        .filter((entry) => Boolean(entry.item.id))
         .slice(0, 8)
-        .map((s) => s.item),
+        .map((entry) => entry.item),
       roleCounts: {
         rulers: rulersCnt,
         ministers: ministersCnt,
@@ -1006,9 +1021,10 @@ export function useHistoricalCountryDashboard(
       },
       eraSlices,
     }
-  }, [personsQuery.data, tenuresQuery.data, country.name])
+  }, [personsQuery.data, tenuresQuery.data, country?.name])
 
   const milestoneEvents = useMemo<MilestoneEventItem[]>(() => {
+    const maxReasonableYear = new Date().getFullYear() + 10
     const PRIORITY_TYPES = new Set([
       'WAR',
       'REVOLUTION',
@@ -1018,19 +1034,25 @@ export function useHistoricalCountryDashboard(
       'FOUNDING',
       'REFORM',
     ])
-    const candidates: Array<{ item: MilestoneEventItem; weight: number }> = []
+    const candidates: Array<{
+      item: MilestoneEventItem
+      weight: number
+      century: number
+    }> = []
     for (const ev of asArray(eventsQuery.data)) {
       if (!ev.id || !ev.title) continue
       const yr = tenureYear(ev.startEra, ev.startYear, ev.startDate)
-      if (yr == null || yr === 0) continue
+      if (yr == null || yr === 0 || yr > maxReasonableYear) continue
       const yearLabel = yr < 0 ? `BC ${Math.abs(yr)}` : `${yr}년`
       const parentId = (ev as { parentId?: string | null }).parentId
+      const century =
+        yr < 0 ? -Math.ceil(Math.abs(yr) / 100) : Math.ceil(yr / 100)
+      const evTypeStr = String(ev.type ?? '')
+      const domStr = String(ev.domain ?? 'OTHER')
       const weight =
         (parentId ? 0 : 5) +
-        (PRIORITY_TYPES.has(String(ev.type ?? '')) ? 4 : 0) +
-        ((ev.domain ?? '') === 'POLITICS' ||
-        (ev.domain ?? '') === 'MILITARY' ||
-        (ev.domain ?? '') === 'DIPLOMACY'
+        (PRIORITY_TYPES.has(evTypeStr) ? 5 : 0) +
+        (domStr === 'POLITICS' || domStr === 'MILITARY' || domStr === 'DIPLOMACY'
           ? 2
           : 0)
       candidates.push({
@@ -1039,20 +1061,214 @@ export function useHistoricalCountryDashboard(
           title: String(ev.title).trim(),
           yearLabel,
           signedYear: yr,
-          domain: String(ev.domain ?? 'OTHER'),
+          domain: domStr,
           polityName: null,
+          eventTypeLabel: resolveEventTurningLabel(evTypeStr, domStr),
         },
         weight,
+        century,
       })
     }
     candidates.sort(
-      (a, b) => b.weight - a.weight || a.item.signedYear - b.item.signedYear,
+      (left, right) =>
+        right.weight - left.weight ||
+        right.item.signedYear - left.item.signedYear,
     )
-    return candidates
-      .slice(0, 6)
-      .map((c) => c.item)
-      .sort((a, b) => a.signedYear - b.signedYear)
+    const picked: MilestoneEventItem[] = []
+    const pickedIds = new Set<string>()
+    const perCenturyCount = new Map<number, number>()
+    for (const cand of candidates) {
+      if (picked.length >= 5) break
+      const used = perCenturyCount.get(cand.century) ?? 0
+      if (used >= 2) continue
+      perCenturyCount.set(cand.century, used + 1)
+      pickedIds.add(cand.item.id)
+      picked.push(cand.item)
+    }
+    if (picked.length < 5) {
+      for (const cand of candidates) {
+        if (picked.length >= 5) break
+        if (pickedIds.has(cand.item.id)) continue
+        pickedIds.add(cand.item.id)
+        picked.push(cand.item)
+      }
+    }
+    return picked.sort((left, right) => left.signedYear - right.signedYear)
   }, [eventsQuery.data])
+
+  const { civicSnapshot, recentElection } = useMemo<{
+    civicSnapshot: CivicInstitutionalSnapshot
+    recentElection: ElectionSummary | null
+  }>(() => {
+    const rawElections = Array.isArray(electionsQuery.data)
+      ? (electionsQuery.data as Array<{
+          id?: string
+          name?: string
+          electionType?: string
+          pollDate?: string | null
+          voterTurnoutPercent?: string | number | null
+          status?: string | null
+        }>)
+      : []
+    const byYearTurnout = new Map<number, { sum: number; cnt: number }>()
+    const byElType = new Map<string, number>()
+    let tSum = 0
+    let tCnt = 0
+    for (const el of rawElections) {
+      if (el?.electionType) {
+        byElType.set(el.electionType, (byElType.get(el.electionType) ?? 0) + 1)
+      }
+      const turnoutVal = Number(el?.voterTurnoutPercent)
+      const yrMatch = /^(-?\d{1,4})/.exec(String(el?.pollDate ?? ''))
+      if (
+        el?.voterTurnoutPercent != null &&
+        String(el.voterTurnoutPercent).trim() !== '' &&
+        Number.isFinite(turnoutVal) &&
+        turnoutVal > 0 &&
+        yrMatch
+      ) {
+        const yrNum = Number(yrMatch[1])
+        const cur = byYearTurnout.get(yrNum) ?? { sum: 0, cnt: 0 }
+        cur.sum += turnoutVal
+        cur.cnt += 1
+        byYearTurnout.set(yrNum, cur)
+        tSum += turnoutVal
+        tCnt += 1
+      }
+    }
+    const turnoutSparkPoints = [...byYearTurnout.entries()]
+      .sort((left, right) => left[0] - right[0])
+      .map(([year, agg]) => ({
+        year,
+        value: Math.round((agg.sum / agg.cnt) * 10) / 10,
+      }))
+
+    const sortedByDateDesc = [...rawElections]
+      .filter((el) => Boolean(el?.id && el?.pollDate))
+      .sort((left, right) =>
+        String(right.pollDate ?? '').localeCompare(String(left.pollDate ?? '')),
+      )
+
+    const legTypes = new Set([
+      'PARLIAMENTARY_CONSTITUENCY',
+      'PARLIAMENTARY_PROPORTIONAL',
+      'PARLIAMENTARY',
+      'LEGISLATIVE',
+      'GENERAL',
+      'LOWER_HOUSE',
+      'UPPER_HOUSE',
+    ])
+    const latestLeg = sortedByDateDesc.find(
+      (el) =>
+        el.id &&
+        legTypes.has(String(el.electionType ?? '')) &&
+        el.status !== 'CANCELLED',
+    )
+    const latestAny = sortedByDateDesc[0] ?? null
+
+    const rawTreaties =
+      (
+        treatiesQuery.data as
+          | { items?: Array<Record<string, unknown>>; data?: Array<Record<string, unknown>> }
+          | undefined
+      )?.items ??
+      (
+        treatiesQuery.data as
+          | { items?: Array<Record<string, unknown>>; data?: Array<Record<string, unknown>> }
+          | undefined
+      )?.data ??
+      []
+    const recentTreaties: CivicInstitutionalSnapshot['recentTreaties'] = (
+      Array.isArray(rawTreaties) ? rawTreaties : []
+    )
+      .slice(0, 4)
+      .map((tr) => ({
+        id: String(tr.id ?? ''),
+        name: String(tr.name ?? tr.title ?? '조약').trim(),
+        type: String(tr.type ?? 'OTHER'),
+        yearLabel: formatActivityYearFromIso(
+          (tr.signDate as string | null | undefined) ??
+            (tr.effectiveDate as string | null | undefined),
+        ),
+      }))
+      .filter((tr) => Boolean(tr.id))
+
+    const rawLaws = Array.isArray(lawsQuery.data)
+      ? (lawsQuery.data as Array<Record<string, unknown>>)
+      : []
+    const recentLaws: CivicInstitutionalSnapshot['recentLaws'] = rawLaws
+      .slice(0, 4)
+      .map((lw) => ({
+        id: String(lw.id ?? ''),
+        title: String(lw.title ?? lw.name ?? '법령').trim(),
+        yearLabel: formatActivityYearFromIso(
+          (lw.enactedDate as string | null | undefined) ??
+            (lw.promulgatedDate as string | null | undefined) ??
+            (lw.startDate as string | null | undefined),
+          lw.era as string | null | undefined,
+          lw.year as number | null | undefined,
+        ),
+      }))
+      .filter((lw) => Boolean(lw.id))
+
+    const rawEth = Array.isArray(ethnicityQuery.data)
+      ? (ethnicityQuery.data as Array<Record<string, unknown>>)
+      : []
+    const ethnicGroups: CivicInstitutionalSnapshot['ethnicGroups'] = rawEth
+      .slice(0, 6)
+      .map((eth) => ({
+        id: String(eth.id ?? ''),
+        name: String(eth.name ?? '').trim(),
+        nameLocal: eth.nameLocal ? String(eth.nameLocal).trim() : null,
+      }))
+      .filter((eth) => Boolean(eth.id && eth.name))
+
+    const sysList = politicalSystemsQuery.data ?? []
+    const primarySys = sysList[0] ?? null
+
+    return {
+      civicSnapshot: {
+        turnoutSparkPoints,
+        avgTurnout: tCnt > 0 ? Math.round((tSum / tCnt) * 10) / 10 : null,
+        electionTypeCounts: [...byElType.entries()]
+          .map(([type, count]) => ({ type, count }))
+          .sort((left, right) => right.count - left.count),
+        latestLegislativeElectionId: latestLeg?.id ? String(latestLeg.id) : null,
+        regimeEras: [],
+        recentTreaties,
+        recentLaws,
+        ethnicGroups,
+        activePolitySeats: primarySys
+          ? {
+              name: primarySys.name ?? null,
+              lowerName: primarySys.lowerHouseName ?? null,
+              lowerSeats: primarySys.lowerHouseSeats ?? null,
+              upperName: primarySys.upperHouseName ?? null,
+              upperSeats: primarySys.upperHouseSeats ?? null,
+              governmentForm: primarySys.governmentForm ?? null,
+              stateStructure: primarySys.stateStructure ?? null,
+              legislatureType: primarySys.legislatureType ?? null,
+              partySystem: primarySys.partySystem ?? null,
+            }
+          : null,
+      },
+      recentElection:
+        latestAny?.id && latestAny.pollDate
+          ? {
+              id: String(latestAny.id),
+              name: String(latestAny.name ?? '선거'),
+              electionType: String(latestAny.electionType ?? 'OTHER'),
+              pollDate: String(latestAny.pollDate),
+            }
+          : null,
+    }
+  }, [
+    electionsQuery.data,
+    treatiesQuery.data,
+    lawsQuery.data,
+    ethnicityQuery.data,
+    politicalSystemsQuery.data,
+  ])
 
   return {
     personCount: persons.length,
@@ -1061,6 +1277,8 @@ export function useHistoricalCountryDashboard(
     lineage,
     personSpotlight,
     milestoneEvents,
+    civicSnapshot,
+    recentElection,
     transitionCount: transitions.length,
     membershipCount: memberships.length,
     relationCount: relations.length,

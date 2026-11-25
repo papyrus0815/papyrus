@@ -26,20 +26,14 @@ import {
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
 import {
-  BentoActionBtn,
-  BentoCard,
-  BentoCardBadge,
-  BentoCardBody,
-  BentoCardHeader,
-  BentoCardTitle,
-  BentoCardTitleGroup,
-  BentoDivider,
-  BentoHeaderActions,
-  BentoPill,
-  BentoSubLabel,
   type CenturyDomainBucket,
+  HdiScaleBar,
   MiniDonutRing,
+  MiniSvgSparkline,
+  PercentileBulletBar,
   type SegmentSlice,
+  SemiCircleGauge,
+  type SparkPoint,
   StackedCenturyDomainChart,
   StackedSegmentBar,
 } from '@/entities/event/ui/bento-primitives'
@@ -54,7 +48,300 @@ import type {
   WarOutcomeSummary,
 } from '../../model/use-country-dashboard-stats'
 
-export * from '@/entities/event/ui/bento-primitives'
+export {
+  type CenturyDomainBucket,
+  HdiScaleBar,
+  MiniDonutRing,
+  MiniSvgSparkline,
+  PercentileBulletBar,
+  type SegmentSlice,
+  SemiCircleGauge,
+  type SparkPoint,
+  StackedCenturyDomainChart,
+  StackedSegmentBar,
+}
+
+/* ─── Cardless Open Editorial Canvas Primitives (무카드 에디토리얼 레이아웃) ─── */
+
+export const BentoCanvas = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  padding: 4px 0 44px;
+  box-sizing: border-box;
+
+  > * {
+    padding: 28px 0;
+  }
+
+  > *:first-child {
+    padding-top: 6px;
+  }
+
+  > * + * {
+    border-top: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.08)'
+          : 'rgba(15, 23, 42, 0.08)'};
+  }
+`
+
+export const BentoGridAsym = styled.div<{
+  $leftFr?: number
+  $rightFr?: number
+}>`
+  display: grid;
+  grid-template-columns: ${({ $leftFr = 1.2, $rightFr = 1 }) =>
+    `minmax(0, ${$leftFr}fr) minmax(0, ${$rightFr}fr)`};
+  gap: 0;
+  align-items: start;
+
+  > *:first-child {
+    padding-right: 30px;
+  }
+
+  > *:nth-child(2) {
+    padding-left: 30px;
+    border-left: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.08)'
+          : 'rgba(15, 23, 42, 0.075)'};
+  }
+
+  @media (max-width: 1040px) {
+    grid-template-columns: 1fr;
+
+    > *:first-child {
+      padding-right: 0;
+    }
+
+    > *:nth-child(2) {
+      padding-left: 0;
+      border-left: none;
+      margin-top: 26px;
+      padding-top: 26px;
+      border-top: 1px solid
+        ${({ theme }) =>
+          theme.mode === 'dark'
+            ? 'rgba(255, 255, 255, 0.08)'
+            : 'rgba(15, 23, 42, 0.075)'};
+    }
+  }
+`
+
+export const BentoGrid2Col = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  align-items: start;
+
+  > *:first-child {
+    padding-right: 30px;
+  }
+
+  > *:nth-child(2) {
+    padding-left: 30px;
+    border-left: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.08)'
+          : 'rgba(15, 23, 42, 0.075)'};
+  }
+
+  @media (max-width: 980px) {
+    grid-template-columns: 1fr;
+
+    > *:first-child {
+      padding-right: 0;
+    }
+
+    > *:nth-child(2) {
+      padding-left: 0;
+      border-left: none;
+      margin-top: 26px;
+      padding-top: 26px;
+      border-top: 1px solid
+        ${({ theme }) =>
+          theme.mode === 'dark'
+            ? 'rgba(255, 255, 255, 0.08)'
+            : 'rgba(15, 23, 42, 0.075)'};
+    }
+  }
+`
+
+export const BentoGrid3Col = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+
+  @media (max-width: 1120px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+export const BentoCard = styled.section`
+  display: flex;
+  flex-direction: column;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  min-width: 0;
+`
+
+export const BentoCardHeader = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 0 0 15px 0;
+  background: transparent;
+`
+
+export const BentoCardTitleGroup = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+`
+
+export const BentoCardTitle = styled.h2`
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 820;
+  letter-spacing: -0.025em;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &::before {
+    content: '';
+    width: 3.5px;
+    height: 15px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #4f46e5 0%, #0ea5e9 100%);
+    flex-shrink: 0;
+  }
+`
+
+export const BentoCardBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 2.5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 680;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.16)'
+      : 'rgba(79, 70, 229, 0.075)'};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  ${DIGIT_DISPLAY}
+`
+
+export const BentoHeaderActions = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+export const BentoActionBtn = styled.button<{ $accent?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 3.5px;
+  height: 27px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: none;
+  background: ${({ theme, $accent }) =>
+    $accent
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.15)'
+        : 'rgba(79, 70, 229, 0.065)'
+      : 'transparent'};
+  color: ${({ theme, $accent }) =>
+    $accent ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 680;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background ${MOTION.fast} ease,
+    color ${MOTION.fast} ease,
+    transform ${MOTION.fast} ease;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.24)'
+        : 'rgba(79, 70, 229, 0.12)'};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    transform: translateY(-0.5px);
+  }
+`
+
+export const BentoCardBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+`
+
+export const BentoDivider = styled.div`
+  height: 1px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(15, 23, 42, 0.055)'};
+`
+
+export const BentoSubLabel = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: -0.005em;
+`
+
+export const BentoPill = styled.span<{ $accent?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: ${({ theme, $accent }) =>
+    $accent
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.16)'
+        : 'rgba(79, 70, 229, 0.08)'
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.055)'
+        : 'rgba(15, 23, 42, 0.042)'};
+  color: ${({ theme, $accent }) =>
+    $accent ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
 
 /**
  * 자료가 없는 대시보드 카드 — 카드 틀(제목)은 그대로 두고 안쪽만 빈 안내.
@@ -149,15 +436,58 @@ const EmptyCardAction = styled.button`
 
 /* ─── 6. Military Force Branch & War Summary Strip ───────────────────────── */
 
-const BRANCH_META: Record<string, { label: string; light: string; dark: string }> = {
-  ARMY: { label: '육군', light: '#15803d', dark: '#4ade80' },
-  NAVY: { label: '해군', light: '#0369a1', dark: '#38bdf8' },
-  AIR_FORCE: { label: '공군', light: '#4f46e5', dark: '#818cf8' },
-  MARINE_CORPS: { label: '해병대', light: '#b91c1c', dark: '#f87171' },
-  JOINT: { label: '합동·통합', light: '#7c3aed', dark: '#c084fc' },
-  COAST_GUARD: { label: '해안경비', light: '#0d9488', dark: '#2dd4bf' },
-  SPACE_FORCE: { label: '우주군', light: '#334155', dark: '#94a3b8' },
-  OTHER: { label: '기타 편제', light: '#64748b', dark: '#94a3b8' },
+const BRANCH_META: Record<
+  string,
+  { label: string; light: string; dark: string; gradient: string }
+> = {
+  ARMY: {
+    label: '육군',
+    light: '#059669',
+    dark: '#34d399',
+    gradient: 'linear-gradient(90deg, #10b981 0%, #34d399 100%)',
+  },
+  NAVY: {
+    label: '해군',
+    light: '#0284c7',
+    dark: '#38bdf8',
+    gradient: 'linear-gradient(90deg, #0284c7 0%, #38bdf8 100%)',
+  },
+  AIR_FORCE: {
+    label: '공군',
+    light: '#4f46e5',
+    dark: '#818cf8',
+    gradient: 'linear-gradient(90deg, #4f46e5 0%, #818cf8 100%)',
+  },
+  MARINE_CORPS: {
+    label: '해병대',
+    light: '#e11d48',
+    dark: '#fb7185',
+    gradient: 'linear-gradient(90deg, #e11d48 0%, #fb7185 100%)',
+  },
+  JOINT: {
+    label: '합동·통합',
+    light: '#7c3aed',
+    dark: '#c084fc',
+    gradient: 'linear-gradient(90deg, #7c3aed 0%, #c084fc 100%)',
+  },
+  COAST_GUARD: {
+    label: '해안경비',
+    light: '#0d9488',
+    dark: '#2dd4bf',
+    gradient: 'linear-gradient(90deg, #0d9488 0%, #2dd4bf 100%)',
+  },
+  SPACE_FORCE: {
+    label: '우주군',
+    light: '#334155',
+    dark: '#94a3b8',
+    gradient: 'linear-gradient(90deg, #475569 0%, #94a3b8 100%)',
+  },
+  OTHER: {
+    label: '기타 편제',
+    light: '#d97706',
+    dark: '#fbbf24',
+    gradient: 'linear-gradient(90deg, #d97706 0%, #fbbf24 100%)',
+  },
 }
 
 export function MilitaryForceInfographicBlock({
@@ -166,35 +496,30 @@ export function MilitaryForceInfographicBlock({
   branchBreakdown,
   warSummary,
   onOpenMilitary,
+  hideSubHeader = false,
 }: {
   militaryCount: number
   highCommandCount: number
   branchBreakdown: MilitaryBranchSummary[]
   warSummary: WarOutcomeSummary
   onOpenMilitary: () => void
+  hideSubHeader?: boolean
 }) {
   const theme = useTheme()
   if (militaryCount === 0 && warSummary.totalMilitaryEvents === 0) return null
 
-  const slices: SegmentSlice[] = branchBreakdown.map((item) => {
-    const meta = BRANCH_META[item.branch] ?? BRANCH_META.OTHER
-    return {
-      key: item.branch,
-      label: meta.label,
-      value: item.count,
-      color: theme.mode === 'dark' ? meta.dark : meta.light,
-    }
-  })
+  const maxBranchVal = Math.max(
+    1,
+    ...branchBreakdown.map((branchRow) => branchRow.count),
+  )
 
   const decidedTotal =
     warSummary.victories + warSummary.defeats + warSummary.draws
   const winRatePct =
-    decidedTotal > 0 ? Math.round((warSummary.victories / decidedTotal) * 100) : null
+    decidedTotal > 0
+      ? Math.round((warSummary.victories / decidedTotal) * 100)
+      : null
 
-  /*
-   * 승률 도넛은 결과가 난 교전이 5건 이상일 때만 — 예전엔 전투 1건으로 '100% 승률' 도넛이 크게 떴다.
-   * 표본이 적으면 'n승 n패' 글자만 둔다.
-   */
   const outcomeSlices: SegmentSlice[] =
     decidedTotal >= MIN_DECIDED_FOR_WIN_RATE
       ? [
@@ -214,43 +539,71 @@ export function MilitaryForceInfographicBlock({
             key: 'draw',
             label: '무승부·기타',
             value: warSummary.draws,
-            color: theme.mode === 'dark' ? '#94a3b8' : '#64748b',
+            color: theme.mode === 'dark' ? '#fbbf24' : '#d97706',
           },
         ]
       : []
 
   return (
     <ForceBlock>
-      <BentoSubLabel>
-        <span>
-          <FiShield size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
-          군사 전력 · 참전 전적
-        </span>
-        <InlineTextAction type="button" onClick={onOpenMilitary}>
-          군사 탭 <FiArrowUpRight size={11} />
-        </InlineTextAction>
-      </BentoSubLabel>
+      {!hideSubHeader ? (
+        <BentoSubLabel>
+          <span>
+            <FiShield size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
+            군사 전력 · 참전 전적
+          </span>
+          <InlineTextAction type="button" onClick={onOpenMilitary}>
+            군사 탭 <FiArrowUpRight size={11} />
+          </InlineTextAction>
+        </BentoSubLabel>
+      ) : null}
 
       <ForceVisualRow $hasDonut={outcomeSlices.length > 0}>
         {outcomeSlices.length > 0 && (
           <MiniDonutRing
             slices={outcomeSlices}
-            size={66}
-            strokeWidth={8}
+            size={70}
+            strokeWidth={8.5}
             centerValue={winRatePct != null ? `${winRatePct}%` : undefined}
             centerLabel="승률"
           />
         )}
 
         <ForceRightStack>
-          {slices.length > 0 ? (
-            <StackedSegmentBar slices={slices} height={8} />
+          {branchBreakdown.length > 0 ? (
+            <ForceBranchBarsGrid>
+              {branchBreakdown.slice(0, 5).map((branchRow) => {
+                const meta =
+                  BRANCH_META[branchRow.branch] ?? BRANCH_META.OTHER
+                const toneColor =
+                  theme.mode === 'dark' ? meta.dark : meta.light
+                const widthPct = Math.max(
+                  10,
+                  Math.round((branchRow.count / maxBranchVal) * 100),
+                )
+                return (
+                  <ForceBranchRow key={branchRow.branch}>
+                    <span className="name">
+                      <i style={{ background: toneColor }} />
+                      {meta.label}
+                    </span>
+                    <div className="track">
+                      <div
+                        className="fill"
+                        style={{ width: `${widthPct}%`, background: meta.gradient }}
+                      />
+                    </div>
+                    <strong className="cnt">{branchRow.count}</strong>
+                  </ForceBranchRow>
+                )
+              })}
+            </ForceBranchBarsGrid>
           ) : null}
 
           <ForcePillsRow>
             {militaryCount > 0 ? (
               <BentoPill>
-                편제 {militaryCount}개
+                총 편제 {militaryCount}개
                 {highCommandCount > 0 ? ` · 사령부 ${highCommandCount}` : ''}
               </BentoPill>
             ) : null}
@@ -261,7 +614,7 @@ export function MilitaryForceInfographicBlock({
             ) : null}
             {decidedTotal > 0 ? (
               <BentoPill>
-                {warSummary.victories}승 {warSummary.defeats}패
+                전적 {warSummary.victories}승 {warSummary.defeats}패
                 {warSummary.draws > 0 ? ` ${warSummary.draws}무` : ''}
               </BentoPill>
             ) : null}
@@ -278,16 +631,68 @@ const MIN_DECIDED_FOR_WIN_RATE = 5
 const ForceVisualRow = styled.div<{ $hasDonut: boolean }>`
   display: grid;
   grid-template-columns: ${({ $hasDonut }) =>
-    $hasDonut ? '66px minmax(0, 1fr)' : 'minmax(0, 1fr)'};
-  gap: 12px;
+    $hasDonut ? '70px minmax(0, 1fr)' : 'minmax(0, 1fr)'};
+  gap: 14px;
   align-items: center;
 `
 
 const ForceRightStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 10px;
   min-width: 0;
+`
+
+const ForceBranchBarsGrid = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const ForceBranchRow = styled.div`
+  display: grid;
+  grid-template-columns: 78px 1fr 28px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+
+  .name {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 650;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    white-space: nowrap;
+
+    i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+  }
+
+  .track {
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : 'rgba(15, 23, 42, 0.055)'};
+  }
+
+  .fill {
+    height: 100%;
+    border-radius: 999px;
+  }
+
+  .cnt {
+    text-align: right;
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+    ${DIGIT_DISPLAY}
+  }
 `
 
 const ForceBlock = styled.div`
@@ -329,66 +734,41 @@ export interface MissingAxisChip {
 }
 
 export function ArchiveFootprintBar({
-  filled,
-  total,
   totalRecords,
   missingChips,
   recentActivity,
   onSelectActivity,
 }: {
-  filled: number
-  total: number
+  filled?: number
+  total?: number
   totalRecords: number
   missingChips: MissingAxisChip[]
   recentActivity: RecentActivityItem[]
   onSelectActivity?: (item: RecentActivityItem) => void
 }) {
-  const theme = useTheme()
-  const pct = total > 0 ? Math.round((filled / total) * 100) : 0
-  const radius = 15
-  const circumference = 2 * Math.PI * radius
-  const dashOffset = circumference * (1 - pct / 100)
-  const accent = ledgerAccent(theme.mode)
+  const uniqueRecent = useMemo(() => {
+    const seen = new Set<string>()
+    const list: RecentActivityItem[] = []
+    for (const act of recentActivity) {
+      const key = `${act.kind}::${act.label.trim()}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      list.push(act)
+      if (list.length >= 3) break
+    }
+    return list
+  }, [recentActivity])
+
+  if (missingChips.length === 0 && uniqueRecent.length === 0) return null
 
   return (
-    <FootprintCard aria-label="아카이브 기록 완성도 및 최근 편집">
+    <FootprintCard aria-label="더 채울 수 있는 기록 및 최근 편집">
       <FootprintLeft>
-        <RingBox>
-          <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden="true">
-            <circle
-              cx="19"
-              cy="19"
-              r={radius}
-              fill="none"
-              stroke="currentColor"
-              strokeOpacity="0.12"
-              strokeWidth="3.5"
-            />
-            <circle
-              cx="19"
-              cy="19"
-              r={radius}
-              fill="none"
-              stroke={accent}
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={dashOffset}
-              transform="rotate(-90 19 19)"
-            />
-          </svg>
-          <RingLabel>{pct}%</RingLabel>
-        </RingBox>
-
         <FootprintMeta>
-          <FootprintTitle>
-            아카이브 커버리지 {filled}/{total}개 도메인 · 누적{' '}
-            {totalRecords.toLocaleString('ko-KR')}건
-          </FootprintTitle>
           {missingChips.length > 0 ? (
             <MissingRow>
-              <span>미입력 보완:</span>
-              {missingChips.slice(0, 6).map((chip) => (
+              <FootprintLeadLabel>더 채울 수 있는 기록</FootprintLeadLabel>
+              {missingChips.slice(0, 10).map((chip) => (
                 <MissingChipBtn
                   key={chip.key}
                   type="button"
@@ -397,23 +777,27 @@ export function ArchiveFootprintBar({
                   <FiPlus size={10} /> {chip.label}
                 </MissingChipBtn>
               ))}
-              {missingChips.length > 6 ? (
-                <MoreSpan>+{missingChips.length - 6}</MoreSpan>
+              {missingChips.length > 10 ? (
+                <MoreSpan>+{missingChips.length - 10}</MoreSpan>
               ) : null}
             </MissingRow>
           ) : (
-            <MissingRow>모든 핵심 도메인 기록이 채워져 있습니다.</MissingRow>
+            <MissingRow>
+              <FootprintLeadLabel>
+                주요 도메인 기록 {totalRecords.toLocaleString('ko-KR')}건 수록됨
+              </FootprintLeadLabel>
+            </MissingRow>
           )}
         </FootprintMeta>
       </FootprintLeft>
 
-      {recentActivity.length > 0 ? (
+      {uniqueRecent.length > 0 ? (
         <FootprintRight>
           <TickerHeader>
-            <FiClock size={11} /> 최근 기록
+            <FiClock size={11} /> 최근 편집
           </TickerHeader>
           <TickerItems>
-            {recentActivity.slice(0, 3).map((act) => (
+            {uniqueRecent.map((act) => (
               <TickerBtn
                 key={act.id}
                 type="button"
@@ -431,16 +815,24 @@ export function ArchiveFootprintBar({
   )
 }
 
+const FootprintLeadLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  margin-right: 4px;
+  white-space: nowrap;
+`
+
 const FootprintCard = styled.footer`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 14px 20px;
-  padding: 12px 16px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 20px 0 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
 `
 
 const FootprintLeft = styled.div`
@@ -497,20 +889,29 @@ const MissingRow = styled.div`
 const MissingChipBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 1.5px 7px;
-  border-radius: 5px;
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  gap: 3px;
+  padding: 3.5px 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(15, 23, 42, 0.07)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'};
   color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    color ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease;
 
   &:hover {
-    border-style: solid;
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
     color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
@@ -546,16 +947,26 @@ const TickerItems = styled.div`
 const TickerBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  max-width: 200px;
-  padding: 3px 8px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  gap: 6px;
+  max-width: 210px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(15, 23, 42, 0.06)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'};
   color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
   font-size: 11px;
   cursor: pointer;
+  transition: border-color ${MOTION.fast} ease;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  }
 
   .label {
     overflow: hidden;
@@ -1160,13 +1571,15 @@ export function SovereignYieldCurveSvg({
       ? '#fb7185'
       : '#e11d48'
     : theme.mode === 'dark'
-      ? '#fbbf24'
-      : '#d97706'
+      ? '#10b981'
+      : '#059669'
+  const secondaryStop = inverted ? '#f43f5e' : '#0ea5e9'
+  const yieldGradId = `yc-${curve.year}`
 
   const pathD = curve.pts
     .map(
-      (p, idx) =>
-        `${idx === 0 ? 'M' : 'L'} ${toX(p.pos).toFixed(1)} ${toY(p.val).toFixed(1)}`,
+      (pt, idx) =>
+        `${idx === 0 ? 'M' : 'L'} ${toX(pt.pos).toFixed(1)} ${toY(pt.val).toFixed(1)}`,
     )
     .join(' ')
   const areaD = `${pathD} L ${toX(maxPos).toFixed(1)} 94 L ${toX(minPos).toFixed(1)} 94 Z`
@@ -1175,12 +1588,18 @@ export function SovereignYieldCurveSvg({
     <YieldCurveWrap>
       <YieldCurveSvgBox style={{ height }}>
         <svg viewBox="0 0 100 96" preserveAspectRatio="none" aria-hidden>
-          <path d={areaD} fill={stroke} fillOpacity="0.13" />
+          <defs>
+            <linearGradient id={yieldGradId} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor={secondaryStop} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={stroke} stopOpacity="0.04" />
+            </linearGradient>
+          </defs>
+          <path d={areaD} fill={`url(#${yieldGradId})`} />
           <path
             d={pathD}
             fill="none"
             stroke={stroke}
-            strokeWidth="1.8"
+            strokeWidth="2.1"
             vectorEffect="non-scaling-stroke"
           />
           {curve.pts.map((pt) => (
@@ -1188,7 +1607,7 @@ export function SovereignYieldCurveSvg({
               key={pt.code}
               d={`M ${toX(pt.pos).toFixed(1)} ${toY(pt.val).toFixed(1)} l 0 0.01`}
               stroke={stroke}
-              strokeWidth="5"
+              strokeWidth="5.5"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
             >
@@ -1265,7 +1684,6 @@ export function CenturyEventMatrixAndMilestones({
   domainBreakdown,
   milestones = [],
   onSelectCentury,
-  onSelectCell,
   onSelectEvent,
 }: {
   buckets: CenturyDomainBucket[]
@@ -1276,186 +1694,207 @@ export function CenturyEventMatrixAndMilestones({
   onSelectEvent?: (eventId: string) => void
 }) {
   const theme = useTheme()
-  const [viewMode, setViewMode] = useState<'bars' | 'matrix'>('matrix')
 
-  const topDomains = useMemo(
-    () => domainBreakdown.filter((d) => d.count > 0).slice(0, 6),
-    [domainBreakdown],
-  )
-  const maxCellCount = useMemo(() => {
-    let max = 1
-    for (const b of buckets) {
-      for (const d of topDomains) {
-        const v = b.domains[d.domain] ?? 0
-        if (v > max) max = v
+  const domainSlices = useMemo<SegmentSlice[]>(() => {
+    const totalCount = domainBreakdown.reduce(
+      (sumAcc, item) => sumAcc + item.count,
+      0,
+    )
+    return domainBreakdown.slice(0, 6).map((item) => {
+      const pct =
+        totalCount > 0 ? Math.round((item.count / totalCount) * 100) : 0
+      return {
+        key: item.domain,
+        label: domainLabel(item.domain),
+        value: item.count,
+        color: domainAccent(item.domain, theme.mode),
+        meta: `${item.count}건 (${pct}%)`,
       }
-    }
-    return max
-  }, [buckets, topDomains])
-
-  /*
-   * 히트맵 열 = 처음 세기부터 마지막 세기까지 빠짐없이. 예전엔 사건이 있는 세기만 열로 세워
-   * 4·5·6·8c처럼 7c가 빠진 채 붙어, 세기 사이 간격이 실제와 다르게 읽혔다. 빈 세기는 빈 칸으로 둔다.
-   * 범위가 너무 넓으면(MAX_CENTURY_COLUMNS 초과) 예전처럼 있는 세기만.
-   */
-  const columns = useMemo(() => {
-    if (buckets.length === 0) return buckets
-    const sorted = [...buckets].sort((left, right) => left.century - right.century)
-    const first = sorted[0].century
-    const last = sorted[sorted.length - 1].century
-    const span = last - first + 1 - (first < 0 && last > 0 ? 1 : 0)
-    if (span > MAX_CENTURY_COLUMNS) return sorted
-    const byCentury = new Map(sorted.map((bucket) => [bucket.century, bucket]))
-    const filled: CenturyDomainBucket[] = []
-    for (let century = first; century <= last; century += 1) {
-      if (century === 0) continue // 기원전 1세기 다음은 1세기
-      filled.push(byCentury.get(century) ?? { century, total: 0, domains: {} })
-    }
-    return filled
-  }, [buckets])
+    })
+  }, [domainBreakdown, theme.mode])
 
   if (buckets.length === 0 && milestones.length === 0) return null
 
+  const hasBoth = buckets.length > 0 && milestones.length > 0
+  const visibleMilestones = milestones.slice(0, 5)
+  const topDomainSlice = domainSlices[0] ?? null
+  const totalDomainEvents = domainBreakdown.reduce(
+    (sumAcc, item) => sumAcc + item.count,
+    0,
+  )
+  const topDomainSharePct =
+    topDomainSlice && totalDomainEvents > 0
+      ? Math.round((topDomainSlice.value / totalDomainEvents) * 100)
+      : null
+
   return (
-    <EventMatrixContainer>
+    <EventMatrixContainer $split={hasBoth}>
       {buckets.length > 0 && (
-        <>
+        <EventChartPane>
           <BentoSubLabel>
-            <span>세기별 역사 사건 밀도 · 분야 매트릭스</span>
-            <MatrixModeSwitch>
-              <MatrixModeBtn
-                type="button"
-                $active={viewMode === 'matrix'}
-                onClick={() => setViewMode('matrix')}
-              >
-                시대×분야 히트맵
-              </MatrixModeBtn>
-              <MatrixModeBtn
-                type="button"
-                $active={viewMode === 'bars'}
-                onClick={() => setViewMode('bars')}
-              >
-                스택 히스토그램
-              </MatrixModeBtn>
-            </MatrixModeSwitch>
+            <span>시대 · 분야별 사건 비중</span>
+            {buckets.length >= 2 ? (
+              <span>
+                {formatCenturyCol(buckets[0].century)} –{' '}
+                {formatCenturyCol(buckets[buckets.length - 1].century)}
+              </span>
+            ) : null}
           </BentoSubLabel>
 
-          {viewMode === 'bars' || topDomains.length <= 1 ? (
-            <StackedCenturyDomainChart
-              buckets={buckets}
-              domainBreakdown={domainBreakdown}
-              onSelectCentury={onSelectCentury}
-            />
-          ) : (
-            <HeatmapScrollWrap>
-              <HeatmapTable>
-                <thead>
-                  <tr>
-                    <th className="dom-head">분야 \ 세기</th>
-                    {columns.map((bucket) => (
-                      <th key={bucket.century}>
-                        <HeatmapCenturyBtn
-                          type="button"
-                          onClick={() => onSelectCentury?.(bucket.century)}
-                          title={`${formatCenturyCol(bucket.century)} 사건 보기 (${bucket.total}건)`}
-                        >
-                          {formatCenturyCol(bucket.century)}
-                        </HeatmapCenturyBtn>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {topDomains.map((dom) => {
-                    const color = domainAccent(dom.domain, theme.mode)
-                    return (
-                      <tr key={dom.domain}>
-                        <td className="dom-cell">
-                          <span
-                            className="dot"
-                            style={{ background: color }}
-                          />
-                          <span>{domainLabel(dom.domain)}</span>
-                          <small>{dom.count}</small>
-                        </td>
-                        {columns.map((bucket) => {
-                          const cnt = bucket.domains[dom.domain] ?? 0
-                          const alpha =
-                            cnt > 0
-                              ? 0.18 + (cnt / maxCellCount) * 0.72
-                              : 0
-                          return (
-                            <td key={bucket.century}>
-                              <HeatmapCellBtn
-                                type="button"
-                                $empty={cnt === 0}
-                                style={
-                                  cnt > 0
-                                    ? {
-                                        background: color,
-                                        opacity: alpha,
-                                      }
-                                    : undefined
-                                }
-                                onClick={() => {
-                                  if (onSelectCell) {
-                                    onSelectCell(bucket.century, dom.domain)
-                                  } else {
-                                    onSelectCentury?.(bucket.century)
-                                  }
-                                }}
-                                title={`${formatCenturyCol(bucket.century)} · ${domainLabel(dom.domain)}: ${cnt}건 (클릭 시 세기+분야 필터)`}
-                              >
-                                {cnt > 0 ? <span>{cnt}</span> : null}
-                              </HeatmapCellBtn>
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </HeatmapTable>
-            </HeatmapScrollWrap>
-          )}
-        </>
+          {domainSlices.length > 0 ? (
+            <EventDomainSummaryBox>
+              <MiniDonutRing
+                slices={domainSlices}
+                size={66}
+                strokeWidth={8.5}
+                centerValue={
+                  topDomainSharePct != null ? `${topDomainSharePct}%` : undefined
+                }
+                centerLabel={topDomainSlice?.label}
+              />
+              <EventDomainPillsCol>
+                {domainSlices.map((sliceItem) => (
+                  <EventDomainPill key={sliceItem.key}>
+                    <i style={{ background: sliceItem.color }} />
+                    <span>{sliceItem.label}</span>
+                    <strong>{sliceItem.value}</strong>
+                  </EventDomainPill>
+                ))}
+              </EventDomainPillsCol>
+            </EventDomainSummaryBox>
+          ) : null}
+
+          <StackedCenturyDomainChart
+            buckets={buckets}
+            domainBreakdown={domainBreakdown}
+            onSelectCentury={onSelectCentury}
+            hideLegend
+          />
+        </EventChartPane>
       )}
 
-      {milestones.length > 0 && (
-        <MilestoneStripWrap>
+      {visibleMilestones.length > 0 && (
+        <MilestoneStripWrap $split={hasBoth} $noTopBorder={buckets.length === 0}>
           <BentoSubLabel>
-            <span>주요 역사적 분수령 사건 ({milestones.length}선)</span>
-            <span>클릭 시 사건 요약</span>
+            <span>연대기 순 핵심 역사 전환점</span>
+            <span>시간순 흐름 ↓</span>
           </BentoSubLabel>
-          <MilestoneCardsRow>
-            {milestones.map((ms) => (
-              <MilestonePinBtn
-                key={ms.id}
-                type="button"
-                $accentColor={domainAccent(ms.domain, theme.mode)}
-                onClick={() => onSelectEvent?.(ms.id)}
-              >
-                <div className="top">
-                  <span className="yr">{ms.yearLabel}</span>
-                  <span className="dom">{domainLabel(ms.domain)}</span>
-                </div>
-                <strong className="title">{ms.title}</strong>
-                {ms.polityName ? (
-                  <small className="polity">{ms.polityName}</small>
-                ) : null}
-              </MilestonePinBtn>
-            ))}
-          </MilestoneCardsRow>
+          <ChronoSpineList>
+            {visibleMilestones.map((ms) => {
+              const accentHex = domainAccent(ms.domain, theme.mode)
+              const kindBadge =
+                ms.eventTypeLabel || domainLabel(ms.domain)
+              return (
+                <ChronoNodeBtn
+                  key={ms.id}
+                  type="button"
+                  $accentColor={accentHex}
+                  onClick={() => onSelectEvent?.(ms.id)}
+                >
+                  <span className="yr-col">{ms.yearLabel}</span>
+                  <span className="rail-col" aria-hidden="true">
+                    <i className="dot" style={{ background: accentHex }} />
+                  </span>
+                  <div className="content-col">
+                    <div className="meta-line">
+                      <span
+                        className="kind-pill"
+                        style={{
+                          color: accentHex,
+                          background:
+                            theme.mode === 'dark'
+                              ? 'rgba(255,255,255,0.06)'
+                              : 'rgba(15,23,42,0.045)',
+                        }}
+                      >
+                        {domainLabel(ms.domain)} · {kindBadge}
+                      </span>
+                      {ms.polityName ? (
+                        <small className="polity">{ms.polityName}</small>
+                      ) : null}
+                    </div>
+                    <strong className="title">{ms.title}</strong>
+                  </div>
+                </ChronoNodeBtn>
+              )
+            })}
+          </ChronoSpineList>
         </MilestoneStripWrap>
       )}
     </EventMatrixContainer>
   )
 }
 
-const EventMatrixContainer = styled.div`
+const EventMatrixContainer = styled.div<{ $split: boolean }>`
+  display: grid;
+  grid-template-columns: ${({ $split }) =>
+    $split ? 'minmax(290px, 0.98fr) minmax(0, 1.22fr)' : 'minmax(0, 1fr)'};
+  gap: ${({ $split }) => ($split ? '22px' : '14px')};
+  align-items: start;
+
+  @media (max-width: 960px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+`
+
+const EventChartPane = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
+`
+
+const EventDomainSummaryBox = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.03)'
+      : 'rgba(15, 23, 42, 0.024)'};
+`
+
+const EventDomainPillsCol = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  min-width: 0;
+  flex: 1;
+`
+
+const EventDomainPill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.045)'
+      : '#ffffff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(15, 23, 42, 0.06)'};
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  strong {
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+    ${DIGIT_DISPLAY}
+  }
 `
 
 const MatrixModeSwitch = styled.span`
@@ -1575,74 +2014,150 @@ const HeatmapCellBtn = styled.button<{ $empty: boolean }>`
   }
 `
 
-const MilestoneStripWrap = styled.div`
+const MilestoneStripWrap = styled.div<{
+  $split?: boolean
+  $noTopBorder?: boolean
+}>`
   display: flex;
   flex-direction: column;
   gap: 7px;
-  padding-top: 8px;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  min-width: 0;
+  padding-top: ${({ $split, $noTopBorder }) =>
+    $split || $noTopBorder ? 0 : '8px'};
+  padding-left: ${({ $split }) => ($split ? '16px' : '0')};
+  border-top: ${({ $split, $noTopBorder, theme }) =>
+    $split || $noTopBorder ? 'none' : `1px solid ${ledgerHairline(theme.mode)}`};
+  border-left: ${({ $split, theme }) =>
+    $split ? `1px solid ${ledgerHairline(theme.mode)}` : 'none'};
+
+  @media (max-width: 960px) {
+    padding-left: 0;
+    border-left: none;
+    padding-top: ${({ $noTopBorder }) => ($noTopBorder ? 0 : '10px')};
+    border-top: ${({ $noTopBorder, theme }) =>
+      $noTopBorder ? 'none' : `1px solid ${ledgerHairline(theme.mode)}`};
+  }
 `
 
-const MilestoneCardsRow = styled.div`
+const ChronoSpineList = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 73px;
+    top: 16px;
+    bottom: 16px;
+    width: 2px;
+    border-radius: 999px;
+    background: linear-gradient(
+      180deg,
+      #6366f1 0%,
+      #0ea5e9 38%,
+      #10b981 72%,
+      #f59e0b 100%
+    );
+    opacity: 0.45;
+    pointer-events: none;
+  }
+`
+
+const ChronoNodeBtn = styled.button<{ $accentColor: string }>`
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
-  gap: 7px;
-`
-
-const MilestonePinBtn = styled.button<{ $accentColor: string }>`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  padding: 7px 9px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-left: 3px solid ${({ $accentColor }) => $accentColor};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  grid-template-columns: 62px 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 0;
+  padding: 8px 12px 8px 6px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.035)'
+      : 'rgba(15, 23, 42, 0.025)'};
   font-family: inherit;
   text-align: left;
   cursor: pointer;
   min-width: 0;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    transform ${MOTION.fast} ease;
 
   &:hover {
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    border-left-color: ${({ $accentColor }) => $accentColor};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.12)'
+        : 'rgba(79, 70, 229, 0.055)'};
+    transform: translateX(2px);
   }
 
-  .top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-    width: 100%;
-    font-size: 10px;
+  .yr-col {
+    font-size: 11px;
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-align: right;
+    padding-right: 4px;
+    white-space: nowrap;
     ${DIGIT_DISPLAY}
   }
 
-  .yr {
-    font-weight: 800;
-    color: ${({ $accentColor }) => $accentColor};
+  .rail-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px
+        ${({ theme }) => (theme.mode === 'dark' ? '#111827' : '#ffffff')};
+    }
   }
 
-  .dom {
-    color: ${({ theme }) => theme.colors.text.tertiary};
+  .content-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5px;
+    min-width: 0;
+    padding-left: 6px;
   }
 
-  .title {
-    font-size: 11.5px;
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    width: 100%;
+  .meta-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .kind-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 1.5px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 750;
+    white-space: nowrap;
   }
 
   .polity {
     font-size: 10px;
     color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  .title {
+    font-size: 12px;
+    font-weight: 720;
+    color: ${({ theme }) => theme.colors.text.primary};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 `
 
@@ -1660,60 +2175,46 @@ export function FiguresSpotlightBentoCard({
   onOpenPersonsTab: () => void
 }) {
   const theme = useTheme()
-  if (personCount === 0) {
-    return (
-      <EmptyBentoCard
-        title="인물"
-        text="이 국가에 속한 인물을 등록하면 역할·시대 분포와 주요 인물 초상이 여기 모입니다."
-        actionLabel="인물 탭에서 등록"
-        onAction={onOpenPersonsTab}
-      />
-    )
-  }
+  if (personCount === 0 || spotlight.featured.length === 0) return null
 
-  const roleSlices: SegmentSlice[] = [
-    {
-      key: 'rulers',
-      label: '통치 · 국가수반',
-      value: spotlight.roleCounts.rulers,
-      color: ledgerAccent(theme.mode),
-      meta: `${spotlight.roleCounts.rulers}명`,
-    },
-    {
-      key: 'ministers',
-      label: '내각 · 관료 · 장성',
-      value: spotlight.roleCounts.ministers,
-      color: theme.mode === 'dark' ? '#38bdf8' : '#0284c7',
-      meta: `${spotlight.roleCounts.ministers}명`,
-    },
-    {
-      key: 'figures',
-      label: '인물 · 학술 · 기타',
-      value: spotlight.roleCounts.figures,
-      color: theme.mode === 'dark' ? '#34d399' : '#0d9488',
-      meta: `${spotlight.roleCounts.figures}명`,
-    },
-  ].filter((s) => s.value > 0)
-
-  const eraPalette =
-    theme.mode === 'dark'
-      ? ['#a5b4fc', '#38bdf8', '#34d399', '#fbbf24', '#c084fc']
-      : ['#4f46e5', '#0284c7', '#059669', '#d97706', '#7c3aed']
-
-  const eraBarSlices: SegmentSlice[] = spotlight.eraSlices.map((e, idx) => ({
-    key: e.key,
-    label: e.label,
-    value: e.count,
-    color: eraPalette[idx % eraPalette.length],
-    meta: `${e.count}명`,
-  }))
+  const roleSlices = useMemo<SegmentSlice[]>(() => {
+    const list: SegmentSlice[] = []
+    if (spotlight.roleCounts.rulers > 0) {
+      list.push({
+        key: 'rulers',
+        label: '국가수반',
+        value: spotlight.roleCounts.rulers,
+        color: ledgerAccent(theme.mode),
+        meta: `${spotlight.roleCounts.rulers}명`,
+      })
+    }
+    if (spotlight.roleCounts.ministers > 0) {
+      list.push({
+        key: 'ministers',
+        label: '관료·장성',
+        value: spotlight.roleCounts.ministers,
+        color: theme.mode === 'dark' ? '#38bdf8' : '#0284c7',
+        meta: `${spotlight.roleCounts.ministers}명`,
+      })
+    }
+    if (spotlight.roleCounts.figures > 0) {
+      list.push({
+        key: 'figures',
+        label: '학자·인물',
+        value: spotlight.roleCounts.figures,
+        color: theme.mode === 'dark' ? '#94a3b8' : '#64748b',
+        meta: `${spotlight.roleCounts.figures}명`,
+      })
+    }
+    return list
+  }, [spotlight.roleCounts, theme.mode])
 
   return (
-    <BentoCard aria-label="소속 인물 역할·시대 분포 및 주요 인물 초상">
+    <BentoCard aria-label="주요 인물">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>인물</BentoCardTitle>
-          <BentoCardBadge>총 {personCount.toLocaleString('ko-KR')}명</BentoCardBadge>
+          <BentoCardTitle>주요 인물</BentoCardTitle>
+          <BentoCardBadge>{personCount.toLocaleString('ko-KR')}명</BentoCardBadge>
         </BentoCardTitleGroup>
         <BentoHeaderActions>
           <BentoActionBtn type="button" $accent onClick={onOpenPersonsTab}>
@@ -1723,70 +2224,59 @@ export function FiguresSpotlightBentoCard({
       </BentoCardHeader>
 
       <BentoCardBody>
-        <FiguresTopSplit>
-          <MiniDonutRing
-            slices={roleSlices}
-            size={64}
-            strokeWidth={8}
-            centerValue={personCount.toLocaleString('ko-KR')}
-            centerLabel="인물"
-          />
-          <FiguresBarsCol>
-            <StackedSegmentBar slices={roleSlices} height={8} />
-            {eraBarSlices.length > 1 ? (
-              <StackedSegmentBar slices={eraBarSlices} height={6} />
-            ) : null}
-          </FiguresBarsCol>
-        </FiguresTopSplit>
+        {roleSlices.length > 1 ? (
+          <StackedSegmentBar slices={roleSlices} height={7} />
+        ) : null}
 
-        {spotlight.featured.length > 0 && (
-          <>
-            <BentoDivider />
-            <PortraitGrid>
-              {spotlight.featured.slice(0, 8).map((person) => {
-                const img = person.profileImageUrl
-                  ? getUploadImageUrl(person.profileImageUrl)
-                  : null
-                const roleLabel =
-                  person.roleKind === 'ruler'
-                    ? '수반'
-                    : person.roleKind === 'minister'
-                      ? '관료'
-                      : '인물'
-                return (
-                  <PortraitCardBtn
-                    key={person.id}
-                    type="button"
-                    onClick={() => onSelectPerson(person.id)}
-                  >
-                    <PortraitThumb>
-                      {img ? (
-                        <img src={img} alt="" />
-                      ) : (
-                        <FiUser size={13} aria-hidden />
-                      )}
-                    </PortraitThumb>
-                    <PortraitMeta>
-                      <div className="name-row">
-                        <strong>{person.name}</strong>
-                        <span className={`role ${person.roleKind}`}>
-                          {roleLabel}
-                        </span>
-                      </div>
-                      {person.subLabel ? (
-                        <small>{person.subLabel}</small>
-                      ) : null}
-                    </PortraitMeta>
-                  </PortraitCardBtn>
-                )
-              })}
-            </PortraitGrid>
-          </>
-        )}
+        <PortraitGrid>
+          {spotlight.featured.slice(0, 8).map((person) => {
+            const img = person.profileImageUrl
+              ? getUploadImageUrl(person.profileImageUrl)
+              : null
+            const roleLabel =
+              person.roleKind === 'ruler'
+                ? '수반'
+                : person.roleKind === 'minister'
+                  ? '관료'
+                  : '인물'
+            return (
+              <PortraitCardBtn
+                key={person.id}
+                type="button"
+                onClick={() => onSelectPerson(person.id)}
+              >
+                <PortraitThumb>
+                  {img ? (
+                    <img src={img} alt="" />
+                  ) : (
+                    <FiUser size={13} aria-hidden />
+                  )}
+                </PortraitThumb>
+                <PortraitMeta>
+                  <div className="name-row">
+                    <strong>{person.name}</strong>
+                    <span className={`role ${person.roleKind}`}>
+                      {roleLabel}
+                    </span>
+                  </div>
+                  {person.subLabel ? (
+                    <small>{person.subLabel}</small>
+                  ) : null}
+                </PortraitMeta>
+              </PortraitCardBtn>
+            )
+          })}
+        </PortraitGrid>
       </BentoCardBody>
     </BentoCard>
   )
 }
+
+const FiguresRoleMetaText = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
 
 const FiguresTopSplit = styled.div`
   display: flex;

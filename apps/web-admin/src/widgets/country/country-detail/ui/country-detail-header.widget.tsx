@@ -46,7 +46,24 @@ export function CountryDetailHeader({
   fallbackIcon,
 }: CountryDetailHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [flagLoadFailed, setFlagLoadFailed] = useState(false)
   const kebabRef = useRef<HTMLDivElement>(null)
+
+  const isoCode = country.isoCode?.trim() || null
+
+  const resolvedFlagImageUrl = useMemo(() => {
+    if (country.thumbnailUrl) {
+      return getUploadImageUrl(country.thumbnailUrl)
+    }
+    if (isoCode && /^[a-zA-Z]{2}$/.test(isoCode)) {
+      return `https://flagcdn.com/${isoCode.toLowerCase()}.svg`
+    }
+    return null
+  }, [country.thumbnailUrl, isoCode])
+
+  useEffect(() => {
+    setFlagLoadFailed(false)
+  }, [resolvedFlagImageUrl, country.id])
 
   // 메뉴 열림 상태에서 바깥 클릭·Esc로 닫기
   useEffect(() => {
@@ -70,7 +87,6 @@ export function CountryDetailHeader({
   const { data: currencies = [] } = useCurrencies()
   const { data: languages = [] } = useLanguages()
 
-  const isoCode = country.isoCode?.trim() || null
   const trimmedFullName = country.fullName?.trim() || null
   const fullName =
     trimmedFullName && trimmedFullName !== country.name.trim()
@@ -98,18 +114,42 @@ export function CountryDetailHeader({
     return found.name
   }, [country.languageId, languages])
 
+  const activeFlagUrl =
+    resolvedFlagImageUrl && !flagLoadFailed ? resolvedFlagImageUrl : null
+
   return (
     <S.HeroBand
       as={motion.div}
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      $historical={country.type === 'historical'}
     >
-      <S.HeroFlagTile aria-hidden={!country.thumbnailUrl}>
-        {country.thumbnailUrl ? (
+      {/* 대형 국기 · 엠블럼 그라데이션 백드롭 레이어 */}
+      <S.HeroBackdropWrap aria-hidden="true">
+        {activeFlagUrl ? (
+          <>
+            <S.HeroFlagColorGlow src={activeFlagUrl} alt="" />
+            <S.HeroFlagBannerImg
+              src={activeFlagUrl}
+              alt=""
+              onError={() => setFlagLoadFailed(true)}
+            />
+          </>
+        ) : country.flagEmoji ? (
+          <S.HeroWatermarkGlyph>{country.flagEmoji}</S.HeroWatermarkGlyph>
+        ) : (
+          <S.HeroHistoricalAura />
+        )}
+        <S.HeroGradientVeil />
+      </S.HeroBackdropWrap>
+
+      <S.HeroFlagTile aria-hidden={!activeFlagUrl}>
+        {activeFlagUrl ? (
           <img
-            src={getUploadImageUrl(country.thumbnailUrl)}
+            src={activeFlagUrl}
             alt={`${country.name} 국기`}
+            onError={() => setFlagLoadFailed(true)}
           />
         ) : country.flagEmoji ? (
           country.flagEmoji

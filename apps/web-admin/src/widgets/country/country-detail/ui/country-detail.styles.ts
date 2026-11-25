@@ -3063,37 +3063,138 @@ export const PremiumPercentageBadge = styled.div<{ positive?: boolean }>`
  * 대신한다 — 이쪽은 71/71 전부 가지고 있다. 밴드는 96px로 줄여 그 자리를 본문에 넘긴다.
  * (역사 국가 상세는 여전히 옛 MiniFlagWrapper 계열을 쓴다 — 건드리지 않는다.)
  */
-export const HeroBand = styled.div`
+export const HeroBand = styled.div<{ $historical?: boolean }>`
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 16px;
-  min-height: 84px;
-  padding: 16px clamp(20px, 2.5vw, 32px);
-  border-bottom: 1px solid ${({ theme }) => ledgerInkLine(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  gap: 22px;
+  min-height: 168px;
+  padding: 32px clamp(26px, 3.2vw, 42px);
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(15, 23, 42, 0.07)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#0f172a' : '#f8fafc'};
 
   @media (max-width: 768px) {
-    padding: 12px 16px;
-    gap: 12px;
+    min-height: 132px;
+    padding: 22px 18px;
+    gap: 14px;
   }
+`
+
+export const HeroBackdropWrap = styled.div`
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+`
+
+/** 국기 고유 색상을 추출해 좌측 국가명 뒤까지 은은한 그라데이션 광채로 번지게 하는 블러 레이어 */
+export const HeroFlagColorGlow = styled.img`
+  position: absolute;
+  top: -40%;
+  left: -4%;
+  width: 88%;
+  height: 180%;
+  object-fit: cover;
+  filter: blur(56px) saturate(1.75);
+  opacity: ${({ theme }) => (theme.mode === 'dark' ? 0.32 : 0.24)};
+  transform: scale(1.15);
+`
+
+/** 국가명 뒤편까지 폭넓게 펼쳐지며 좌측으로 부드럽게 그라데이션 페이드되는 초대형 국기 배너 */
+export const HeroFlagBannerImg = styled.img`
+  position: absolute;
+  top: -22%;
+  right: -3%;
+  width: min(82%, 820px);
+  height: 144%;
+  object-fit: cover;
+  object-position: center;
+  opacity: ${({ theme }) => (theme.mode === 'dark' ? 0.48 : 0.46)};
+  filter: saturate(1.1) contrast(1.03);
+  transform: perspective(960px) rotateY(-5deg) scale(1.04);
+  mask-image: linear-gradient(
+    to left,
+    rgba(0, 0, 0, 0.98) 0%,
+    rgba(0, 0, 0, 0.78) 36%,
+    rgba(0, 0, 0, 0.34) 72%,
+    rgba(0, 0, 0, 0.08) 92%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to left,
+    rgba(0, 0, 0, 0.98) 0%,
+    rgba(0, 0, 0, 0.78) 36%,
+    rgba(0, 0, 0, 0.34) 72%,
+    rgba(0, 0, 0, 0.08) 92%,
+    transparent 100%
+  );
+`
+
+export const HeroWatermarkGlyph = styled.div`
+  position: absolute;
+  right: 3%;
+  top: 50%;
+  transform: translateY(-50%) rotate(-6deg);
+  font-size: 168px;
+  line-height: 1;
+  opacity: ${({ theme }) => (theme.mode === 'dark' ? 0.2 : 0.16)};
+  filter: saturate(1.15);
+`
+
+export const HeroHistoricalAura = styled.div`
+  position: absolute;
+  inset: 0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'radial-gradient(ellipse 74% 130% at 78% 50%, rgba(99, 102, 241, 0.28), rgba(217, 119, 6, 0.12) 50%, transparent 84%)'
+      : 'radial-gradient(ellipse 74% 130% at 78% 50%, rgba(99, 102, 241, 0.16), rgba(245, 158, 11, 0.09) 50%, transparent 84%)'};
+`
+
+/** 좌측 국가명 가독성을 보장하면서 뒷배경 대형 국기와 그라데이션으로 어우러지는 베일 */
+export const HeroGradientVeil = styled.div`
+  position: absolute;
+  inset: 0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(96deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.76) 32%, rgba(15, 23, 42, 0.36) 68%, rgba(15, 23, 42, 0.18) 100%), linear-gradient(180deg, rgba(15, 23, 42, 0.08) 0%, rgba(15, 23, 42, 0.5) 100%)'
+      : 'linear-gradient(96deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.76) 32%, rgba(255, 255, 255, 0.28) 68%, rgba(255, 255, 255, 0.1) 100%), linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(248, 250, 252, 0.46) 100%)'};
 `
 
 /** 국기 타일 — 썸네일이면 이미지, 없으면 이모지, 그것도 없으면 이니셜 */
 export const HeroFlagTile = styled.div`
+  position: relative;
+  z-index: 1;
   flex-shrink: 0;
-  width: 64px;
-  height: 44px;
-  border-radius: ${RADIUS.SM};
+  width: 76px;
+  height: 52px;
+  border-radius: 12px;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 32px;
   line-height: 1;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(30, 41, 59, 0.85)'
+      : 'rgba(255, 255, 255, 0.92)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.14)'
+        : 'rgba(15, 23, 42, 0.1)'};
   color: ${({ theme }) => theme.colors.text.tertiary};
-  box-shadow: none;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 8px 24px -6px rgba(0, 0, 0, 0.55)'
+      : '0 8px 22px -6px rgba(15, 23, 42, 0.16)'};
 
   img {
     width: 100%;
@@ -3102,41 +3203,43 @@ export const HeroFlagTile = styled.div`
   }
 
   @media (max-width: 768px) {
-    width: 54px;
-    height: 36px;
-    font-size: 24px;
+    width: 60px;
+    height: 42px;
+    font-size: 26px;
   }
 `
 
 /** 이니셜 폴백 — 이모지도 없는 국가 */
 export const HeroFlagInitial = styled.span`
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   letter-spacing: 0.03em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const HeroTitleCol = styled.div`
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
   flex: 1;
 `
 
 export const HeroName = styled.h1`
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  font-size: clamp(34px, 3.6vw, 44px);
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
   color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 
   @media (max-width: 768px) {
-    font-size: 20px;
+    font-size: 28px;
   }
 `
 
@@ -3145,66 +3248,86 @@ export const HeroMetaRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
-  font-size: 12.5px;
-  color: ${metaText};
+  gap: 6px 9px;
+  font-size: 13.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
   min-width: 0;
 `
 
 export const HeroLocalName = styled.span`
-  font-weight: 500;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 320px;
+  max-width: 360px;
 `
 
 export const HeroMetaChip = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
-  border-radius: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 650;
   letter-spacing: 0.01em;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(15, 23, 42, 0.62)'
+      : 'rgba(255, 255, 255, 0.78)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(15, 23, 42, 0.07)'};
+  backdrop-filter: blur(8px);
 `
 
 export const HeroMetaSep = styled.span`
-  opacity: 0.35;
+  opacity: 0.4;
 `
 
 /** 우측 액션 묶음 — 케밥 메뉴는 흐름 안에 두어 밴드 높이에 묶이지 않는다 */
 export const HeroActions = styled.div`
+  position: relative;
+  z-index: 2;
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 `
 
-/** 헤더 우측 인라인 정보 수정 버튼 — 사건 상세 EditIconButton 규격 */
+/** 헤더 우측 인라인 정보 수정 버튼 — 글래스모피즘 필 버튼 */
 export const HeroEditButton = styled.button`
   appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 11px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.16)'
+        : 'rgba(15, 23, 42, 0.12)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(15, 23, 42, 0.72)'
+      : 'rgba(255, 255, 255, 0.86)'};
+  backdrop-filter: blur(10px);
+  color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 650;
   white-space: nowrap;
   cursor: pointer;
+  box-shadow: 0 4px 12px -4px rgba(15, 23, 42, 0.12);
   transition:
     background ${MOTION.fast} ease,
     border-color ${MOTION.fast} ease,
-    color ${MOTION.fast} ease;
+    transform ${MOTION.fast} ease;
 
   svg {
     width: 13px;
@@ -3213,9 +3336,12 @@ export const HeroEditButton = styled.button`
   }
 
   &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
-    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(30, 41, 59, 0.92)'
+        : '#ffffff'};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    transform: translateY(-0.5px);
   }
 
   &:focus-visible {

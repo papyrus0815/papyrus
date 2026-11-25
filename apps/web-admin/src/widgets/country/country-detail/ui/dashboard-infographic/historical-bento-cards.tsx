@@ -87,6 +87,10 @@ export function HistoricalHeroFlowCard({
   onEditBasic,
   founding,
   rulersCount,
+  rulers = [],
+  activeTenureId,
+  onFocusRulerTenure,
+  onOpenRulersTab,
   politicalSystems,
   onOpenGovernment,
   onOpenSuccession,
@@ -111,6 +115,10 @@ export function HistoricalHeroFlowCard({
   onEditBasic?: () => void
   founding: unknown
   rulersCount: number
+  rulers?: HistoricalRulerItem[]
+  activeTenureId?: string | null
+  onFocusRulerTenure?: (tenureId: string) => void
+  onOpenRulersTab?: () => void
   politicalSystems: PoliticalSystem[]
   onOpenGovernment: () => void
   onOpenSuccession: () => void
@@ -118,6 +126,72 @@ export function HistoricalHeroFlowCard({
   onSelectEvent: (eventId: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
+
+  const {
+    uniqueRulerCount,
+    inferredFirstRuler,
+    inferredLastRuler,
+    longestReignInfo,
+  } = useMemo(() => {
+    const byPerson = new Map<
+      string,
+      HistoricalRulerItem & { minStart: number | null; maxEnd: number | null }
+    >()
+    for (const ruler of rulers) {
+      const key = ruler.personId
+        ? `pid:${ruler.personId}`
+        : `nm:${ruler.personName.replace(/\s+/g, '')}`
+      const existing = byPerson.get(key)
+      if (!existing) {
+        byPerson.set(key, {
+          ...ruler,
+          minStart: ruler.startYear,
+          maxEnd: ruler.endYear,
+        })
+      } else {
+        if (
+          ruler.startYear != null &&
+          (existing.minStart == null || ruler.startYear < existing.minStart)
+        ) {
+          existing.minStart = ruler.startYear
+        }
+        if (
+          ruler.endYear != null &&
+          (existing.maxEnd == null || ruler.endYear > existing.maxEnd)
+        ) {
+          existing.maxEnd = ruler.endYear
+        }
+        if (!existing.profileImageUrl && ruler.profileImageUrl) {
+          existing.profileImageUrl = ruler.profileImageUrl
+        }
+      }
+    }
+    const allMerged = [...byPerson.values()]
+    const hosPool = allMerged.filter((item) => item.axis === 'HEAD_OF_STATE')
+    const anchorPool = (hosPool.length > 0 ? hosPool : allMerged).sort(
+      (left, right) =>
+        (left.minStart ?? 99999) - (right.minStart ?? 99999) ||
+        (left.maxEnd ?? 99999) - (right.maxEnd ?? 99999),
+    )
+
+    let longest: { name: string; years: number } | null = null
+    for (const item of anchorPool) {
+      if (item.minStart != null && item.maxEnd != null) {
+        const yrs = Math.max(0, item.maxEnd - item.minStart)
+        if (yrs > 0 && (!longest || yrs > longest.years)) {
+          longest = { name: item.personName, years: yrs }
+        }
+      }
+    }
+
+    return {
+      uniqueRulerCount: allMerged.length,
+      inferredFirstRuler: anchorPool[0] ?? null,
+      inferredLastRuler:
+        anchorPool.length >= 2 ? anchorPool[anchorPool.length - 1] : null,
+      longestReignInfo: longest,
+    }
+  }, [rulers])
 
   const typedFounding = founding as {
     foundingNote?: string | null
@@ -138,20 +212,48 @@ export function HistoricalHeroFlowCard({
     ? GOVERNMENT_FORM_LABEL[currentSystem.governmentForm]
     : stateTypeLabel
 
+  const explicitFirst =
+    typedFounding?.firstRulers?.find((r) => Boolean(r?.name)) ??
+    typedFounding?.founders?.find((r) => Boolean(r?.name)) ??
+    null
+  const explicitLast =
+    typedFounding?.lastRulers?.find((r) => Boolean(r?.name)) ??
+    typedFounding?.dissolvers?.find((r) => Boolean(r?.name)) ??
+    null
+
   const firstRuler =
-    typedFounding?.firstRulers?.[0] ?? typedFounding?.founders?.[0] ?? null
+    explicitFirst ??
+    (inferredFirstRuler
+      ? {
+          personId: inferredFirstRuler.personId ?? undefined,
+          name: inferredFirstRuler.personName,
+          imageUrl: inferredFirstRuler.profileImageUrl,
+        }
+      : null)
   const lastRuler =
-    typedFounding?.lastRulers?.[0] ?? typedFounding?.dissolvers?.[0] ?? null
+    explicitLast ??
+    (inferredLastRuler
+      ? {
+          personId: inferredLastRuler.personId ?? undefined,
+          name: inferredLastRuler.personName,
+          imageUrl: inferredLastRuler.profileImageUrl,
+        }
+      : null)
+
+  const startYearText = periodLabel.split(/[–~]/)[0]?.trim() || null
+  const endYearText = /[–~]/.test(periodLabel)
+    ? periodLabel.split(/[–~]/)[1]?.trim() || null
+    : null
 
   const hasNarrative = Boolean(
     savedDescription?.trim() || nameOrigin?.trim() || historyText?.trim(),
   )
 
   return (
-    <BentoCard aria-label={`${countryName} 정체성 및 흥망 흐름`}>
+    <BentoCard aria-label={`${countryName} 국가 형태 및 통치 요약`}>
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>정치체 정체성 · 흥망성쇠 타임라인</BentoCardTitle>
+          <BentoCardTitle>국가 형태 · 통치 요약</BentoCardTitle>
           {entityKindLabel ? (
             <BentoCardBadge>{entityKindLabel}</BentoCardBadge>
           ) : null}
@@ -162,24 +264,23 @@ export function HistoricalHeroFlowCard({
           ) : null}
         </BentoCardTitleGroup>
         <BentoHeaderActions>
-          {!isEditorOpen ? (
-            <BentoActionBtn type="button" onClick={onOpenEditor}>
-              <FiEdit2 size={11} /> {savedDescription ? '개요 편집' : '개요 작성'}
-            </BentoActionBtn>
-          ) : null}
-          {onEditBasic ? (
-            <BentoActionBtn type="button" onClick={onEditBasic}>
-              기본 제원
-            </BentoActionBtn>
-          ) : null}
+          <BentoActionBtn
+            type="button"
+            $accent
+            onClick={onOpenRulersTab ?? onOpenGovernment}
+          >
+            정부·통치자 <FiArrowUpRight size={11} />
+          </BentoActionBtn>
         </BentoHeaderActions>
       </BentoCardHeader>
 
       <BentoCardBody>
-        {/* 건국 ──▶ 존속·체제 ──▶ 멸망·계승 3단계 플로우 스트립 */}
+        {/* 초대 통치자 ──▶ 존속·통치 요약(총 N대·최장 재위) ──▶ 마지막 통치자 3점 앵커 */}
         <MilestoneFlowGrid>
           <MilestoneStep>
-            <MilestoneTag $tone="start">성립 · 건국</MilestoneTag>
+            <MilestoneTag $tone="start">
+              초대 · 건국{startYearText ? ` (${startYearText})` : ''}
+            </MilestoneTag>
             <MilestoneMain>
               {firstRuler?.name ? (
                 <InlinePersonBtn
@@ -188,10 +289,18 @@ export function HistoricalHeroFlowCard({
                     firstRuler.personId && onSelectPerson(firstRuler.personId)
                   }
                 >
-                  <FiUser size={11} /> {firstRuler.name}
+                  {'imageUrl' in firstRuler && firstRuler.imageUrl ? (
+                    <AnchorMiniAvatar
+                      src={getUploadImageUrl(firstRuler.imageUrl)}
+                      alt=""
+                    />
+                  ) : (
+                    <FiUser size={11.5} />
+                  )}
+                  {firstRuler.name}
                 </InlinePersonBtn>
               ) : (
-                <span>{periodLabel.split('~')[0]?.trim() || '시점 미상'}</span>
+                <span>{startYearText || '시점 미상'}</span>
               )}
             </MilestoneMain>
             {typedFounding?.foundedEvent ? (
@@ -204,7 +313,7 @@ export function HistoricalHeroFlowCard({
             ) : typedFounding?.foundingNote ? (
               <MilestoneSubText>{typedFounding.foundingNote}</MilestoneSubText>
             ) : (
-              <MilestoneSubText>시조 · 건국 배경</MilestoneSubText>
+              <MilestoneSubText>창건 · 시조 기록</MilestoneSubText>
             )}
           </MilestoneStep>
 
@@ -212,7 +321,12 @@ export function HistoricalHeroFlowCard({
             <FiArrowRight size={14} />
           </FlowArrowBox>
 
-          <MilestoneStep $highlight onClick={onOpenGovernment} role="button" tabIndex={0}>
+          <MilestoneStep
+            $highlight
+            onClick={onOpenRulersTab ?? onOpenGovernment}
+            role="button"
+            tabIndex={0}
+          >
             <MilestoneTag $tone="mid">존속 · 통치 체제</MilestoneTag>
             <MilestoneMain>
               <strong>
@@ -227,7 +341,14 @@ export function HistoricalHeroFlowCard({
                 currentSystem?.stateStructure
                   ? STATE_STRUCTURE_LABEL[currentSystem.stateStructure]
                   : null,
-                rulersCount > 0 ? `통치자 ${rulersCount}명` : null,
+                uniqueRulerCount > 0
+                  ? `수반 총 ${uniqueRulerCount}명`
+                  : rulersCount > 0
+                    ? `수반 ${rulersCount}명`
+                    : null,
+                longestReignInfo
+                  ? `최장 ${longestReignInfo.name}(${longestReignInfo.years}년)`
+                  : null,
               ]
                 .filter(Boolean)
                 .join(' · ') || periodLabel}
@@ -239,7 +360,9 @@ export function HistoricalHeroFlowCard({
           </FlowArrowBox>
 
           <MilestoneStep onClick={onOpenSuccession} role="button" tabIndex={0}>
-            <MilestoneTag $tone="end">종식 · 계승</MilestoneTag>
+            <MilestoneTag $tone="end">
+              마지막 · 종식{endYearText ? ` (${endYearText})` : ''}
+            </MilestoneTag>
             <MilestoneMain>
               {lastRuler?.name ? (
                 <InlinePersonBtn
@@ -249,14 +372,18 @@ export function HistoricalHeroFlowCard({
                     if (lastRuler.personId) onSelectPerson(lastRuler.personId)
                   }}
                 >
-                  <FiUser size={11} /> {lastRuler.name}
+                  {'imageUrl' in lastRuler && lastRuler.imageUrl ? (
+                    <AnchorMiniAvatar
+                      src={getUploadImageUrl(lastRuler.imageUrl)}
+                      alt=""
+                    />
+                  ) : (
+                    <FiUser size={11.5} />
+                  )}
+                  {lastRuler.name}
                 </InlinePersonBtn>
               ) : (
-                <span>
-                  {periodLabel.includes('~')
-                    ? periodLabel.split('~')[1]?.trim() || '종료'
-                    : '계승 탭 보기'}
-                </span>
+                <span>{endYearText || '계승 상세'}</span>
               )}
             </MilestoneMain>
             {typedFounding?.dissolvedEvent ? (
@@ -274,7 +401,7 @@ export function HistoricalHeroFlowCard({
                 {typedFounding.dissolutionNote}
               </MilestoneSubText>
             ) : (
-              <MilestoneSubText>후신 정치체 계승 보기 →</MilestoneSubText>
+              <MilestoneSubText>후신 국가 계승 보기 →</MilestoneSubText>
             )}
           </MilestoneStep>
         </MilestoneFlowGrid>
@@ -324,14 +451,23 @@ export function HistoricalHeroFlowCard({
                 </PlainProse>
               ) : null}
             </ProseClampArea>
-            <ToggleClampBtn
-              type="button"
-              onClick={() => setExpanded((prev) => !prev)}
-            >
-              {expanded ? '서술 접기' : '서술 전문 펼치기'}
-            </ToggleClampBtn>
+            <NarrativeActionRow>
+              <ToggleClampBtn
+                type="button"
+                onClick={() => setExpanded((prev) => !prev)}
+              >
+                {expanded ? '서술 접기' : '서술 전문 펼치기'}
+              </ToggleClampBtn>
+              <ToggleClampBtn type="button" onClick={onOpenEditor}>
+                <FiEdit2 size={10.5} /> 개요 편집
+              </ToggleClampBtn>
+            </NarrativeActionRow>
           </>
-        ) : null}
+        ) : (
+          <ToggleClampBtn type="button" onClick={onOpenEditor}>
+            <FiEdit2 size={10.5} /> 역사 개요 작성하기
+          </ToggleClampBtn>
+        )}
       </BentoCardBody>
     </BentoCard>
   )
@@ -881,17 +1017,30 @@ const FlowArrowBox = styled.div`
 const MilestoneStep = styled.div<{ $highlight?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  gap: 5px;
+  padding: 12px 14px;
+  border-radius: 16px;
   border: 1px solid
     ${({ theme, $highlight }) =>
       $highlight
-        ? ledgerAccentBorder(theme.mode)
-        : ledgerHairlineStrong(theme.mode)};
+        ? theme.mode === 'dark'
+          ? 'rgba(129, 140, 248, 0.24)'
+          : 'rgba(99, 102, 241, 0.14)'
+        : 'transparent'};
   background: ${({ theme, $highlight }) =>
-    $highlight ? ledgerAccentSubtle(theme.mode) : ledgerSubtleFill(theme.mode)};
+    $highlight
+      ? theme.mode === 'dark'
+        ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(30, 41, 59, 0.45))'
+        : 'linear-gradient(135deg, rgba(238, 242, 255, 0.75), rgba(248, 250, 252, 0.9))'
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.04)'
+        : 'rgba(15, 23, 42, 0.032)'};
   cursor: ${({ onClick }) => (onClick ? 'pointer' : 'default')};
+  transition: transform 0.15s ease;
+
+  &:hover {
+    transform: ${({ onClick }) => (onClick ? 'translateY(-1px)' : 'none')};
+  }
 `
 
 const MilestoneTag = styled.span<{ $tone: 'start' | 'mid' | 'end' }>`
@@ -935,7 +1084,7 @@ const MilestoneSubBtn = styled.button`
 const InlinePersonBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 0;
   border: none;
   background: transparent;
@@ -943,11 +1092,27 @@ const InlinePersonBtn = styled.button`
   font-size: 13.5px;
   font-weight: 800;
   color: ${({ theme }) => theme.colors.text.primary};
+  word-break: keep-all;
+  text-align: left;
   cursor: pointer;
 
   &:hover {
     color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
+`
+
+const AnchorMiniAvatar = styled.img`
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+`
+
+const NarrativeActionRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
 `
 
 const EditorWrap = styled.div`
@@ -1072,31 +1237,37 @@ const SpectrumAxisTicks = styled.div`
 const RulerChipsWrap = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
 `
 
 const RulerChipBtn = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
+  gap: 6px;
+  padding: 4px 10px 4px 5px;
   border-radius: 999px;
   border: 1px solid
     ${({ theme, $active }) =>
       $active
         ? ledgerAccentBorder(theme.mode)
-        : ledgerHairlineStrong(theme.mode)};
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.07)'
+          : 'rgba(15, 23, 42, 0.06)'};
   background: ${({ theme, $active }) =>
-    $active ? ledgerAccentSubtle(theme.mode) : ledgerBackground(theme.mode)};
+    $active
+      ? ledgerAccentSubtle(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.04)'
+        : 'rgba(15, 23, 42, 0.03)'};
   color: ${({ theme, $active }) =>
     $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
   font-family: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   cursor: pointer;
 
   img {
-    width: 15px;
-    height: 15px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     object-fit: cover;
   }

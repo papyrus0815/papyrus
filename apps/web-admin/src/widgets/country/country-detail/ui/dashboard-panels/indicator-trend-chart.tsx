@@ -38,14 +38,14 @@ interface Props {
 /** 관측점을 찍는 상한 — 이보다 촘촘하면 점이 선을 덮어 오히려 안 읽힌다 */
 const SPARSE_POINT_LIMIT = 24
 
-/** 단위별 수치 포맷 — %, $, 명, 세, ‰, t, 무단위(HDI·지니계수 등)를 모두 자연스럽게 읽히도록 */
+/** 단위별 수치 포맷 — %, $, USD, 명, 세, ‰, t, 무단위(HDI·지니계수 등)를 모두 자연스럽게 읽히도록 */
 export function formatMetricValue(
   value: number,
   unit: string,
   compact = false,
 ): string {
   const abs = Math.abs(value)
-  if (unit === '$') {
+  if (unit === '$' || unit === 'USD' || unit === 'USD_CAPITA') {
     const sign = value < 0 ? '-' : ''
     if (compact) {
       if (abs >= 1e12) return `${sign}$${Number((abs / 1e12).toFixed(1))}T`

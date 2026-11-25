@@ -141,12 +141,14 @@ export const DashboardRoot = styled.div`
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 24px clamp(20px, 2.5vw, 32px) 48px;
-  gap: 28px;
+  padding: 20px clamp(24px, 3vw, 38px) 52px;
+  gap: 24px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#0f172a' : '#ffffff'};
 
   @media (max-width: 768px) {
     padding: 16px 16px 32px;
-    gap: 22px;
+    gap: 20px;
   }
 `
 

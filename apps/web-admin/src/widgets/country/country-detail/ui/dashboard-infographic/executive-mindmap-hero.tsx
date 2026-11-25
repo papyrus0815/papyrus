@@ -11,7 +11,7 @@ import {
   FiUser,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled, { css } from 'styled-components'
+import styled, { css, useTheme } from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
@@ -62,10 +62,120 @@ import {
   StackedSegmentBar,
 } from './bento-primitives'
 
-const NODE_HEIGHT = 44
-const NODE_GAP = 8
-const GUTTER = 44
+const NODE_HEIGHT = 54
+const NODE_GAP = 10
+const GUTTER = 62
 const DEFAULT_COLLAPSED_BRANCHES = 14
+
+type MinistryDomainKey = 'security' | 'economy' | 'governance' | 'social'
+
+interface MinistryDomainMeta {
+  key: MinistryDomainKey
+  label: string
+  light: string
+  dark: string
+  softLight: string
+  softDark: string
+}
+
+const MINISTRY_DOMAINS: Record<MinistryDomainKey, MinistryDomainMeta> = {
+  security: {
+    key: 'security',
+    label: '외교 · 안보',
+    light: '#4f46e5',
+    dark: '#818cf8',
+    softLight: 'rgba(79, 70, 229, 0.1)',
+    softDark: 'rgba(129, 140, 248, 0.18)',
+  },
+  economy: {
+    key: 'economy',
+    label: '경제 · 산업',
+    light: '#0d9488',
+    dark: '#2dd4bf',
+    softLight: 'rgba(13, 148, 136, 0.1)',
+    softDark: 'rgba(45, 212, 191, 0.18)',
+  },
+  governance: {
+    key: 'governance',
+    label: '내정 · 사법',
+    light: '#d97706',
+    dark: '#fbbf24',
+    softLight: 'rgba(217, 119, 6, 0.11)',
+    softDark: 'rgba(251, 191, 36, 0.18)',
+  },
+  social: {
+    key: 'social',
+    label: '사회 · 인프라',
+    light: '#0284c7',
+    dark: '#38bdf8',
+    softLight: 'rgba(2, 132, 199, 0.1)',
+    softDark: 'rgba(56, 189, 248, 0.18)',
+  },
+}
+
+const MINISTRY_DOMAIN_ORDER: MinistryDomainKey[] = [
+  'security',
+  'governance',
+  'economy',
+  'social',
+]
+
+function inferMinistryDomain(rawText: string, isMilitary = false): MinistryDomainMeta {
+  if (isMilitary) return MINISTRY_DOMAINS.security
+  const normalized = rawText.toLowerCase()
+  if (
+    /(국무|외교|외무|국방|전쟁|보훈|통일|안보|해군|육군|공군|해병|병조|예조|사령|state|defense|foreign|war|veteran|security)/.test(
+      normalized,
+    )
+  ) {
+    return MINISTRY_DOMAINS.security
+  }
+  if (
+    /(재무|기획재정|기재|상무|산업|통상|농무|농림|에너지|해양|호조|공조|재정|경제|금융|treasury|commerce|energy|agriculture|trade|finance)/.test(
+      normalized,
+    )
+  ) {
+    return MINISTRY_DOMAINS.economy
+  }
+  if (
+    /(내무|행정|행안|법무|국토안보|인사|법제|의정부|이조|형조|승정원|총리|수상|감사|interior|justice|homeland|home)/.test(
+      normalized,
+    )
+  ) {
+    return MINISTRY_DOMAINS.governance
+  }
+  return MINISTRY_DOMAINS.social
+}
+
+function getBranchDomainMeta(item: MindMapBranchItem): MinistryDomainMeta {
+  if (item.kind === 'military') return MINISTRY_DOMAINS.security
+  if (item.kind === 'member') {
+    return inferMinistryDomain(
+      `${item.member.departmentName ?? ''} ${item.member.title ?? ''}`,
+    )
+  }
+  return inferMinistryDomain(
+    `${item.slot.departmentName} ${item.slot.positionTitle}`,
+  )
+}
+
+function describeArcSvg(
+  cx: number,
+  cy: number,
+  radius: number,
+  startDeg: number,
+  endDeg: number,
+): string {
+  const safeSpan = Math.min(359.2, Math.max(0.5, endDeg - startDeg))
+  const startRad = ((startDeg - 90) * Math.PI) / 180
+  const endRad = ((startDeg + safeSpan - 90) * Math.PI) / 180
+  const startX = cx + radius * Math.cos(startRad)
+  const startY = cy + radius * Math.sin(startRad)
+  const endX = cx + radius * Math.cos(endRad)
+  const endY = cy + radius * Math.sin(endRad)
+  const largeArc = safeSpan > 180 ? 1 : 0
+  return `M ${startX.toFixed(2)} ${startY.toFixed(2)} A ${radius} ${radius} 0 ${largeArc} 1 ${endX.toFixed(2)} ${endY.toFixed(2)}`
+}
 
 const PARTY_FALLBACK_PALETTE = [
   '#4f46e5',
@@ -92,17 +202,23 @@ function AvatarThumb({
   name,
   size,
   monarch = false,
+  accentColor,
 }: {
   imageUrl?: string | null
   name: string
   size: number
   monarch?: boolean
+  accentColor?: string
 }) {
   const [failed, setFailed] = useState(false)
   const resolved = !failed && imageUrl ? getUploadImageUrl(imageUrl) : null
 
   return (
-    <AvatarCircle $size={size} $monarch={monarch}>
+    <AvatarCircle
+      $size={size}
+      $monarch={monarch}
+      $accentColor={accentColor}
+    >
       {resolved ? (
         <img src={resolved} alt={name} onError={() => setFailed(true)} />
       ) : (
@@ -116,6 +232,8 @@ function BezierBranchGroup({
   side,
   items,
   muted,
+  hubMonarch = false,
+  cleanInstitutionalVacant = false,
   onSelectPerson,
   onSelectVacant,
   onSelectMilitaryCommand,
@@ -123,12 +241,23 @@ function BezierBranchGroup({
   side: 'left' | 'right'
   items: MindMapBranchItem[]
   muted: boolean
+  hubMonarch?: boolean
+  cleanInstitutionalVacant?: boolean
   onSelectPerson: (personId: string) => void
   onSelectVacant: (slot: MindMapVacantSlot) => void
   onSelectMilitaryCommand?: (cmd: MindMapMilitaryCommandItem) => void
 }) {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const height = groupHeightOf(items.length)
   const originY = height / 2
+  const hubColor = hubMonarch
+    ? isDark
+      ? '#fcd34d'
+      : '#d97706'
+    : isDark
+      ? '#818cf8'
+      : '#4f46e5'
 
   return (
     <WingGroupBox $side={side}>
@@ -141,36 +270,88 @@ function BezierBranchGroup({
           viewBox={`0 0 ${GUTTER} ${height}`}
           aria-hidden
         >
+          <defs>
+            {items.map((item, idx) => {
+              const dom = getBranchDomainMeta(item)
+              const targetColor = isDark ? dom.dark : dom.light
+              const gradId = `mm-grad-${side}-${idx}`
+              return (
+                <linearGradient
+                  key={gradId}
+                  id={gradId}
+                  x1={side === 'left' ? '100%' : '0%'}
+                  y1="50%"
+                  x2={side === 'left' ? '0%' : '100%'}
+                  y2="50%"
+                >
+                  <stop offset="0%" stopColor={hubColor} stopOpacity="0.65" />
+                  <stop offset="100%" stopColor={targetColor} stopOpacity="0.78" />
+                </linearGradient>
+              )
+            })}
+          </defs>
           {items.map((item, idx) => {
-            const y = nodeCenterY(idx)
-            const d =
+            const nodeY = nodeCenterY(idx)
+            const pathD =
               side === 'left'
-                ? `M ${GUTTER} ${originY} C ${GUTTER * 0.5} ${originY}, ${GUTTER * 0.5} ${y}, 0 ${y}`
-                : `M 0 ${originY} C ${GUTTER * 0.5} ${originY}, ${GUTTER * 0.5} ${y}, ${GUTTER} ${y}`
+                ? `M ${GUTTER} ${originY} C ${GUTTER * 0.42} ${originY}, ${GUTTER * 0.58} ${nodeY}, 0 ${nodeY}`
+                : `M 0 ${originY} C ${GUTTER * 0.42} ${originY}, ${GUTTER * 0.58} ${nodeY}, ${GUTTER} ${nodeY}`
             const isDashed =
               item.kind === 'vacant' ||
               (item.kind === 'military' && !item.command.commanderName)
+            const endX = side === 'left' ? 2 : GUTTER - 2
+            const dom = getBranchDomainMeta(item)
+            const dotColor = isDark ? dom.dark : dom.light
             return (
-              <path
-                key={item.key}
-                d={d}
-                strokeDasharray={isDashed ? '3 3' : undefined}
-              />
+              <g key={item.key}>
+                <path
+                  d={pathD}
+                  stroke={muted ? undefined : `url(#mm-grad-${side}-${idx})`}
+                  strokeDasharray={isDashed ? '4 3.5' : undefined}
+                />
+                <circle
+                  cx={endX}
+                  cy={nodeY}
+                  r="3.2"
+                  fill={muted ? ledgerHairlineStrong(theme.mode) : dotColor}
+                />
+              </g>
             )
           })}
+          <circle
+            cx={side === 'left' ? GUTTER - 1 : 1}
+            cy={originY}
+            r="6.5"
+            fill={hubColor}
+            fillOpacity="0.18"
+          />
+          <circle
+            cx={side === 'left' ? GUTTER - 1 : 1}
+            cy={originY}
+            r="3.4"
+            fill={hubColor}
+          />
         </ConnectorSvg>
       )}
 
       {items.map((item) => {
+        const dom = getBranchDomainMeta(item)
+        const domColor = isDark ? dom.dark : dom.light
+        const domSoft = isDark ? dom.softDark : dom.softLight
+
         if (item.kind === 'member') {
-          const m = item.member
-          const deptTag =
-            m.departmentName &&
-            !m.title.includes(m.departmentName.replace(/\s+/g, ''))
-              ? `${m.departmentName} · ${m.title}`
-              : m.title
-          const startYearLabel = m.startDate
-            ? formatShortMindMapDate(m.startDate).split('.')[0]
+          const memberRow = item.member
+          const deptPrimary = memberRow.departmentName?.trim() || dom.label
+          const roleSub =
+            memberRow.departmentName &&
+            memberRow.title &&
+            memberRow.title !== memberRow.departmentName
+              ? memberRow.title
+              : !memberRow.departmentName
+                ? memberRow.title
+                : null
+          const startYearLabel = memberRow.startDate
+            ? formatShortMindMapDate(memberRow.startDate).split('.')[0]
             : null
 
           return (
@@ -178,26 +359,40 @@ function BezierBranchGroup({
               key={item.key}
               type="button"
               $side={side}
+              $accent={domColor}
               onClick={() => {
-                if (m.personId) onSelectPerson(m.personId)
+                if (memberRow.personId) onSelectPerson(memberRow.personId)
               }}
               title={
-                m.replaced && m.predecessor
-                  ? `${deptTag} — ${m.name} (${m.predecessor} 후임)`
-                  : `${deptTag} — ${m.name}`
+                memberRow.replaced && memberRow.predecessor
+                  ? `${deptPrimary} — ${memberRow.name} (${memberRow.predecessor} 후임)`
+                  : `${deptPrimary} — ${memberRow.name}`
               }
             >
-              <AvatarThumb imageUrl={m.imageUrl} name={m.name} size={30} />
+              <AvatarThumb
+                imageUrl={memberRow.imageUrl}
+                name={memberRow.name}
+                size={36}
+                accentColor={domColor}
+              />
               <NodeMainText>
                 <NodeRoleLine>
-                  <span>{deptTag}</span>
-                  {m.replaced ? <ReshuffleBadge>교체</ReshuffleBadge> : null}
+                  <DomainMinistryBadge $color={domColor} $bg={domSoft}>
+                    {deptPrimary}
+                  </DomainMinistryBadge>
+                  {roleSub ? <span className="sub-role">{roleSub}</span> : null}
+                  {memberRow.replaced ? (
+                    <ReshuffleBadge>교체</ReshuffleBadge>
+                  ) : null}
                 </NodeRoleLine>
                 <NodePersonLine>
-                  {m.partyColor ? (
-                    <PartyDot $color={m.partyColor} title={m.partyName ?? ''} />
+                  {memberRow.partyColor ? (
+                    <PartyDot
+                      $color={memberRow.partyColor}
+                      title={memberRow.partyName ?? ''}
+                    />
                   ) : null}
-                  <strong>{m.name}</strong>
+                  <strong>{memberRow.name}</strong>
                 </NodePersonLine>
               </NodeMainText>
               {startYearLabel ? (
@@ -215,6 +410,7 @@ function BezierBranchGroup({
                 key={item.key}
                 type="button"
                 $side={side}
+                $accent={domColor}
                 onClick={() => {
                   if (cmd.commanderPersonId) {
                     onSelectPerson(cmd.commanderPersonId)
@@ -227,24 +423,25 @@ function BezierBranchGroup({
                 <AvatarThumb
                   imageUrl={cmd.commanderImageUrl}
                   name={cmd.commanderName}
-                  size={30}
+                  size={36}
+                  accentColor={domColor}
                 />
                 <NodeMainText>
                   <NodeRoleLine>
-                    <span>
+                    <DomainMinistryBadge $color={domColor} $bg={domSoft}>
                       {cmd.unitName}
-                      {cmd.commanderRankOrTitle
-                        ? ` · ${cmd.commanderRankOrTitle}`
-                        : ''}
-                    </span>
+                    </DomainMinistryBadge>
+                    {cmd.commanderRankOrTitle ? (
+                      <span className="sub-role">{cmd.commanderRankOrTitle}</span>
+                    ) : null}
                   </NodeRoleLine>
                   <NodePersonLine>
                     <strong>{cmd.commanderName}</strong>
                   </NodePersonLine>
                 </NodeMainText>
                 <UnitJumpTag
-                  onClick={(e) => {
-                    e.stopPropagation()
+                  onClick={(evt) => {
+                    evt.stopPropagation()
                     onSelectMilitaryCommand?.(cmd)
                   }}
                   title="부대 상세 보기"
@@ -261,36 +458,52 @@ function BezierBranchGroup({
               type="button"
               $side={side}
               onClick={() => onSelectMilitaryCommand?.(cmd)}
-              title={`${cmd.unitName} 지휘관 임명 또는 부대 상세`}
+              title={`${cmd.unitName} 부대 상세`}
             >
-              <VacantDot aria-hidden>
-                <FiShield size={12} />
+              <VacantDot aria-hidden $color={domColor} $bg={domSoft}>
+                <FiShield size={13} />
               </VacantDot>
               <NodeMainText>
                 <NodeRoleLine>
-                  <span>{cmd.unitName}</span>
+                  <DomainMinistryBadge $color={domColor} $bg={domSoft}>
+                    {cmd.unitName}
+                  </DomainMinistryBadge>
                 </NodeRoleLine>
-                <VacantSubLine>+ 지휘관 임명</VacantSubLine>
+                <VacantSubLine>
+                  {cleanInstitutionalVacant ? '군 상위 사령부' : '+ 지휘관 임명'}
+                </VacantSubLine>
               </NodeMainText>
             </VacantNodeBtn>
           )
         }
 
-        const s = item.slot
+        const slotItem = item.slot
         return (
           <VacantNodeBtn
             key={item.key}
             type="button"
             $side={side}
-            onClick={() => onSelectVacant(s)}
-            title={`${s.departmentName} (${s.positionTitle}) 즉시 임명`}
+            onClick={() => onSelectVacant(slotItem)}
+            title={
+              cleanInstitutionalVacant
+                ? `${slotItem.departmentName} (${slotItem.positionTitle})`
+                : `${slotItem.departmentName} (${slotItem.positionTitle}) 즉시 임명`
+            }
           >
-            <VacantDot aria-hidden>+</VacantDot>
+            <VacantDot aria-hidden $color={domColor} $bg={domSoft}>
+              {cleanInstitutionalVacant ? '🏛' : '+'}
+            </VacantDot>
             <NodeMainText>
               <NodeRoleLine>
-                <span>{s.departmentName}</span>
+                <DomainMinistryBadge $color={domColor} $bg={domSoft}>
+                  {slotItem.departmentName}
+                </DomainMinistryBadge>
               </NodeRoleLine>
-              <VacantSubLine>{s.positionTitle} · 임명</VacantSubLine>
+              <VacantSubLine>
+                {cleanInstitutionalVacant
+                  ? slotItem.positionTitle
+                  : `${slotItem.positionTitle} · 임명`}
+              </VacantSubLine>
             </NodeMainText>
           </VacantNodeBtn>
         )
@@ -311,6 +524,7 @@ export function MindMapDiagramStage({
   ministersCount,
   departmentsCount,
   isHistorical = false,
+  cleanInstitutionalVacant = false,
   sovereignsAbove = [],
   cabinetsDuringReign = [],
   branches,
@@ -329,6 +543,7 @@ export function MindMapDiagramStage({
   ministersCount: number
   departmentsCount: number
   isHistorical?: boolean
+  cleanInstitutionalVacant?: boolean
   sovereignsAbove?: MindMapMember[]
   cabinetsDuringReign?: MindMapMember[]
   branches: MindMapBranchItem[]
@@ -339,9 +554,65 @@ export function MindMapDiagramStage({
   onSelectMilitaryCommand?: (cmd: MindMapMilitaryCommandItem) => void
   onSelectReignCabinet?: (cabinetId: string) => void
 }) {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const [expanded, setExpanded] = useState(false)
-  const visible = expanded ? branches : branches.slice(0, collapsedLimit)
-  const hiddenCount = Math.max(0, branches.length - visible.length)
+
+  const sortedBranches = useMemo(() => {
+    const domainRank: Record<MinistryDomainKey, number> = {
+      security: 0,
+      governance: 1,
+      economy: 2,
+      social: 3,
+    }
+    return [...branches].sort((left, right) => {
+      const dLeft = domainRank[getBranchDomainMeta(left).key]
+      const dRight = domainRank[getBranchDomainMeta(right).key]
+      return dLeft - dRight
+    })
+  }, [branches])
+
+  const domainCounts = useMemo(() => {
+    const counts: Record<MinistryDomainKey, number> = {
+      security: 0,
+      governance: 0,
+      economy: 0,
+      social: 0,
+    }
+    for (const item of sortedBranches) {
+      counts[getBranchDomainMeta(item).key] += 1
+    }
+    return counts
+  }, [sortedBranches])
+
+  const radialArcs = useMemo(() => {
+    const total = sortedBranches.length
+    if (total === 0) return []
+    const activeKeys = MINISTRY_DOMAIN_ORDER.filter(
+      (domKey) => domainCounts[domKey] > 0,
+    )
+    const gapDeg = activeKeys.length > 1 ? 8 : 0
+    const usableDeg = 360 - gapDeg * activeKeys.length
+    let cursor = 0
+    return activeKeys.map((domKey) => {
+      const dom = MINISTRY_DOMAINS[domKey]
+      const sweep = (domainCounts[domKey] / total) * usableDeg
+      const dPath = describeArcSvg(59, 59, 51, cursor, cursor + sweep)
+      cursor += sweep + gapDeg
+      return {
+        key: domKey,
+        label: dom.label,
+        count: domainCounts[domKey],
+        color: isDark ? dom.dark : dom.light,
+        dPath,
+      }
+    })
+  }, [sortedBranches.length, domainCounts, isDark])
+
+  const visible = expanded
+    ? sortedBranches
+    : sortedBranches.slice(0, collapsedLimit)
+  const hiddenCount = Math.max(0, sortedBranches.length - visible.length)
 
   const pivot = Math.ceil(visible.length / 2)
   const leftItems = visible.slice(0, pivot)
@@ -350,6 +621,18 @@ export function MindMapDiagramStage({
 
   return (
     <MindMapStage>
+      {radialArcs.length > 1 && (
+        <DomainLegendBar aria-label="부처 분야별 분포">
+          {radialArcs.map((arc) => (
+            <DomainLegendPill key={arc.key}>
+              <span className="dot" style={{ background: arc.color }} />
+              <span>{arc.label}</span>
+              <strong>{arc.count}</strong>
+            </DomainLegendPill>
+          ))}
+        </DomainLegendBar>
+      )}
+
       <MindMapGrid $hasBranches={visible.length > 0}>
         {visible.length > 0 && (
           <MindMapSideCol $side="left">
@@ -357,6 +640,8 @@ export function MindMapDiagramStage({
               side="left"
               items={leftItems}
               muted={!head}
+              hubMonarch={isMonarchCenter}
+              cleanInstitutionalVacant={cleanInstitutionalVacant}
               onSelectPerson={onSelectPerson}
               onSelectVacant={onSelectVacant}
               onSelectMilitaryCommand={onSelectMilitaryCommand}
@@ -408,12 +693,73 @@ export function MindMapDiagramStage({
                 else onClickEmptyHead()
               }}
             >
-              <AvatarThumb
-                imageUrl={head.imageUrl}
-                name={head.name}
-                size={84}
-                monarch={isMonarchCenter}
-              />
+              <HubRingPortraitBox>
+                <svg
+                  className="ring-svg"
+                  viewBox="0 0 118 118"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="59"
+                    cy="59"
+                    r="51"
+                    fill="none"
+                    stroke={
+                      isDark
+                        ? 'rgba(255, 255, 255, 0.08)'
+                        : 'rgba(15, 23, 42, 0.07)'
+                    }
+                    strokeWidth="4.5"
+                  />
+                  <circle
+                    cx="59"
+                    cy="59"
+                    r="56"
+                    fill="none"
+                    stroke={
+                      isDark
+                        ? 'rgba(255, 255, 255, 0.1)'
+                        : 'rgba(15, 23, 42, 0.09)'
+                    }
+                    strokeWidth="1"
+                    strokeDasharray="2 4"
+                  />
+                  {radialArcs.length > 0 ? (
+                    radialArcs.map((arc) => (
+                      <path
+                        key={arc.key}
+                        d={arc.dPath}
+                        fill="none"
+                        stroke={arc.color}
+                        strokeWidth="4.5"
+                        strokeLinecap="round"
+                      />
+                    ))
+                  ) : (
+                    <path
+                      d={describeArcSvg(59, 59, 51, 30, 330)}
+                      fill="none"
+                      stroke={
+                        isMonarchCenter
+                          ? isDark
+                            ? '#fcd34d'
+                            : '#d97706'
+                          : isDark
+                            ? '#818cf8'
+                            : '#4f46e5'
+                      }
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                    />
+                  )}
+                </svg>
+                <AvatarThumb
+                  imageUrl={head.imageUrl}
+                  name={head.name}
+                  size={86}
+                  monarch={isMonarchCenter}
+                />
+              </HubRingPortraitBox>
 
               <LeaderRoleRow>
                 <LeaderRoleChip $monarch={isMonarchCenter}>
@@ -501,6 +847,8 @@ export function MindMapDiagramStage({
               side="right"
               items={rightItems}
               muted={!head}
+              hubMonarch={isMonarchCenter}
+              cleanInstitutionalVacant={cleanInstitutionalVacant}
               onSelectPerson={onSelectPerson}
               onSelectVacant={onSelectVacant}
               onSelectMilitaryCommand={onSelectMilitaryCommand}
@@ -536,6 +884,9 @@ export interface ExecutiveMindMapBentoHeroProps {
   currentCabinetSummary?: CurrentCabinetSummary | null
   nextElection?: ElectionSummary | null
   recentElection?: ElectionSummary | null
+  /** 2단 내각·장관 마인드맵 전용 모드 (실제 임명된 장관이 있을 때만 노출, 공석 점선 및 중복 크롬 제거) */
+  cabinetMindMapMode?: boolean
+  onVisibilityChange?: (visible: boolean) => void
   onEditOverview?: () => void
   onOpenPoliticalSystem: () => void
   onOpenCabinets: (cabinetId?: string | null) => void
@@ -556,6 +907,8 @@ export function ExecutiveMindMapBentoHero({
   currentCabinetSummary,
   nextElection,
   recentElection,
+  cabinetMindMapMode = false,
+  onVisibilityChange,
   onEditOverview,
   onOpenPoliticalSystem,
   onOpenCabinets,
@@ -589,28 +942,55 @@ export function ExecutiveMindMapBentoHero({
     focusedTenureId,
   })
 
+  const onActiveTenureChangeRef = React.useRef(onActiveTenureChange)
+  onActiveTenureChangeRef.current = onActiveTenureChange
+
   React.useEffect(() => {
-    onActiveTenureChange?.(mindmap.activeHeadTenureId)
-  }, [mindmap.activeHeadTenureId, onActiveTenureChange])
+    onActiveTenureChangeRef.current?.(mindmap.activeHeadTenureId)
+  }, [mindmap.activeHeadTenureId])
 
   // 국가가 바뀌면 기본 탭 복귀
   React.useEffect(() => {
     setBranchDomain('cabinet')
   }, [countryId, historicalCountryId])
 
+  const appointedMilitaryBranches = useMemo(
+    () =>
+      mindmap.militaryBranches.filter((cmd) => Boolean(cmd.commanderName)),
+    [mindmap.militaryBranches],
+  )
+
   const activeBranches = useMemo<MindMapBranchItem[]>(() => {
-    if (branchDomain === 'military' && mindmap.militaryBranches.length > 0) {
-      return mindmap.militaryBranches.map((cmd) => ({
-        kind: 'military',
-        key: `mil:${cmd.unitId}`,
-        command: cmd,
-      }))
+    if (branchDomain === 'military') {
+      const milPool = cabinetMindMapMode
+        ? appointedMilitaryBranches
+        : mindmap.militaryBranches
+      if (milPool.length > 0) {
+        return milPool.map((cmd) => ({
+          kind: 'military',
+          key: `mil:${cmd.unitId}`,
+          command: cmd,
+        }))
+      }
     }
     const filled: MindMapBranchItem[] = mindmap.members.map((member) => ({
       kind: 'member',
       key: `m:${member.id}`,
       member,
     }))
+    if (cabinetMindMapMode) {
+      if (filled.length > 0) return filled
+      // 행정 수반은 등록되어 있으나 각료가 아직 비어 있는 경우, 실제 DB에 등록된 해당 시대 부처만 최대 6개 기관 노드로 연결
+      const realDeptSlots = mindmap.vacantSlots
+        .filter((slot) => Boolean(slot.departmentId))
+        .slice(0, 6)
+        .map<MindMapBranchItem>((slot) => ({
+          kind: 'vacant',
+          key: `v:${slot.key}`,
+          slot,
+        }))
+      return realDeptSlots
+    }
     const vacant: MindMapBranchItem[] = mindmap.vacantSlots.map((slot) => ({
       kind: 'vacant',
       key: `v:${slot.key}`,
@@ -619,6 +999,8 @@ export function ExecutiveMindMapBentoHero({
     return [...filled, ...vacant]
   }, [
     branchDomain,
+    cabinetMindMapMode,
+    appointedMilitaryBranches,
     mindmap.militaryBranches,
     mindmap.members,
     mindmap.vacantSlots,
@@ -719,10 +1101,33 @@ export function ExecutiveMindMapBentoHero({
     return `${start || '?'} ~ ${end}${elapsed ? ` (${elapsed})` : ''}`
   }, [mindmap.head])
 
-  const showPowerRibbon =
+  const showPowerRibbon = !cabinetMindMapMode && (
     cabinetPartySlices.length > 0 ||
     seatSlices.length > 0 ||
     Boolean(activeElection)
+  )
+
+  const hasExecutiveHeroData = cabinetMindMapMode
+    ? Boolean(mindmap.head) || mindmap.members.length > 0
+    : Boolean(mindmap.head) ||
+      mindmap.members.length > 0 ||
+      appointedMilitaryBranches.length > 0
+
+  const isVisibleInCabinetMode =
+    !cabinetMindMapMode || (!mindmap.isLoading && hasExecutiveHeroData)
+
+  const onVisibilityChangeRef = React.useRef(onVisibilityChange)
+  onVisibilityChangeRef.current = onVisibilityChange
+
+  React.useEffect(() => {
+    if (cabinetMindMapMode) {
+      onVisibilityChangeRef.current?.(!mindmap.isLoading && hasExecutiveHeroData)
+    }
+  }, [cabinetMindMapMode, mindmap.isLoading, hasExecutiveHeroData])
+
+  if (cabinetMindMapMode && !isVisibleInCabinetMode) {
+    return null
+  }
 
   const handleOpenVacantAppointment = (slot: MindMapVacantSlot) => {
     if (slot.departmentId) {
@@ -757,24 +1162,58 @@ export function ExecutiveMindMapBentoHero({
   }
 
   return (
-    <BentoCard aria-label={`${countryName} 국가 수장 및 각 부처 마인드맵`}>
-      {/* 1. 상단 바: 정체 배지 + [내각 부처 | 군 통수부] 전환 + 정권 스테퍼 + 관리 바로가기 */}
+    <BentoCard aria-label={`${countryName} 행정부 및 각 부처 조직도`}>
+      {/* 1. 상단 바: 행정부 타이틀 + 좌우 화살표 내각 전환기 (칩 리스트 없음) + 바로가기 */}
       <BentoCardHeader>
         <HeroTitleCluster>
           <BentoCardTitleGroup>
             <BentoCardTitle>
-              {branchDomain === 'military'
-                ? '군 지휘부'
-                : historicalCountryId
-                  ? '조정 구조'
-                  : '통치 구조'}
+              {branchDomain === 'military' ? '군 통수부' : '행정부'}
             </BentoCardTitle>
-            {mindmap.activeCabinetLabel ? (
+            {mindmap.navigation ? (
+              <AdminArrowSwitcher aria-label="역대 행정부 좌우 전환">
+                <StepperArrowBtn
+                  type="button"
+                  disabled={!mindmap.navigation.onOlder}
+                  onClick={() => mindmap.navigation?.onOlder?.()}
+                  aria-label="이전 행정부"
+                  title={
+                    mindmap.navigation.olderLabel
+                      ? `이전: ${mindmap.navigation.olderLabel}`
+                      : '첫 기록입니다'
+                  }
+                >
+                  <FiChevronLeft size={14} />
+                </StepperArrowBtn>
+                <AdminSwitcherLabel>
+                  <strong>
+                    {mindmap.activeCabinetLabel ?? '현 행정부'}
+                  </strong>
+                  <small>
+                    {mindmap.navigation.currentOrdinalIndex}/
+                    {mindmap.navigation.total}
+                  </small>
+                </AdminSwitcherLabel>
+                <StepperArrowBtn
+                  type="button"
+                  disabled={!mindmap.navigation.onNewer}
+                  onClick={() => mindmap.navigation?.onNewer?.()}
+                  aria-label="다음 행정부"
+                  title={
+                    mindmap.navigation.newerLabel
+                      ? `다음: ${mindmap.navigation.newerLabel}`
+                      : '가장 최근 행정부입니다'
+                  }
+                >
+                  <FiChevronRight size={14} />
+                </StepperArrowBtn>
+              </AdminArrowSwitcher>
+            ) : mindmap.activeCabinetLabel ? (
               <BentoCardBadge>{mindmap.activeCabinetLabel}</BentoCardBadge>
             ) : null}
           </BentoCardTitleGroup>
 
-          {mindmap.polityBadges.length > 0 && (
+          {!cabinetMindMapMode && mindmap.polityBadges.length > 0 && (
             <RegimePillRow>
               {mindmap.polityBadges.map((label) => (
                 <RegimePill
@@ -790,26 +1229,32 @@ export function ExecutiveMindMapBentoHero({
         </HeroTitleCluster>
 
         <BentoHeaderActions>
-          {mindmap.militaryBranches.length > 0 && (
+          {(cabinetMindMapMode
+            ? mindmap.members.length > 0 && appointedMilitaryBranches.length > 0
+            : mindmap.militaryBranches.length > 0) && (
             <ModeSwitchGroup role="tablist" aria-label="마인드맵 권력축 전환">
               <ModeSwitchBtn
                 type="button"
                 $active={branchDomain === 'cabinet'}
                 onClick={() => setBranchDomain('cabinet')}
               >
-                내각 부처 ({mindmap.members.length + mindmap.vacantSlots.length})
+                내각 부처 ({mindmap.members.length})
               </ModeSwitchBtn>
               <ModeSwitchBtn
                 type="button"
                 $active={branchDomain === 'military'}
                 onClick={() => setBranchDomain('military')}
               >
-                군 수뇌부 ({mindmap.militaryBranches.length})
+                군 수뇌부 (
+                {cabinetMindMapMode
+                  ? appointedMilitaryBranches.length
+                  : mindmap.militaryBranches.length}
+                )
               </ModeSwitchBtn>
             </ModeSwitchGroup>
           )}
 
-          {mindmap.canToggleMode && (
+          {!cabinetMindMapMode && mindmap.canToggleMode && (
             <ModeSwitchGroup role="tablist" aria-label="수반 보기 기준">
               <ModeSwitchBtn
                 type="button"
@@ -828,52 +1273,17 @@ export function ExecutiveMindMapBentoHero({
             </ModeSwitchGroup>
           )}
 
-          {mindmap.navigation && (
-            <RegimeStepper aria-label="역대 정권·치세 전환">
-              <StepperArrowBtn
-                type="button"
-                disabled={!mindmap.navigation.onOlder}
-                onClick={() => mindmap.navigation?.onOlder?.()}
-                title={
-                  mindmap.navigation.olderLabel
-                    ? `이전: ${mindmap.navigation.olderLabel}`
-                    : '이전 기록 없음'
-                }
-              >
-                <FiChevronLeft size={13} />
-              </StepperArrowBtn>
-              <StepperCount>
-                {mindmap.navigation.currentOrdinalIndex} /{' '}
-                {mindmap.navigation.total}대
-              </StepperCount>
-              <StepperArrowBtn
-                type="button"
-                disabled={!mindmap.navigation.onNewer}
-                onClick={() => mindmap.navigation?.onNewer?.()}
-                title={
-                  mindmap.navigation.newerLabel
-                    ? `다음: ${mindmap.navigation.newerLabel}`
-                    : '더 최근 기록 없음'
-                }
-              >
-                <FiChevronRight size={13} />
-              </StepperArrowBtn>
-            </RegimeStepper>
-          )}
-
-          {/* '각료 임명'은 빈 부처 칸마다 있는 '+ 임명'과 같은 일이라 머리 줄에서 뺐다(조작 9개 → 줄임) */}
           <BentoActionBtn
             type="button"
             $accent
             onClick={() => onOpenCabinets(mindmap.activeCabinetId)}
           >
-            내각·수반 관리 <FiArrowUpRight size={11} />
+            행정부 상세 <FiArrowUpRight size={11} />
           </BentoActionBtn>
         </BentoHeaderActions>
       </BentoCardHeader>
 
-      {/* 2. 슬림 1줄 국가 핵심 개요 배너 — 소개가 있을 때만. 없을 때의 '아직 등록되지 않았습니다' 안내는
-          통치 구조 패널의 일이 아니다(소개 수정은 국가 머리의 '정보 수정'이 맡는다) */}
+      {/* 2. 슬림 1줄 국가 핵심 개요 배너 — 소개가 있을 때만 */}
       {plainOverviewPreview && (
         <CompactOverviewStrip>
           {proseExpanded ? (
@@ -893,7 +1303,7 @@ export function ExecutiveMindMapBentoHero({
             {plainOverviewPreview.length > 95 && (
               <MiniTextBtn
                 type="button"
-                onClick={() => setProseExpanded((p) => !p)}
+                onClick={() => setProseExpanded((prev) => !prev)}
               >
                 {proseExpanded ? '접기' : '전문 보기'}
               </MiniTextBtn>
@@ -927,9 +1337,11 @@ export function ExecutiveMindMapBentoHero({
               mindmap.members.length + mindmap.vacantSlots.length
         }
         isHistorical={Boolean(historicalCountryId)}
+        cleanInstitutionalVacant={cabinetMindMapMode}
         sovereignsAbove={sovereignsAbove}
         cabinetsDuringReign={cabinetsDuringReign}
         branches={activeBranches}
+        collapsedLimit={cabinetMindMapMode ? 10 : DEFAULT_COLLAPSED_BRANCHES}
         onSelectPerson={onSelectPerson}
         onClickEmptyHead={() => onOpenCabinets(null)}
         onSelectVacant={handleOpenVacantAppointment}
@@ -955,7 +1367,7 @@ export function ExecutiveMindMapBentoHero({
             </PowerRibbonCell>
           )}
 
-          {seatSlices.length > 0 && (
+          {!cabinetMindMapMode && seatSlices.length > 0 && (
             <PowerRibbonCell>
               <RibbonCellHead>
                 <span>입법부 의석 정원</span>
@@ -967,7 +1379,7 @@ export function ExecutiveMindMapBentoHero({
             </PowerRibbonCell>
           )}
 
-          {activeElection && onOpenElections && (
+          {!cabinetMindMapMode && activeElection && onOpenElections && (
             <PowerRibbonElectionBtn
               type="button"
               onClick={() => onOpenElections(activeElection.id)}
@@ -1069,24 +1481,34 @@ const RegimePill = styled.button`
 
 const ModeSwitchGroup = styled.div`
   display: inline-flex;
-  padding: 2px;
-  border-radius: 6px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 3px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(15, 23, 42, 0.045)'};
 `
 
 const ModeSwitchBtn = styled.button<{ $active: boolean }>`
-  height: 22px;
-  padding: 0 8px;
+  height: 23px;
+  padding: 0 10px;
   border: none;
-  border-radius: 4px;
+  border-radius: 999px;
   background: ${({ theme, $active }) =>
-    $active ? ledgerBackground(theme.mode) : 'transparent'};
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.28)'
+        : '#ffffff'
+      : 'transparent'};
+  box-shadow: ${({ theme, $active }) =>
+    $active && theme.mode !== 'dark'
+      ? '0 1px 4px rgba(15, 23, 42, 0.08)'
+      : 'none'};
   color: ${({ theme, $active }) =>
     $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
   font-family: inherit;
   font-size: 11px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  font-weight: ${({ $active }) => ($active ? 700 : 550)};
   ${DIGIT_DISPLAY}
   cursor: pointer;
 `
@@ -1094,16 +1516,20 @@ const ModeSwitchBtn = styled.button<{ $active: boolean }>`
 const RegimeStepper = styled.div`
   display: inline-flex;
   align-items: center;
-  height: 26px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  height: 28px;
+  padding: 0 2px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(15, 23, 42, 0.045)'};
   overflow: hidden;
 `
 
 const StepperArrowBtn = styled.button`
-  width: 25px;
-  height: 100%;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1124,13 +1550,49 @@ const StepperArrowBtn = styled.button`
 `
 
 const StepperCount = styled.span`
-  padding: 0 7px;
+  padding: 0 6px;
   font-size: 11px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
-  border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-right: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   ${DIGIT_DISPLAY}
+`
+
+const AdminArrowSwitcher = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 3px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.14)'
+      : 'rgba(79, 70, 229, 0.065)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(129, 140, 248, 0.24)'
+        : 'rgba(79, 70, 229, 0.14)'};
+`
+
+const AdminSwitcherLabel = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 8px;
+  font-size: 12px;
+  white-space: nowrap;
+
+  strong {
+    font-weight: 750;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  small {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
+  }
 `
 
 const CompactOverviewStrip = styled.div`
@@ -1139,9 +1601,8 @@ const CompactOverviewStrip = styled.div`
   justify-content: space-between;
   gap: 12px;
   padding: 8px 12px;
-  margin: 0 18px;
-  border-radius: 7px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  margin: 0 0 8px;
+  border-radius: 10px;
   background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `
 
@@ -1197,14 +1658,19 @@ const MiniTextBtn = styled.button`
 
 const MindMapStage = styled.div`
   container-type: inline-size;
-  padding: 14px 18px 16px;
+  padding: 20px 18px 16px;
+  border-radius: 24px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'radial-gradient(ellipse 56% 72% at 50% 50%, rgba(99, 102, 241, 0.13), rgba(15, 23, 42, 0.35) 76%)'
+      : 'radial-gradient(ellipse 58% 74% at 50% 50%, rgba(99, 102, 241, 0.075), rgba(248, 250, 252, 0.65) 76%)'};
 `
 
 const MindMapGrid = styled.div<{ $hasBranches: boolean }>`
   display: grid;
   grid-template-columns: ${({ $hasBranches }) =>
     $hasBranches
-      ? `minmax(210px, 1fr) 256px minmax(210px, 1fr)`
+      ? `minmax(210px, 1fr) 264px minmax(210px, 1fr)`
       : 'minmax(0, 340px)'};
   gap: ${({ $hasBranches }) => ($hasBranches ? `${GUTTER}px` : '0')};
   align-items: center;
@@ -1212,7 +1678,7 @@ const MindMapGrid = styled.div<{ $hasBranches: boolean }>`
 
   @container (max-width: 820px) {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    gap: 14px;
   }
 `
 
@@ -1256,9 +1722,21 @@ const ConnectorSvg = styled.svg<{ $side: 'left' | 'right'; $muted: boolean }>`
       $muted
         ? ledgerHairlineStrong(theme.mode)
         : theme.mode === 'dark'
-          ? 'rgba(165, 180, 252, 0.34)'
-          : 'rgba(79, 70, 229, 0.30)'};
-    stroke-width: 1.4;
+          ? 'rgba(165, 180, 252, 0.36)'
+          : 'rgba(99, 102, 241, 0.32)'};
+    stroke-width: 1.75;
+    stroke-linecap: round;
+  }
+
+  circle.node-dot,
+  circle.hub-dot {
+    fill: ${({ theme, $muted }) =>
+      $muted
+        ? ledgerHairlineStrong(theme.mode)
+        : theme.mode === 'dark'
+          ? '#818cf8'
+          : '#6366f1'};
+    opacity: 0.72;
   }
 
   @container (max-width: 820px) {
@@ -1268,11 +1746,11 @@ const ConnectorSvg = styled.svg<{ $side: 'left' | 'right'; $muted: boolean }>`
 
 const nodeSharedCss = css`
   height: ${NODE_HEIGHT}px;
-  padding: 0 10px;
-  border-radius: 8px;
+  padding: 0 14px 0 9px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 11px;
   width: 100%;
   min-width: 0;
   font-family: inherit;
@@ -1281,35 +1759,65 @@ const nodeSharedCss = css`
   box-sizing: border-box;
   transition:
     border-color ${MOTION.fast} ease,
-    background ${MOTION.fast} ease;
+    background ${MOTION.fast} ease,
+    transform ${MOTION.fast} ease,
+    box-shadow ${MOTION.fast} ease;
 `
 
-const MinisterNodeBtn = styled.button<{ $side: 'left' | 'right' }>`
+const MinisterNodeBtn = styled.button<{
+  $side: 'left' | 'right'
+  $accent?: string
+}>`
   ${nodeSharedCss}
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(15, 23, 42, 0.065)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.72)' : '#ffffff'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 6px 18px -8px rgba(0, 0, 0, 0.48)'
+      : '0 4px 16px -6px rgba(15, 23, 42, 0.075)'};
 
   &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-color: ${({ $accent, theme }) =>
+      $accent ?? ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(30, 41, 59, 0.92)'
+        : 'rgba(248, 250, 255, 1)'};
+    transform: translateY(-1.5px);
   }
 `
 
 const VacantNodeBtn = styled.button<{ $side: 'left' | 'right' }>`
   ${nodeSharedCss}
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  opacity: 0.76;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.09)'
+        : 'rgba(15, 23, 42, 0.075)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.03)'
+      : 'rgba(248, 250, 252, 0.85)'};
+  opacity: 0.92;
 
   &:hover {
     opacity: 1;
-    border-style: solid;
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
     background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    transform: translateY(-1px);
   }
 `
 
-const AvatarCircle = styled.span<{ $size: number; $monarch?: boolean }>`
+const AvatarCircle = styled.span<{
+  $size: number
+  $monarch?: boolean
+  $accentColor?: string
+}>`
   width: ${({ $size }) => $size}px;
   height: ${({ $size }) => $size}px;
   border-radius: 50%;
@@ -1318,16 +1826,18 @@ const AvatarCircle = styled.span<{ $size: number; $monarch?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: ${({ $size, $monarch, theme }) =>
+  border: ${({ $size, $monarch, $accentColor, theme }) =>
     $size >= 60
-      ? `2px solid ${
+      ? `2.5px solid ${
           $monarch
             ? theme.mode === 'dark'
               ? '#fcd34d'
               : '#d97706'
             : ledgerAccent(theme.mode)
         }`
-      : `1px solid ${ledgerHairlineStrong(theme.mode)}`};
+      : $accentColor
+        ? `2px solid ${$accentColor}`
+        : `1px solid ${ledgerHairlineStrong(theme.mode)}`};
   background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   color: ${({ theme }) => theme.colors.text.tertiary};
 
@@ -1339,24 +1849,91 @@ const AvatarCircle = styled.span<{ $size: number; $monarch?: boolean }>`
   }
 `
 
-const VacantDot = styled.span`
-  width: 28px;
-  height: 28px;
+const VacantDot = styled.span<{ $color?: string; $bg?: string }>`
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ $bg, theme }) => $bg ?? ledgerSubtleFill(theme.mode)};
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  color: ${({ $color, theme }) => $color ?? ledgerAccent(theme.mode)};
   flex-shrink: 0;
+`
+
+const DomainMinistryBadge = styled.span<{ $color: string; $bg: string }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 750;
+  color: ${({ $color }) => $color};
+  background: ${({ $bg }) => $bg};
+  white-space: nowrap;
+  flex-shrink: 0;
+`
+
+const DomainLegendBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+`
+
+const DomainLegendPill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3.5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.045)'
+      : 'rgba(15, 23, 42, 0.035)'};
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  strong {
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+    ${DIGIT_DISPLAY}
+  }
+`
+
+const HubRingPortraitBox = styled.div`
+  position: relative;
+  width: 118px;
+  height: 118px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .ring-svg {
+    position: absolute;
+    inset: 0;
+    width: 118px;
+    height: 118px;
+    pointer-events: none;
+  }
 `
 
 const NodeMainText = styled.span`
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
   flex: 1;
   min-width: 0;
 `
@@ -1372,7 +1949,7 @@ const NodeRoleLine = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
 
-  span {
+  .sub-role {
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -1455,18 +2032,26 @@ const CrownCounterpartList = styled.div`
 const CrownCounterpartCard = styled.button<{ $monarch: boolean }>`
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   width: 100%;
-  padding: 7px 10px;
-  border-radius: 9px;
+  padding: 7px 14px 7px 8px;
+  border-radius: 999px;
   border: 1px solid
     ${({ theme, $monarch }) =>
       $monarch
         ? theme.mode === 'dark'
-          ? 'rgba(252, 211, 77, 0.35)'
-          : 'rgba(217, 119, 6, 0.32)'
+          ? 'rgba(252, 211, 77, 0.32)'
+          : 'rgba(217, 119, 6, 0.24)'
         : ledgerAccentBorder(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  background: ${({ theme, $monarch }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? 'rgba(251, 191, 36, 0.08)'
+        : 'rgba(255, 251, 235, 0.92)'
+      : theme.mode === 'dark'
+        ? 'rgba(30, 41, 59, 0.7)'
+        : '#ffffff'};
+  box-shadow: 0 3px 10px -4px rgba(15, 23, 42, 0.06);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -1513,31 +2098,43 @@ const LeaderCenterCard = styled.button<{ $monarch: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   width: 100%;
-  padding: 16px 14px 13px;
-  border-radius: 12px;
-  border: 1.5px solid
+  padding: 20px 16px 16px;
+  border-radius: 26px;
+  border: 1px solid
     ${({ theme, $monarch }) =>
       $monarch
         ? theme.mode === 'dark'
-          ? 'rgba(252, 211, 77, 0.45)'
-          : 'rgba(217, 119, 6, 0.4)'
-        : ledgerAccentBorder(theme.mode)};
+          ? 'rgba(252, 211, 77, 0.35)'
+          : 'rgba(217, 119, 6, 0.24)'
+        : theme.mode === 'dark'
+          ? 'rgba(129, 140, 248, 0.3)'
+          : 'rgba(99, 102, 241, 0.18)'};
   background: ${({ theme, $monarch }) =>
     $monarch
       ? theme.mode === 'dark'
-        ? 'rgba(251, 191, 36, 0.06)'
-        : 'rgba(254, 243, 199, 0.32)'
-      : ledgerAccentSubtle(theme.mode)};
+        ? 'linear-gradient(180deg, rgba(251, 191, 36, 0.1), rgba(17, 24, 39, 0.85))'
+        : 'linear-gradient(180deg, rgba(255, 251, 235, 0.95), #ffffff)'
+      : theme.mode === 'dark'
+        ? 'linear-gradient(180deg, rgba(99, 102, 241, 0.14), rgba(17, 24, 39, 0.88))'
+        : 'linear-gradient(180deg, rgba(238, 242, 255, 0.85), #ffffff)'};
   font-family: inherit;
   text-align: center;
   cursor: pointer;
-  box-shadow: none;
-  transition: border-color ${MOTION.fast} ease;
+  box-shadow: ${({ theme, $monarch }) =>
+    theme.mode === 'dark'
+      ? '0 14px 32px -12px rgba(0, 0, 0, 0.5)'
+      : $monarch
+        ? '0 14px 32px -12px rgba(217, 119, 6, 0.18)'
+        : '0 14px 34px -12px rgba(79, 70, 229, 0.18)'};
+  transition:
+    border-color ${MOTION.fast} ease,
+    transform ${MOTION.fast} ease;
 
   &:hover {
     border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    transform: translateY(-1px);
   }
 `
 
@@ -1547,8 +2144,8 @@ const LeaderEmptyCard = styled.button`
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 20px 14px;
-  border-radius: 12px;
+  padding: 22px 16px;
+  border-radius: 24px;
   border: 1.5px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   font-family: inherit;
@@ -1581,8 +2178,8 @@ const LeaderRoleChip = styled.span<{ $monarch: boolean }>`
 `
 
 const IncumbentBadge = styled.span`
-  padding: 1px 5px;
-  border-radius: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
   color: #ffffff;
@@ -1591,9 +2188,12 @@ const IncumbentBadge = styled.span`
 `
 
 const RegnalEraChip = styled.span`
-  padding: 1px 5px;
-  border-radius: 3px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.07)'
+      : 'rgba(15, 23, 42, 0.05)'};
   font-size: 10px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -1623,11 +2223,15 @@ const LeaderKpiMiniRow = styled.span`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  margin-top: 6px;
+  padding: 7px 10px;
+  border-radius: 14px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.045)'
+      : 'rgba(15, 23, 42, 0.035)'};
 `
 
 const LeaderKpiCell = styled.span`
@@ -1731,9 +2335,8 @@ const PowerRibbonGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
-  padding: 12px 18px 14px;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 6px 22px 18px;
+  background: transparent;
 `
 
 const PowerRibbonCell = styled.div`
@@ -1800,4 +2403,60 @@ const ElectionMetaLine = styled.span`
 const HeroFooterSlot = styled.div`
   padding: 12px 18px 14px;
   border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const CabinetSelectorStrip = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 22px 6px;
+  background: transparent;
+  overflow-x: auto;
+  scrollbar-width: thin;
+`
+
+const CabinetSelectorBtn = styled.button<{ $active: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4.5px 12px 4.5px 5px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.07)'
+          : 'rgba(15, 23, 42, 0.06)'};
+  background: ${({ theme, $active }) =>
+    $active
+      ? ledgerAccentSubtle(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.04)'
+        : 'rgba(15, 23, 42, 0.032)'};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 11.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition:
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  }
+
+  .nm {
+    font-weight: 700;
+  }
+
+  small {
+    font-size: 10.5px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
+  }
 `

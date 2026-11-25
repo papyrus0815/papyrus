@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiArrowLeft,
   FiArrowUpRight,
+  FiChevronDown,
   FiEdit2,
   FiPlus,
 } from 'react-icons/fi'
@@ -41,6 +42,7 @@ import {
   getTransitionsByHistoricalCountryId,
 } from '@/shared/api/historical-countries'
 import { companyApi } from '@/shared/api/company'
+import { politicalPartyApi } from '@/shared/api/political-party'
 import { useTradeRecords } from '@/entities/trade/api'
 
 import { CountryCompaniesTabSection } from './country-companies-tab-section.widget'
@@ -98,23 +100,25 @@ import {
   BentoGridAsym,
   BentoHeaderActions,
   CenturyEventMatrixAndMilestones,
-  FiguresSpotlightBentoCard,
   MilitaryForceInfographicBlock,
   type MissingAxisChip,
 } from './dashboard-infographic/bento-primitives'
+import { ExecutiveMindMapBentoHero } from './dashboard-infographic/executive-mindmap-hero'
 import {
   getHistoricalCountryTerritoryChanges,
   territoryTransferKeys,
 } from '@/shared/api/territory-transfers'
 import {
-  HistoricalDomainArchiveCard,
   HistoricalHeroFlowCard,
-  HistoricalLineageDiplomacyCard,
-  HistoricalRulerSpectrumCard,
   HistoricalTerritoryWaterfallCard,
 } from './dashboard-infographic/historical-bento-cards'
-import { ExecutiveMindMapBentoHero } from './dashboard-infographic/executive-mindmap-hero'
-import { CompactGeoBentoCard } from './dashboard-infographic/modern-bento-cards'
+import {
+  CompactGeoBentoCard,
+  DiplomacyTreatyLawBentoCard,
+  MilitaryForceBentoCard,
+  ModernEventsCard,
+  ParliamentAndPartyBentoCard,
+} from './dashboard-infographic/modern-bento-cards'
 
 export type HistoricalCountryTab =
   | 'overview' // 역사 개요
@@ -299,9 +303,11 @@ export function HistoricalCountryDetail({
       government: dashboardStats.loading.administration
         ? undefined
         : dashboardStats.administrationCount + dashboardStats.rulers.length,
-      military: dashboardStats.loading.military
-        ? undefined
-        : dashboardStats.militaryCount,
+      military:
+        dashboardStats.loading.military && dashboardStats.loading.events
+          ? undefined
+          : dashboardStats.militaryCount +
+            dashboardStats.warSummary.totalMilitaryEvents,
       elections: dashboardStats.loading.elections
         ? undefined
         : dashboardStats.electionCount,
@@ -485,6 +491,9 @@ export function HistoricalCountryDetail({
                       <HistoricalOverviewSection
                         country={country}
                         linkedModernCountries={linkedModernCountries}
+                        preloadedStats={dashboardStats}
+                        preloadedTradeRecords={tradeRecords}
+                        preloadedCompanies={allCompanies}
                         onEdit={onEdit ? () => onEdit(country) : undefined}
                         onGoToTab={handleTabChange}
                         onOpenGovernmentSubTab={(subTab) => {
@@ -713,28 +722,28 @@ function getStateTypeLabel(stateType: string): string {
 const HISTORICAL_TABS: ReadonlyArray<{
   id: HistoricalCountryTab
   label: string
-  groupEnd?: boolean
+  group: number
 }> = [
   // 1. 종합 개요
-  { id: 'overview', label: '대시보드', groupEnd: true },
-  // 2. 통치·정치·제도 (현대 국가와 동일한 핵심 위치)
-  { id: 'government', label: '정부·행정' },
-  { id: 'elections', label: '정당·선거' },
-  { id: 'laws', label: '법령', groupEnd: true },
-  // 3. 역사·인물·계승 (시간축 서사 및 정통성 계보)
-  { id: 'events', label: '사건' },
-  { id: 'figures', label: '인물' },
-  { id: 'succession', label: '계승', groupEnd: true },
+  { id: 'overview', label: '대시보드', group: 1 },
+  // 2. 통치·정치·제도
+  { id: 'government', label: '정부·행정', group: 2 },
+  { id: 'elections', label: '정당·선거', group: 2 },
+  { id: 'laws', label: '법령', group: 2 },
+  // 3. 역사·인물·계승
+  { id: 'events', label: '사건', group: 3 },
+  { id: 'figures', label: '인물', group: 3 },
+  { id: 'succession', label: '계승', group: 3 },
   // 4. 강역·군사·대외 관계
-  { id: 'regions', label: '행정구역' },
-  { id: 'military', label: '군사' },
-  { id: 'treaty', label: '조약' },
-  { id: 'relation', label: '국가 관계' },
-  { id: 'membership', label: '소속·구성', groupEnd: true },
+  { id: 'regions', label: '행정구역', group: 4 },
+  { id: 'military', label: '군사', group: 4 },
+  { id: 'treaty', label: '조약', group: 4 },
+  { id: 'relation', label: '국가 관계', group: 4 },
+  { id: 'membership', label: '소속·구성', group: 4 },
   // 5. 경제·산업·사회
-  { id: 'trade', label: '교역' },
-  { id: 'companies', label: '기업' },
-  { id: 'ethnicity', label: '민족' },
+  { id: 'trade', label: '교역', group: 5 },
+  { id: 'companies', label: '기업', group: 5 },
+  { id: 'ethnicity', label: '민족', group: 5 },
 ]
 
 const historicalTabId = (tab: HistoricalCountryTab) => `historical-country-tab-${tab}`
@@ -751,27 +760,72 @@ function HistoricalCountryTabs({
   contextBar?: ReactNode
 }) {
   const listRef = useRef<HTMLDivElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [emptyMenuOpen, setEmptyMenuOpen] = useState(false)
 
-  /* WAI-ARIA tabs — ←/→ 이웃 탭, Home/End 처음/끝(현대 국가 상세 OverviewSubTabs와 같은 규약) */
+  useEffect(() => {
+    if (!emptyMenuOpen) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setEmptyMenuOpen(false)
+      }
+    }
+    const onEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setEmptyMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onEscape)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onEscape)
+    }
+  }, [emptyMenuOpen])
+
+  const { visibleTabs, emptyTabs } = useMemo(() => {
+    const visible: Array<(typeof HISTORICAL_TABS)[number]> = []
+    const empty: Array<(typeof HISTORICAL_TABS)[number]> = []
+    for (const tab of HISTORICAL_TABS) {
+      const count = counts?.[tab.id]
+      const shouldHideAsEmpty =
+        tab.id !== 'overview' &&
+        activeTab !== tab.id &&
+        count !== undefined &&
+        count === 0
+      if (shouldHideAsEmpty) {
+        empty.push(tab)
+      } else {
+        visible.push(tab)
+      }
+    }
+    return { visibleTabs: visible, emptyTabs: empty }
+  }, [counts, activeTab])
+
   const handleKeyDown = (keyEvent: React.KeyboardEvent<HTMLDivElement>) => {
     const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']
-    if (!keys.includes(keyEvent.key)) return
+    if (!keys.includes(keyEvent.key) || visibleTabs.length === 0) return
     keyEvent.preventDefault()
-    const index = HISTORICAL_TABS.findIndex((tab) => tab.id === activeTab)
-    const last = HISTORICAL_TABS.length - 1
+    const index = visibleTabs.findIndex((tab) => tab.id === activeTab)
+    const safeIdx = index >= 0 ? index : 0
+    const last = visibleTabs.length - 1
     const nextIndex =
       keyEvent.key === 'Home'
         ? 0
         : keyEvent.key === 'End'
           ? last
           : keyEvent.key === 'ArrowLeft'
-            ? index > 0 ? index - 1 : last
-            : index < last ? index + 1 : 0
-    const target = HISTORICAL_TABS[nextIndex]
+            ? safeIdx > 0
+              ? safeIdx - 1
+              : last
+            : safeIdx < last
+              ? safeIdx + 1
+              : 0
+    const target = visibleTabs[nextIndex]
     onTabChange(target.id)
     requestAnimationFrame(() => {
       listRef.current
-        ?.querySelector<HTMLButtonElement>(`#${CSS.escape(historicalTabId(target.id))}`)
+        ?.querySelector<HTMLButtonElement>(
+          `#${CSS.escape(historicalTabId(target.id))}`,
+        )
         ?.focus()
     })
   }
@@ -787,14 +841,13 @@ function HistoricalCountryTabs({
             aria-label="역사 국가 상세 메뉴"
             onKeyDown={handleKeyDown}
           >
-            {HISTORICAL_TABS.map((tab) => {
+            {visibleTabs.map((tab, tabIdx) => {
               const active = activeTab === tab.id
               const count = counts?.[tab.id]
-              const isEmptyTab =
-                tab.id !== 'overview' &&
-                !active &&
-                count !== undefined &&
-                count === 0
+              const nextTab = visibleTabs[tabIdx + 1]
+              const showGroupDivider = Boolean(
+                nextTab && nextTab.group !== tab.group,
+              )
 
               return (
                 <Fragment key={tab.id}>
@@ -805,10 +858,9 @@ function HistoricalCountryTabs({
                     aria-selected={active}
                     tabIndex={active ? 0 : -1}
                     $active={active}
-                    data-empty={isEmptyTab ? '' : undefined}
                     onClick={() => onTabChange(tab.id)}
                   >
-                    <TabStyles.TabLabelWrap $empty={isEmptyTab}>
+                    <TabStyles.TabLabelWrap>
                       <span>{tab.label}</span>
                       {count != null && count > 0 && (
                         <TabStyles.TabCountBadge $active={active}>
@@ -817,12 +869,56 @@ function HistoricalCountryTabs({
                       )}
                     </TabStyles.TabLabelWrap>
                   </UnderlineTabButton>
-                  {tab.groupEnd && <TabStyles.TabGroupDivider aria-hidden />}
+                  {showGroupDivider && (
+                    <TabStyles.TabGroupDivider aria-hidden />
+                  )}
                 </Fragment>
               )
             })}
           </TabStyles.TopUnderlineTabNav>
         </TabStyles.Left>
+
+        {emptyTabs.length > 0 && (
+          <TabStyles.EmptyTabsMenuWrap ref={menuRef}>
+            <TabStyles.EmptyTabsTriggerBtn
+              type="button"
+              $open={emptyMenuOpen}
+              aria-haspopup="menu"
+              aria-expanded={emptyMenuOpen}
+              onClick={() => setEmptyMenuOpen((prev) => !prev)}
+            >
+              <FiPlus size={11.5} aria-hidden />
+              <span>빈 탭 {emptyTabs.length}</span>
+              <FiChevronDown size={11.5} aria-hidden />
+            </TabStyles.EmptyTabsTriggerBtn>
+            {emptyMenuOpen && (
+              <TabStyles.EmptyTabsPopover
+                role="menu"
+                aria-label="미입력 도메인 탭 목록"
+              >
+                <TabStyles.EmptyTabsPopoverLabel>
+                  아직 기록이 없는 탭 바로 열기
+                </TabStyles.EmptyTabsPopoverLabel>
+                <TabStyles.EmptyTabsGrid>
+                  {emptyTabs.map((emptyTab) => (
+                    <TabStyles.EmptyTabOptionBtn
+                      key={emptyTab.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setEmptyMenuOpen(false)
+                        onTabChange(emptyTab.id)
+                      }}
+                    >
+                      <FiPlus size={10.5} aria-hidden />
+                      {emptyTab.label}
+                    </TabStyles.EmptyTabOptionBtn>
+                  ))}
+                </TabStyles.EmptyTabsGrid>
+              </TabStyles.EmptyTabsPopover>
+            )}
+          </TabStyles.EmptyTabsMenuWrap>
+        )}
       </TabStyles.Row>
     </TabStyles.StickyContainer>
   )
@@ -835,6 +931,9 @@ function HistoricalCountryTabs({
 function HistoricalOverviewSection({
   country,
   linkedModernCountries = [],
+  preloadedStats,
+  preloadedTradeRecords,
+  preloadedCompanies,
   onEdit,
   onGoToTab,
   onOpenGovernmentSubTab,
@@ -842,6 +941,9 @@ function HistoricalOverviewSection({
 }: {
   country: UnifiedCountry
   linkedModernCountries?: Country[]
+  preloadedStats?: ReturnType<typeof useHistoricalCountryDashboard>
+  preloadedTradeRecords?: Array<{ year: number }>
+  preloadedCompanies?: Array<{ historicalCountryId?: string | null }>
   onEdit?: () => void
   onGoToTab: (tab: HistoricalCountryTab) => void
   onOpenGovernmentSubTab?: (
@@ -926,15 +1028,19 @@ function HistoricalOverviewSection({
     setIsEditorOpen(false)
   }, [])
 
-  const { data: tradeRecords = [] } = useTradeRecords(
-    country.id ? { historicalCountryId: country.id } : {},
+  const { data: fallbackTradeRecords = [] } = useTradeRecords(
+    !preloadedTradeRecords && country.id
+      ? { historicalCountryId: country.id }
+      : {},
   )
-  const { data: allCompanies = [] } = useQuery({
+  const tradeRecords = preloadedTradeRecords ?? fallbackTradeRecords
+  const { data: fallbackCompanies = [] } = useQuery({
     queryKey: ['companies', 'all'],
     queryFn: () => companyApi.getAll(),
     staleTime: 60_000,
-    enabled: Boolean(country.id),
+    enabled: Boolean(country.id) && !preloadedCompanies,
   })
+  const allCompanies = preloadedCompanies ?? fallbackCompanies
   const companyCount = useMemo(
     () =>
       allCompanies.filter(
@@ -954,20 +1060,46 @@ function HistoricalOverviewSection({
     ? getStateTypeLabel(country.stateType)
     : null
 
-  const stats = useHistoricalCountryDashboard(country, savedDescription)
+  const fallbackStats = useHistoricalCountryDashboard(
+    preloadedStats ? null : country,
+    savedDescription,
+  )
+  const stats = useMemo(() => {
+    if (!preloadedStats) return fallbackStats
+    // 개요 인라인 편집 저장 직후에는 description 완성도 칩만 최신 savedDescription 기준으로 보정
+    if (savedDescription === country.description) return preloadedStats
+    const hasDesc = Boolean(savedDescription?.trim())
+    const updatedMissing = hasDesc
+      ? preloadedStats.completeness.missing.filter(
+          (field) => field.key !== 'description',
+        )
+      : preloadedStats.completeness.missing
+    return {
+      ...preloadedStats,
+      completeness: {
+        ...preloadedStats.completeness,
+        missing: updatedMissing,
+      },
+    }
+  }, [preloadedStats, fallbackStats, savedDescription, country.description])
   const span = getCountryYearRange(country)
   const [previewEventId, setPreviewEventId] = useState<string | null>(null)
   const [previewPersonId, setPreviewPersonId] = useState<string | null>(null)
-  const [focusedTenureId, setFocusedTenureId] = useState<string | null>(null)
-  const [activeMindMapTenureId, setActiveMindMapTenureId] = useState<
-    string | null
-  >(null)
+  const [focusedTenureState, setFocusedTenureState] = useState<{
+    cid: string
+    tid: string
+  } | null>(null)
+  const [activeMindMapState, setActiveMindMapState] = useState<{
+    cid: string
+    tid: string | null
+  } | null>(null)
+  const focusedTenureId =
+    focusedTenureState?.cid === country.id ? focusedTenureState.tid : null
+  const activeMindMapTenureId =
+    activeMindMapState?.cid === country.id ? activeMindMapState.tid : null
 
   const capitalText = country.capital ? String(country.capital).trim() : ''
   const effectiveCapital = capitalText || stats.capitalDivisionName || ''
-  const hasGeoLocation =
-    stats.divisionCount > 0 ||
-    (country.latitude != null && country.longitude != null)
 
   const goFill = (field: CompletenessField) => {
     const target = (field as HistoricalCompletenessField).historicalTarget
@@ -997,7 +1129,6 @@ function HistoricalOverviewSection({
         label: field.label,
         onClick: () => goFill(field),
       })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [stats.completeness.missing, country.id],
   )
 
@@ -1053,176 +1184,179 @@ function HistoricalOverviewSection({
     enabled: Boolean(country.id),
     staleTime: 60_000,
   })
-  const hasTerritoryCard = territoryChanges.length > 0
-  const hasLineageCard =
-    stats.lineage.length > 1 ||
-    linkedModernCountries.length > 0 ||
-    stats.membershipCount + stats.relationCount + stats.treatyCount > 0
+  const { data: historicalParties = [] } = useQuery({
+    queryKey: ['political-parties', `h:${country.id}`],
+    queryFn: () => politicalPartyApi.getAll({ historicalCountryId: country.id }),
+    enabled: Boolean(country.id),
+    staleTime: 60_000,
+  })
 
-  const domainArchiveCard = (
-    <HistoricalDomainArchiveCard
-      items={[
-        {
-          key: 'figures',
-          label: '소속 인물',
-          count: stats.personCount,
-          unit: '명',
-          onOpen: () => onGoToTab('figures'),
-        },
-        {
-          key: 'events',
-          label: '역사 사건',
-          count: stats.eventCount,
-          unit: '건',
-          onOpen: () => onGoToTab('events'),
-        },
-        {
-          key: 'government',
-          label: '정부·관직',
-          count: stats.administrationCount + stats.rulers.length,
-          unit: '건',
-          onOpen: () => onGoToTab('government'),
-        },
-        {
-          key: 'military',
-          label: '군사 편제',
-          count: stats.militaryCount,
-          unit: '개',
-          onOpen: () => onGoToTab('military'),
-        },
-        {
-          key: 'regions',
-          label: '행정구역',
-          count: stats.divisionCount,
-          unit: '개',
-          onOpen: () => onGoToTab('regions'),
-        },
-        {
-          key: 'laws',
-          label: '법령·율령',
-          count: stats.lawCount,
-          unit: '건',
-          onOpen: () => onGoToTab('laws'),
-        },
-        {
-          key: 'treaty',
-          label: '체결 조약',
-          count: stats.treatyCount,
-          unit: '건',
-          onOpen: () => onGoToTab('treaty'),
-        },
-        {
-          key: 'ethnicity',
-          label: '구성 민족',
-          count: stats.ethnicityCount,
-          unit: '개',
-          onOpen: () => onGoToTab('ethnicity'),
-        },
-        {
-          key: 'relation',
-          label: '계승·외교',
-          count:
-            stats.transitionCount +
-            stats.membershipCount +
-            stats.relationCount,
-          unit: '건',
-          onOpen: () => onGoToTab('succession'),
-        },
-        {
-          key: 'trade',
-          label: '교역·상단',
-          count: tradeYearCount + companyCount,
-          unit: '건',
-          onOpen: () =>
-            onGoToTab(tradeYearCount > 0 ? 'trade' : 'companies'),
-        },
-      ]}
+  const hasTerritoryCard = territoryChanges.length > 0
+  const hasEventsBlock =
+    stats.eventCenturyDomainCounts.length > 0 ||
+    stats.milestoneEvents.length > 0
+  const hasMilitaryBlock = stats.militaryCount > 0
+  const hasParliamentBlock =
+    historicalParties.length > 0 ||
+    stats.electionCount > 0 ||
+    Boolean(stats.civicSnapshot.latestLegislativeElectionId) ||
+    Boolean(stats.civicSnapshot.activePolitySeats?.lowerSeats) ||
+    Boolean(stats.civicSnapshot.activePolitySeats?.upperSeats)
+  const hasDiplomacyBlock =
+    stats.lawCount > 0 || stats.treatyCount > 0 || stats.ethnicityCount > 0
+
+  const historicalDomainCards: Array<{ key: string; node: ReactNode }> = []
+  if (hasParliamentBlock) {
+    historicalDomainCards.push({
+      key: 'parliament',
+      node: (
+        <ParliamentAndPartyBentoCard
+          parties={historicalParties}
+          civicSnapshot={stats.civicSnapshot}
+          currentCabinet={null}
+          electionCount={stats.electionCount}
+          modernElectionCount={stats.electionCount}
+          nextElection={null}
+          recentElection={stats.recentElection}
+          polityScope="historical"
+          onOpenElections={() => onGoToTab('elections')}
+          onOpenPoliticalSystem={() =>
+            onOpenGovernmentSubTab
+              ? onOpenGovernmentSubTab('system')
+              : onGoToTab('government')
+          }
+          onOpenPartyCatalog={() => onGoToTab('elections')}
+        />
+      ),
+    })
+  }
+  if (hasDiplomacyBlock) {
+    historicalDomainCards.push({
+      key: 'diplomacy',
+      node: (
+        <DiplomacyTreatyLawBentoCard
+          treatyCount={stats.treatyCount}
+          lawCount={stats.lawCount}
+          ethnicityCount={stats.ethnicityCount}
+          civicSnapshot={stats.civicSnapshot}
+          onOpenTreaties={() => onGoToTab('treaty')}
+          onSelectTreaty={(tid) => navigate(pathKeys.treaties.detail(tid))}
+          onOpenLaws={() => onGoToTab('laws')}
+          onOpenEthnicity={() => onGoToTab('ethnicity')}
+        />
+      ),
+    })
+  }
+  if (hasMilitaryBlock) {
+    historicalDomainCards.push({
+      key: 'military',
+      node: (
+        <MilitaryForceBentoCard
+          militaryCount={stats.militaryCount}
+          highCommandCount={stats.highCommandCount}
+          militaryBranchBreakdown={stats.militaryBranchBreakdown}
+          warSummary={stats.warSummary}
+          onOpenMilitary={() => onGoToTab('military')}
+        />
+      ),
+    })
+  }
+
+  const historicalDomainRows: ReactNode[] = []
+  for (let rowIdx = 0; rowIdx < historicalDomainCards.length; rowIdx += 2) {
+    const first = historicalDomainCards[rowIdx]
+    const second = historicalDomainCards[rowIdx + 1]
+    if (second) {
+      historicalDomainRows.push(
+        <BentoGrid2Col key={`${first.key}-${second.key}`}>
+          {first.node}
+          {second.node}
+        </BentoGrid2Col>,
+      )
+    } else {
+      historicalDomainRows.push(<div key={first.key}>{first.node}</div>)
+    }
+  }
+
+  const geoCardNode = (
+    <CompactGeoBentoCard
+      country={country}
+      cityCount={stats.divisionCount}
+      onOpenRegions={(divId) => {
+        if (divId) {
+          navigate(
+            `${pathKeys.countryRegions(country.id)}?division_id=${encodeURIComponent(divId)}`,
+          )
+        } else {
+          onGoToTab('regions')
+        }
+      }}
     />
   )
-
-  const hasEventsOrMilitary =
-    stats.eventCenturyDomainCounts.length > 0 ||
-    stats.milestoneEvents.length > 0 ||
-    stats.militaryCount > 0 ||
-    tradeYearCount > 0 ||
-    companyCount > 0
-
-  const eventsAndForceCard = hasEventsOrMilitary ? (
-    <BentoCard aria-label="세기별 역사 사건 밀도 및 군사·교역 요약">
-      <BentoCardHeader>
-        <BentoCardTitleGroup>
-          <BentoCardTitle>세기별 사건 매트릭스 · 분수령 사건 · 군사</BentoCardTitle>
-          {stats.eventCount > 0 ? (
-            <BentoCardBadge>사건 {stats.eventCount}건</BentoCardBadge>
-          ) : null}
-        </BentoCardTitleGroup>
-        <BentoHeaderActions>
-          {tradeYearCount > 0 ? (
-            <BentoActionBtn type="button" onClick={() => onGoToTab('trade')}>
-              교역 {tradeYearCount}개년
-            </BentoActionBtn>
-          ) : null}
-          {companyCount > 0 ? (
-            <BentoActionBtn
-              type="button"
-              onClick={() => onGoToTab('companies')}
-            >
-              기업·상단 {companyCount}
-            </BentoActionBtn>
-          ) : null}
-          <BentoActionBtn
-            type="button"
-            $accent
-            onClick={() => onGoToTab('events')}
-          >
-            주요 사건 <FiArrowUpRight size={11} />
-          </BentoActionBtn>
-        </BentoHeaderActions>
-      </BentoCardHeader>
-
-      <BentoCardBody>
-        {stats.eventCenturyDomainCounts.length > 0 ||
-        stats.milestoneEvents.length > 0 ? (
-          <CenturyEventMatrixAndMilestones
-            buckets={stats.eventCenturyDomainCounts}
-            domainBreakdown={stats.eventDomainBreakdown}
-            milestones={stats.milestoneEvents}
-            onSelectCentury={(cent) => onOpenEventsCentury(cent)}
-            onSelectCell={(cent, dom) => onOpenEventsCentury(cent, dom)}
-            onSelectEvent={(eid) => setPreviewEventId(eid)}
-          />
-        ) : null}
-
-        {(stats.militaryCount > 0 ||
-          stats.warSummary.totalMilitaryEvents > 0) && (
-          <>
-            {stats.eventCenturyDomainCounts.length > 0 ||
-            stats.milestoneEvents.length > 0 ? (
-              <BentoDivider />
-            ) : null}
-            <MilitaryForceInfographicBlock
-              militaryCount={stats.militaryCount}
-              highCommandCount={stats.highCommandCount}
-              branchBreakdown={stats.militaryBranchBreakdown}
-              warSummary={stats.warSummary}
-              onOpenMilitary={() => onGoToTab('military')}
-            />
-          </>
-        )}
-      </BentoCardBody>
-    </BentoCard>
-  ) : null
 
   return (
     <DashboardRoot ref={rootRef}>
       <BentoCanvas>
-        {/* 1단 (전폭 히어로): 통치 군주·황제 & 당대 조정 관서·내각 마인드맵 */}
+        {/* 1단 비대칭 히어로 벤토: [좌측: 국가 형태 · 역대 통치자] | [우측: 강역 지도 · 행정구역] */}
+        <BentoGridAsym $leftFr={1.34} $rightFr={1}>
+          <HistoricalHeroFlowCard
+            countryName={country.name}
+            periodLabel={period}
+            durationYears={durationYears}
+            stateTypeLabel={stateTypeLabel}
+            entityKindLabel={entityKindLabel}
+            effectiveCapital={effectiveCapital}
+            savedDescription={savedDescription}
+            nameOrigin={resolvedNameOrigin}
+            historyText={resolvedHistory}
+            isEditorOpen={isEditorOpen}
+            isSaving={updateMutation.isPending}
+            onEditorChange={(html) => {
+              editorValueRef.current = html
+            }}
+            onOpenEditor={handleOpenEditor}
+            onSaveEditor={handleSave}
+            onCancelEditor={handleClose}
+            onEditBasic={onEdit}
+            founding={stats.founding}
+            rulersCount={stats.rulers.length}
+            rulers={stats.rulers}
+            activeTenureId={activeMindMapTenureId ?? focusedTenureId}
+            onFocusRulerTenure={(tid) =>
+              setFocusedTenureState({ cid: country.id, tid })
+            }
+            onOpenRulersTab={() =>
+              onOpenGovernmentSubTab
+                ? onOpenGovernmentSubTab('cabinets')
+                : onGoToTab('government')
+            }
+            politicalSystems={stats.politicalSystems}
+            onOpenGovernment={() =>
+              onOpenGovernmentSubTab
+                ? onOpenGovernmentSubTab('system')
+                : onGoToTab('government')
+            }
+            onOpenSuccession={() => onGoToTab('succession')}
+            onSelectPerson={(pid) => setPreviewPersonId(pid)}
+            onSelectEvent={(eid) => setPreviewEventId(eid)}
+          />
+
+          {geoCardNode}
+        </BentoGridAsym>
+
+        {/* 2단 전폭: 당대 행정 관서 · 내각 수장 얼굴 및 대신·장관 마인드맵 */}
         <ExecutiveMindMapBentoHero
           historicalCountryId={country.id}
           countryName={country.name}
           focusedTenureId={focusedTenureId}
-          onActiveTenureChange={setActiveMindMapTenureId}
-          onEditOverview={handleOpenEditor}
+          onActiveTenureChange={(tid) =>
+            setActiveMindMapState((prev) =>
+              prev?.cid === country.id && prev.tid === tid
+                ? prev
+                : { cid: country.id, tid },
+            )
+          }
+          cabinetMindMapMode
           onOpenPoliticalSystem={() =>
             onOpenGovernmentSubTab
               ? onOpenGovernmentSubTab('system')
@@ -1238,166 +1372,37 @@ function HistoricalOverviewSection({
               ? onOpenGovernmentSubTab('ministries')
               : onGoToTab('government')
           }
-          onOpenElections={() => onGoToTab('elections')}
           onSelectPerson={(pid) => setPreviewPersonId(pid)}
         />
 
-        {/* 2단: 역대 통치자 비례 치세 스펙트럼 (클릭 시 상단 마인드맵 즉시 연동) */}
-        <HistoricalRulerSpectrumCard
-          rulers={stats.rulers}
-          politicalSystems={stats.politicalSystems}
-          spanStart={span.start}
-          spanEnd={span.end}
-          activeTenureId={activeMindMapTenureId}
-          onFocusRulerTenure={(tid) => setFocusedTenureId(tid)}
-          onSelectPerson={(pid) => setPreviewPersonId(pid)}
-          onOpenPoliticalSystem={() =>
-            onOpenGovernmentSubTab
-              ? onOpenGovernmentSubTab('system')
-              : onGoToTab('government')
-          }
-          onOpenRulersTab={() =>
-            onOpenGovernmentSubTab
-              ? onOpenGovernmentSubTab('cabinets')
-              : onGoToTab('government')
-          }
-        />
+        {/* 3단: [의회·정당·선거 → 헌법·법령·조약 → 군사·전적] 권력 작동 우선순위 벤토 */}
+        {historicalDomainRows}
 
-        {/* 3단: 왕조·정치체 정체성 & 성립 → 존속 → 종식 타임라인 플로우 */}
-        <HistoricalHeroFlowCard
-          countryName={country.name}
-          periodLabel={period}
-          durationYears={durationYears}
-          stateTypeLabel={stateTypeLabel}
-          entityKindLabel={entityKindLabel}
-          effectiveCapital={effectiveCapital}
-          savedDescription={savedDescription}
-          nameOrigin={resolvedNameOrigin}
-          historyText={resolvedHistory}
-          isEditorOpen={isEditorOpen}
-          isSaving={updateMutation.isPending}
-          onEditorChange={(html) => {
-            editorValueRef.current = html
-          }}
-          onOpenEditor={handleOpenEditor}
-          onSaveEditor={handleSave}
-          onCancelEditor={handleClose}
-          onEditBasic={onEdit}
-          founding={stats.founding}
-          rulersCount={stats.rulers.length}
-          politicalSystems={stats.politicalSystems}
-          onOpenGovernment={() =>
-            onOpenGovernmentSubTab
-              ? onOpenGovernmentSubTab('system')
-              : onGoToTab('government')
-          }
-          onOpenSuccession={() => onGoToTab('succession')}
-          onSelectPerson={(pid) => setPreviewPersonId(pid)}
-          onSelectEvent={(eid) => setPreviewEventId(eid)}
-        />
+        {/* 4단: 강역 변천(존재 시) */}
+        {hasTerritoryCard ? (
+          <HistoricalTerritoryWaterfallCard
+            historicalCountryId={country.id}
+            onSelectEvent={(eid) => setPreviewEventId(eid)}
+          />
+        ) : null}
 
-        {/* 3단: 전후 계승 스팬·대외 관계 & 강역 변천 워터폴 / 도메인 아카이브 스냅샷 (빈 칸 없는 적응형 페어링) */}
-        {hasLineageCard && hasTerritoryCard ? (
-          <>
-            <BentoGrid2Col>
-              <HistoricalLineageDiplomacyCard
-                currentId={country.id}
-                lineage={stats.lineage}
-                linkedModernCountries={linkedModernCountries}
-                membershipCount={stats.membershipCount}
-                relationCount={stats.relationCount}
-                treatyCount={stats.treatyCount}
-                onSelectCountry={(cid) => navigate(pathKeys.countryDetail(cid))}
-                onOpenSuccession={() => onGoToTab('succession')}
-                onOpenMembership={() => onGoToTab('membership')}
-                onOpenRelations={() => onGoToTab('relation')}
-                onOpenTreaties={() => onGoToTab('treaty')}
-              />
+        {/* 5단: 역사 연표 · 핵심 전환점 인포그래픽 */}
+        {hasEventsBlock ? (
+          <ModernEventsCard
+            eventCount={stats.eventCount}
+            centuryBuckets={stats.eventCenturyDomainCounts}
+            domainBreakdown={stats.eventDomainBreakdown}
+            milestoneEvents={stats.milestoneEvents}
+            warSummary={!hasMilitaryBlock ? stats.warSummary : undefined}
+            onSelectCentury={(cent) => onOpenEventsCentury(cent)}
+            onSelectCell={(cent, dom) => onOpenEventsCentury(cent, dom)}
+            onSelectEvent={(eid) => setPreviewEventId(eid)}
+            onOpenEvents={() => onGoToTab('events')}
+            onOpenMilitary={() => onGoToTab('military')}
+          />
+        ) : null}
 
-              <HistoricalTerritoryWaterfallCard
-                historicalCountryId={country.id}
-                onSelectEvent={(eid) => setPreviewEventId(eid)}
-              />
-            </BentoGrid2Col>
-            {domainArchiveCard}
-          </>
-        ) : hasLineageCard ? (
-          <BentoGrid2Col>
-            <HistoricalLineageDiplomacyCard
-              currentId={country.id}
-              lineage={stats.lineage}
-              linkedModernCountries={linkedModernCountries}
-              membershipCount={stats.membershipCount}
-              relationCount={stats.relationCount}
-              treatyCount={stats.treatyCount}
-              onSelectCountry={(cid) => navigate(pathKeys.countryDetail(cid))}
-              onOpenSuccession={() => onGoToTab('succession')}
-              onOpenMembership={() => onGoToTab('membership')}
-              onOpenRelations={() => onGoToTab('relation')}
-              onOpenTreaties={() => onGoToTab('treaty')}
-            />
-            {domainArchiveCard}
-          </BentoGrid2Col>
-        ) : hasTerritoryCard ? (
-          <BentoGrid2Col>
-            <HistoricalTerritoryWaterfallCard
-              historicalCountryId={country.id}
-              onSelectEvent={(eid) => setPreviewEventId(eid)}
-            />
-            {domainArchiveCard}
-          </BentoGrid2Col>
-        ) : (
-          domainArchiveCard
-        )}
-
-        {/* 4단: 세기별 사건·군사력 & (좌표·행정구역 보유 시) 컴팩트 강역 지도 */}
-        {eventsAndForceCard && hasGeoLocation ? (
-          <BentoGridAsym $leftFr={1.3} $rightFr={1}>
-            {eventsAndForceCard}
-            <CompactGeoBentoCard
-              country={country}
-              cityCount={stats.divisionCount}
-              onOpenRegions={(divId) => {
-                if (divId) {
-                  navigate(
-                    `${pathKeys.countryRegions(country.id)}?division_id=${encodeURIComponent(divId)}`,
-                  )
-                } else {
-                  onGoToTab('regions')
-                }
-              }}
-            />
-          </BentoGridAsym>
-        ) : (
-          <>
-            {eventsAndForceCard}
-            {hasGeoLocation ? (
-              <CompactGeoBentoCard
-                country={country}
-                cityCount={stats.divisionCount}
-                onOpenRegions={(divId) => {
-                  if (divId) {
-                    navigate(
-                      `${pathKeys.countryRegions(country.id)}?division_id=${encodeURIComponent(divId)}`,
-                    )
-                  } else {
-                    onGoToTab('regions')
-                  }
-                }}
-              />
-            ) : null}
-          </>
-        )}
-
-        {/* 5단: 소속 인물 역할·시대 분포 도넛 & 주요 인물 초상 갤러리 */}
-        <FiguresSpotlightBentoCard
-          spotlight={stats.personSpotlight}
-          personCount={stats.personCount}
-          onSelectPerson={(pid) => setPreviewPersonId(pid)}
-          onOpenPersonsTab={() => onGoToTab('figures')}
-        />
-
-        {/* 하단 1줄: 아카이브 완성도 도넛 링 + 미입력 보완 칩 + 최근 기록 티커 */}
+        {/* 하단: 더 채울 수 있는 기록 + 최근 편집 */}
         <ArchiveFootprintBar
           filled={stats.completeness.filled}
           total={stats.completeness.total}
@@ -1432,6 +1437,13 @@ function HistoricalOverviewSection({
 const DashboardRoot = styled(DashboardStyles.DashboardRoot)`
   container-type: inline-size;
   container-name: historical-dashboard;
+`
+
+const HeroColumnStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 `
 
 // ============================================

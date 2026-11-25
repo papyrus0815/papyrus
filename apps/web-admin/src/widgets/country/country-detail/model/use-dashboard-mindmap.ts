@@ -96,6 +96,15 @@ export interface MindMapMilitaryCommandItem {
   startDate: string | null
 }
 
+export interface MindMapSelectorItem {
+  id: string
+  mode: 'cabinet' | 'fallback'
+  label: string
+  subLabel: string | null
+  imageUrl: string | null
+  active: boolean
+}
+
 interface RawTenureRow {
   id: string
   personId?: string | null
@@ -534,23 +543,52 @@ export function useDashboardMindMap({
 
   const cabinets = useMemo(() => {
     const rows = cabinetsQuery.data ?? []
-    return [...rows].sort(compareCabinetsNewestFirst)
-  }, [cabinetsQuery.data])
+    const scopedRows = isModernScope
+      ? rows.filter(
+          (cab) =>
+            !(cab as { historicalCountryId?: string | null }).historicalCountryId &&
+            !cab.headTenure?.historicalCountryId,
+        )
+      : rows
+    return [...scopedRows].sort(compareCabinetsNewestFirst)
+  }, [cabinetsQuery.data, isModernScope])
 
   const cabinetHeadIds = useMemo(() => {
     const set = new Set<string>()
-    for (const c of cabinets) {
-      if (c.headTenure?.id) set.add(c.headTenure.id)
+    for (const cab of cabinets) {
+      if (cab.headTenure?.id) set.add(cab.headTenure.id)
     }
     return set
   }, [cabinets])
 
   const fallbackHeadTenures = useMemo(() => {
     const rows = (tenuresQuery.data ?? []) as RawTenureRow[]
+    const hasDirectHistoricalHeads = historicalCountryId
+      ? rows.some((row) => {
+          const posType =
+            row.positionType ?? row.positionDefinition?.positionType ?? ''
+          return (
+            HEAD_TYPES.has(posType) &&
+            row.historicalCountryId === historicalCountryId
+          )
+        })
+      : false
+
     const filtered = rows.filter((row) => {
       const type =
         row.positionType ?? row.positionDefinition?.positionType ?? ''
       if (!HEAD_TYPES.has(type)) return false
+      if (isModernScope && row.historicalCountryId) {
+        return false
+      }
+      if (
+        historicalCountryId &&
+        hasDirectHistoricalHeads &&
+        row.historicalCountryId &&
+        row.historicalCountryId !== historicalCountryId
+      ) {
+        return false
+      }
       if (!historicalCountryId && cabinets.length > 0 && cabinetHeadIds.has(row.id)) {
         return false
       }
@@ -563,25 +601,29 @@ export function useDashboardMindMap({
 
     // 현대는 최신순(인덱스 0 = 현직), 역사는 연대기 오름차순(인덱스 0 = 초대 군주/원수) 정렬이 자연스럽지만
     // 일관된 좌우 네비게이션을 위해 최신순 정렬 후 역사국가는 기본 선택을 마지막/대표 군주 또는 초대 군주로 설정
-    return filtered.sort((a, b) => {
-      const ka = getTenureChronologyKey(a) ?? Number.MIN_SAFE_INTEGER
-      const kb = getTenureChronologyKey(b) ?? Number.MIN_SAFE_INTEGER
-      return kb - ka
+    return filtered.sort((left, right) => {
+      const keyLeft = getTenureChronologyKey(left) ?? Number.MIN_SAFE_INTEGER
+      const keyRight = getTenureChronologyKey(right) ?? Number.MIN_SAFE_INTEGER
+      return keyRight - keyLeft
     })
-  }, [tenuresQuery.data, historicalCountryId, cabinets.length, cabinetHeadIds])
+  }, [tenuresQuery.data, historicalCountryId, isModernScope, cabinets.length, cabinetHeadIds])
 
   // 국가 변경 시 초기 모드 설정
   useEffect(() => {
     if (historicalCountryId) {
-      setHeadViewMode(
-        fallbackHeadTenures.length > 0 || cabinets.length === 0
-          ? 'fallback'
-          : 'cabinet',
-      )
-    } else {
-      setHeadViewMode('cabinet')
+      setHeadViewMode(cabinets.length > 0 ? 'cabinet' : 'fallback')
+      return
     }
-  }, [countryId, historicalCountryId, fallbackHeadTenures.length, cabinets.length])
+    const hasModernCabinet = cabinets.some(
+      (cab) => !cab.headTenure?.historicalCountryId,
+    )
+    const hasModernFallbackHead = fallbackHeadTenures.some(
+      (row) => !row.historicalCountryId,
+    )
+    setHeadViewMode(
+      !hasModernCabinet && hasModernFallbackHead ? 'fallback' : 'cabinet',
+    )
+  }, [countryId, historicalCountryId, fallbackHeadTenures, cabinets])
 
   useEffect(() => {
     if (cabinets.length === 0) {
@@ -1171,16 +1213,73 @@ export function useDashboardMindMap({
     return historicalCountryId ? '군주 · 통치자' : '국가원수 · 정부수반'
   }, [activePoliticalSystem, regimeMeta, historicalCountryId])
 
-  // 정권 / 치세 좌우 슬라이드 네비게이션
+  // 정권 / 행정부 좌우 화살표 통합 네비게이션 (리스트 노출 없이 화살표만으로 모든 역대 행정부·치세 전환)
   const navigation = useMemo(() => {
+    if (!historicalCountryId) {
+      type UnifiedStep = {
+        mode: 'cabinet' | 'fallback'
+        id: string
+        label: string
+        chronKey: number
+      }
+      const unified: UnifiedStep[] = [
+        ...cabinets.map((cab) => ({
+          mode: 'cabinet' as const,
+          id: cab.id,
+          label: formatCabLabel(cab),
+          chronKey:
+            getTenureChronologyKey(
+              (cab.headTenure as RawTenureRow | undefined) ?? {},
+            ) ?? Number.MAX_SAFE_INTEGER,
+        })),
+        ...fallbackHeadTenures.map((row) => ({
+          mode: 'fallback' as const,
+          id: row.id,
+          label: `${resolveTenureDisplayName(row)} 행정부`,
+          chronKey: getTenureChronologyKey(row) ?? Number.MIN_SAFE_INTEGER,
+        })),
+      ].sort((left, right) => right.chronKey - left.chronKey)
+
+      if (unified.length <= 1) return null
+      const activeMode = effectiveFallbackMode ? 'fallback' : 'cabinet'
+      const activeId = effectiveFallbackMode
+        ? activeFallbackHead?.id
+        : selectedCabinet?.id
+      const idx = Math.max(
+        0,
+        unified.findIndex(
+          (step) => step.mode === activeMode && step.id === activeId,
+        ),
+      )
+      const olderStep = idx < unified.length - 1 ? unified[idx + 1] : null
+      const newerStep = idx > 0 ? unified[idx - 1] : null
+      const activateStep = (step: UnifiedStep) => {
+        if (step.mode === 'cabinet') {
+          setSelectedCabinetId(step.id)
+          setHeadViewMode('cabinet')
+        } else {
+          setSelectedFallbackHeadId(step.id)
+          setHeadViewMode('fallback')
+        }
+      }
+      return {
+        currentOrdinalIndex: unified.length - idx,
+        total: unified.length,
+        olderLabel: olderStep?.label ?? null,
+        newerLabel: newerStep?.label ?? null,
+        onOlder: olderStep ? () => activateStep(olderStep) : null,
+        onNewer: newerStep ? () => activateStep(newerStep) : null,
+      }
+    }
+
     if (effectiveFallbackMode) {
       if (fallbackHeadTenures.length <= 1) return null
       const idx = Math.max(
         0,
-        fallbackHeadTenures.findIndex((r) => r.id === activeFallbackHead?.id),
+        fallbackHeadTenures.findIndex(
+          (row) => row.id === activeFallbackHead?.id,
+        ),
       )
-      // 배열은 최신순(0 = 최신, length-1 = 초대)이므로:
-      // 이전 시대(과거) = idx + 1, 다음 시대(후대/최근) = idx - 1
       const olderRow =
         idx < fallbackHeadTenures.length - 1
           ? fallbackHeadTenures[idx + 1]
@@ -1203,7 +1302,7 @@ export function useDashboardMindMap({
     if (cabinets.length <= 1) return null
     const idx = Math.max(
       0,
-      cabinets.findIndex((c) => c.id === selectedCabinet?.id),
+      cabinets.findIndex((cab) => cab.id === selectedCabinet?.id),
     )
     const olderCab = idx < cabinets.length - 1 ? cabinets[idx + 1] : null
     const newerCab = idx > 0 ? cabinets[idx - 1] : null
@@ -1216,6 +1315,7 @@ export function useDashboardMindMap({
       onNewer: newerCab ? () => setSelectedCabinetId(newerCab.id) : null,
     }
   }, [
+    historicalCountryId,
     effectiveFallbackMode,
     fallbackHeadTenures,
     activeFallbackHead,
@@ -1233,11 +1333,12 @@ export function useDashboardMindMap({
       ? Number(headVoteShareRaw)
       : null
 
-  const activeCabinetLabel = selectedCabinet
-    ? formatCabLabel(selectedCabinet)
-    : activeFallbackHead
-      ? `${resolveTenureDisplayName(activeFallbackHead)} 치세`
-      : null
+  const activeCabinetLabel =
+    !effectiveFallbackMode && selectedCabinet
+      ? formatCabLabel(selectedCabinet)
+      : activeFallbackHead
+        ? `${resolveTenureDisplayName(activeFallbackHead)} ${isModernScope ? '행정부' : '치세'}`
+        : null
 
   const militaryUnitsQuery = useQuery({
     queryKey: [
@@ -1314,6 +1415,45 @@ export function useDashboardMindMap({
     selectedCabinet,
   ])
 
+  const selectorItems = useMemo<MindMapSelectorItem[]>(() => {
+    if (!effectiveFallbackMode && cabinets.length > 0) {
+      return cabinets.slice(0, 8).map((cab) => {
+        const ht = cab.headTenure as RawTenureRow | undefined
+        const headName = ht ? resolveTenureDisplayName(ht) : null
+        return {
+          id: cab.id,
+          mode: 'cabinet',
+          label: formatCabLabel(cab),
+          subLabel:
+            headName && !formatCabLabel(cab).includes(headName)
+              ? headName
+              : null,
+          imageUrl: ht?.person?.profileImageUrl ?? null,
+          active: cab.id === selectedCabinet?.id,
+        }
+      })
+    }
+    return fallbackHeadTenures.slice(0, 8).map((row) => {
+      const startStr = formatShortMindMapDate(resolveTenureStartIso(row))
+      const yearOnly = startStr ? startStr.split('.')[0] : null
+      return {
+        id: row.id,
+        mode: 'fallback',
+        label: resolveTenureDisplayName(row),
+        subLabel: yearOnly,
+        imageUrl: row.person?.profileImageUrl ?? null,
+        active: row.id === activeFallbackHead?.id,
+      }
+    })
+  }, [
+    effectiveFallbackMode,
+    cabinets,
+    formatCabLabel,
+    selectedCabinet?.id,
+    fallbackHeadTenures,
+    activeFallbackHead?.id,
+  ])
+
   return {
     isLoading:
       cabinetsQuery.isLoading ||
@@ -1326,6 +1466,7 @@ export function useDashboardMindMap({
     vacantSlots,
     militaryBranches,
     eraDepartments,
+    selectorItems,
     activeCabinetDates: {
       startDate: activeCabinetScope.startDate,
       endDate: activeCabinetScope.endDate,

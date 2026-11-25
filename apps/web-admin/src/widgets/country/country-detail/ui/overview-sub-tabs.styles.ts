@@ -224,3 +224,98 @@ export const TabCountBadge = styled.span<{ $active?: boolean }>`
   color: ${({ theme, $active }) =>
     $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
 `
+
+export const EmptyTabsMenuWrap = styled.div`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 6px 0;
+`
+
+export const EmptyTabsTriggerBtn = styled.button<{ $open?: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: ${RADIUS.SM};
+  border: 1px dashed
+    ${({ theme, $open }) =>
+      $open ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $open }) =>
+    $open ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ theme, $open }) =>
+    $open ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  ${DIGIT_DISPLAY}
+  transition:
+    color ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-style: solid;
+    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+export const EmptyTabsPopover = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  min-width: 210px;
+  max-width: 280px;
+  padding: 8px;
+  border-radius: 9px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+export const EmptyTabsPopoverLabel = styled.span`
+  padding: 2px 4px 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const EmptyTabsGrid = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+export const EmptyTabOptionBtn = styled.button`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4.5px 9px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  }
+`

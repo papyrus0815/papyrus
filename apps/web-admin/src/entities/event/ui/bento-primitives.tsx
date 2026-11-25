@@ -357,46 +357,52 @@ export interface SegmentSlice {
   label: string
   value: number
   color: string
+  gradient?: string
   meta?: string
 }
 
 export function StackedSegmentBar({
   slices,
-  height = 9,
+  height = 10,
   showPercent = false,
 }: {
   slices: SegmentSlice[]
   height?: number
   showPercent?: boolean
 }) {
-  const valid = slices.filter((s) => s.value > 0)
-  const total = valid.reduce((acc, s) => acc + s.value, 0)
-  if (total <= 0) return null
+  const validSlices = slices.filter((sliceItem) => sliceItem.value > 0)
+  const totalValue = validSlices.reduce(
+    (sumAcc, sliceItem) => sumAcc + sliceItem.value,
+    0,
+  )
+  if (totalValue <= 0) return null
 
   return (
     <SegmentWrap>
       <SegmentTrack $height={height} aria-hidden="true">
-        {valid.map((s) => (
+        {validSlices.map((sliceItem) => (
           <SegmentPiece
-            key={s.key}
-            $color={s.color}
-            style={{ flexGrow: s.value }}
-            title={`${s.label}: ${s.value.toLocaleString('ko-KR')} (${Math.round((s.value / total) * 100)}%)`}
+            key={sliceItem.key}
+            style={{
+              flex: `${sliceItem.value} 1 0%`,
+              background: sliceItem.gradient ?? sliceItem.color,
+            }}
+            title={`${sliceItem.label}: ${sliceItem.value.toLocaleString('ko-KR')} (${Math.round((sliceItem.value / totalValue) * 100)}%)`}
           />
         ))}
       </SegmentTrack>
       <SegmentLegend>
-        {valid.map((s) => {
-          const pct = Math.round((s.value / total) * 100)
+        {validSlices.map((sliceItem) => {
+          const pct = Math.round((sliceItem.value / totalValue) * 100)
           return (
-            <LegendItem key={s.key}>
-              <LegendSwatch $color={s.color} />
-              <LegendLabel>{s.label}</LegendLabel>
+            <LegendItem key={sliceItem.key}>
+              <LegendSwatch style={{ background: sliceItem.color }} />
+              <LegendLabel>{sliceItem.label}</LegendLabel>
               <LegendVal>
-                {s.meta ??
+                {sliceItem.meta ??
                   (showPercent
                     ? `${pct}%`
-                    : s.value.toLocaleString('ko-KR'))}
+                    : sliceItem.value.toLocaleString('ko-KR'))}
               </LegendVal>
             </LegendItem>
           )
@@ -409,45 +415,55 @@ export function StackedSegmentBar({
 const SegmentWrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 `
 
 const SegmentTrack = styled.div<{ $height: number }>`
   display: flex;
-  gap: 2px;
+  gap: 2.5px;
   width: 100%;
   height: ${({ $height }) => $height}px;
   border-radius: 999px;
   overflow: hidden;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 1.5px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(15, 23, 42, 0.055)'};
 `
 
-const SegmentPiece = styled.div<{ $color: string }>`
-  flex: 1 1 0;
-  min-width: 3px;
-  background: ${({ $color }) => $color};
+const SegmentPiece = styled.div`
+  min-width: 4px;
+  height: 100%;
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
 `
 
 const SegmentLegend = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px 12px;
+  gap: 5px 10px;
 `
 
 const LegendItem = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.04)'
+      : 'rgba(15, 23, 42, 0.032)'};
   font-size: 11px;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const LegendSwatch = styled.span<{ $color: string }>`
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  background: ${({ $color }) => $color};
+const LegendSwatch = styled.span`
+  width: 7.5px;
+  height: 7.5px;
+  border-radius: 50%;
   flex-shrink: 0;
 `
 
@@ -482,17 +498,44 @@ export function MiniSvgSparkline({
   formatValue?: (val: number) => string
 }) {
   const theme = useTheme()
+  const gradUid = React.useId().replace(/:/g, '')
   const [hoverIdx, setHoverIdx] = React.useState<number | null>(null)
   const strokeColor = color ?? ledgerAccent(theme.mode)
 
   if (points.length === 0) return null
 
-  const sorted = [...points].sort((a, b) => a.year - b.year)
+  const sorted = [...points].sort((left, right) => left.year - right.year)
   if (sorted.length === 1) {
+    const singlePt = sorted[0]
+    const formattedSingle = formatValue
+      ? formatValue(singlePt.value)
+      : singlePt.value.toLocaleString('ko-KR', { maximumFractionDigits: 2 })
+    const isPercentLike = singlePt.value > 0 && singlePt.value <= 100
+    if (isPercentLike) {
+      const clampedPct = Math.max(4, Math.min(100, singlePt.value))
+      return (
+        <SingleGaugeWrap>
+          <SingleGaugeMeta>
+            <span>{singlePt.year}년 기준</span>
+            <strong style={{ color: strokeColor }}>{formattedSingle}</strong>
+          </SingleGaugeMeta>
+          <SingleGaugeTrack>
+            <SingleGaugeFill
+              style={{
+                width: `${clampedPct}%`,
+                background: `linear-gradient(90deg, ${strokeColor}, #6366f1, #10b981)`,
+              }}
+            />
+          </SingleGaugeTrack>
+        </SingleGaugeWrap>
+      )
+    }
     return (
       <SinglePointBox style={{ height }}>
         <SingleDot $color={strokeColor} />
-        <span>{sorted[0].year}년 단일 시점</span>
+        <span>
+          {singlePt.year}년 · <strong>{formattedSingle}</strong>
+        </span>
       </SinglePointBox>
     )
   }
@@ -501,20 +544,20 @@ export function MiniSvgSparkline({
   const maxX = sorted[sorted.length - 1].year
   const spanX = Math.max(1, maxX - minX)
 
-  const vals = sorted.map((p) => p.value)
+  const vals = sorted.map((pt) => pt.value)
   let minY = Math.min(...vals)
   let maxY = Math.max(...vals)
   if (showZeroLine) {
     minY = Math.min(minY, 0)
     maxY = Math.max(maxY, 0)
   }
-  const padY = (maxY - minY || Math.abs(maxY) || 1) * 0.14
+  const padY = (maxY - minY || Math.abs(maxY) || 1) * 0.16
   const lo = minY - padY
   const hi = maxY + padY
   const spanY = Math.max(1e-6, hi - lo)
 
   const toX = (yr: number) => 4 + ((yr - minX) / spanX) * 92
-  const toY = (val: number) => 92 - ((val - lo) / spanY) * 84
+  const toY = (val: number) => 90 - ((val - lo) / spanY) * 80
 
   const linePath = sorted
     .map(
@@ -530,10 +573,13 @@ export function MiniSvgSparkline({
       : sorted[sorted.length - 1]
   const zeroY = showZeroLine && lo < 0 && hi > 0 ? toY(0) : null
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
+  const handleMouseMove = (moveEvent: React.MouseEvent<HTMLDivElement>) => {
+    const rect = moveEvent.currentTarget.getBoundingClientRect()
     if (rect.width <= 0) return
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    const ratio = Math.max(
+      0,
+      Math.min(1, (moveEvent.clientX - rect.left) / rect.width),
+    )
     const targetYear = minX + ratio * spanX
     let best = 0
     let bestDiff = Infinity
@@ -566,6 +612,23 @@ export function MiniSvgSparkline({
         </SparkHoverBadge>
       )}
       <SparkSvg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id={`spk-${gradUid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={strokeColor} stopOpacity="0.32" />
+            <stop offset="100%" stopColor={strokeColor} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        <line
+          x1="0"
+          y1="50"
+          x2="100"
+          y2="50"
+          stroke="currentColor"
+          strokeOpacity="0.1"
+          strokeWidth="1"
+          strokeDasharray="2.5 2.5"
+          vectorEffect="non-scaling-stroke"
+        />
         {zeroY != null ? (
           <line
             x1="0"
@@ -573,18 +636,18 @@ export function MiniSvgSparkline({
             x2="100"
             y2={zeroY}
             stroke="currentColor"
-            strokeOpacity="0.22"
+            strokeOpacity="0.24"
             strokeWidth="1"
             strokeDasharray="3 3"
             vectorEffect="non-scaling-stroke"
           />
         ) : null}
-        <path d={areaPath} fill={strokeColor} fillOpacity="0.12" />
+        <path d={areaPath} fill={`url(#spk-${gradUid})`} />
         <path
           d={linePath}
           fill="none"
           stroke={strokeColor}
-          strokeWidth="1.85"
+          strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
@@ -605,14 +668,14 @@ export function MiniSvgSparkline({
         <path
           d={`M ${toX(activePt.year).toFixed(2)} ${toY(activePt.value).toFixed(2)} l 0 0.01`}
           stroke={strokeColor}
-          strokeWidth={hoverIdx != null ? '6.5' : '5'}
+          strokeWidth={hoverIdx != null ? '7.5' : '6'}
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
         />
       </SparkSvg>
       <SparkAxisRow>
-        <span>{minX < 0 ? `BC ${Math.abs(minX)}` : minX}</span>
-        <span>{maxX < 0 ? `BC ${Math.abs(maxX)}` : maxX}</span>
+        <span>{minX < 0 ? `BC ${Math.abs(minX)}` : `${minX}년`}</span>
+        <span>{maxX < 0 ? `BC ${Math.abs(maxX)}` : `${maxX}년`}</span>
       </SparkAxisRow>
     </SparkContainer>
   )
@@ -867,6 +930,48 @@ const SparkAxisRow = styled.div`
   ${DIGIT_DISPLAY}
 `
 
+const SingleGaugeWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.035)'
+      : 'rgba(15, 23, 42, 0.028)'};
+`
+
+const SingleGaugeMeta = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-size: 12.5px;
+    font-weight: 800;
+  }
+`
+
+const SingleGaugeTrack = styled.div`
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.08)'
+      : 'rgba(15, 23, 42, 0.07)'};
+`
+
+const SingleGaugeFill = styled.div`
+  height: 100%;
+  border-radius: 999px;
+`
+
 const SinglePointBox = styled.div`
   display: flex;
   align-items: center;
@@ -886,43 +991,53 @@ const SingleDot = styled.span<{ $color: string }>`
 
 /* ─── 5. Stacked Century Event Domain Histogram ──────────────────────────── */
 
-function formatCenturyShort(century: number): string {
-  return century < 0 ? `BC${Math.abs(century)}` : `${century}c`
+function formatCenturyShort(century: number, compact = false): string {
+  if (century < 0) return `BC${Math.abs(century)}`
+  return compact ? `${century}c` : `${century}세기`
 }
 
 export function StackedCenturyDomainChart({
   buckets,
   domainBreakdown,
   onSelectCentury,
+  hideLegend = false,
 }: {
   buckets: CenturyDomainBucket[]
   domainBreakdown: Array<{ domain: string; count: number }>
   onSelectCentury?: (century: number) => void
+  hideLegend?: boolean
 }) {
   const theme = useTheme()
   if (buckets.length === 0) return null
 
-  const maxTotal = Math.max(1, ...buckets.map((b) => b.total))
-  const topDomains = domainBreakdown.slice(0, 5)
+  const maxTotal = Math.max(1, ...buckets.map((bucket) => bucket.total))
+  const topDomains = domainBreakdown.slice(0, 6)
+  const isCompactAxis = buckets.length > 6
 
   return (
     <CenturyChartWrap>
-      <CenturyBarsRow role="list" aria-label="세기별 사건 분포">
+      <CenturyBarsRow
+        $dense={isCompactAxis}
+        role="list"
+        aria-label="세기별 사건 분포"
+      >
         {buckets.map((bucket, idx) => {
           const prevCentury = idx > 0 ? buckets[idx - 1].century : null
           const skipped =
             prevCentury != null && bucket.century - prevCentury > 1
               ? bucket.century - prevCentury - 1
               : 0
-          const heightPct = Math.max(10, Math.round((bucket.total / maxTotal) * 100))
+          const heightPct = Math.max(
+            14,
+            Math.round((bucket.total / maxTotal) * 100),
+          )
 
           const orderedDomains = EVENT_DOMAIN_ORDER.filter(
             (dk) => (bucket.domains[dk] ?? 0) > 0,
           )
-          // 혹시 등록되지 않은 키가 있으면 OTHER로 합산
           const extraCount = Object.entries(bucket.domains)
-            .filter(([k]) => !EVENT_DOMAIN_ORDER.includes(k as never))
-            .reduce((s, [, v]) => s + v, 0)
+            .filter(([domKey]) => !EVENT_DOMAIN_ORDER.includes(domKey as never))
+            .reduce((sumVal, [, countVal]) => sumVal + countVal, 0)
 
           return (
             <React.Fragment key={bucket.century}>
@@ -934,39 +1049,50 @@ export function StackedCenturyDomainChart({
               <CenturyCol
                 type="button"
                 role="listitem"
+                $dense={isCompactAxis}
                 onClick={() => onSelectCentury?.(bucket.century)}
-                title={`${bucket.century < 0 ? `기원전 ${Math.abs(bucket.century)}세기` : `${bucket.century}세기`}: 사건 ${bucket.total}건 (클릭하여 이동)`}
+                title={`${bucket.century < 0 ? `기원전 ${Math.abs(bucket.century)}세기` : `${bucket.century}세기`}: 사건 ${bucket.total}건`}
               >
                 <CenturyCount>{bucket.total}</CenturyCount>
                 <CenturyBarTrack>
-                  <CenturyBarStack style={{ height: `${heightPct}%` }}>
-                    {orderedDomains.map((dk) => (
-                      <CenturySeg
-                        key={dk}
-                        $color={domainAccent(dk, theme.mode)}
-                        style={{ flexGrow: bucket.domains[dk] }}
-                      />
-                    ))}
-                    {extraCount > 0 ? (
-                      <CenturySeg
-                        $color={domainAccent('OTHER', theme.mode)}
-                        style={{ flexGrow: extraCount }}
-                      />
-                    ) : null}
-                  </CenturyBarStack>
+                  <CenturyBarWell>
+                    <CenturyBarStack style={{ height: `${heightPct}%` }}>
+                      {orderedDomains.map((dk) => (
+                        <CenturySeg
+                          key={dk}
+                          style={{
+                            flexGrow: bucket.domains[dk],
+                            background: domainAccent(dk, theme.mode),
+                          }}
+                        />
+                      ))}
+                      {extraCount > 0 ? (
+                        <CenturySeg
+                          style={{
+                            flexGrow: extraCount,
+                            background: domainAccent('OTHER', theme.mode),
+                          }}
+                        />
+                      ) : null}
+                    </CenturyBarStack>
+                  </CenturyBarWell>
                 </CenturyBarTrack>
-                <CenturyLabel>{formatCenturyShort(bucket.century)}</CenturyLabel>
+                <CenturyLabel>
+                  {formatCenturyShort(bucket.century, isCompactAxis)}
+                </CenturyLabel>
               </CenturyCol>
             </React.Fragment>
           )
         })}
       </CenturyBarsRow>
 
-      {topDomains.length > 0 ? (
+      {!hideLegend && topDomains.length > 0 ? (
         <SegmentLegend>
           {topDomains.map((item) => (
             <LegendItem key={item.domain}>
-              <LegendSwatch $color={domainAccent(item.domain, theme.mode)} />
+              <LegendSwatch
+                style={{ background: domainAccent(item.domain, theme.mode) }}
+              />
               <LegendLabel>{domainLabel(item.domain)}</LegendLabel>
               <LegendVal>{item.count}</LegendVal>
             </LegendItem>
@@ -980,35 +1106,40 @@ export function StackedCenturyDomainChart({
 const CenturyChartWrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 `
 
-const CenturyBarsRow = styled.div`
+const CenturyBarsRow = styled.div<{ $dense?: boolean }>`
   display: flex;
   align-items: flex-end;
-  gap: 4px;
-  height: 112px;
-  padding-top: 14px;
+  gap: ${({ $dense }) => ($dense ? '3px' : '6px')};
+  height: 126px;
+  padding: ${({ $dense }) => ($dense ? '10px 6px 6px' : '10px 8px 6px')};
+  border-radius: 16px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.03)'
+      : 'rgba(15, 23, 42, 0.024)'};
   overflow-x: auto;
 `
 
 const CenturySkip = styled.span`
   align-self: center;
-  font-size: 11px;
+  font-size: 10px;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  padding: 0 2px;
+  padding: 0 1px;
 `
 
-const CenturyCol = styled.button`
-  flex: 1 1 26px;
-  min-width: 24px;
-  max-width: 52px;
+const CenturyCol = styled.button<{ $dense?: boolean }>`
+  flex: 1 1 ${({ $dense }) => ($dense ? '18px' : '32px')};
+  min-width: ${({ $dense }) => ($dense ? '17px' : '26px')};
+  max-width: 64px;
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  gap: 3px;
+  gap: 4px;
   padding: 0;
   border: none;
   background: transparent;
@@ -1020,9 +1151,9 @@ const CenturyCol = styled.button`
 `
 
 const CenturyCount = styled.span`
-  font-size: 10px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 10.5px;
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.text.primary};
   ${DIGIT_DISPLAY}
 `
 
@@ -1034,25 +1165,39 @@ const CenturyBarTrack = styled.div`
   justify-content: center;
 `
 
+const CenturyBarWell = styled.div`
+  width: min(26px, 82%);
+  height: 100%;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.045)'
+      : 'rgba(15, 23, 42, 0.045)'};
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  padding: 1.5px;
+`
+
 const CenturyBarStack = styled.div`
-  width: min(22px, 78%);
+  width: 100%;
   display: flex;
   flex-direction: column-reverse;
-  gap: 1px;
-  border-radius: 3px 3px 0 0;
+  gap: 1.5px;
+  border-radius: 6px;
   overflow: hidden;
 `
 
-const CenturySeg = styled.div<{ $color: string }>`
+const CenturySeg = styled.div`
   width: 100%;
-  min-height: 2px;
-  background: ${({ $color }) => $color};
+  min-height: 3px;
+  border-radius: 2px;
 `
 
 const CenturyLabel = styled.span`
   font-size: 10px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
   white-space: nowrap;
   ${DIGIT_DISPLAY}
 `
