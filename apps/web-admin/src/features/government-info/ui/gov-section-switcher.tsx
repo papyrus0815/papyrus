@@ -155,12 +155,18 @@ export function GovSectionSwitcher<Key extends string>({
   )
 }
 
+/*
+ * 아래 여백 — 국가 탭 줄과 이 줄 사이가 20px인데 아래 본문(구역 무대의 위 여백 16px 포함)까지는 30px라
+ * 줄이 위로 붙어 보였다. 4px + 16px = 위와 같은 20px.
+ * 오른쪽 단추(30px)는 제목 단추(31px) 높이 가운데에 맞춘다.
+ */
 const Row = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 0 14px;
+  min-height: 31px;
+  margin: 0 0 4px;
   min-width: 0;
 `
 
