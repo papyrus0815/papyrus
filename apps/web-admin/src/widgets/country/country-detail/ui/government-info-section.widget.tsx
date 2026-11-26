@@ -110,8 +110,17 @@ export function GovernmentInfoSection({
    */
   useEffect(() => {
     if (departmentIdQuery) return
+    /*
+     * sub가 없으면 이 지면의 기본 구역 — 라우트가 정한 initialContentTab(예: /government/system)이 있으면 그것,
+     * 없으면 행정부·내각. 과거 국가 지면은 늘 initialContentTab='cabinets'를 넘기므로, 예전처럼 'initialContentTab이
+     * 있으면 무시'하면 머리 메뉴에서 '행정부·내각'(sub 없음)을 골라도 부처 구역에 그대로 머물렀다.
+     */
+    const routeDefault: GovernmentContentTab =
+      initialContentTab && initialContentTab !== 'military' && initialContentTab !== 'positions'
+        ? initialContentTab
+        : 'cabinets'
     const fromUrl: GovernmentContentTab | null =
-      validSubQuery ?? (rawSubQuery === '' && !initialContentTab ? 'cabinets' : null)
+      validSubQuery ?? (rawSubQuery === '' ? routeDefault : null)
     if (fromUrl && fromUrl !== contentTab) {
       /* 머리 메뉴로 고른 것도 손으로 고른 것 — 빈 구역 자동 넘김이 되돌리지 않게, 부처 필터 맥락은 비운다 */
       userManuallyPickedTabRef.current = true

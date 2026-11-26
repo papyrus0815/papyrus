@@ -61,6 +61,8 @@ import {
   TRANSITION_EVENT_LABELS,
 } from './historical-relations-sections'
 import { CountryDetailHeader } from './country-detail-header.widget'
+import { CountryTabSubmenu } from './country-tab-submenu'
+import type { OverviewSubTab } from './overview-sub-tabs'
 import * as TabStyles from './overview-sub-tabs.styles'
 import * as DashboardStyles from './country-detail-dashboard.styles'
 import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
@@ -745,6 +747,16 @@ const HISTORICAL_TABS: ReadonlyArray<{
 
 const historicalTabId = (tab: HistoricalCountryTab) => `historical-country-tab-${tab}`
 
+/**
+ * 과거 국가 탭 중 머리 2차 메뉴를 다는 것 — 현대 국가 탭과 같은 구역·같은 URL(?sub=, ?subtab=)을 쓰는 지면만.
+ * 과거 국가의 '행정구역'은 현대의 지도 지면(?region_view=)이 아니라 따로 그린 지면이라 뺀다.
+ */
+const HISTORICAL_SUBMENU_KEYS: Partial<Record<HistoricalCountryTab, OverviewSubTab>> = {
+  government: 'government',
+  elections: 'elections',
+  military: 'military',
+}
+
 function HistoricalCountryTabs({
   activeTab,
   onTabChange,
@@ -800,8 +812,7 @@ function HistoricalCountryTabs({
           >
             {HISTORICAL_TABS.map((tab) => {
               const active = activeTab === tab.id
-
-              return (
+              const button = (
                 <UnderlineTabButton
                   key={tab.id}
                   id={historicalTabId(tab.id)}
@@ -814,6 +825,15 @@ function HistoricalCountryTabs({
                 >
                   <span>{tab.label}</span>
                 </UnderlineTabButton>
+              )
+              const submenuKey = HISTORICAL_SUBMENU_KEYS[tab.id]
+              /* 현대 국가 탭과 같은 2차 메뉴 — hover·클릭으로 구역(행정부·내각/중앙부처 …)을 고른다 */
+              return submenuKey ? (
+                <CountryTabSubmenu key={tab.id} tabKey={submenuKey} active={active}>
+                  {button}
+                </CountryTabSubmenu>
+              ) : (
+                button
               )
             })}
           </TabStyles.TopUnderlineTabNav>
