@@ -269,7 +269,15 @@ export interface TreatyEventLinkWithEventDto extends TreatyEventLinkDto {
     startDate: string | null
     startEra?: 'AD' | 'BC' | null
     startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    location?: string | null
+    description?: string | null
+    background?: string | null
+    aftermath?: string | null
     domain?: string | null
+    kind?: 'SINGLE' | 'COLLECTION' | null
+    type?: string | null
   } | null
 }
 
@@ -295,10 +303,10 @@ function normalizeTreatyListResponse(data: unknown): TreatyListResponse {
     return { items: data as TreatyDto[], total: data.length }
   }
   if (data && typeof data === 'object' && 'items' in data) {
-    const o = data as { items?: TreatyDto[]; total?: number }
+    const obj = data as { items?: TreatyDto[]; total?: number }
     return {
-      items: o.items ?? [],
-      total: o.total ?? o.items?.length ?? 0,
+      items: obj.items ?? [],
+      total: obj.total ?? obj.items?.length ?? 0,
     }
   }
   return { items: [], total: 0 }
@@ -321,16 +329,18 @@ export const treatyApi = {
     skip?: number
     take?: number
   }): Promise<TreatyListResponse> => {
-    const q = new URLSearchParams()
-    if (params?.countryId) q.set('countryId', params.countryId)
-    if (params?.historicalCountryId) q.set('historicalCountryId', params.historicalCountryId)
-    if (params?.cabinetId) q.set('cabinetId', params.cabinetId)
-    if (params?.eventId) q.set('eventId', params.eventId)
-    if (params?.type) q.set('type', params.type)
-    if (params?.search?.trim()) q.set('search', params.search.trim())
-    if (params?.skip !== undefined) q.set('skip', String(params.skip))
-    if (params?.take !== undefined) q.set('take', String(params.take))
-    const res = await apiClient.get(`/treaties?${q.toString()}`)
+    const queryParams = new URLSearchParams()
+    if (params?.countryId) queryParams.set('countryId', params.countryId)
+    if (params?.historicalCountryId) {
+      queryParams.set('historicalCountryId', params.historicalCountryId)
+    }
+    if (params?.cabinetId) queryParams.set('cabinetId', params.cabinetId)
+    if (params?.eventId) queryParams.set('eventId', params.eventId)
+    if (params?.type) queryParams.set('type', params.type)
+    if (params?.search?.trim()) queryParams.set('search', params.search.trim())
+    if (params?.skip !== undefined) queryParams.set('skip', String(params.skip))
+    if (params?.take !== undefined) queryParams.set('take', String(params.take))
+    const res = await apiClient.get(`/treaties?${queryParams.toString()}`)
     return normalizeTreatyListResponse(res.data)
   },
 

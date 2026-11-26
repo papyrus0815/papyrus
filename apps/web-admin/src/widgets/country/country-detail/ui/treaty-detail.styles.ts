@@ -18,6 +18,7 @@ import {
   ledgerHairline,
   ledgerHairlineStrong,
 } from '@/entities/event/ui/ledger-tokens'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 
 const ASIDE_WIDTH = 300
 
@@ -293,6 +294,14 @@ export const Lead = styled.p`
   font-size: 17px;
   line-height: 1.75;
   word-break: keep-all;
+  white-space: pre-line;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const LeadRichText = styled(RichTextReadView)`
+  max-width: 880px;
+  font-size: 16.5px;
+  line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -315,49 +324,46 @@ export const Broken = styled.div`
   }
 `
 
-// ── 서명국 카드 (사건 상세 hero-country-cards 문법) ─────────
+// ── 서명 · 참여 당사국 원장 행 (박스 카드 대신 깔끔한 헤어라인 목록) ─────────
 
 export const PartiesHead = styled.div`
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: ${metaColor};
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
 
   b {
     ${DIGIT_DISPLAY}
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.primary};
+    margin-left: 5px;
+    font-weight: 700;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
 export const PartiesGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
-  gap: 8px;
-  max-width: 1100px;
-
-  /* 좁은 폭에선 2열 — 1열이면 서명국 6개가 카드 6장(≈600px)으로 세로를 다 먹는다(사건 상세와 같은 140px) */
-  @container treatydetail (max-width: 639px) {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  }
+  display: flex;
+  flex-direction: column;
+  max-width: 920px;
 `
 
 export const PartyCard = styled.div`
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: ${({ theme }) => fill(theme.mode, 0.03, 0.04)};
+  padding: 10px 4px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
   transition: background 0.12s;
 
   &:hover {
-    background: ${({ theme }) => fill(theme.mode, 0.06, 0.07)};
+    background: ${({ theme }) => fill(theme.mode, 0.025, 0.035)};
   }
 
   &:hover [data-party-actions],
@@ -371,21 +377,30 @@ export const PartyCard = styled.div`
 
   &:has(a[data-party-link]:focus-visible) {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
+    outline-offset: -2px;
+  }
+`
+
+export const PartyPrimaryRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  min-width: 0;
+  padding-right: 52px;
+
+  @container treatydetail (max-width: 639px) {
+    padding-right: 0;
   }
 `
 
 export const PartyHead = styled.span`
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
-  padding-right: 44px;
-
-  /* 2열 카드(≈175px)에서 44px을 비우면 국가명 몫이 70px대로 준다 — 액션을 카드 아랫줄로 내린다 */
-  @container treatydetail (max-width: 639px) {
-    padding-right: 0;
-  }
 `
 
 export const Emblem = styled.span<{ $historical: boolean }>`
@@ -393,15 +408,15 @@ export const Emblem = styled.span<{ $historical: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
   overflow: hidden;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   font-style: ${({ $historical }) => ($historical ? 'italic' : 'normal')};
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => fill(theme.mode, 0.06, 0.08)};
+  background: ${({ theme }) => fill(theme.mode, 0.05, 0.08)};
 
   img {
     width: 100%;
@@ -410,26 +425,15 @@ export const Emblem = styled.span<{ $historical: boolean }>`
   }
 `
 
-/* 국가명은 카드에서 가장 중요한 글자라 한 줄 말줄임 대신 두 줄까지 — 숨은 편집 아이콘 몫(44px)
-   때문에 '그레이트브리튼 및 아일…'처럼 잘리던 것 */
 export const PartyName = styled.span`
   min-width: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   word-break: keep-all;
   line-height: 1.35;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-/**
- * 국가명 링크 — 카드 전체가 눌리도록 ::after로 카드를 덮는다(사건 상세 참여국 카드와 같은 동작:
- * 국가 정보 창). 수정자 키·가운데 클릭은 href(국가 상세)로 새 탭. 카드 안의 다른 조작
- * (편집·삭제·인물 링크·더 보기)은 z-index 1로 이 덮개 위에 선다.
- */
 export const PartyNameLink = styled(Link)`
   min-width: 0;
   color: inherit;
@@ -439,7 +443,6 @@ export const PartyNameLink = styled(Link)`
     content: '';
     position: absolute;
     inset: 0;
-    border-radius: 12px;
   }
 
   &:focus-visible {
@@ -447,12 +450,12 @@ export const PartyNameLink = styled(Link)`
   }
 
   &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
     text-decoration: underline;
     text-underline-offset: 3px;
   }
 `
 
-/** 서명 인물 → 인물 상세 */
 export const PersonLink = styled(Link)`
   position: relative;
   z-index: 1;
@@ -470,22 +473,17 @@ export const PersonLink = styled(Link)`
 `
 
 export const PartyTags = styled.span`
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
+  gap: 6px;
 `
 
 export const Tag = styled.span<{ $strong?: boolean }>`
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 18px;
+  font-size: 11.5px;
+  font-weight: 600;
   color: ${({ theme, $strong }) =>
-    $strong ? theme.colors.text.primary : theme.colors.text.secondary};
-  background: ${({ theme, $strong }) =>
-    $strong ? fill(theme.mode, 0.09, 0.12) : fill(theme.mode, 0.05, 0.07)};
+    $strong ? ledgerAccent(theme.mode) : metaColor({ theme })};
 `
 
 export const PartyLine = styled.span`
@@ -500,41 +498,35 @@ export const PartyLine = styled.span`
   }
 
   .meta {
-    font-size: 11.5px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     color: ${metaColor};
   }
 `
 
-/**
- * 서명국 비고 — "서명했으나 상원이 비준을 거부"처럼 그 나라가 이 조약에서 어떤 처지였는지.
- * 예전엔 수정 창에서만 보였다. 카드 높이가 들쭉날쭉하지 않게 3줄에서 접고, 넘칠 때만 '더 보기'.
- */
 export const PartyNote = styled.div`
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  margin-top: 2px;
-  padding-top: 7px;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  padding-left: 28px;
 `
 
 export const PartyNoteText = styled.p<{ $expanded: boolean }>`
   margin: 0;
   font-size: 12.5px;
-  line-height: 1.55;
+  line-height: 1.5;
   word-break: keep-all;
   overflow-wrap: anywhere;
   white-space: pre-line;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${metaColor};
 
   ${({ $expanded }) =>
     !$expanded &&
     css`
       display: -webkit-box;
       -webkit-box-orient: vertical;
-      -webkit-line-clamp: 3;
+      -webkit-line-clamp: 2;
       overflow: hidden;
     `}
 `
@@ -558,12 +550,11 @@ export const NoteToggle = styled.button`
   ${focusRing}
 `
 
-/** 카드 우상단 편집·삭제 — hover/focus에서만 보인다(행마다 상시 아이콘 2개는 잡음이었다) */
 export const PartyActions = styled.span`
   position: absolute;
   z-index: 1;
-  top: 8px;
-  right: 8px;
+  top: 9px;
+  right: 4px;
   display: inline-flex;
   gap: 2px;
   opacity: 0;
@@ -877,6 +868,13 @@ export const Prose = styled.p`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
+export const ProseRichText = styled(RichTextReadView)`
+  max-width: 880px;
+  font-size: 16px;
+  line-height: 1.8;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
 export const EmptyLine = styled.p`
   margin: 0;
   font-size: 13px;
@@ -976,6 +974,12 @@ export const TermContent = styled.p`
   line-height: 1.75;
   word-break: keep-all;
   white-space: pre-line;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const TermRichText = styled(RichTextReadView)`
+  font-size: 15px;
+  line-height: 1.75;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 

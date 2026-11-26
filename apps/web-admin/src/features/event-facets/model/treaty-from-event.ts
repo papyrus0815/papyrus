@@ -2,10 +2,13 @@
  * 사건 → 조약 초안 — 상세 '조약' 섹션과 등록 모달의 '맺어진 조약' 칸이 같은 규칙을 쓴다.
  * (예전엔 detail-treaties 안에만 있어 등록 단계에서 조약을 만들 길이 없었다.)
  */
-import type {
-  CreateTreatySignatoryNested,
-  TreatyType,
+import {
+  type CreateTreatySignatoryNested,
+  type TreatyDto,
+  type TreatyType,
+  treatyApi,
 } from '@/shared/api/treaty'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
 /**
  * 참여국 역할 → 조약 참여 유형.
@@ -37,6 +40,55 @@ export function guessTreatyType(title: string): TreatyType {
 /** 사건 제목에서 조약명 후보 — "…조약 체결"의 꼬리를 떼어 이름만 남긴다. */
 export function treatyNameFromEventTitle(title: string): string {
   return title.replace(/\s*(체결|조인|서명|선포)\s*$/u, '').trim() || title
+}
+
+function normalizeTreatyTitleForMatch(raw: string | null | undefined): string {
+  if (!raw) return ''
+  return treatyNameFromEventTitle(raw)
+    .replace(/\([^)]*\)/gu, '')
+    .replace(/\s+/gu, '')
+    .toLowerCase()
+}
+
+/**
+ * 사건에서 새 조약을 만들기 전에 동일 명칭·시기의 조약이 이미 있는지 찾는다.
+ * 중복 생성(`allowDuplicateSignDate: true`)으로 같은 조약이 2벌씩 생기는 문제를 막는다.
+ */
+export async function findExistingMatchingTreaty(
+  candidateName: string,
+  targetDateIso?: string | null,
+): Promise<TreatyDto | null> {
+  if (typeof treatyApi.getAll !== 'function') return null
+  const normalizedTarget = normalizeTreatyTitleForMatch(candidateName)
+  if (normalizedTarget.length < 2) return null
+
+  const targetYear = parseIsoDateParts(targetDateIso)?.year ?? null
+  try {
+    const response = await treatyApi.getAll({
+      search: candidateName.trim(),
+      take: 30,
+    })
+    const candidates = response?.items ?? []
+    for (const item of candidates) {
+      const nameNorm = normalizeTreatyTitleForMatch(item.name)
+      const aliasNorm = normalizeTreatyTitleForMatch(item.alias)
+      const exactTitleMatch =
+        nameNorm === normalizedTarget ||
+        (aliasNorm.length >= 2 && aliasNorm === normalizedTarget)
+      if (!exactTitleMatch) continue
+
+      if (targetYear !== null) {
+        const itemYear = parseIsoDateParts(item.signDate)?.year ?? null
+        if (itemYear !== null && Math.abs(itemYear - targetYear) > 2) {
+          continue
+        }
+      }
+      return item
+    }
+  } catch {
+    // 네트워크 실패 시 생성 흐름 자체를 막지는 않는다
+  }
+  return null
 }
 
 /** 참여국 줄 → 서명국 초안 */

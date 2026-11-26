@@ -55,12 +55,12 @@ function formatPeriodLabel(row: CountryOrganizationMembershipDto): string {
     if (yr == null) return null
     return era === 'BC' ? `BC ${yr}년` : `${yr}년`
   }
-  const s = fmt(row.startEra, row.startYear)
-  const e = fmt(row.endEra, row.endYear)
-  if (!s && !e) return '기간 미상'
-  if (s && !e) return `${s} ~ 현재`
-  if (!s && e) return `~ ${e}`
-  return `${s} ~ ${e}`
+  const startLabel = fmt(row.startEra, row.startYear)
+  const endLabel = fmt(row.endEra, row.endYear)
+  if (!startLabel && !endLabel) return '기간 미상'
+  if (startLabel && !endLabel) return `${startLabel} ~ 현재`
+  if (!startLabel && endLabel) return `~ ${endLabel}`
+  return `${startLabel} ~ ${endLabel}`
 }
 
 export const CountryInternationalOrgsSection: React.FC<
@@ -107,14 +107,16 @@ export const CountryInternationalOrgsSection: React.FC<
   const memberships = useMemo(
     () =>
       (membershipsQuery.data ?? []).filter(
-        (m) => m.organization.type !== 'COMPANY',
+        (member) => member.organization.type !== 'COMPANY',
       ),
     [membershipsQuery.data],
   )
   const upcomingHostedSeries = hostedSeriesQuery.data ?? []
 
   const availableOrgs = useMemo(() => {
-    const joinedIds = new Set(memberships.map((m) => m.organizationId))
+    const joinedIds = new Set(
+      memberships.map((member) => member.organizationId),
+    )
     return (candidateOrgsQuery.data ?? []).filter(
       (org) => !joinedIds.has(org.id),
     )
@@ -198,7 +200,7 @@ export const CountryInternationalOrgsSection: React.FC<
           </SecondaryBtn>
           <PrimaryOutlineBtn
             type="button"
-            onClick={() => setAddingOpen((v) => !v)}
+            onClick={() => setAddingOpen((prev) => !prev)}
           >
             <FiPlus size={13} />
             가입 기구 연결
@@ -412,12 +414,12 @@ export const CountryInternationalOrgsSection: React.FC<
 }
 
 const SectionWrap = styled.section`
-  margin-top: 12px;
-  padding-top: 22px;
+  margin-top: 28px;
+  padding-top: 28px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 `
 
 const SectionHead = styled.div`
@@ -431,16 +433,17 @@ const SectionHead = styled.div`
 const HeadTitleGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 `
 
 const HeadTitle = styled.h3`
   margin: 0;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 15px;
+  gap: 8px;
+  font-size: 16px;
   font-weight: 800;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -452,13 +455,15 @@ const CountPill = styled.span`
   border-radius: 999px;
   font-size: 11.5px;
   font-weight: 700;
-  background: ${({ theme }) => `${theme.colors.primary}18`};
+  font-variant-numeric: tabular-nums;
+  background: ${({ theme }) => `${theme.colors.primary}14`};
   color: ${({ theme }) => theme.colors.primary};
 `
 
 const HeadDesc = styled.p`
   margin: 0;
   font-size: 12.5px;
+  line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
@@ -472,19 +477,21 @@ const HeadActions = styled.div`
 const SecondaryBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 32px;
-  padding: 0 11px;
-  border-radius: 7px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12px;
+  font: inherit;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: border-color 0.14s ease, color 0.14s ease;
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.border.default};
   }
 `
 
@@ -492,17 +499,20 @@ const PrimaryOutlineBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: 7px;
-  border: 1px solid ${({ theme }) => theme.colors.primary};
-  background: ${({ theme }) => `${theme.colors.primary}12`};
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => `${theme.colors.primary}45`};
+  background: ${({ theme }) => `${theme.colors.primary}0d`};
   color: ${({ theme }) => theme.colors.primary};
-  font-size: 12px;
+  font: inherit;
+  font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
   &:hover {
-    background: ${({ theme }) => `${theme.colors.primary}20`};
+    background: ${({ theme }) => `${theme.colors.primary}18`};
+    border-color: ${({ theme }) => theme.colors.primary};
   }
 `
 
@@ -677,21 +687,35 @@ const EmptyLine = styled.div`
 const OrgGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 
-  @media (max-width: 820px) {
+  @media (max-width: 860px) {
     grid-template-columns: 1fr;
   }
 `
 
 const OrgCard = styled.div`
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 15px 18px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  transition: background 0.14s ease;
+
+  &:nth-child(odd) {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+
+  @media (max-width: 860px) {
+    &:nth-child(odd) {
+      border-right: none;
+    }
+  }
 `
 
 const OrgCardTop = styled.div`

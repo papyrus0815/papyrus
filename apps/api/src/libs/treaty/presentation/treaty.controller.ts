@@ -123,7 +123,15 @@ const TREATY_EVENT_LINK_INCLUDE = {
       startDate: true,
       startEra: true,
       startYear: true,
+      startMonth: true,
+      startDay: true,
+      location: true,
+      description: true,
+      background: true,
+      aftermath: true,
       domain: true,
+      kind: true,
+      type: true,
     },
   },
 } as const satisfies Prisma.TreatyEventLinkInclude
@@ -1006,6 +1014,30 @@ export class TreatyController {
       },
       include: TREATY_EVENT_LINK_INCLUDE,
     })
+
+    // 파기(VIOLATION) · 비준(RATIFICATION) 사건 연결 시 조약 쪽 날짜·사유가 비어 있으면 사건 정본에서 자동 동기화
+    const eventStartDate = (event as { startDate?: Date | null }).startDate
+    if (
+      eventStartDate instanceof Date &&
+      !Number.isNaN(eventStartDate.getTime()) &&
+      eventStartDate.getTime() >= treaty.signDate.getTime()
+    ) {
+      if (linkType === 'VIOLATION' && !treaty.violationDate) {
+        await this.prisma.treaty.update({
+          where: { id: treatyId },
+          data: {
+            violationDate: eventStartDate,
+            ...(!treaty.violationReason ? { violationReason: event.title } : {}),
+          },
+        })
+      } else if (linkType === 'RATIFICATION' && !treaty.effectiveDate) {
+        await this.prisma.treaty.update({
+          where: { id: treatyId },
+          data: { effectiveDate: eventStartDate },
+        })
+      }
+    }
+
     return serializeDates(link)
   }
 

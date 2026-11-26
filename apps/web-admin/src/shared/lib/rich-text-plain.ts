@@ -30,3 +30,49 @@ export function richTextToPlainText(html: string | null | undefined): string {
   }
   return text.replace(/\s+/g, ' ').trim()
 }
+
+/**
+ * 리치텍스트 HTML → 문단·줄바꿈을 보존한 평문.
+ *
+ * `<textarea>` 초기값이나 줄수 제한(`-webkit-line-clamp`) 읽기 뷰처럼 HTML 마크업 없이
+ * 단락 구분(`\n\n`)만 살려 보여 주어야 하는 자리에서 사용한다.
+ */
+export function richTextToMultilineText(html: string | null | undefined): string {
+  const raw = html ?? ''
+  if (!/<[a-z/!]/i.test(raw) && !/&(?:nbsp|lt|gt|amp|quot|#39|#x[0-9a-f]+|#\d+);/i.test(raw)) {
+    return raw.trim()
+  }
+
+  const withLineBreaks = raw
+    .replace(/<div[^>]*>\s*<br\s*\/?>\s*<\/div>/gi, '\n\n')
+    .replace(/<p[^>]*>\s*<br\s*\/?>\s*<\/p>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|h[1-6]|blockquote)>/gi, '\n\n')
+    .replace(/<\/(?:div|li|tr)>/gi, '\n')
+    .replace(/<div[^>]*>/gi, '\n')
+
+  let decoded: string
+  if (typeof DOMParser !== 'undefined') {
+    decoded =
+      new DOMParser().parseFromString(
+        `<pre>${withLineBreaks}</pre>`,
+        'text/html',
+      ).body.textContent ?? ''
+  } else {
+    decoded = withLineBreaks
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&')
+  }
+
+  return decoded
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}

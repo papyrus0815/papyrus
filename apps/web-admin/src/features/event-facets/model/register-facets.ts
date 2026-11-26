@@ -38,6 +38,7 @@ import { parseQuickObservationInput } from '@/entities/evidence/lib/parse-quick-
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import {
+  findExistingMatchingTreaty,
   guessTreatyType,
   signatoriesFromParticipants,
   treatyNameFromEventTitle,
@@ -787,14 +788,19 @@ export async function commitRegisterFacets(input: CommitInput): Promise<CommitRe
   } else if (treaty.mode === 'create') {
     await attempt('조약 만들기', async () => {
       const name = treaty.name.trim() || treatyNameFromEventTitle(input.eventTitle)
+      const existing = await findExistingMatchingTreaty(name, input.startDate)
+      if (existing) {
+        await treatyApi.linkEvent(existing.id, { eventId, linkType: 'SIGNING' })
+        return `기존 조약 「${existing.name}」에 자동 연결`
+      }
+      // 사건 본문(description)은 Event가 정본이므로 조약 summary에 중복 복제하지 않는다
       const created = await treatyApi.create({
         name,
         type: guessTreatyType(name),
         signDate: input.startDate || new Date().toISOString(),
         location: input.location ?? null,
-        summary: input.description ?? null,
+        summary: null,
         signatories: signatoriesFromParticipants(input.participants),
-        allowDuplicateSignDate: true,
       })
       await treatyApi.linkEvent(created.id, { eventId, linkType: 'SIGNING' })
       return `새 조약 「${created.name}」(참여국 ${input.participants.length}곳을 서명국으로)`

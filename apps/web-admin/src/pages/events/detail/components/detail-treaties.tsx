@@ -50,6 +50,7 @@ import {
   type EventDetailTreatySignatory,
 } from '../use-event-detail'
 import {
+  findExistingMatchingTreaty,
   guessTreatyType,
   participationTypeFromRole,
   treatyNameFromEventTitle,
@@ -152,14 +153,14 @@ export function DetailTreaties({ event, onInvalidate, openLinkSeq = 0 }: DetailT
           note: country.roleDescription ?? null,
         })),
       ]
+      // 사건 서사(description·background·aftermath)는 Event가 정본이므로 summary에 복제하지 않는다
       const treaty = await treatyApi.create({
         name: treatyNameFromEventTitle(event.title),
         type: guessTreatyType(event.title),
         signDate: event.startDate ?? new Date().toISOString(),
         location: event.location ?? null,
-        summary: event.description ?? null,
+        summary: null,
         signatories,
-        allowDuplicateSignDate: true,
       })
       await treatyApi.linkEvent(treaty.id, {
         eventId: event.id,
@@ -173,7 +174,12 @@ export function DetailTreaties({ event, onInvalidate, openLinkSeq = 0 }: DetailT
       )
       invalidateTreaties()
     },
-    onError: () => notify.error('조약 생성에 실패했습니다'),
+    onError: (err) =>
+      notify.error(
+        err instanceof Error && err.message
+          ? err.message
+          : '조약 생성에 실패했습니다 (동일 명칭·날짜 조약이 있는지 확인하세요)',
+      ),
   })
 
   const unlinkMutation = useMutation({
@@ -216,14 +222,42 @@ export function DetailTreaties({ event, onInvalidate, openLinkSeq = 0 }: DetailT
   }
 
   const handleCreate = async () => {
+    if (event.kind === 'COLLECTION') {
+      const openLinkInstead = await confirm({
+        title: '묶음 사건 안내',
+        message: `「${event.title}」은(는) 전쟁·연속 사건 묶음입니다. 묶음 사건 제목 그대로 조약을 만들면 사건명이 조약 목록에 잘못 등록됩니다. 이미 등록된 강화·휴전 조약을 연결할까요?`,
+        confirmLabel: '기존 조약 연결 열기',
+      })
+      if (openLinkInstead) setLinkModalOpen(true)
+      return
+    }
+
+    const name = treatyNameFromEventTitle(event.title)
+    const existing = await findExistingMatchingTreaty(name, event.startDate)
+    if (existing) {
+      const alreadyLinked = treaties.some((linked) => linked.id === existing.id)
+      if (alreadyLinked) {
+        notify.info(`이미 「${existing.name}」 조약이 이 사건에 연결되어 있습니다.`)
+        return
+      }
+      const shouldLinkExisting = await confirm({
+        title: '동일 조약 발견',
+        message: `동일한 이름의 조약 「${existing.name}」이(가) 이미 등록되어 있습니다. 중복 생성하지 않고 기존 조약을 이 사건에 연결할까요?`,
+        confirmLabel: '기존 조약 연결',
+      })
+      if (shouldLinkExisting) {
+        linkMutation.mutate({ treatyId: existing.id, linkType: 'SIGNING' })
+      }
+      return
+    }
+
     const participantCount =
       (event.relatedCountries?.length ?? 0) + (event.relatedHistoricalCountries?.length ?? 0)
-    const name = treatyNameFromEventTitle(event.title)
     const ok = await confirm({
       title: '조약 만들기',
       message:
         participantCount > 0
-          ? `「${name}」(${TREATY_TYPE_LABELS[guessTreatyType(event.title)]})을 만들고 참여국 ${participantCount}곳을 서명국으로 옮깁니다. 이름·유형·서명 인물은 조약 상세에서 고칠 수 있습니다.`
+          ? `「${name}」(${TREATY_TYPE_LABELS[guessTreatyType(event.title)]})을 만들고 참여국 ${participantCount}곳을 서명국으로 옮깁니다. 배경·여파는 이 사건을 정본으로 참조하며, 조항·서명 인물은 조약에서 채웁니다.`
           : `「${name}」(${TREATY_TYPE_LABELS[guessTreatyType(event.title)]})을 만듭니다. 참여국이 없어 서명국은 비어 있습니다.`,
       confirmLabel: '만들기',
     })

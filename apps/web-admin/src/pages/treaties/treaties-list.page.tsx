@@ -1,36 +1,37 @@
 /**
- * 조약 카탈로그 — `/treaties`.
+ * 조약 · 국제협약 총람 (`/treaties`).
  *
- * 조약은 원래 국가 상세의 한 탭에서만 볼 수 있었다. 그러면 "이 나라가 낀 조약"은
- * 물을 수 있어도 "베르사유 조약"을 이름으로 찾거나 "19세기 불평등 조약들"을
- * 가로로 훑을 수가 없다 — 조약을 1급 엔티티로 여는 지면이 여기다.
- *
- * 지면 문법은 **사건 목록(/events)과 같다**(2026-11-05 '사건 페이지 참조해서 디자인 개선'):
- * 상단 툴바 한 줄 → 열 머리글(정렬은 머리글 클릭) → 세기 장(章) 표지(축 위 큰 구슬 +
- * 리더 룰) → 한 줄 행(축 위 작은 구슬). 예전의 카드 격자는 카드마다 정보 배치가
- * 들쭉날쭉해(서명국이 1~3줄로 접힘) 서명일·서명국을 세로로 견줘 읽을 수 없었다.
- *
- * ⚠️ 연(年) 머리글은 두지 않는다 — 조약 20건이 거의 모두 서로 다른 해라, 사건 목록에서
- *    이미 문제로 확인된 '행 1개짜리 연 머리글'만 잔뜩 생긴다. 연도는 서명일 열이 말한다.
- *
- * 좌측 목록은 레이아웃(ContentAreaShell)이 소유하므로 여기서는 본문만 그린다.
+ * 디자인 문법 (`/military` · `/government` 원장 총람과 통일):
+ * - 상단 크롬 바: 좌측 인디고 강조 막대 + 제목 + 한 줄 핵심 집계, 우측 `통계 요약`·`시대 막대` 토글(기본 접힘) + `조약 등록`
+ * - 1차 분류: 테두리·색점 없는 깔끔한 언더라인 탭(`UnderlineTabNav`) + 보기 방식(`원장 표` / `세기별 연대기`)
+ * - 단일 검색·필터 바: 검색창 + 당사국 `SearchableSelect` + 무테 텍스트 필터(`유효·존속`·`파기·위반`·`만료`·`다자`) + 정렬/초기화 메뉴
+ * - 원장 표: 회색 알약·색 배경 배지를 모두 걷어낸 고밀도 평문 열 표 (`treatyTypeTone`은 글자색 전용 규약 준수)
  */
 import React, { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiChevronDown, FiPlus, FiSearch, FiX } from 'react-icons/fi'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import styled, { css, useTheme } from 'styled-components'
+import {
+  FiArrowDown,
+  FiArrowUp,
+  FiArrowUpRight,
+  FiBarChart2,
+  FiCalendar,
+  FiCheck,
+  FiChevronDown,
+  FiChevronRight,
+  FiClock,
+  FiList,
+  FiPlus,
+  FiRotateCcw,
+  FiSearch,
+  FiX,
+} from 'react-icons/fi'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import styled, { useTheme } from 'styled-components'
 
 import {
-  BentoCard,
-  BentoCardBadge,
-  BentoCardBody,
-  BentoCardHeader,
-  BentoCardTitle,
-  BentoCardTitleGroup,
-  BentoGrid2Col,
+  MiniDonutRing,
   type SegmentSlice,
   StackedSegmentBar,
 } from '@/entities/event/ui/bento-primitives'
@@ -39,19 +40,27 @@ import {
   ledgerAccent,
   ledgerAccentBorder,
   ledgerAccentSubtle,
+  ledgerBackground,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
-  ledgerSubtleFill,
   MOTION,
 } from '@/entities/event/ui/ledger-tokens'
+import { centuryOf } from '@/pages/events/list/lib/era-strip.lib'
+import {
+  type GovernmentCenturyBucket,
+  type GovernmentDecadeBucket,
+  type GovernmentEraSpanItem,
+  GovernmentEraStrip,
+} from '@/pages/government/components/government-era-strip'
 import {
   TREATY_TYPE_LABELS,
   treatyApi,
-  treatyTypeTone,
   type TreatyDto,
   type TreatyType,
+  treatyTypeTone,
 } from '@/shared/api/treaty'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import {
   formatCenturyLabel,
@@ -66,560 +75,1317 @@ import {
   type TreatySortKey,
 } from '@/shared/lib/treaty-list-state'
 import { pathKeys } from '@/shared/router'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
+import {
+  PopoverMenu,
+  PopoverMenuDivider,
+  PopoverMenuItem,
+  PopoverMenuSectionLabel,
+} from '@/shared/ui/popover-menu'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from '@/shared/ui/searchable-select'
+import {
+  UnderlineTabBadge,
+  UnderlineTabButton,
+  UnderlineTabNav,
+} from '@/shared/ui/underline-tabs'
+import {
+  LedgerSearchBox,
+  LedgerSearchInput,
+  LedgerViewSwitch,
+  LedgerViewSwitchItem,
+} from '@/widgets/country/country-detail/ui/country-ledger-primitives'
 import {
   TreatyCreateModal,
   TreatySectionThemeProvider,
 } from '@/widgets/country/country-detail/ui/treaty-section.widget'
+import {
+  CountryInlineModal,
+  type CountryInlineModalTarget,
+  shouldInterceptEntityClick,
+} from '@/widgets/country/country-inline-modal/country-inline-modal'
 
-const UNDATED = '__undated__'
+const UNDATED_GROUP = '__undated__'
 
-/** 연도 라벨 — BC 음수 연도 안전. 표기는 상세와 같은 '기원전 N' */
-function yearLabel(year: number): string {
-  return year < 0 ? `기원전 ${-year}` : String(year)
-}
+type ValidityFilterKey = 'all' | 'active' | 'broken' | 'expired'
+type CatalogViewMode = 'table' | 'century'
 
-interface Party {
-  key: string
+const CANONICAL_TYPE_ORDER: readonly TreatyType[] = [
+  'PEACE',
+  'ALLIANCE',
+  'NON_AGGRESSION',
+  'TERRITORIAL',
+  'BORDER',
+  'TRADE',
+  'DISARMAMENT',
+  'FRIENDSHIP',
+  'MULTILATERAL',
+  'SECRET',
+  'OTHER',
+]
+
+const VALIDITY_QUICK_OPTIONS: ReadonlyArray<{
+  key: ValidityFilterKey
+  label: string
+}> = [
+  { key: 'all', label: '전체 효력' },
+  { key: 'active', label: '유효·존속' },
+  { key: 'broken', label: '파기·위반' },
+  { key: 'expired', label: '만료' },
+]
+
+interface PartyDisplayItem {
+  id: string
+  polityKey: string
   name: string
-  flag: string | null
+  target: CountryInlineModalTarget | null
 }
 
-/** 서명국 — 현대·역사 국가를 한 축으로 편다 */
-function partiesOf(treaty: TreatyDto): Party[] {
-  return treaty.signatories
-    .map((signatory) => {
-      const name =
-        signatory.country?.name ?? signatory.historicalCountry?.name ?? null
-      if (!name) return null
-      return {
-        key: signatory.id,
-        name,
-        flag: signatory.country?.flagEmoji ?? null,
-      }
+function extractParties(treatyItem: TreatyDto): PartyDisplayItem[] {
+  const seen = new Set<string>()
+  const result: PartyDisplayItem[] = []
+  for (const signatory of treatyItem.signatories) {
+    const modCountry = signatory.country
+    const histCountry = signatory.historicalCountry
+    const name = modCountry?.name?.trim() || histCountry?.name?.trim() || ''
+    if (!name) continue
+    const polityKey = histCountry?.id
+      ? `hist:${histCountry.id}`
+      : modCountry?.id
+        ? `mod:${modCountry.id}`
+        : `name:${name}`
+    if (seen.has(polityKey)) continue
+    seen.add(polityKey)
+    const target: CountryInlineModalTarget | null = histCountry?.id
+      ? { id: histCountry.id, kind: 'historical', name: histCountry.name }
+      : modCountry?.id
+        ? { id: modCountry.id, kind: 'modern', name: modCountry.name }
+        : null
+    result.push({
+      id: signatory.id,
+      polityKey,
+      name,
+      target,
     })
-    .filter((party): party is Party => !!party)
+  }
+  return result
 }
 
-/** 세기 범위 '(1901–2000)' — 사건 목록 세기 머리글과 같은 꼬리 */
-function centuryRange(century: number): string {
-  if (century > 0) return `${(century - 1) * 100 + 1}–${century * 100}`
-  const end = (-century - 1) * 100 + 1
-  return `기원전 ${-century * 100}–${end}`
+function classifyValidity(
+  treatyItem: TreatyDto,
+): Exclude<ValidityFilterKey, 'all'> {
+  if (parseIsoDateParts(treatyItem.violationDate)) return 'broken'
+  if (parseIsoDateParts(treatyItem.expiryDate)) return 'expired'
+  return 'active'
 }
 
-type SortKey = TreatySortKey
+function formatCompactYear(yearVal: number): string {
+  return yearVal < 0 ? `BC ${Math.abs(yearVal)}` : String(yearVal)
+}
 
-/** 행 끝 상태 — 파기가 만료보다 강한 사실이다. 둘 다 없으면 비워 둔다(유효라고 단정하지 않는다). */
-function statusOf(
-  treaty: TreatyDto,
-): { tone: 'broken' | 'expired'; label: string } | null {
-  const broken = parseIsoDateParts(treaty.violationDate)
-  if (broken) return { tone: 'broken', label: `파기 ${yearLabel(broken.year)}` }
-  const expired = parseIsoDateParts(treaty.expiryDate)
-  if (expired) return { tone: 'expired', label: `만료 ${yearLabel(expired.year)}` }
-  return null
+function formatSignDateTabular(signDate: string | null | undefined): string {
+  const parts = parseIsoDateParts(signDate)
+  if (!parts) return '연도 미상'
+  const pad2 = (num: number) => String(num).padStart(2, '0')
+  const yearStr = parts.year < 0 ? `BC ${Math.abs(parts.year)}` : String(parts.year)
+  return `${yearStr}.${pad2(parts.month)}.${pad2(parts.day)}`
+}
+
+function getSignChronologyKey(treatyItem: TreatyDto): number {
+  const parts = parseIsoDateParts(treatyItem.signDate)
+  if (!parts) return Number.NEGATIVE_INFINITY
+  return parts.year * 10000 + parts.month * 100 + parts.day
+}
+
+function shortTypeLabel(typeKey: TreatyType): string {
+  return (TREATY_TYPE_LABELS[typeKey] ?? typeKey).replace(/ (조약|협정)$/, '')
+}
+
+function formatCenturyRangeLabel(centuryNum: number): string {
+  if (centuryNum > 0) {
+    return `${(centuryNum - 1) * 100 + 1}–${centuryNum * 100}`
+  }
+  const endAbs = (-centuryNum - 1) * 100 + 1
+  return `BC ${-centuryNum * 100}–${endAbs}`
+}
+
+function formatCenturyChipLabel(centuryKey: string): string {
+  const centuryNum = Number(centuryKey.replace(/^c:/, ''))
+  if (!Number.isFinite(centuryNum)) return centuryKey
+  return centuryNum < 0 ? `BC ${Math.abs(centuryNum)}세기` : `${centuryNum}세기`
 }
 
 export function TreatiesListPage() {
-  useDocumentTitle('조약')
+  useDocumentTitle('조약 · 국제협약 총람')
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
+  const theme = useTheme()
+  const isDarkMode = theme.mode === 'dark'
 
   const { data, isLoading, isError, refetch } = useQuery({
-    /* 좌측 사이드바와 같은 키 — 같은 응답을 두 번 받지 않는다 */
     queryKey: ['treaties', 'all'],
     queryFn: () => treatyApi.getAll(),
     staleTime: 60_000,
   })
 
-  /* 검색·유형·정렬의 정본은 URL — 상세에 갔다 '목록'으로 돌아와도, 새로고침해도 그대로다 */
   const [searchParams, setSearchParams] = useSearchParams()
   const listState = useMemo(
     () => parseTreatyListState(searchParams),
     [searchParams],
   )
-  const { query, type: typeFilter, sort } = listState
+  const { query: urlQuery, type: typeFilter, sort } = listState
+
   const patchListState = (patch: Partial<TreatyListState>) =>
     setSearchParams(serializeTreatyListState({ ...listState, ...patch }), {
       replace: true,
     })
-  const setQuery = (next: string) => patchListState({ query: next })
-  const setTypeFilter = (next: TreatyType | '') => patchListState({ type: next })
-  const setSort = (next: SortKey) => patchListState({ sort: next })
+
+  const [searchInput, setSearchInput] = useState(urlQuery)
+  const debouncedSearch = useDebouncedValue(searchInput, 160)
+
+  React.useEffect(() => {
+    if (debouncedSearch !== urlQuery) {
+      patchListState({ query: debouncedSearch })
+    }
+  }, [debouncedSearch])
+
+  const setTypeFilter = (nextType: TreatyType | '') =>
+    patchListState({ type: nextType })
+  const setSort = (nextSort: TreatySortKey) =>
+    patchListState({ sort: nextSort })
+
   const returnState: TreatyListReturnState = {
     treatyListSearch: location.search,
   }
 
-  const theme = useTheme()
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
-  const [selectedCentury, setSelectedCentury] = useState<number | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<CatalogViewMode>('table')
+  const [countryFilter, setCountryFilter] = useState<string>('')
+  const [validityFilter, setValidityFilter] =
+    useState<ValidityFilterKey>('all')
+  const [multilateralOnly, setMultilateralOnly] = useState<boolean>(false)
+  const [activeCenturyKey, setActiveCenturyKey] = useState<string | null>(null)
+  const [activeDecadeStart, setActiveDecadeStart] = useState<number | null>(
+    null,
+  )
+  const [showInfographic, setShowInfographic] = useState<boolean>(false)
+  const [showEraStrip, setShowEraStrip] = useState<boolean>(false)
+  const [collapsedCenturies, setCollapsedCenturies] = useState<Set<string>>(
+    new Set(),
+  )
+  const [createOpen, setCreateOpen] = useState<boolean>(false)
+  const [countryModalTarget, setCountryModalTarget] =
+    useState<CountryInlineModalTarget | null>(null)
 
-  const all = useMemo(() => data?.items ?? [], [data])
+  const allTreaties = useMemo(() => data?.items ?? [], [data])
 
-  /** 유형 필터는 실제로 존재하는 유형만 — 비어 있는 칸은 막다른 길이다 */
+  // 전체 KPI 및 당사국 옵션
+  const { kpiMetrics, countryOptions, topPolities } = useMemo(() => {
+    let activeCount = 0
+    let brokenCount = 0
+    let expiredCount = 0
+    let multilateralCount = 0
+    const countryNameCounts = new Map<string, { label: string; count: number }>()
+
+    const bumpCountry = (label: string) => {
+      const existing = countryNameCounts.get(label)
+      if (existing) existing.count += 1
+      else countryNameCounts.set(label, { label, count: 1 })
+    }
+
+    for (const treatyItem of allTreaties) {
+      const validity = classifyValidity(treatyItem)
+      if (validity === 'broken') brokenCount += 1
+      else if (validity === 'expired') expiredCount += 1
+      else activeCount += 1
+
+      const parties = extractParties(treatyItem)
+      if (parties.length >= 3) multilateralCount += 1
+
+      const seenLabels = new Set<string>()
+      for (const signatory of treatyItem.signatories) {
+        const histLabel = signatory.historicalCountry?.name?.trim() || null
+        const modLabel = signatory.country?.name?.trim() || null
+        if (histLabel && !seenLabels.has(histLabel)) {
+          seenLabels.add(histLabel)
+          bumpCountry(histLabel)
+        }
+        if (modLabel && modLabel !== histLabel && !seenLabels.has(modLabel)) {
+          seenLabels.add(modLabel)
+          bumpCountry(modLabel)
+        }
+      }
+    }
+
+    const sortedOptions = [...countryNameCounts.values()].sort(
+      (leftOpt, rightOpt) =>
+        rightOpt.count - leftOpt.count ||
+        leftOpt.label.localeCompare(rightOpt.label, 'ko'),
+    )
+
+    return {
+      kpiMetrics: {
+        totalCount: allTreaties.length,
+        activeCount,
+        brokenCount,
+        expiredCount,
+        endedCount: brokenCount + expiredCount,
+        multilateralCount,
+        polityCount: sortedOptions.length,
+      },
+      countryOptions: sortedOptions,
+      topPolities: sortedOptions.slice(0, 5),
+    }
+  }, [allTreaties])
+
+  // 시대 막대(GovernmentEraStrip) 버킷
+  const eraStripData = useMemo(() => {
+    const centuryCounts = new Map<number, number>()
+    const decadeCounts = new Map<number, number>()
+    const spans: GovernmentEraSpanItem[] = []
+    let undatedCount = 0
+
+    for (const treatyItem of allTreaties) {
+      const signParts = parseIsoDateParts(treatyItem.signDate)
+      if (!signParts) {
+        undatedCount += 1
+        continue
+      }
+      const signYear = signParts.year
+      const cNum = centuryOf(signYear)
+      centuryCounts.set(cNum, (centuryCounts.get(cNum) ?? 0) + 1)
+      const decStart = Math.floor(signYear / 10) * 10
+      decadeCounts.set(decStart, (decadeCounts.get(decStart) ?? 0) + 1)
+
+      const endParts = parseIsoDateParts(
+        treatyItem.violationDate ?? treatyItem.expiryDate,
+      )
+      if (endParts && endParts.year - signYear >= 3) {
+        spans.push({
+          id: treatyItem.id,
+          title: treatyItem.name,
+          from: signYear,
+          to: endParts.year,
+        })
+      }
+    }
+
+    const buckets: GovernmentCenturyBucket[] = [...centuryCounts.entries()]
+      .sort((leftEntry, rightEntry) => leftEntry[0] - rightEntry[0])
+      .map(([century, count]) => ({
+        key: `c:${century}`,
+        century,
+        count,
+      }))
+
+    const decadeBuckets: GovernmentDecadeBucket[] = [...decadeCounts.entries()]
+      .sort((leftEntry, rightEntry) => leftEntry[0] - rightEntry[0])
+      .map(([decadeStartYear, count]) => {
+        const repYear = decadeStartYear === 0 ? 1 : decadeStartYear + 5
+        const century = centuryOf(repYear)
+        return {
+          key: `d:${decadeStartYear}`,
+          decadeStartYear,
+          centuryKey: `c:${century}`,
+          count,
+        }
+      })
+
+    return { buckets, decadeBuckets, spans: spans.slice(0, 24), undatedCount }
+  }, [allTreaties])
+
+  // 유형 탭 제외 나머지 조건 일치 목록 (유형 탭 배지 숫자 정합성 유지)
+  const preTypeFiltered = useMemo(() => {
+    const needle = debouncedSearch.trim().toLowerCase()
+
+    return allTreaties.filter((treatyItem) => {
+      if (countryFilter) {
+        const matchesPolity = treatyItem.signatories.some(
+          (sig) =>
+            sig.country?.name?.trim() === countryFilter ||
+            sig.historicalCountry?.name?.trim() === countryFilter,
+        )
+        if (!matchesPolity) return false
+      }
+
+      if (validityFilter !== 'all') {
+        if (classifyValidity(treatyItem) !== validityFilter) return false
+      }
+
+      if (multilateralOnly) {
+        if (extractParties(treatyItem).length < 3) return false
+      }
+
+      const signParts = parseIsoDateParts(treatyItem.signDate)
+      if (activeDecadeStart !== null) {
+        if (!signParts) return false
+        if (
+          signParts.year < activeDecadeStart ||
+          signParts.year > activeDecadeStart + 9
+        ) {
+          return false
+        }
+      } else if (activeCenturyKey) {
+        if (!signParts) return false
+        if (`c:${centuryOf(signParts.year)}` !== activeCenturyKey) {
+          return false
+        }
+      }
+
+      if (needle) {
+        const partyNames = extractParties(treatyItem)
+          .map((party) => party.name)
+          .join(' ')
+        const haystack = [
+          treatyItem.name,
+          treatyItem.alias ?? '',
+          treatyItem.location ?? '',
+          TREATY_TYPE_LABELS[treatyItem.type] ?? '',
+          partyNames,
+        ]
+          .join(' ')
+          .toLowerCase()
+        if (!haystack.includes(needle)) return false
+      }
+
+      return true
+    })
+  }, [
+    allTreaties,
+    debouncedSearch,
+    countryFilter,
+    validityFilter,
+    multilateralOnly,
+    activeCenturyKey,
+    activeDecadeStart,
+  ])
+
   const typeCounts = useMemo(() => {
     const counts = new Map<TreatyType, number>()
-    for (const treaty of all) {
-      counts.set(treaty.type, (counts.get(treaty.type) ?? 0) + 1)
+    for (const treatyItem of preTypeFiltered) {
+      counts.set(treatyItem.type, (counts.get(treatyItem.type) ?? 0) + 1)
     }
     return counts
-  }, [all])
+  }, [preTypeFiltered])
 
-  /** 세기별 체결 밀도 & 유형·효력 상태 인포그래픽 집계 */
-  const infographicData = useMemo(() => {
-    const centuryMap = new Map<number, number>()
-    let undatedCount = 0
+  const visibleTypeTabs = useMemo(() => {
+    const allPresentTypes = new Set<TreatyType>()
+    for (const treatyItem of allTreaties) {
+      allPresentTypes.add(treatyItem.type)
+    }
+    if (typeFilter) {
+      allPresentTypes.add(typeFilter)
+    }
+    return CANONICAL_TYPE_ORDER.filter((typeKey) =>
+      allPresentTypes.has(typeKey),
+    )
+  }, [allTreaties, typeFilter])
+
+  const filteredTreaties = useMemo(() => {
+    const base = typeFilter
+      ? preTypeFiltered.filter((treatyItem) => treatyItem.type === typeFilter)
+      : preTypeFiltered
+
+    return [...base].sort((leftItem, rightItem) => {
+      if (sort === 'name') {
+        return leftItem.name.localeCompare(rightItem.name, 'ko')
+      }
+      const leftKey = getSignChronologyKey(leftItem)
+      const rightKey = getSignChronologyKey(rightItem)
+      if (leftKey === rightKey) {
+        return leftItem.name.localeCompare(rightItem.name, 'ko')
+      }
+      if (leftKey === Number.NEGATIVE_INFINITY) return 1
+      if (rightKey === Number.NEGATIVE_INFINITY) return -1
+      return sort === 'date-asc' ? leftKey - rightKey : rightKey - leftKey
+    })
+  }, [preTypeFiltered, typeFilter, sort])
+
+  // 인포그래픽 슬라이스 (통계 요약 토글 열람용)
+  const summaryStats = useMemo(() => {
     let activeCount = 0
     let expiredCount = 0
     let brokenCount = 0
+    const localTypeCounts = new Map<TreatyType, number>()
 
-    for (const treaty of all) {
-      const century = getCenturyFromIso(treaty.signDate)
-      if (century === null) undatedCount += 1
-      else centuryMap.set(century, (centuryMap.get(century) ?? 0) + 1)
-
-      if (parseIsoDateParts(treaty.violationDate)) brokenCount += 1
-      else if (parseIsoDateParts(treaty.expiryDate)) expiredCount += 1
+    for (const treatyItem of filteredTreaties) {
+      localTypeCounts.set(
+        treatyItem.type,
+        (localTypeCounts.get(treatyItem.type) ?? 0) + 1,
+      )
+      const val = classifyValidity(treatyItem)
+      if (val === 'broken') brokenCount += 1
+      else if (val === 'expired') expiredCount += 1
       else activeCount += 1
     }
 
-    const centuryBars = [...centuryMap.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([century, count]) => ({
-        century,
-        count,
-        shortLabel: century < 0 ? `BC${Math.abs(century)}C` : `${century}C`,
-        fullLabel: formatCenturyLabel(century),
-      }))
+    const typeSlices: SegmentSlice[] = CANONICAL_TYPE_ORDER.map((typeKey) => ({
+      key: typeKey,
+      label: shortTypeLabel(typeKey),
+      value: localTypeCounts.get(typeKey) ?? 0,
+      color: treatyTypeTone(typeKey, theme.mode),
+    })).filter((slice) => slice.value > 0)
 
-    const maxCenturyCount = centuryBars.reduce(
-      (max, b) => Math.max(max, b.count),
-      1,
-    )
-    const peakCentury =
-      centuryBars.length > 0
-        ? centuryBars.reduce((best, b) => (b.count > best.count ? b : best))
-        : null
+    const total = activeCount + expiredCount + brokenCount
+    const activePct = total > 0 ? Math.round((activeCount / total) * 100) : 0
 
-    const typeSlices: SegmentSlice[] = (
-      Object.keys(TREATY_TYPE_LABELS) as TreatyType[]
-    )
-      .filter((t) => (typeCounts.get(t) ?? 0) > 0)
-      .sort((a, b) => (typeCounts.get(b) ?? 0) - (typeCounts.get(a) ?? 0))
-      .map((t) => ({
-        key: t,
-        label: TREATY_TYPE_LABELS[t].replace(/ (조약|협정)$/, ''),
-        value: typeCounts.get(t) ?? 0,
-        color: treatyTypeTone(t, theme.mode),
-      }))
-
-    const isDarkMode = theme.mode === 'dark'
-    const validitySlices: SegmentSlice[] = [
+    const statusSlices: SegmentSlice[] = [
       {
         key: 'active',
-        label: '유효 · 존속',
+        label: '유효·존속',
         value: activeCount,
         color: isDarkMode ? '#34d399' : '#059669',
+        meta: `${activeCount}건 (${activePct}%)`,
       },
       {
         key: 'expired',
         label: '만료',
         value: expiredCount,
-        color: isDarkMode ? '#94a3b8' : '#64748b',
+        color: isDarkMode ? '#fbbf24' : '#d97706',
+        meta: `${expiredCount}건`,
       },
       {
         key: 'broken',
-        label: '파기',
+        label: '파기·위반',
         value: brokenCount,
         color: isDarkMode ? '#f87171' : '#dc2626',
+        meta: `${brokenCount}건`,
       },
-    ]
+    ].filter((slice) => slice.value > 0)
 
-    return {
-      centuryBars,
-      maxCenturyCount,
-      peakCentury,
-      undatedCount,
-      typeSlices,
-      validitySlices,
-    }
-  }, [all, typeCounts, theme.mode])
+    return { typeSlices, statusSlices, activePct }
+  }, [filteredTreaties, theme.mode, isDarkMode])
 
-  const groups = useMemo(() => {
-    const lowered = query.trim().toLowerCase()
-    const filtered = all.filter((treaty) => {
-      if (typeFilter && treaty.type !== typeFilter) return false
-      if (
-        selectedCentury !== null &&
-        getCenturyFromIso(treaty.signDate) !== selectedCentury
-      ) {
-        return false
-      }
-      if (!lowered) return true
-      const haystack = [
-        treaty.name,
-        treaty.alias,
-        treaty.location,
-        ...partiesOf(treaty).map((party) => party.name),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(lowered)
-    })
-
-    /* 연·월·일 전부로 비교 — 같은 해(1905년 2건)의 순서가 입력 순서에 맡겨지지 않게 */
-    const dateKey = (treaty: TreatyDto) => {
-      const parts = parseIsoDateParts(treaty.signDate)
-      if (!parts) return Number.NEGATIVE_INFINITY
-      return parts.year * 10_000 + parts.month * 100 + parts.day
+  // 세기별 그룹 (세기별 연대기 보기용)
+  const centuryChapters = useMemo(() => {
+    const bucketMap = new Map<string, TreatyDto[]>()
+    for (const treatyItem of filteredTreaties) {
+      const centuryNum = getCenturyFromIso(treatyItem.signDate)
+      const groupKey = centuryNum === null ? UNDATED_GROUP : String(centuryNum)
+      const bucket = bucketMap.get(groupKey)
+      if (bucket) bucket.push(treatyItem)
+      else bucketMap.set(groupKey, [treatyItem])
     }
 
-    const sorted = [...filtered].sort((left, right) => {
-      if (sort === 'name') return left.name.localeCompare(right.name, 'ko')
-      const diff = dateKey(right) - dateKey(left)
-      if (diff !== 0) return sort === 'date-desc' ? diff : -diff
-      return left.name.localeCompare(right.name, 'ko')
-    })
+    const numericEntries = [...bucketMap.entries()]
+      .filter(([groupKey]) => groupKey !== UNDATED_GROUP)
+      .map(([groupKey, items]) => ({
+        key: groupKey,
+        century: Number(groupKey),
+        label: formatCenturyLabel(Number(groupKey)),
+        rangeLabel: formatCenturyRangeLabel(Number(groupKey)),
+        items,
+      }))
+      .sort((leftGroup, rightGroup) =>
+        sort === 'date-asc'
+          ? leftGroup.century - rightGroup.century
+          : rightGroup.century - leftGroup.century,
+      )
 
-    if (sort === 'name') {
-      return [{ key: 'all', century: null as number | null, treaties: sorted }]
+    const undatedItems = bucketMap.get(UNDATED_GROUP)
+    if (undatedItems && undatedItems.length > 0) {
+      numericEntries.push({
+        key: UNDATED_GROUP,
+        century: 0,
+        label: '서명일 미상',
+        rangeLabel: '',
+        items: undatedItems,
+      })
     }
+    return numericEntries
+  }, [filteredTreaties, sort])
 
-    /* 세기 장으로 묶어 시대감을 준다 — 이름순일 땐 축이 다르므로 묶지 않는다 */
-    const buckets = new Map<string, { century: number | null; treaties: TreatyDto[] }>()
-    for (const treaty of sorted) {
-      const century = getCenturyFromIso(treaty.signDate)
-      const key = century === null ? UNDATED : String(century)
-      if (!buckets.has(key)) buckets.set(key, { century, treaties: [] })
-      buckets.get(key)!.treaties.push(treaty)
-    }
-    return [...buckets.entries()].map(([key, bucket]) => ({ key, ...bucket }))
-  }, [all, query, typeFilter, selectedCentury, sort])
-
-  const shownCount = groups.reduce(
-    (sum, group) => sum + group.treaties.length,
-    0,
+  const hasSecondaryFilters = Boolean(
+    searchInput.trim() ||
+      countryFilter ||
+      validityFilter !== 'all' ||
+      multilateralOnly ||
+      activeCenturyKey ||
+      activeDecadeStart !== null,
   )
-  const hasFilter = !!query.trim() || !!typeFilter || selectedCentury !== null
+  const hasAnyFilter = Boolean(typeFilter || hasSecondaryFilters)
 
-  const clearFilters = () => {
-    setSelectedCentury(null)
+  const handleResetAllFilters = () => {
+    setSearchInput('')
+    setCountryFilter('')
+    setValidityFilter('all')
+    setMultilateralOnly(false)
+    setActiveCenturyKey(null)
+    setActiveDecadeStart(null)
     patchListState({ query: '', type: '' })
   }
 
-  const handleSelectCenturyBar = (century: number) => {
-    setSelectedCentury((prev) => (prev === century ? null : century))
-    setCollapsed((current) => {
-      if (!current.has(String(century))) return current
-      const next = new Set(current)
-      next.delete(String(century))
+  const handleToggleSortDate = () => {
+    setSort(sort === 'date-asc' ? 'date-desc' : 'date-asc')
+  }
+
+  const toggleCenturyCollapse = (chapterKey: string) => {
+    setCollapsedCenturies((prev) => {
+      const next = new Set(prev)
+      if (next.has(chapterKey)) next.delete(chapterKey)
+      else next.add(chapterKey)
       return next
     })
   }
 
-  const toggleGroup = (key: string) =>
-    setCollapsed((current) => {
-      const next = new Set(current)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
+  const openTreatyDetail = (treatyId: string) => {
+    navigate(pathKeys.treaties.detail(treatyId), { state: returnState })
+  }
+
+  const renderTableRows = (rows: TreatyDto[]) =>
+    rows.map((treatyItem) => {
+      const validity = classifyValidity(treatyItem)
+      const brokenParts = parseIsoDateParts(treatyItem.violationDate)
+      const expiredParts = parseIsoDateParts(treatyItem.expiryDate)
+      const statusSuffix = brokenParts
+        ? `파기 ${formatCompactYear(brokenParts.year)}`
+        : expiredParts
+          ? `만료 ${formatCompactYear(expiredParts.year)}`
+          : null
+
+      const parties = extractParties(treatyItem)
+      const visibleParties = parties.slice(0, 2)
+      const extraPartyCount = Math.max(0, parties.length - visibleParties.length)
+      const scaleText =
+        parties.length === 2
+          ? '양자'
+          : parties.length >= 3
+            ? `${parties.length}개국`
+            : parties.length === 1
+              ? '단독'
+              : null
+
+      const termCount = treatyItem.terms?.length ?? 0
+      const eventCount = treatyItem.eventLinks?.length ?? 0
+      const typeToneColor = treatyTypeTone(treatyItem.type, theme.mode)
+
+      return (
+        <Tr
+          key={treatyItem.id}
+          tabIndex={0}
+          onClick={() => openTreatyDetail(treatyItem.id)}
+          onKeyDown={(keyEvent) => {
+            if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+              keyEvent.preventDefault()
+              openTreatyDetail(treatyItem.id)
+            }
+          }}
+        >
+          <Td>
+            <DateStatusCell>
+              <StatusDot $validity={validity} aria-hidden />
+              <DatePrimaryText>
+                {formatSignDateTabular(treatyItem.signDate)}
+              </DatePrimaryText>
+              {statusSuffix ? (
+                <StatusInlineText $validity={validity}>
+                  · {statusSuffix}
+                </StatusInlineText>
+              ) : null}
+            </DateStatusCell>
+          </Td>
+
+          <Td>
+            <NamePrimaryLine>
+              <NameTitleSpan>{treatyItem.name}</NameTitleSpan>
+              {treatyItem.alias ? (
+                <AliasInlineSpan>({treatyItem.alias})</AliasInlineSpan>
+              ) : null}
+              <DetailOpenIcon aria-hidden>
+                <FiArrowUpRight size={13} />
+              </DetailOpenIcon>
+            </NamePrimaryLine>
+          </Td>
+
+          <Td>
+            <TypeScaleCell>
+              <TypePrimaryText $color={typeToneColor}>
+                {shortTypeLabel(treatyItem.type)}
+              </TypePrimaryText>
+              {scaleText ? (
+                <ScaleSecondaryText>· {scaleText}</ScaleSecondaryText>
+              ) : null}
+            </TypeScaleCell>
+          </Td>
+
+          <Td>
+            {visibleParties.length > 0 ? (
+              <PartiesPlainLine>
+                {visibleParties.map((party, partyIndex) => (
+                  <React.Fragment key={party.polityKey}>
+                    {partyIndex > 0 ? (
+                      <PartySep aria-hidden>·</PartySep>
+                    ) : null}
+                    {party.target ? (
+                      <PartyPlainBtn
+                        type="button"
+                        onClick={(clickEvent) => {
+                          clickEvent.stopPropagation()
+                          if (!shouldInterceptEntityClick(clickEvent)) {
+                            navigate(pathKeys.countryDetail(party.target!.id))
+                            return
+                          }
+                          setCountryModalTarget(party.target)
+                        }}
+                      >
+                        {party.name}
+                      </PartyPlainBtn>
+                    ) : (
+                      <PartyPlainText>{party.name}</PartyPlainText>
+                    )}
+                  </React.Fragment>
+                ))}
+                {extraPartyCount > 0 ? (
+                  <PartyOverflowSpan>외 {extraPartyCount}개국</PartyOverflowSpan>
+                ) : null}
+              </PartiesPlainLine>
+            ) : (
+              <DashText>—</DashText>
+            )}
+          </Td>
+
+          <Td>
+            {treatyItem.location?.trim() ? (
+              <LocationPlainText title={treatyItem.location}>
+                {treatyItem.location}
+              </LocationPlainText>
+            ) : (
+              <DashText>—</DashText>
+            )}
+          </Td>
+
+          <Td style={{ textAlign: 'right' }}>
+            {termCount > 0 || eventCount > 0 ? (
+              <RightCountsInline>
+                {termCount > 0 ? (
+                  <RecordCountSpan $accent>조항 {termCount}</RecordCountSpan>
+                ) : null}
+                {termCount > 0 && eventCount > 0 ? (
+                  <PartySep aria-hidden>·</PartySep>
+                ) : null}
+                {eventCount > 0 ? (
+                  <RecordCountSpan $accent>사건 {eventCount}</RecordCountSpan>
+                ) : null}
+              </RightCountsInline>
+            ) : (
+              <DashText>—</DashText>
+            )}
+          </Td>
+        </Tr>
+      )
     })
 
-  return (
-    <Page>
-      {!isLoading && !isError && all.length > 0 && (
-        <BentoGrid2Col aria-label="조약 체결 밀도 및 성격 요약">
-          <BentoCard>
-            <BentoCardHeader>
-              <BentoCardTitleGroup>
-                <BentoCardTitle>세기별 조약 체결 밀도</BentoCardTitle>
-                <BentoCardBadge>{all.length.toLocaleString('ko-KR')}건</BentoCardBadge>
-              </BentoCardTitleGroup>
-              {selectedCentury !== null ? (
-                <HistogramResetBtn
-                  type="button"
-                  onClick={() => setSelectedCentury(null)}
-                >
-                  {formatCenturyLabel(selectedCentury)} 해제 <FiX size={11} />
-                </HistogramResetBtn>
-              ) : infographicData.peakCentury ? (
-                <HistogramPeakText>
-                  최다 <strong>{infographicData.peakCentury.fullLabel}</strong> (
-                  {infographicData.peakCentury.count}건)
-                </HistogramPeakText>
-              ) : null}
-            </BentoCardHeader>
-            <BentoCardBody>
-              {infographicData.centuryBars.length > 0 ? (
-                <>
-                  <CenturyHistogram role="group" aria-label="세기별 체결 건수 히스토그램">
-                    {infographicData.centuryBars.map((bar) => {
-                      const active = selectedCentury === bar.century
-                      const dimmed =
-                        selectedCentury !== null && selectedCentury !== bar.century
-                      const heightPct = Math.max(
-                        12,
-                        Math.round(
-                          (bar.count / infographicData.maxCenturyCount) * 100,
-                        ),
-                      )
-                      return (
-                        <CenturyBarBtn
-                          key={bar.century}
-                          type="button"
-                          $active={active}
-                          $dimmed={dimmed}
-                          aria-pressed={active}
-                          title={`${bar.fullLabel}: ${bar.count}건 — 클릭하여 세기 필터`}
-                          onClick={() => handleSelectCenturyBar(bar.century)}
-                        >
-                          <CenturyBarCount $active={active}>
-                            {bar.count}
-                          </CenturyBarCount>
-                          <CenturyBarTrack>
-                            <CenturyBarFill
-                              $active={active}
-                              style={{ height: `${heightPct}%` }}
-                            />
-                          </CenturyBarTrack>
-                          <CenturyBarAxis $active={active}>
-                            {bar.shortLabel}
-                          </CenturyBarAxis>
-                        </CenturyBarBtn>
-                      )
-                    })}
-                  </CenturyHistogram>
-                  <HistogramCaption>
-                    막대를 클릭하면 해당 세기의 조약만 필터링합니다
-                    {infographicData.undatedCount > 0
-                      ? ` · 서명일 미상 ${infographicData.undatedCount}건`
-                      : ''}
-                  </HistogramCaption>
-                </>
-              ) : (
-                <HistogramCaption>
-                  서명일이 기록된 조약이 없습니다.
-                </HistogramCaption>
-              )}
-            </BentoCardBody>
-          </BentoCard>
-
-          <BentoCard>
-            <BentoCardHeader>
-              <BentoCardTitleGroup>
-                <BentoCardTitle>조약 성격 비중 · 효력 상태</BentoCardTitle>
-                <BentoCardBadge>{typeCounts.size}개 유형</BentoCardBadge>
-              </BentoCardTitleGroup>
-            </BentoCardHeader>
-            <BentoCardBody>
-              <SummaryBlock>
-                <SummaryMiniTitle>조약 성격 분포</SummaryMiniTitle>
-                <StackedSegmentBar
-                  slices={infographicData.typeSlices}
-                  height={9}
-                />
-              </SummaryBlock>
-              <SummaryDivider />
-              <SummaryBlock>
-                <SummaryMiniTitle>효력 상태 요약 (유효 · 만료 · 파기)</SummaryMiniTitle>
-                <StackedSegmentBar
-                  slices={infographicData.validitySlices}
-                  height={7}
-                />
-              </SummaryBlock>
-            </BentoCardBody>
-          </BentoCard>
-        </BentoGrid2Col>
-      )}
-
-      <Toolbar>
-        <SearchBox>
-          <FiSearch size={16} aria-hidden />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="조약명 · 별칭 · 서명국 · 장소 검색"
-            aria-label="조약 검색"
-          />
-          {query && (
-            <ClearButton
-              type="button"
-              onClick={() => setQuery('')}
-              aria-label="검색어 지우기"
-            >
-              <FiX size={13} />
-            </ClearButton>
-          )}
-        </SearchBox>
-
-        <FilterGroup role="group" aria-label="조약 유형">
-          <FilterButton
+  const renderTableHead = () => (
+    <thead>
+      <tr>
+        <Th style={{ width: '176px' }}>
+          <SortableThBtn
             type="button"
-            $active={typeFilter === ''}
-            aria-pressed={typeFilter === ''}
-            onClick={() => setTypeFilter('')}
+            $active={sort === 'date-desc' || sort === 'date-asc'}
+            onClick={handleToggleSortDate}
           >
-            전체
-            <FilterCount>{all.length}</FilterCount>
-          </FilterButton>
-          {(Object.keys(TREATY_TYPE_LABELS) as TreatyType[])
-            .filter((type) => typeCounts.has(type))
-            .map((type) => (
-              <FilterButton
-                key={type}
-                type="button"
-                $active={typeFilter === type}
-                $type={type}
-                aria-pressed={typeFilter === type}
-                onClick={() => setTypeFilter(typeFilter === type ? '' : type)}
-              >
-                <TypeDot $type={type} aria-hidden />
-                {TREATY_TYPE_LABELS[type]}
-                <FilterCount>{typeCounts.get(type)}</FilterCount>
-              </FilterButton>
-            ))}
-        </FilterGroup>
-
-        {hasFilter && (
-          <ResetButton type="button" onClick={clearFilters}>
-            필터 초기화
-          </ResetButton>
-        )}
-
-        <CreateButton type="button" onClick={() => setCreateOpen(true)}>
-          <FiPlus size={15} aria-hidden />
-          조약 등록
-        </CreateButton>
-      </Toolbar>
-
-      <Catalog>
-        {/*
-          열 머리글은 표 구조(role=table/row)를 흉내 내지 않는다 — 행은 링크 한 덩어리라
-          낭독기는 행 글자를 그대로 읽는다. 예전엔 버튼에 role=columnheader를 씌워 버튼 의미가
-          지워졌고 role=row는 table 없이 떠 있었다. 정렬 버튼은 버튼으로, 상태는 라벨로 말한다.
-        */}
-        <ColumnHeader>
-          <HeaderCell
-            as="button"
+            <span>서명 · 효력</span>
+            {sort === 'date-asc' ? (
+              <FiArrowUp size={11.5} />
+            ) : sort === 'date-desc' ? (
+              <FiArrowDown size={11.5} />
+            ) : null}
+          </SortableThBtn>
+        </Th>
+        <Th>
+          <SortableThBtn
             type="button"
-            data-col="date"
-            $sortable
-            $active={sort !== 'name'}
-            onClick={() =>
-              setSort(sort === 'date-desc' ? 'date-asc' : 'date-desc')
-            }
-            aria-label={
-              sort === 'date-desc'
-                ? '서명일 정렬 — 지금 최신순, 누르면 오래된순'
-                : sort === 'date-asc'
-                  ? '서명일 정렬 — 지금 오래된순, 누르면 최신순'
-                  : '서명일순으로 정렬'
-            }
-            title="서명일 정렬 바꾸기"
-          >
-            서명일
-            <Caret $flipped={sort === 'date-asc'} $idle={sort === 'name'}>
-              ▾
-            </Caret>
-          </HeaderCell>
-          <HeaderCell data-col="type" aria-hidden>
-            유형
-          </HeaderCell>
-          <HeaderCell
-            as="button"
-            type="button"
-            data-col="title"
-            $sortable
             $active={sort === 'name'}
-            aria-pressed={sort === 'name'}
-            onClick={() => setSort('name')}
-            aria-label={`이름순 정렬 — 조약 ${shownCount}건`}
-            title="이름순 정렬"
+            onClick={() => setSort(sort === 'name' ? 'date-desc' : 'name')}
           >
-            조약
-            <HeaderCount>
-              {hasFilter ? `${shownCount} / ${all.length}` : all.length}건
-            </HeaderCount>
-          </HeaderCell>
-          <HeaderCell data-col="parties" aria-hidden>
-            서명국
-          </HeaderCell>
-          <HeaderCell data-col="place" aria-hidden>
-            서명 장소
-          </HeaderCell>
-          <HeaderCell data-col="status" aria-hidden>
-            상태
-          </HeaderCell>
-        </ColumnHeader>
+            <span>조약 · 협약</span>
+            {sort === 'name' ? <FiArrowUp size={11.5} /> : null}
+          </SortableThBtn>
+        </Th>
+        <Th style={{ width: '132px' }}>성격 · 규모</Th>
+        <Th style={{ width: '28%' }}>서명 · 당사국</Th>
+        <Th style={{ width: '19%' }}>체결 장소</Th>
+        <Th style={{ width: '96px', textAlign: 'right' }}>조항 · 사건</Th>
+      </tr>
+    </thead>
+  )
 
-        {isLoading ? (
-          <Notice>불러오는 중…</Notice>
-        ) : isError ? (
-          <Notice>
-            목록을 불러오지 못했습니다.{' '}
-            <TextButton onClick={() => void refetch()}>다시 시도</TextButton>
-          </Notice>
-        ) : shownCount === 0 ? (
-          <Notice>
-            {all.length === 0
-              ? '아직 등록된 조약이 없습니다. 위의 「조약 등록」으로 시작하세요.'
-              : '조건에 맞는 조약이 없습니다.'}
-            {hasFilter && (
-              <>
-                {' '}
-                <TextButton onClick={clearFilters}>필터 초기화</TextButton>
-              </>
+  return (
+    <PageCanvas>
+      <TopChromeBar>
+        <TopHeadlineGroup>
+          <HeadlineAccentBar aria-hidden="true" />
+          <HeadlineTextStack>
+            <PageTitle>조약 · 국제협약 총람</PageTitle>
+            <HeadlineSummaryLine>
+              <span>
+                전체 조약{' '}
+                <b>{kpiMetrics.totalCount.toLocaleString('ko-KR')}</b>
+              </span>
+              <span className="sep">·</span>
+              <span className="accent">
+                유효·존속{' '}
+                <b>{kpiMetrics.activeCount.toLocaleString('ko-KR')}</b>
+              </span>
+              {kpiMetrics.endedCount > 0 ? (
+                <>
+                  <span className="sep">·</span>
+                  <span>
+                    파기·만료{' '}
+                    <b>{kpiMetrics.endedCount.toLocaleString('ko-KR')}</b>
+                  </span>
+                </>
+              ) : null}
+              {kpiMetrics.polityCount > 0 ? (
+                <>
+                  <span className="sep">·</span>
+                  <span>
+                    당사 정치체{' '}
+                    <b>{kpiMetrics.polityCount.toLocaleString('ko-KR')}</b>
+                  </span>
+                </>
+              ) : null}
+            </HeadlineSummaryLine>
+          </HeadlineTextStack>
+        </TopHeadlineGroup>
+
+        <TopChromeActions>
+          <UtilityToggleBtn
+            type="button"
+            $active={showInfographic}
+            onClick={() => setShowInfographic((prev) => !prev)}
+            title="조약 성격·효력 및 주요 당사국 통계 요약 열기"
+          >
+            <FiBarChart2 size={13} />
+            <span>통계 요약</span>
+          </UtilityToggleBtn>
+
+          {eraStripData.buckets.length > 0 ? (
+            <UtilityToggleBtn
+              type="button"
+              $active={
+                showEraStrip ||
+                Boolean(activeCenturyKey) ||
+                activeDecadeStart !== null
+              }
+              onClick={() => setShowEraStrip((prev) => !prev)}
+              title="세기·연대별 조약 체결 분포 막대 열기"
+            >
+              <FiCalendar size={13} />
+              <span>시대 막대</span>
+            </UtilityToggleBtn>
+          ) : null}
+
+          <PrimaryActionButton
+            $size="md"
+            icon={<FiPlus size={14} />}
+            onClick={() => setCreateOpen(true)}
+          >
+            조약 등록
+          </PrimaryActionButton>
+        </TopChromeActions>
+      </TopChromeBar>
+
+      {showInfographic ? (
+        <EditorialSummaryGrid aria-label="조약 총람 인포그래픽 요약">
+          <EditorialSummaryCol>
+            <EditorialSummaryHead>
+              <EditorialSummaryTitle>
+                조약 성격 · 효력 구성
+                <span>
+                  {filteredTreaties.length.toLocaleString('ko-KR')}건
+                </span>
+              </EditorialSummaryTitle>
+              <SummaryMetaGroup>
+                <span>
+                  유효 비율 <strong>{summaryStats.activePct}%</strong>
+                </span>
+              </SummaryMetaGroup>
+            </EditorialSummaryHead>
+            {filteredTreaties.length > 0 ? (
+              <SummarySplitRow>
+                <MiniDonutRing
+                  slices={summaryStats.typeSlices}
+                  size={72}
+                  strokeWidth={9}
+                  centerValue={filteredTreaties.length.toLocaleString('ko-KR')}
+                  centerLabel="조약"
+                />
+                <SummaryBarsCol>
+                  <StackedSegmentBar
+                    slices={summaryStats.typeSlices}
+                    height={9}
+                  />
+                  <SummaryHairline />
+                  <StackedSegmentBar
+                    slices={summaryStats.statusSlices}
+                    height={7}
+                  />
+                </SummaryBarsCol>
+              </SummarySplitRow>
+            ) : (
+              <SummaryEmptyText>
+                현재 필터 조건에 해당하는 조약이 없습니다.
+              </SummaryEmptyText>
             )}
-          </Notice>
-        ) : (
-          <Rail>
-            {groups.map((group) => {
-              const isCollapsed = collapsed.has(group.key)
-              return (
-                <section key={group.key} aria-label={group.century === null ? undefined : formatCenturyLabel(group.century)}>
-                  {group.key !== 'all' && (
-                    <CenturyDivider
+          </EditorialSummaryCol>
+
+          <EditorialSummaryCol>
+            <EditorialSummaryHead>
+              <EditorialSummaryTitle>
+                최다 참여 당사국 Top 5
+                <span>
+                  총 {kpiMetrics.polityCount.toLocaleString('ko-KR')}개 정치체
+                </span>
+              </EditorialSummaryTitle>
+              {countryFilter ? (
+                <InlineResetTextBtn
+                  type="button"
+                  onClick={() => setCountryFilter('')}
+                >
+                  국가 필터 해제
+                </InlineResetTextBtn>
+              ) : null}
+            </EditorialSummaryHead>
+            {topPolities.length > 0 ? (
+              <TopPolityList>
+                {topPolities.map((polityItem, index) => {
+                  const maxCount = topPolities[0]?.count ?? 1
+                  const widthPct = Math.max(
+                    10,
+                    Math.round((polityItem.count / maxCount) * 100),
+                  )
+                  const isSelected = countryFilter === polityItem.label
+                  return (
+                    <TopPolityRowBtn
+                      key={polityItem.label}
                       type="button"
-                      aria-expanded={!isCollapsed}
-                      onClick={() => toggleGroup(group.key)}
+                      $active={isSelected}
+                      onClick={() =>
+                        setCountryFilter((prev) =>
+                          prev === polityItem.label ? '' : polityItem.label,
+                        )
+                      }
                     >
-                      <CenturyLabel>
-                        <FiChevronDown
-                          size={14}
-                          aria-hidden
-                          style={{
-                            transform: isCollapsed ? 'rotate(-90deg)' : undefined,
-                          }}
+                      <TopPolityRank>#{index + 1}</TopPolityRank>
+                      <TopPolityName>{polityItem.label}</TopPolityName>
+                      <TopPolityTrack>
+                        <TopPolityFill
+                          $active={isSelected || index === 0}
+                          style={{ width: `${widthPct}%` }}
                         />
-                        {group.century === null
-                          ? '서명일 미상'
-                          : formatCenturyLabel(group.century)}
-                        {group.century !== null && (
-                          <CenturyYears>({centuryRange(group.century)})</CenturyYears>
-                        )}
-                      </CenturyLabel>
-                      <CenturyCount>{group.treaties.length}건</CenturyCount>
-                    </CenturyDivider>
-                  )}
-                  {!isCollapsed &&
-                    group.treaties.map((treaty) => (
-                      <TreatyRow
-                        key={treaty.id}
-                        treaty={treaty}
-                        returnState={returnState}
-                      />
-                    ))}
-                </section>
+                      </TopPolityTrack>
+                      <TopPolityCount>{polityItem.count}건</TopPolityCount>
+                    </TopPolityRowBtn>
+                  )
+                })}
+              </TopPolityList>
+            ) : (
+              <SummaryEmptyText>
+                서명 당사국이 연결된 조약이 없습니다.
+              </SummaryEmptyText>
+            )}
+          </EditorialSummaryCol>
+        </EditorialSummaryGrid>
+      ) : null}
+
+      {(showEraStrip ||
+        Boolean(activeCenturyKey) ||
+        activeDecadeStart !== null) &&
+      eraStripData.buckets.length > 0 ? (
+        <GovernmentEraStrip
+          buckets={eraStripData.buckets}
+          decadeBuckets={eraStripData.decadeBuckets}
+          spans={eraStripData.spans}
+          activeCenturyKey={activeCenturyKey}
+          onJumpToCentury={(centuryKey) => {
+            setActiveDecadeStart(null)
+            setActiveCenturyKey((prev) =>
+              prev === centuryKey ? null : centuryKey,
+            )
+          }}
+          onJumpToDecade={(decadeBucket) => {
+            setActiveCenturyKey(decadeBucket.centuryKey)
+            setActiveDecadeStart((prev) =>
+              prev === decadeBucket.decadeStartYear
+                ? null
+                : decadeBucket.decadeStartYear,
+            )
+          }}
+          undatedCount={eraStripData.undatedCount}
+        />
+      ) : null}
+
+      <LedgerWorkspace>
+        <TopTabBarRow>
+          <UnderlineTabNav as="nav" aria-label="조약 성격 탭">
+            <UnderlineTabButton
+              type="button"
+              $active={typeFilter === ''}
+              onClick={() => setTypeFilter('')}
+            >
+              <span>전체 조약</span>
+              <UnderlineTabBadge $active={typeFilter === ''}>
+                {preTypeFiltered.length.toLocaleString('ko-KR')}
+              </UnderlineTabBadge>
+            </UnderlineTabButton>
+
+            {visibleTypeTabs.map((typeKey) => {
+              const count = typeCounts.get(typeKey) ?? 0
+              const isActive = typeFilter === typeKey
+              if (count === 0 && !isActive) return null
+              return (
+                <UnderlineTabButton
+                  key={typeKey}
+                  type="button"
+                  $active={isActive}
+                  onClick={() => setTypeFilter(isActive ? '' : typeKey)}
+                >
+                  <span>{shortTypeLabel(typeKey)}</span>
+                  <UnderlineTabBadge $active={isActive}>
+                    {count.toLocaleString('ko-KR')}
+                  </UnderlineTabBadge>
+                </UnderlineTabButton>
               )
             })}
-          </Rail>
-        )}
-      </Catalog>
+          </UnderlineTabNav>
 
-      {/* body로 포털 — Page의 container-type이 position:fixed 오버레이의 기준 상자가 된다 */}
+          <TabRightViewSlot>
+            <LedgerViewSwitch role="group" aria-label="조약 보기 방식">
+              <LedgerViewSwitchItem
+                type="button"
+                $active={viewMode === 'table'}
+                onClick={() => setViewMode('table')}
+              >
+                <FiList size={13} />
+                원장 표
+              </LedgerViewSwitchItem>
+              <LedgerViewSwitchItem
+                type="button"
+                $active={viewMode === 'century'}
+                onClick={() => setViewMode('century')}
+              >
+                <FiClock size={13} />
+                세기별 연대기
+              </LedgerViewSwitchItem>
+            </LedgerViewSwitch>
+          </TabRightViewSlot>
+        </TopTabBarRow>
+
+        <CatalogControlRow>
+          <ControlZoneLeft>
+            <LedgerSearchBox style={{ width: 'clamp(220px, 26vw, 310px)' }}>
+              <FiSearch />
+              <LedgerSearchInput
+                type="search"
+                placeholder="조약명·별칭, 당사국, 체결 장소 검색…"
+                value={searchInput}
+                onChange={(evt) => setSearchInput(evt.target.value)}
+                aria-label="조약 검색"
+              />
+              {searchInput ? (
+                <ClearIconBtn
+                  type="button"
+                  aria-label="검색어 지우기"
+                  onClick={() => {
+                    setSearchInput('')
+                    patchListState({ query: '' })
+                  }}
+                >
+                  <FiX size={13} />
+                </ClearIconBtn>
+              ) : null}
+            </LedgerSearchBox>
+
+            <CountryPickerWrap>
+              <SearchableSelect
+                size="sm"
+                ariaLabel="당사국 및 정치체 필터"
+                clearable
+                value={countryFilter}
+                onChange={(nextVal) => setCountryFilter(nextVal)}
+                placeholder={`전체 당사국 · 정체 (${countryOptions.length})`}
+                searchPlaceholder="국가 · 역사 정치체 검색…"
+                options={countryOptions.map<SearchableSelectOption>((opt) => ({
+                  value: opt.label,
+                  label: opt.label,
+                  meta: `${opt.count}건`,
+                }))}
+              />
+            </CountryPickerWrap>
+
+            <QuickFilterRow role="group" aria-label="효력 및 규모 필터">
+              {VALIDITY_QUICK_OPTIONS.map((opt) => (
+                <QuickFilterChip
+                  key={opt.key}
+                  type="button"
+                  $active={validityFilter === opt.key}
+                  onClick={() => setValidityFilter(opt.key)}
+                >
+                  {opt.label}
+                </QuickFilterChip>
+              ))}
+              {kpiMetrics.multilateralCount > 0 ? (
+                <QuickFilterChip
+                  type="button"
+                  $active={multilateralOnly}
+                  onClick={() => setMultilateralOnly((prev) => !prev)}
+                >
+                  다자(3개국+)
+                </QuickFilterChip>
+              ) : null}
+            </QuickFilterRow>
+          </ControlZoneLeft>
+
+          <ControlZoneRight>
+            <ResultCountMeta>
+              {filteredTreaties.length === allTreaties.length ? (
+                <>
+                  전체{' '}
+                  <strong>{allTreaties.length.toLocaleString('ko-KR')}</strong>건
+                </>
+              ) : (
+                <>
+                  표시{' '}
+                  <strong>
+                    {filteredTreaties.length.toLocaleString('ko-KR')}
+                  </strong>{' '}
+                  / {allTreaties.length.toLocaleString('ko-KR')}건
+                </>
+              )}
+            </ResultCountMeta>
+
+            <PopoverMenu
+              ariaLabel="정렬 순서 및 필터 관리"
+              title="정렬 기준 · 필터 초기화"
+              minWidth={210}
+              active={sort !== 'date-desc' || hasAnyFilter}
+            >
+              {(closeMenu) => (
+                <>
+                  <PopoverMenuSectionLabel>정렬 순서</PopoverMenuSectionLabel>
+                  <PopoverMenuItem
+                    type="button"
+                    onClick={() => {
+                      setSort('date-desc')
+                      closeMenu()
+                    }}
+                  >
+                    <FiArrowDown size={13} />
+                    <span>서명일 최신순</span>
+                    {sort === 'date-desc' ? (
+                      <FiCheck size={13} style={{ marginLeft: 'auto' }} />
+                    ) : null}
+                  </PopoverMenuItem>
+                  <PopoverMenuItem
+                    type="button"
+                    onClick={() => {
+                      setSort('date-asc')
+                      closeMenu()
+                    }}
+                  >
+                    <FiArrowUp size={13} />
+                    <span>서명일 오래된순</span>
+                    {sort === 'date-asc' ? (
+                      <FiCheck size={13} style={{ marginLeft: 'auto' }} />
+                    ) : null}
+                  </PopoverMenuItem>
+                  <PopoverMenuItem
+                    type="button"
+                    onClick={() => {
+                      setSort('name')
+                      closeMenu()
+                    }}
+                  >
+                    <FiList size={13} />
+                    <span>조약명 가나다순</span>
+                    {sort === 'name' ? (
+                      <FiCheck size={13} style={{ marginLeft: 'auto' }} />
+                    ) : null}
+                  </PopoverMenuItem>
+
+                  {hasAnyFilter ? (
+                    <>
+                      <PopoverMenuDivider />
+                      <PopoverMenuItem
+                        type="button"
+                        onClick={() => {
+                          handleResetAllFilters()
+                          closeMenu()
+                        }}
+                      >
+                        <FiRotateCcw size={13} />
+                        <span>모든 필터 초기화</span>
+                      </PopoverMenuItem>
+                    </>
+                  ) : null}
+                </>
+              )}
+            </PopoverMenu>
+          </ControlZoneRight>
+        </CatalogControlRow>
+
+        {hasSecondaryFilters ? (
+          <ActiveFilterBar>
+            {countryFilter ? (
+              <ActiveFilterPill
+                type="button"
+                onClick={() => setCountryFilter('')}
+              >
+                <span>당사국: {countryFilter}</span>
+                <FiX size={11} />
+              </ActiveFilterPill>
+            ) : null}
+            {validityFilter !== 'all' ? (
+              <ActiveFilterPill
+                type="button"
+                onClick={() => setValidityFilter('all')}
+              >
+                <span>
+                  효력:{' '}
+                  {
+                    VALIDITY_QUICK_OPTIONS.find(
+                      (item) => item.key === validityFilter,
+                    )?.label
+                  }
+                </span>
+                <FiX size={11} />
+              </ActiveFilterPill>
+            ) : null}
+            {multilateralOnly ? (
+              <ActiveFilterPill
+                type="button"
+                onClick={() => setMultilateralOnly(false)}
+              >
+                <span>규모: 다자(3개국+)</span>
+                <FiX size={11} />
+              </ActiveFilterPill>
+            ) : null}
+            {activeCenturyKey ? (
+              <ActiveFilterPill
+                type="button"
+                onClick={() => {
+                  setActiveCenturyKey(null)
+                  setActiveDecadeStart(null)
+                }}
+              >
+                <span>세기: {formatCenturyChipLabel(activeCenturyKey)}</span>
+                <FiX size={11} />
+              </ActiveFilterPill>
+            ) : null}
+            {activeDecadeStart !== null ? (
+              <ActiveFilterPill
+                type="button"
+                onClick={() => setActiveDecadeStart(null)}
+              >
+                <span>연대: {activeDecadeStart}년대</span>
+                <FiX size={11} />
+              </ActiveFilterPill>
+            ) : null}
+
+            <ResetAllInlineBtn type="button" onClick={handleResetAllFilters}>
+              <FiRotateCcw size={11} />
+              <span>초기화</span>
+            </ResetAllInlineBtn>
+          </ActiveFilterBar>
+        ) : null}
+
+        <LedgerSurfacePanel>
+          {isLoading ? (
+            <div style={{ padding: '24px 0' }}>
+              <ChartSkeleton variant="bars" rows={8} />
+            </div>
+          ) : isError ? (
+            <EmptyStateSpotlight
+              title="조약 목록을 불러오지 못했습니다"
+              description="네트워크 연결 또는 서버 상태를 확인한 뒤 다시 시도해 주세요."
+              actions={
+                <UtilityToggleBtn type="button" onClick={() => void refetch()}>
+                  다시 불러오기
+                </UtilityToggleBtn>
+              }
+            />
+          ) : allTreaties.length === 0 ? (
+            <EmptyStateSpotlight
+              title="등록된 조약이 없습니다"
+              description="강화·동맹·불가침·무역 협정 등 역사적 조약을 등록하면 시대·당사국별로 정리됩니다."
+              actions={
+                <PrimaryActionButton
+                  $size="md"
+                  icon={<FiPlus size={14} />}
+                  onClick={() => setCreateOpen(true)}
+                >
+                  첫 조약 등록
+                </PrimaryActionButton>
+              }
+            />
+          ) : filteredTreaties.length === 0 ? (
+            <EmptyStateSpotlight
+              title="조건에 일치하는 조약이 없습니다"
+              description="검색어나 선택한 당사국·효력 필터를 완화해 보세요."
+              actions={
+                <UtilityToggleBtn type="button" onClick={handleResetAllFilters}>
+                  <FiRotateCcw size={12.5} />
+                  <span>필터 모두 초기화</span>
+                </UtilityToggleBtn>
+              }
+            />
+          ) : viewMode === 'table' ? (
+            <TableScrollArea>
+              <LedgerTable aria-label="조약 총람 원장 표">
+                {renderTableHead()}
+                <tbody>{renderTableRows(filteredTreaties)}</tbody>
+              </LedgerTable>
+            </TableScrollArea>
+          ) : (
+            <CenturyGroupStack>
+              {centuryChapters.map((chapter) => {
+                const isCollapsed = collapsedCenturies.has(chapter.key)
+                return (
+                  <CenturyChapterBlock key={chapter.key}>
+                    <CenturyBandRow>
+                      <CenturyBandToggle
+                        type="button"
+                        onClick={() => toggleCenturyCollapse(chapter.key)}
+                      >
+                        {isCollapsed ? (
+                          <FiChevronRight size={14} />
+                        ) : (
+                          <FiChevronDown size={14} />
+                        )}
+                        <strong>{chapter.label}</strong>
+                        {chapter.rangeLabel ? (
+                          <CenturyRangeMeta>
+                            {chapter.rangeLabel}
+                          </CenturyRangeMeta>
+                        ) : null}
+                        <CenturyBandCount>
+                          {chapter.items.length}건
+                        </CenturyBandCount>
+                      </CenturyBandToggle>
+                    </CenturyBandRow>
+                    {!isCollapsed ? (
+                      <TableScrollArea>
+                        <LedgerTable
+                          aria-label={`${chapter.label} 체결 조약 표`}
+                        >
+                          {renderTableHead()}
+                          <tbody>{renderTableRows(chapter.items)}</tbody>
+                        </LedgerTable>
+                      </TableScrollArea>
+                    ) : null}
+                  </CenturyChapterBlock>
+                )
+              })}
+            </CenturyGroupStack>
+          )}
+        </LedgerSurfacePanel>
+      </LedgerWorkspace>
+
       {createOpen &&
         createPortal(
           <TreatySectionThemeProvider>
@@ -632,760 +1398,561 @@ export function TreatiesListPage() {
                   state: returnState,
                 })
               }}
+              onCreatedAndContinue={() => {
+                void queryClient.invalidateQueries({ queryKey: ['treaties'] })
+              }}
             />
           </TreatySectionThemeProvider>,
           document.body,
         )}
-    </Page>
-  )
-}
 
-function TreatyRow({
-  treaty,
-  returnState,
-}: {
-  treaty: TreatyDto
-  returnState: TreatyListReturnState
-}) {
-  const parts = parseIsoDateParts(treaty.signDate)
-  const parties = partiesOf(treaty)
-  const status = statusOf(treaty)
-  const shownParties = parties.slice(0, 2)
-  const restCount = parties.length - shownParties.length
-
-  return (
-    <Row to={pathKeys.treaties.detail(treaty.id)} state={returnState}>
-      <DateCell data-col="date">
-        {parts ? (
-          <>
-            <b>{yearLabel(parts.year)}</b>
-            <span>
-              .{parts.month}.{parts.day}
-            </span>
-          </>
-        ) : (
-          <span>미상</span>
-        )}
-      </DateCell>
-      <TypeCell data-col="type" $type={treaty.type}>
-        {(TREATY_TYPE_LABELS[treaty.type] ?? treaty.type).replace(/ (조약|협정)$/, '')}
-      </TypeCell>
-      <TitleCell data-col="title">
-        <strong>{treaty.name}</strong>
-        {treaty.alias && <em>{treaty.alias}</em>}
-      </TitleCell>
-      <PartiesCell
-        data-col="parties"
-        title={parties.map((party) => party.name).join(' · ')}
-      >
-        {shownParties.map((party) => (
-          <PartyChip key={party.key}>
-            {party.flag && <span aria-hidden>{party.flag}</span>}
-            <span className="name">{party.name}</span>
-          </PartyChip>
-        ))}
-        {restCount > 0 && <MoreChip>+{restCount}</MoreChip>}
-      </PartiesCell>
-      <PlaceCell data-col="place" title={treaty.location ?? undefined}>
-        {treaty.location}
-      </PlaceCell>
-      <StatusCell data-col="status" $tone={status?.tone}>
-        {status?.label}
-      </StatusCell>
-    </Row>
+      <CountryInlineModal
+        target={countryModalTarget}
+        onClose={() => setCountryModalTarget(null)}
+      />
+    </PageCanvas>
   )
 }
 
 export default TreatiesListPage
 
-// ──────────────────────────────────────────────
-// styled — 토큰은 사건 목록·상세와 같은 ledger-tokens
-// ──────────────────────────────────────────────
+// ── 스타일 (군사·정부 총람 원장 규격 통일) ──────────────────────────────────
 
-/** 축 좌표 — 행 구슬·세기 구슬·축선이 같은 x를 공유한다 */
-const RAIL_X = 22
-const RAIL_GUTTER = 44
-
-const metaColor = ({ theme }: { theme: { mode: string } }) =>
-  theme.mode === 'dark' ? '#a1a1aa' : '#6b7280'
-
-/*
- * ⚠️ 스크롤러가 되지 말 것(height:100% · overflow-y:auto 금지). 예전엔 둘 다 걸려 있었는데
- * 부모가 높이를 묶지 않아 이 div가 내용만큼(1392px) 늘어났고, 실제 스크롤은 바깥 셸이 했다 —
- * 그러면 열 머리글의 sticky가 '스크롤하지 않는 이 div'에 묶여 600px 내리면 top −323px로
- * 화면 밖에 나갔다. 스크롤은 셸에 맡기고 sticky는 셸 스크롤포트에 붙인다.
- */
-const Page = styled.div`
-  container-type: inline-size;
-  container-name: treatycatalog;
-  padding: 18px clamp(16px, 2vw, 28px) 64px;
+const PageCanvas = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 14px;
-`
-
-const Toolbar = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-
-  /* 우상단 전역 플로팅 아바타가 줄 끝을 덮는다 — 사건 상세와 같은 56px 비킴 */
-  @media (max-width: 768px) {
-    padding-right: 56px;
-  }
-`
-
-/** 사건 목록 '+ 새 사건 등록'과 같은 자리·같은 옷 — 툴바 맨 끝, 인디고 브랜드 채움 */
-const CreateButton = styled.button`
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#6366f1' : '#4f46e5')};
-  border-radius: 10px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#6366f1' : '#4f46e5')};
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  box-shadow: none;
-  transition: background ${MOTION.fast} ease, border-color ${MOTION.fast} ease;
-
-  &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#4f46e5' : '#4338ca')};
-    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#4f46e5' : '#4338ca')};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-  }
-`
-
-const SearchBox = styled.label`
-  flex: 0 1 320px;
-  min-width: 220px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 10px 0 12px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#141414' : '#fff')};
-  color: ${metaColor};
-  transition: border-color 0.12s;
-
-  &:focus-within {
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-
-  input {
-    flex: 1;
-    min-width: 0;
-    border: none;
-    outline: none;
-    background: transparent;
-    font-size: 13px;
-    color: ${({ theme }) => theme.colors.text.primary};
-
-    &::placeholder {
-      color: ${metaColor};
-    }
-  }
-`
-
-const ClearButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-/**
- * 사건 툴바의 '분야 · 세부 · 대륙…' 묶음과 같은 한 덩어리 — 칸 사이는 세로 헤어라인.
- * ⚠️ 줄바꿈하지 않는다: 예전엔 좁은 폭에서 3줄로 꺾였는데 줄 사이 가로선이 없어 칸이
- * 흐트러졌다. 넘치면 묶음 안에서만 가로로 민다(페이지 가로 스크롤은 생기지 않는다).
- */
-const FilterGroup = styled.div`
-  display: inline-flex;
-  flex-wrap: nowrap;
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-  align-items: stretch;
-  min-height: 36px;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-
-  > * {
-    flex-shrink: 0;
-  }
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#141414' : '#fff')};
-  overflow: hidden;
-`
-
-const FilterButton = styled.button<{ $active: boolean; $type?: TreatyType }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  min-height: 34px;
-  border: none;
-  border-right: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme, $active }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(165,180,252,0.14)'
-        : 'rgba(99,102,241,0.08)'
-      : 'transparent'};
-  color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
-  font-size: 12.5px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-
-  &:last-child {
-    border-right: none;
-  }
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: -2px;
-  }
-`
-
-const TypeDot = styled.span<{ $type: TreatyType }>`
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: ${({ theme, $type }) => treatyTypeTone($type, theme.mode)};
-`
-
-const FilterCount = styled.span`
-  ${DIGIT_DISPLAY}
-  font-size: 11px;
-  font-weight: 500;
-  color: ${metaColor};
-`
-
-const ResetButton = styled.button`
-  border: none;
-  background: none;
-  padding: 0 4px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-  }
-`
-
-/** 사건 목록 본문 카드와 같은 테두리 한 장 — 열 머리글·세기 장·행이 이 안에 산다 */
-const Catalog = styled.div`
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#141414' : '#fff')};
-`
-
-/**
- * 열 트랙 — 머리글과 행이 **같은 템플릿**을 쓴다(사건 목록 5차에서 머리글 격자가 행보다
- * 넓어 제목 우측 열이 전부 밀리던 결함의 재발 방지). 좁아지면 장소 → 서명국 순으로 접는다.
- */
-const rowGrid = css`
-  display: grid;
-  grid-template-columns:
-    [date] 96px [type] 64px [title] minmax(0, 1fr)
-    [parties] minmax(0, 260px) [place] minmax(0, 220px) [status] 80px;
-  column-gap: 16px;
-  align-items: center;
-  padding: 0 20px 0 ${RAIL_GUTTER}px;
-
-  @container treatycatalog (max-width: 1180px) {
-    grid-template-columns:
-      [date] 96px [type] 64px [title] minmax(0, 1fr)
-      [parties] minmax(0, 240px) [status] 80px;
-
-    [data-col='place'] {
-      display: none;
-    }
-  }
-
-  @container treatycatalog (max-width: 820px) {
-    grid-template-columns: [date] 84px [title] minmax(0, 1fr) [status] 64px;
-    column-gap: 12px;
-    padding-right: 14px;
-
-    [data-col='type'],
-    [data-col='parties'],
-    [data-col='place'] {
-      display: none;
-    }
-  }
-`
-
-const ColumnHeader = styled.div`
-  ${rowGrid}
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  height: 34px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: 12px 12px 0 0;
-  /* ⚠️ 불투명 — 아래로 지나가는 행이 비치면 안 된다 */
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#141414' : '#fff')};
-`
-
-const HeaderCell = styled.span<{ $sortable?: boolean; $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: none;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-  text-align: left;
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.text.primary : metaColor({ theme })};
-  cursor: ${({ $sortable }) => ($sortable ? 'pointer' : 'default')};
-
-  &[data-col='status'] {
-    justify-content: flex-end;
-  }
-
-  &:hover {
-    color: ${({ theme, $sortable }) =>
-      $sortable ? theme.colors.text.primary : undefined};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-    border-radius: 2px;
-  }
-`
-
-const Caret = styled.span<{ $flipped: boolean; $idle: boolean }>`
-  display: inline-block;
-  font-size: 10px;
-  opacity: ${({ $idle }) => ($idle ? 0.35 : 1)};
-  transform: ${({ $flipped }) => ($flipped ? 'rotate(180deg)' : 'none')};
-  transition: transform 0.15s;
-`
-
-const HeaderCount = styled.span`
-  ${DIGIT_DISPLAY}
-  margin-left: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-/** 레일 — 축선 한 줄이 목록 전체를 세로로 꿴다. 구슬(행 5 : 세기 10)이 그 위에 얹힌다. */
-const Rail = styled.div`
-  position: relative;
-  padding-bottom: 10px;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: ${RAIL_X}px;
-    top: 22px;
-    bottom: 22px;
-    width: 1px;
-    /* 사건 목록 RAIL_AXIS와 같은 잉크 — 행 괘선(0.04)보다 확실히 진해야 '축'으로 읽힌다 */
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.36)' : 'rgba(15,23,42,0.46)'};
-    pointer-events: none;
-  }
-`
-
-/**
- * 세기 장 표지 — 사건 목록 CenturyDivider와 같은 옷: 라벨 18/700 + 범위 11 + 건수 12,
- * 남는 폭은 리더 룰, 축 위엔 브랜드 큰 구슬(지면색 링). sticky 아님(장 표지는 지나간다).
- */
-const CenturyDivider = styled.button`
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  gap: 18px;
   width: 100%;
-  min-height: 46px;
-  margin-top: 6px;
-  padding: 8px 20px 8px ${RAIL_GUTTER - 6}px;
-  border: none;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 24px clamp(20px, 2.8vw, 36px) 84px;
+  box-sizing: border-box;
 
-  section:first-child > & {
-    margin-top: 0;
-  }
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: ${RAIL_X}px;
-    top: 50%;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    background: ${({ theme }) => ledgerAccent(theme.mode)};
-    box-shadow: 0 0 0 3px
-      ${({ theme }) => (theme.mode === 'dark' ? '#141414' : '#fff')};
-  }
-
-  &::after {
-    content: '';
-    flex: 1;
-    min-width: 24px;
-    height: 1px;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.13)'};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: -2px;
-    border-radius: 6px;
+  @media (max-width: 768px) {
+    padding: 16px 16px 72px;
+    gap: 14px;
   }
 `
 
-const CenturyLabel = styled.span`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-  word-break: keep-all;
+const TopChromeBar = styled.header`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+`
+
+const TopHeadlineGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+`
+
+const HeadlineAccentBar = styled.span`
+  width: 3.5px;
+  height: 36px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  flex-shrink: 0;
+`
+
+const HeadlineTextStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+`
+
+const PageTitle = styled.h1`
+  margin: 0;
+  font-size: clamp(20px, 1.9vw, 23px);
+  font-weight: 850;
+  letter-spacing: -0.028em;
+  line-height: 1.2;
   color: ${({ theme }) => theme.colors.text.primary};
-
-  svg {
-    align-self: center;
-    flex-shrink: 0;
-    color: ${metaColor};
-    transition: transform 0.15s;
-  }
 `
 
-const CenturyYears = styled.span`
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const CenturyCount = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const Row = styled(Link)`
-  ${rowGrid}
-  position: relative;
-  min-height: 44px;
-  text-decoration: none;
-  color: inherit;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  transition: background 0.12s;
-
-  /* 행 구슬 — 축 위 5px, 지면색 링으로 축선을 끊는다 */
-  &::before {
-    content: '';
-    position: absolute;
-    left: ${RAIL_X}px;
-    top: 50%;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
-    box-shadow: 0 0 0 2px
-      ${({ theme }) => (theme.mode === 'dark' ? '#141414' : '#fff')};
-  }
-
-  section:last-child > &:last-child {
-    border-bottom: none;
-  }
-
-  &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-
-    &::before {
-      background: ${({ theme }) => ledgerAccent(theme.mode)};
-    }
-
-    strong {
-      color: ${({ theme }) => ledgerAccent(theme.mode)};
-    }
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: -2px;
-  }
-`
-
-const DateCell = styled.span`
-  ${DIGIT_DISPLAY}
+const HeadlineSummaryLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
   font-size: 12.5px;
-  white-space: nowrap;
-  color: ${metaColor};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
 
   b {
-    font-weight: 600;
+    font-weight: 750;
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  .accent b {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  .sep {
+    opacity: 0.55;
   }
 `
 
-const TypeCell = styled.span<{ $type: TreatyType }>`
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: ${({ theme, $type }) => treatyTypeTone($type, theme.mode)};
-`
-
-/** 제목 + 별칭을 한 줄 글로 — 사건 목록의 '제목 뒤 잇는 설명'과 같은 조판 */
-const TitleCell = styled.span`
-  display: flex;
-  align-items: baseline;
+const TopChromeActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  min-width: 0;
-  padding: 11px 0;
-
-  strong {
-    flex: 0 1 auto;
-    max-width: 70%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 14px;
-    font-weight: 700;
-    line-height: 1.3;
-    color: ${({ theme }) => theme.colors.text.primary};
-    transition: color 0.12s;
-  }
-
-  em {
-    flex: 1 1 0;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-style: normal;
-    font-size: 12.5px;
-    color: ${metaColor};
-  }
-
-  /*
-   * 좁은 폭(390px)에선 별칭이 남은 폭을 나눠 먹어 제목이 '독소 불가침 …' 4~5자로 잘렸다.
-   * 별칭을 내리고 제목에 전폭 + 두 줄까지 — 제목이 행의 주어다.
-   */
-  @container treatycatalog (max-width: 640px) {
-    em {
-      display: none;
-    }
-
-    strong {
-      max-width: 100%;
-      white-space: normal;
-      word-break: keep-all;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-    }
-  }
+  margin-left: auto;
 `
 
-const PartiesCell = styled.span`
-  display: flex;
-  align-items: center;
-  gap: 4px 8px;
-  min-width: 0;
-  overflow: hidden;
-`
-
-/* ⚠️ 말줄임은 안쪽 .name이 진다 — flex 컨테이너 자신의 text-overflow는 익명 텍스트에
-   안 먹어서 '프랑스 제3공'처럼 글자가 반쯤 잘린 채 끝났다. */
-const PartyChip = styled.span`
+const UtilityToggleBtn = styled.button<{ $active?: boolean }>`
   display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  > span {
-    flex-shrink: 0;
-  }
-
-  > .name {
-    flex-shrink: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-`
-
-const MoreChip = styled.span`
-  ${DIGIT_DISPLAY}
-  flex-shrink: 0;
-  padding: 0 5px;
-  border-radius: 4px;
-  font-size: 10.5px;
-  line-height: 17px;
-  color: ${metaColor};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.05)'};
-`
-
-const PlaceCell = styled.span`
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: ${metaColor};
-`
-
-const StatusCell = styled.span<{ $tone?: 'broken' | 'expired' }>`
-  ${DIGIT_DISPLAY}
-  justify-self: end;
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  color: ${({ theme, $tone }) =>
-    $tone === 'broken'
-      ? theme.mode === 'dark'
-        ? '#fca5a5'
-        : '#b91c1c'
-      : metaColor({ theme })};
-`
-
-const Notice = styled.div`
-  padding: 48px 16px;
-  text-align: center;
-  font-size: 13px;
-  color: ${metaColor};
-`
-
-const TextButton = styled.button`
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-
-  &:hover {
-    text-decoration: underline;
-  }
-`
-
-const HistogramPeakText = styled.span`
-  font-size: 11.5px;
-  color: ${metaColor};
-  ${DIGIT_DISPLAY}
-
-  strong {
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const HistogramResetBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 6px;
-  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  ${DIGIT_DISPLAY}
-`
-
-const CenturyHistogram = styled.div`
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(28px, 1fr);
-  gap: 6px;
-  align-items: end;
-  overflow-x: auto;
-  padding-top: 2px;
-`
-
-const CenturyBarBtn = styled.button<{ $active: boolean; $dimmed: boolean }>`
-  display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 5px;
-  padding: 4px 2px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 7px;
   border: 1px solid
     ${({ theme, $active }) =>
-      $active ? ledgerAccentBorder(theme.mode) : 'transparent'};
-  border-radius: 6px;
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
   background: ${({ theme, $active }) =>
     $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
-  opacity: ${({ $dimmed }) => ($dimmed ? 0.48 : 1)};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
   cursor: pointer;
+  white-space: nowrap;
   transition:
     background ${MOTION.fast} ease,
     border-color ${MOTION.fast} ease,
-    opacity ${MOTION.fast} ease;
+    color ${MOTION.fast} ease;
+
+  &:hover {
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+`
+
+const EditorialSummaryGrid = styled.section`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 6px 0 22px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  > *:first-child {
+    padding-right: 32px;
+  }
+
+  > *:nth-child(2) {
+    padding-left: 32px;
+    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+
+  @media (max-width: 960px) {
+    grid-template-columns: 1fr;
+
+    > *:first-child {
+      padding-right: 0;
+    }
+
+    > *:nth-child(2) {
+      padding-left: 0;
+      border-left: none;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+    }
+  }
+`
+
+const EditorialSummaryCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+`
+
+const EditorialSummaryHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 12px;
+`
+
+const EditorialSummaryTitle = styled.h2`
+  margin: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 15.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  span {
+    font-size: 12px;
+    font-weight: 600;
+    ${DIGIT_DISPLAY}
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const SummaryMetaGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-weight: 700;
+    ${DIGIT_DISPLAY}
+  }
+`
+
+const SummarySplitRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+`
+
+const SummaryBarsCol = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const SummaryHairline = styled.div`
+  height: 1px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const SummaryEmptyText = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const InlineResetTextBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const TopPolityList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const TopPolityRowBtn = styled.button<{ $active: boolean }>`
+  display: grid;
+  grid-template-columns: 24px minmax(110px, 160px) 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+`
+
+const TopPolityRank = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const TopPolityName = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const TopPolityTrack = styled.span`
+  height: 5px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+  overflow: hidden;
+`
+
+const TopPolityFill = styled.span<{ $active: boolean }>`
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
+  opacity: ${({ $active }) => ($active ? 0.9 : 0.45)};
+`
+
+const TopPolityCount = styled.span`
+  font-size: 12px;
+  font-weight: 650;
+  ${DIGIT_DISPLAY}
+  text-align: right;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const LedgerWorkspace = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+`
+
+const TopTabBarRow = styled.div`
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+
+  ${UnderlineTabNav} {
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-bottom: 0;
+    border-bottom: none;
+  }
+`
+
+const TabRightViewSlot = styled.div`
+  display: inline-flex;
+  align-items: center;
+  padding-bottom: 7px;
+  margin-left: auto;
+`
+
+const CatalogControlRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 11px 0;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const ControlZoneLeft = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 340px;
+`
+
+const CountryPickerWrap = styled.div`
+  width: 216px;
+  min-width: 174px;
+`
+
+const QuickFilterRow = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding-left: 2px;
+`
+
+const QuickFilterChip = styled.button<{ $active: boolean }>`
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  }
+`
+
+const ClearIconBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ControlZoneRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+`
+
+const ResultCountMeta = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+  white-space: nowrap;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ActiveFilterBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const ActiveFilterPill = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+`
+
+const ResetAllInlineBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const LedgerSurfacePanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+`
+
+const TableScrollArea = styled.div`
+  overflow-x: auto;
+`
+
+const LedgerTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+`
+
+const Th = styled.th`
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 9px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  white-space: nowrap;
+
+  &:first-child {
+    padding-left: 4px;
+  }
+
+  &:last-child {
+    padding-right: 4px;
+  }
+`
+
+const SortableThBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const Tr = styled.tr`
+  cursor: pointer;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  transition: background 0.12s ease;
 
   &:hover {
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-    opacity: 1;
   }
 
   &:focus-visible {
@@ -1394,64 +1961,266 @@ const CenturyBarBtn = styled.button<{ $active: boolean; $dimmed: boolean }>`
   }
 `
 
-const CenturyBarCount = styled.span<{ $active: boolean }>`
-  ${DIGIT_DISPLAY}
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1;
-  color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+const Td = styled.td`
+  padding: 11.5px 10px;
+  vertical-align: middle;
+  font-size: 13px;
+
+  &:first-child {
+    padding-left: 4px;
+  }
+
+  &:last-child {
+    padding-right: 4px;
+  }
 `
 
-const CenturyBarTrack = styled.span`
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  width: 100%;
-  max-width: 24px;
-  height: 46px;
-  border-radius: 3px 3px 0 0;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  overflow: hidden;
-`
-
-const CenturyBarFill = styled.span<{ $active: boolean }>`
-  width: 100%;
-  border-radius: 3px 3px 0 0;
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  opacity: ${({ $active }) => ($active ? 1 : 0.72)};
-  transition: height ${MOTION.normal} ease, opacity ${MOTION.fast} ease;
-`
-
-const CenturyBarAxis = styled.span<{ $active: boolean }>`
-  ${DIGIT_DISPLAY}
-  font-size: 10px;
-  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+const DateStatusCell = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
-  color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : metaColor({ theme })};
 `
 
-const HistogramCaption = styled.div`
-  font-size: 11px;
-  color: ${metaColor};
+const StatusDot = styled.span<{
+  $validity: Exclude<ValidityFilterKey, 'all'>
+}>`
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: ${({ $validity }) =>
+    $validity === 'broken'
+      ? '#ef4444'
+      : $validity === 'expired'
+        ? '#d97706'
+        : '#10b981'};
+  opacity: ${({ $validity }) => ($validity === 'active' ? 0.8 : 0.9)};
+`
+
+const DatePrimaryText = styled.span`
+  font-size: 12.5px;
   ${DIGIT_DISPLAY}
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const SummaryBlock = styled.div`
+const StatusInlineText = styled.span<{
+  $validity: Exclude<ValidityFilterKey, 'all'>
+}>`
+  font-size: 11.5px;
+  font-weight: 600;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme, $validity }) =>
+    $validity === 'broken'
+      ? theme.mode === 'dark'
+        ? '#fca5a5'
+        : '#b91c1c'
+      : $validity === 'expired'
+        ? theme.mode === 'dark'
+          ? '#fcd34d'
+          : '#b45309'
+        : theme.colors.text.tertiary};
+`
+
+const NamePrimaryLine = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  line-height: 1.38;
+`
+
+const NameTitleSpan = styled.span`
+  font-size: 13.5px;
+  font-weight: 720;
+  color: ${({ theme }) => theme.colors.text.primary};
+  transition: color 0.12s ease;
+
+  ${Tr}:hover & {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const AliasInlineSpan = styled.span`
+  font-size: 12px;
+  font-weight: 450;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const DetailOpenIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  opacity: 0;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+
+  ${Tr}:hover & {
+    opacity: 0.9;
+    transform: translate(1px, -1px);
+  }
+`
+
+const TypeScaleCell = styled.div`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+`
+
+const TypePrimaryText = styled.span<{ $color: string }>`
+  font-size: 12.5px;
+  font-weight: 650;
+  color: ${({ $color }) => $color};
+`
+
+const ScaleSecondaryText = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const PartiesPlainLine = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 5px;
+  min-width: 0;
+  line-height: 1.4;
+`
+
+const PartyPlainBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const PartyPlainText = styled.span`
+  font-size: 12.5px;
+  font-weight: 550;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const PartySep = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.65;
+`
+
+const PartyOverflowSpan = styled.span`
+  font-size: 11.5px;
+  font-weight: 550;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+`
+
+const LocationPlainText = styled.span`
+  display: block;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const DashText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.65;
+`
+
+const RightCountsInline = styled.div`
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  white-space: nowrap;
+`
+
+const RecordCountSpan = styled.span<{ $accent?: boolean }>`
+  font-size: 11.5px;
+  font-weight: ${({ $accent }) => ($accent ? 650 : 500)};
+  ${DIGIT_DISPLAY}
+  color: ${({ theme, $accent }) =>
+    $accent ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
+`
+
+const CenturyGroupStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 18px;
+  padding-top: 8px;
 `
 
-const SummaryMiniTitle = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-  color: ${metaColor};
+const CenturyChapterBlock = styled.section`
+  display: flex;
+  flex-direction: column;
 `
 
-const SummaryDivider = styled.div`
-  height: 1px;
-  background: ${({ theme }) => ledgerHairline(theme.mode)};
+const CenturyBandRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+const CenturyBandToggle = styled.button`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+
+  strong {
+    font-weight: 800;
+    letter-spacing: -0.015em;
+  }
+
+  svg {
+    align-self: center;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const CenturyRangeMeta = styled.span`
+  font-size: 12px;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CenturyBandCount = styled.span`
+  font-size: 12px;
+  font-weight: 650;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
 `

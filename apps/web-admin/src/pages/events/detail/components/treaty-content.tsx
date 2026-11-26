@@ -7,6 +7,7 @@ import styled from 'styled-components'
 import { ledgerAccent, ledgerHairlineStrong } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type TreatyTermDto, treatyApi } from '@/shared/api/treaty'
+import { richTextToMultilineText } from '@/shared/lib/rich-text-plain'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { InlineText } from '@/shared/ui/inline-edit'
 import { notify } from '@/shared/ui/toast'
@@ -99,7 +100,7 @@ export function TreatyContent({ treatyId, summary, onChanged }: TreatyContentPro
       <Block>
         <BlockLabel>개요</BlockLabel>
         <InlineText
-          value={treaty?.summary ?? summary ?? ''}
+          value={richTextToMultilineText(treaty?.summary ?? summary ?? '')}
           onSave={(next) => summaryMutation.mutate(next)}
           placeholder="이 조약이 무엇을 정했는지 두세 문장 — 누가, 무엇을 넘기고 약속했나"
           label="조약 개요"
@@ -142,7 +143,7 @@ export function TreatyContent({ treatyId, summary, onChanged }: TreatyContentPro
                     <FiX aria-hidden />
                   </RemoveTerm>
                   <InlineText
-                    value={term.content}
+                    value={richTextToMultilineText(term.content)}
                     onSave={(next) => {
                       if (next.trim()) termMutation.mutate({ id: term.id, patch: { content: next.trim() } })
                     }}
