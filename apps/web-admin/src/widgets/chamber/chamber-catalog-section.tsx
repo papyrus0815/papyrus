@@ -2,13 +2,19 @@
  * 의회 — 원(院) 카탈로그 섹션. 정체 탭 아래에서 그 나라의 원과 정원 이력을 보고 고친다(B7).
  *
  * 원은 선거·정체·정당 의석이 가리키는 정본이다. 정원은 원에 붙은 이력 — 선거법이 바뀔 때마다 한 줄.
+ *
+ * 모양은 바로 위 헌정 체제 연혁과 같은 문법 — 왼쪽 연도 칸(개원 크게 · 폐지 작게), 본문은 넓으면 두 칸
+ * (원 이름 · 구성 | 정원 이력), 행 사이는 가는 선. 원 이름이 위 체제 이름과 같은 세로줄에 선다.
+ * 예전엔 굵은 검은 밑줄 머리 · 행마다 연필/휴지통 아이콘이 따로 놀았다 — 고치기·정원 추가·지우기는 ⋯ 안에.
  */
 import React, { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiArrowRight, FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi'
+import { FiCornerDownRight, FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { DIGIT_DISPLAY, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
+import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
 import * as EventFormS from '@/pages/events/create/event-create.styles'
 import {
   CHAMBER_COMPOSITION_OPTIONS,
@@ -40,17 +46,7 @@ import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import { PersonRegisterModalFormScroll } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import { notify } from '@/shared/ui/toast'
 import * as FormS from '@/widgets/country/country-detail/ui/military-unit-form/styles'
-import {
-  FactActions,
-  FactBadge,
-  FactList,
-  FactMain,
-  FactNote,
-  FactRow,
-  IconBtn,
-  ModalFooter,
-  PeriodPair,
-} from '@/widgets/political-party/party-sidecar-parts'
+import { FactBadge, FactNote, ModalFooter, PeriodPair } from '@/widgets/political-party/party-sidecar-parts'
 
 const ROLE_ORDER: Record<ChamberRole, number> = { UNICAMERAL: 0, LOWER: 1, UPPER: 2, ADVISORY: 3, OTHER: 4 }
 
@@ -65,6 +61,31 @@ export function chamberSinceKey(chamber: Pick<ChamberDto, 'startEra' | 'startYea
     .map((size) => signedYear(size.startEra, size.startYear))
     .filter((year): year is number => year != null)
   return fromSizes.length > 0 ? Math.min(...fromSizes) : Number.POSITIVE_INFINITY
+}
+
+const yearLabel = (era: string | null | undefined, year: number | null | undefined) =>
+  year == null ? null : era === 'BC' ? `기원전 ${year}` : String(year)
+
+/**
+ * 연도 칸 — 원 자신의 개원·폐지. 개원을 모르면 가장 이른 정원 이력의 시작,
+ * 폐지를 모르면 정원 이력이 모두 끝났을 때만 그 마지막 끝(하나라도 열려 있으면 비운다 — '현재'라고 단정하지 않는다).
+ */
+function chamberYearSpan(chamber: ChamberDto): { start: string | null; end: string | null } {
+  const bySignedStart = [...chamber.sizes]
+    .filter((size) => size.startYear != null)
+    .sort((left, right) => (signedYear(left.startEra, left.startYear) ?? 0) - (signedYear(right.startEra, right.startYear) ?? 0))
+  const start =
+    yearLabel(chamber.startEra, chamber.startYear) ??
+    (bySignedStart[0] ? yearLabel(bySignedStart[0].startEra, bySignedStart[0].startYear) : null)
+
+  let end = yearLabel(chamber.endEra, chamber.endYear)
+  if (!end && chamber.sizes.length > 0 && chamber.sizes.every((size) => size.endYear != null)) {
+    const latest = [...chamber.sizes].sort(
+      (left, right) => (signedYear(right.endEra, right.endYear) ?? 0) - (signedYear(left.endEra, left.endYear) ?? 0),
+    )[0]
+    end = yearLabel(latest.endEra, latest.endYear)
+  }
+  return { start, end }
 }
 
 export function ChamberCatalogSection({
@@ -143,7 +164,10 @@ export function ChamberCatalogSection({
   return (
     <SectionRoot aria-labelledby="chamber-catalog-title">
       <SectionHead>
-        <h3 id="chamber-catalog-title">의회 — 원(院)</h3>
+        <h3 id="chamber-catalog-title">
+          의회 · 원(院)
+          {sorted.length > 0 ? <span className="count">{sorted.length}</span> : null}
+        </h3>
         <AddBtn type="button" onClick={() => setChamberModal({ mode: 'create' })}>
           <FiPlus size={14} aria-hidden />원 추가
         </AddBtn>
@@ -154,73 +178,109 @@ export function ChamberCatalogSection({
       ) : sorted.length === 0 ? (
         <SectionHint>등록된 원이 없습니다.</SectionHint>
       ) : (
-        <FactList>
+        <ChamberList aria-label="의회 원 목록">
           {sorted.map((chamber) => {
-            const period = formatPeriodLabel(chamber)
             const uses = (chamber._count?.elections ?? 0) + (chamber._count?.observations ?? 0)
+            const span = chamberYearSpan(chamber)
+            const subParts = [
+              chamber.localName,
+              chamber.composition ? labelChamberComposition(chamber.composition) : null,
+              showPolity ? (chamber.historicalCountry?.name ?? chamber.country?.name ?? null) : null,
+            ].filter((part): part is string => Boolean(part))
+            const confirmRemove = async () => {
+              const approved = await confirm({
+                title: '원 지우기',
+                message:
+                  uses > 0
+                    ? `「${chamber.name}」을 지울까요? 이 원을 가리키는 선거 ${chamber._count?.elections ?? 0}건·의석 기록 ${chamber._count?.observations ?? 0}건은 원 연결이 비워집니다.`
+                    : `「${chamber.name}」을 지울까요? 정원 이력도 함께 지워집니다.`,
+                confirmLabel: '지우기',
+                danger: true,
+              })
+              if (approved) removeChamber.mutate(chamber.id)
+            }
             return (
-              <FactRow key={chamber.id}>
-                <FactMain>
-                  <FactBadge>{labelChamberRole(chamber.role)}</FactBadge>
-                  <span className="title">{chamber.name}</span>
-                  {chamber.localName ? <span className="period">{chamber.localName}</span> : null}
-                  {chamber.composition ? <span className="period">{labelChamberComposition(chamber.composition)}</span> : null}
-                  {period ? <span className="period strong">{period}</span> : null}
-                  {showPolity ? <span className="period">{chamber.historicalCountry?.name ?? chamber.country?.name}</span> : null}
-                </FactMain>
-                <SizeLine>
-                  {chamber.predecessor ? (
-                    <span className="lineage">
-                      {chamber.predecessor.name}
-                      <FiArrowRight size={11} aria-label="에서 이어짐" />
+              <ChamberRow key={chamber.id}>
+                <YearCol>
+                  <span className="start">{span.start ?? '—'}</span>
+                  {span.end ? <span className="end">– {span.end}</span> : null}
+                </YearCol>
+                <span aria-hidden />
+                <ChamberBody>
+                  <ChamberMain>
+                    <span className="title-line">
+                      <FactBadge>{labelChamberRole(chamber.role)}</FactBadge>
+                      <strong className="title">{chamber.name}</strong>
                     </span>
-                  ) : null}
-                  {chamber.sizes.map((size) => (
-                    <SizeChip
-                      key={size.id}
-                      type="button"
-                      title="정원 이력 고치기"
-                      onClick={() => setSizeModal({ chamber, size })}
-                    >
-                      <strong>{size.seats.toLocaleString('ko-KR')}석</strong>
-                      {formatPeriodLabel(size) ? <span>{formatPeriodLabel(size)}</span> : null}
-                    </SizeChip>
-                  ))}
-                  <SizeChip type="button" $ghost onClick={() => setSizeModal({ chamber })}>
-                    <FiPlus size={11} aria-hidden />
-                    정원
-                  </SizeChip>
-                  {uses > 0 ? <span className="uses">선거 {chamber._count?.elections ?? 0} · 의석 기록 {chamber._count?.observations ?? 0}</span> : null}
-                </SizeLine>
-                {chamber.note ? <FactNote>{chamber.note}</FactNote> : null}
-                <FactActions>
-                  <IconBtn type="button" aria-label={`${chamber.name} 고치기`} onClick={() => setChamberModal({ mode: 'edit', chamber })}>
-                    <FiEdit2 size={13} />
-                  </IconBtn>
-                  <IconBtn
-                    type="button"
-                    aria-label={`${chamber.name} 지우기`}
-                    disabled={removeChamber.isPending}
-                    onClick={async () => {
-                      const approved = await confirm({
-                        title: '원 지우기',
-                        message:
-                          uses > 0
-                            ? `「${chamber.name}」을 지울까요? 이 원을 가리키는 선거 ${chamber._count?.elections ?? 0}건·의석 기록 ${chamber._count?.observations ?? 0}건은 원 연결이 비워집니다.`
-                            : `「${chamber.name}」을 지울까요? 정원 이력도 함께 지워집니다.`,
-                        confirmLabel: '지우기',
-                        danger: true,
-                      })
-                      if (approved) removeChamber.mutate(chamber.id)
-                    }}
-                  >
-                    <FiTrash2 size={13} />
-                  </IconBtn>
-                </FactActions>
-              </FactRow>
+                    {subParts.length > 0 ? <span className="sub">{subParts.join(' · ')}</span> : null}
+                    {chamber.predecessor ? (
+                      <span className="lineage">
+                        <FiCornerDownRight size={11} aria-hidden />
+                        전신 {chamber.predecessor.name}
+                      </span>
+                    ) : null}
+                  </ChamberMain>
+                  <ChamberSide>
+                    {chamber.sizes.length > 0 ? (
+                      <SizeLine aria-label="정원 이력">
+                        {chamber.sizes.map((size) => (
+                          <SizeChip
+                            key={size.id}
+                            type="button"
+                            title="정원 이력 고치기"
+                            onClick={() => setSizeModal({ chamber, size })}
+                          >
+                            <strong>{size.seats.toLocaleString('ko-KR')}석</strong>
+                            {formatPeriodLabel(size) ? <span>{formatPeriodLabel(size)}</span> : null}
+                          </SizeChip>
+                        ))}
+                      </SizeLine>
+                    ) : (
+                      <span className="muted">정원 이력 없음</span>
+                    )}
+                    {uses > 0 ? (
+                      <span className="muted">
+                        선거 {chamber._count?.elections ?? 0} · 의석 기록 {chamber._count?.observations ?? 0}
+                      </span>
+                    ) : null}
+                    {chamber.note ? <FactNote>{chamber.note}</FactNote> : null}
+                  </ChamberSide>
+                  <RowMenu>
+                    <GovMorePopover
+                      triggerSize="sm"
+                      ariaLabel={`${chamber.name} 관리 메뉴`}
+                      title="원 고치기 · 정원 추가 · 지우기"
+                      actions={[
+                        {
+                          key: 'edit-chamber',
+                          label: '원 고치기',
+                          icon: <FiEdit2 size={13.5} />,
+                          onClick: () => setChamberModal({ mode: 'edit', chamber }),
+                        },
+                        {
+                          key: 'add-size',
+                          label: '정원 이력 추가',
+                          icon: <FiPlus size={13.5} />,
+                          onClick: () => setSizeModal({ chamber }),
+                        },
+                        {
+                          key: 'remove-chamber',
+                          label: '원 지우기',
+                          icon: <FiTrash2 size={13.5} />,
+                          danger: true,
+                          disabled: removeChamber.isPending,
+                          onClick: () => {
+                            void confirmRemove()
+                          },
+                        },
+                      ]}
+                    />
+                  </RowMenu>
+                </ChamberBody>
+              </ChamberRow>
             )
           })}
-        </FactList>
+        </ChamberList>
       )}
       {chamberModal ? (
         <ChamberFormModal
@@ -542,23 +602,40 @@ export function ChamberSizeFormModal({
   )
 }
 
+/* 위 헌정 체제 연혁과 같은 연도·축 칸 폭 — 원 이름이 체제 이름과 같은 세로줄에 선다 */
+const YEAR_COL_PX = 88
+const AXIS_COL_PX = 22
+const WIDE_PX = 860
+
 const SectionRoot = styled.section`
-  margin-top: 28px;
+  container-type: inline-size;
+  margin-top: 36px;
 `
 
+/* 굵은 검은 밑줄 대신 위 목록과 같은 가는 선 — 이 섹션만 무게가 튀었다 */
 const SectionHead = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 8px;
-  border-bottom: 2px solid ${({ theme }) => theme.colors.text.primary};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   h3 {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
     margin: 0;
     font-size: 15px;
     font-weight: 800;
+    letter-spacing: -0.01em;
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+  .count {
+    font-size: 12.5px;
+    font-weight: 700;
+    ${DIGIT_DISPLAY}
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -588,13 +665,91 @@ const AddBtn = styled.button`
   }
 `
 
-const SizeLine = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
+const ChamberList = styled.ol`
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+`
 
+const ChamberRow = styled.li`
+  display: grid;
+  grid-template-columns: ${YEAR_COL_PX}px ${AXIS_COL_PX}px minmax(0, 1fr);
+  column-gap: 12px;
+
+  @container (max-width: 560px) {
+    grid-template-columns: 58px 0 minmax(0, 1fr);
+    column-gap: 8px;
+  }
+`
+
+const YearCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding-top: 15px;
+  text-align: right;
+  ${DIGIT_DISPLAY}
+
+  .start {
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    word-break: keep-all;
+  }
+  .end {
+    margin-top: 2px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    white-space: nowrap;
+  }
+`
+
+const ChamberBody = styled.div`
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px 40px;
+  min-width: 0;
+  padding: 14px 40px 14px 4px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  li:last-child > & {
+    border-bottom: none;
+  }
+
+  @container (min-width: ${WIDE_PX}px) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    align-items: start;
+  }
+`
+
+const ChamberMain = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+
+  .title-line {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 24px;
+  }
+  .title {
+    font-size: 14.5px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  .sub {
+    font-size: 12.5px;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    word-break: keep-all;
+  }
   .lineage {
     display: inline-flex;
     align-items: center;
@@ -602,32 +757,63 @@ const SizeLine = styled.div`
     font-size: 12px;
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
-  .uses {
+`
+
+const ChamberSide = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+
+  @container (min-width: ${WIDE_PX}px) {
+    padding-top: 1px;
+  }
+
+  .muted {
     font-size: 12px;
     color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
   }
 `
 
-const SizeChip = styled.button<{ $ghost?: boolean }>`
+const RowMenu = styled.div`
+  position: absolute;
+  top: 10px;
+  right: 0;
+`
+
+const SizeLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+/* 정원 이력 — 누르면 그 줄을 고친다. 테두리 알약 대신 옅은 면 */
+const SizeChip = styled.button`
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
   padding: 3px 9px;
-  border: 1px ${({ $ghost }) => ($ghost ? 'dashed' : 'solid')} ${({ theme }) => theme.colors.border.light};
-  border-radius: 999px;
-  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)')};
   font: inherit;
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
+  ${DIGIT_DISPLAY}
 
   strong {
     font-weight: 700;
-    font-variant-numeric: tabular-nums;
     color: ${({ theme }) => theme.colors.text.primary};
   }
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
   }
 `
 
