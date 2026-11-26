@@ -13,8 +13,8 @@
  * - 마우스: 올리면 열고(90ms), 탭·메뉴 밖으로 나가면 닫는다(180ms 유예 — 탭에서 메뉴로 옮겨 가는 틈).
  *   누르면 원래대로 그 탭으로 가면서 메뉴도 열린다(터치 기기는 이것이 유일한 여는 길).
  * - 키보드: 탭에서 ↓로 열고 ↑↓로 이동, Enter로 이동, Esc로 닫고 탭으로 돌아간다.
- * - 2차 구역이 URL로 열리는 탭만 등록한다(정부·행정 ?sub=, 군사 ?sub=). 통계·인물·정당은 구역이 화면 상태라
- *   URL로 바꿔도 안 따라오므로 아직 넣지 않았다.
+ * - 2차 구역이 URL로 열리는 탭만 등록한다 — 정부·행정·군사·경제·통계(?sub=), 정당·선거(?subtab=),
+ *   지리·행정구역(?region_view=). 인물·과거국가의 알약은 구역이 아니라 '보기 방식'이라 넣지 않는다.
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 
@@ -43,6 +43,10 @@ interface SubmenuSpec {
   param: string
   buildPath: (countryId: string) => string
   items: SubmenuItem[]
+  /** 쿼리가 없을 때 지금 구역으로 칠 값 — 기본 구역도 쿼리 값으로 여는 탭(경제·통계)용 */
+  defaultValue?: string
+  /** 쿼리 말고 경로로 구역이 정해지는 경우(정당 상세 /elections/party/:id = 정당) */
+  valueFromPath?: (pathname: string) => string | null
 }
 
 const COUNTRY_TAB_SUBMENUS: Partial<Record<OverviewSubTab, SubmenuSpec>> = {
@@ -62,6 +66,36 @@ const COUNTRY_TAB_SUBMENUS: Partial<Record<OverviewSubTab, SubmenuSpec>> = {
     items: [
       { value: null, label: '편제 · 사령부', hint: '최고사령부·참모본부·야전군·사단·함대 등 지휘 계통' },
       { value: 'wars', label: '전쟁 · 참전사', hint: '이 나라가 치른 전쟁과 참전 기록' },
+    ],
+  },
+  elections: {
+    param: 'subtab',
+    buildPath: (countryId) => pathKeys.countryElections(countryId),
+    valueFromPath: (pathname) => (/\/elections\/party\//.test(pathname) ? 'parties' : null),
+    items: [
+      { value: 'parties', label: '정당', hint: '이 나라의 정당과 그 계보' },
+      { value: null, label: '선거', hint: '역대 선거와 투표 결과' },
+    ],
+  },
+  regions: {
+    param: 'region_view',
+    buildPath: (countryId) => pathKeys.countryRegions(countryId),
+    items: [
+      { value: null, label: '행정구역', hint: '행정구역 계층 편제와 시기별 개편 체계' },
+      { value: 'nature', label: '자연 지리', hint: '산·강·호수 등 자연 지형' },
+      { value: 'infrastructure', label: '인프라', hint: '철도·항만·발전소 등 국가 기간시설' },
+    ],
+  },
+  statistics: {
+    param: 'sub',
+    buildPath: (countryId) => pathKeys.countryStatistics(countryId),
+    /* 통계 지면은 쿼리가 사라질 때 구역을 되돌리지 않는다 — 기본 구역도 값으로 열어야 같은 지면에서 돌아온다 */
+    defaultValue: 'indicators',
+    items: [
+      { value: 'indicators', label: '거시·발전 지표', hint: '경제·인구·발전 핵심 지표와 연도별 추이' },
+      { value: 'pyramid', label: '인구 피라미드', hint: '연도별 연령대 × 성별 인구 구조' },
+      { value: 'bonds', label: '국채 금리', hint: '연도·만기별 수익률 곡선과 장단기 스프레드' },
+      { value: 'records', label: '국가 연혁 메모', hint: '연도별 주요 정책·경제·사회 기록 노트' },
     ],
   },
 }
@@ -120,7 +154,12 @@ function SubmenuAnchor({
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
 
   const countryId = countryIdFromPath(location.pathname)
-  const currentValue = active ? new URLSearchParams(location.search).get(spec.param) : undefined
+  const currentValue = active
+    ? (spec.valueFromPath?.(location.pathname) ??
+      new URLSearchParams(location.search).get(spec.param) ??
+      spec.defaultValue ??
+      null)
+    : undefined
 
   const clearTimers = () => {
     if (openTimerRef.current != null) window.clearTimeout(openTimerRef.current)
