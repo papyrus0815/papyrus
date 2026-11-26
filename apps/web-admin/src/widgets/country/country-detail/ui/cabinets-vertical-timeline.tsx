@@ -11,11 +11,18 @@
  * 안 보였다. 여기서는 연도를 자기 줄 왼쪽에 두고, 이름을 가장 크게, 재임 길이는 막대로 그린다.
  * 축은 중립 회색이다 — 예전엔 군주 재위 색이었으나 팔레트가 거의 같은 주황이라 메이지·쇼와가 구분되지 않았다.
  * 군주 교체·정치체 전환·기록 공백은 행 사이 표지(MarkerRow)가 글자로 말하고, 공백 구간 축은 점선이 된다.
- * 넓은 칸(≥760px)에서는 오른쪽 셋째 칸에 취임 방식 · 퇴임 사유 · 정당을 둔다 — 1440px에서 비던 오른쪽 절반.
+ *
+ * 폭에 따라 세 꼴:
+ *   - 넓은 칸(≥830px): 한 행이 넷째 칸까지 가로로 펼쳐진 표 — 수반·내각 | 재임 기간(막대가 칸 폭을 다 씀) |
+ *     취임 → 퇴임 · 정당 · 나이 · 업적. 맨 위에 옅은 열 머리. 예전엔 본문 칸을 440px로 묶어 1440px 화면에서
+ *     오른쪽 3분의 1이 비었고, 정보가 세로로 쌓여 한 행이 80px였다.
+ *   - 중간(760~830px): 본문 둘째 칸에 이름·기간, 셋째 칸에 취임·퇴임·정당.
+ *   - 좁은 칸: 모두 한 칸에 위아래로.
+ * 목록에는 수정 단추를 두지 않는다 — 행을 누르면 상세, 수정은 상세에서.
  */
 import React from 'react'
 
-import { FiAward, FiEdit2, FiFlag } from 'react-icons/fi'
+import { FiAward, FiFlag } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
@@ -92,13 +99,11 @@ export function CabinetsVerticalTimeline({
   rows,
   hidePosTitle = false,
   onSelect,
-  onEdit,
 }: {
   rows: CabinetVerticalTimelineRow[]
   /** 목록 전체가 같은 직함이라 요약 줄에 한 번 쓴 경우 — 행마다 직함을 빼낸다 */
   hidePosTitle?: boolean
   onSelect: (cabinetId: string) => void
-  onEdit: (cabinetId: string, clickEvent: React.MouseEvent) => void
 }) {
   const maxDays = Math.max(1, ...rows.map((row) => row.durationDays ?? 0))
   const longestLabel = maxDays > 1 ? formatTenureDuration(maxDays) : null
@@ -128,6 +133,17 @@ export function CabinetsVerticalTimeline({
   let prevCentury: string | null = null
   return (
     <TimelineList aria-label="역대 행정부 연표">
+      {/* 넓은 칸에서만 — 가로로 펼친 넷째 칸까지 무엇인지 */}
+      <ColumnHead aria-hidden>
+        <span />
+        <span />
+        <span className="cells">
+          <span />
+          <span>{hidePosTitle ? '수반 · 내각' : '수반 · 직함 · 내각'}</span>
+          <span>재임 기간{longestLabel ? <em>막대 = 최장 {longestLabel} 대비</em> : null}</span>
+          <span>취임 → 퇴임 · 정당</span>
+        </span>
+      </ColumnHead>
       {rows.map((row, rowIdx) => {
         const prevRow = rowIdx > 0 ? rows[rowIdx - 1] : null
         const century = row.startSignedYear != null ? centuryLabel(row.startSignedYear) : ''
@@ -216,7 +232,7 @@ export function CabinetsVerticalTimeline({
                       </Avatar>
                     )}
                   </AvatarCell>
-                  <TextStack>
+                  <IdentityStack>
                     {isContinuation ? (
                       <NameLine $continuation>
                         <strong>{row.cabinetName ?? row.personName}</strong>
@@ -235,29 +251,60 @@ export function CabinetsVerticalTimeline({
                         {[row.cabinetName, row.territoryLabel].filter(Boolean).join(' · ')}
                       </SubLine>
                     ) : null}
-                    <MetaLine>
-                      <span className="range">{row.range}</span>
-                      {row.durationLabel ? (
-                        /* 재임 막대는 이 글자 바로 옆 — 예전엔 막대 혼자 한 줄을 써 19행이면 ≈230px였다 */
-                        <span className="duration">
-                          {row.durationLabel}
-                          {barPct > 0 ? (
-                            <DurationTrack
-                              aria-hidden
-                              title={
-                                longestLabel
-                                  ? `재임 ${row.durationLabel} — 이 목록 최장(${longestLabel}) 대비`
-                                  : undefined
-                              }
-                            >
-                              <span
-                                style={{
-                                  width: `${barPct}%`,
-                                  background: row.ringColor ?? undefined,
-                                }}
-                              />
-                            </DurationTrack>
-                          ) : null}
+                    {row.reignEraLine ? <EraLine>{row.reignEraLine}</EraLine> : null}
+                  </IdentityStack>
+                  <PeriodStack>
+                    <span className="range">{row.range}</span>
+                    {row.durationLabel ? (
+                      <span className="duration">
+                        <span className="duration-text">{row.durationLabel}</span>
+                        {barPct > 0 ? (
+                          <DurationTrack
+                            aria-hidden
+                            title={
+                              longestLabel
+                                ? `재임 ${row.durationLabel} — 이 목록 최장(${longestLabel}) 대비`
+                                : undefined
+                            }
+                          >
+                            <span
+                              style={{
+                                width: `${barPct}%`,
+                                background: row.ringColor ?? undefined,
+                              }}
+                            />
+                          </DurationTrack>
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </PeriodStack>
+                  <FactsStack>
+                    {row.transition ? (
+                      /* 원장과 같은 '취임 → 퇴임' 한 줄 */
+                      <span
+                        className="transition"
+                        title={`취임 ${row.transition.appointment ?? '미상'} → 퇴임 ${row.transition.endReason ?? (row.isCurrent ? '현직' : '미상')}`}
+                      >
+                        {row.transition.appointment ?? '—'}
+                        {row.transition.endReason ? (
+                          <>
+                            <span className="arrow" aria-hidden>
+                              →
+                            </span>
+                            {row.transition.endReason}
+                          </>
+                        ) : null}
+                      </span>
+                    ) : null}
+                    <span className="facts">
+                      {row.partyLabel ? (
+                        <span className="party" title={`정당 ${row.partyLabel}`}>
+                          <span
+                            className="party-dot"
+                            aria-hidden
+                            style={row.partyColor ? { background: row.partyColor } : undefined}
+                          />
+                          {row.partyLabel}
                         </span>
                       ) : null}
                       {row.ageAtStart != null ? <span>취임 {row.ageAtStart}세</span> : null}
@@ -268,51 +315,9 @@ export function CabinetsVerticalTimeline({
                         </span>
                       ) : null}
                       {row.isCurrent ? <span className="current">현직</span> : null}
-                    </MetaLine>
-                    {row.reignEraLine ? <EraLine>{row.reignEraLine}</EraLine> : null}
-                  </TextStack>
-                  {row.transition || row.partyLabel ? (
-                    /* 원장과 같은 '취임 → 퇴임' 한 줄 + 정당 — 예전엔 '취임/퇴임/정당' 키 라벨이 행마다 셋씩 반복됐다 */
-                    <AsideStack>
-                      {row.transition ? (
-                        <span
-                          className="transition"
-                          title={`취임 ${row.transition.appointment ?? '미상'} → 퇴임 ${row.transition.endReason ?? (row.isCurrent ? '현직' : '미상')}`}
-                        >
-                          {row.transition.appointment ?? '—'}
-                          {row.transition.endReason ? (
-                            <>
-                              <span className="arrow" aria-hidden>
-                                →
-                              </span>
-                              {row.transition.endReason}
-                            </>
-                          ) : null}
-                        </span>
-                      ) : null}
-                      {row.partyLabel ? (
-                        <span className="party" title={`정당 ${row.partyLabel}`}>
-                          <span
-                            className="party-dot"
-                            aria-hidden
-                            style={
-                              row.partyColor ? { background: row.partyColor } : undefined
-                            }
-                          />
-                          {row.partyLabel}
-                        </span>
-                      ) : null}
-                    </AsideStack>
-                  ) : null}
+                    </span>
+                  </FactsStack>
                 </MainBtn>
-                <EditBtn
-                  type="button"
-                  aria-label={`${row.personName} 행정부 빠른 수정`}
-                  title="행정부 빠른 수정"
-                  onClick={(clickEvent) => onEdit(row.id, clickEvent)}
-                >
-                  <FiEdit2 size={12} aria-hidden />
-                </EditBtn>
               </Body>
             </TimelineRow>
           </React.Fragment>
@@ -326,6 +331,12 @@ const YEAR_COL_PX = 72
 const AXIS_COL_PX = 22
 /** 노드 세로 위치 — 이름 줄 가운데에 맞춤 */
 const NODE_TOP_PX = 20
+/** 이 폭(목록 칸)부터 한 행을 가로 네 칸 표로 펼친다 */
+const WIDE_PX = 830
+const WIDE_GAP_PX = 24
+/** 넓은 칸 — 사진 · 수반·내각 · 재임 기간 · 취임→퇴임·정당. ColumnHead도 같은 값 */
+const ROW_COLUMNS_WIDE =
+  '44px minmax(190px, 1.05fr) minmax(220px, 1.25fr) minmax(170px, 0.9fr)'
 
 /* 위 여백 — 첫 세기 머리('19세기')가 요약 줄('19개 행정부 · 1885–1954')에 붙어 요약의 일부로 읽혔다 */
 const TimelineList = styled.ol`
@@ -333,6 +344,36 @@ const TimelineList = styled.ol`
   list-style: none;
   margin: 0;
   padding: 14px 0 8px;
+`
+
+/* 넓은 칸에서만 보이는 열 머리 — 줄과 같은 격자(연도 · 축 · [사진 · 수반 · 기간 · 사실]) */
+const ColumnHead = styled.li`
+  display: none;
+
+  @container (min-width: ${WIDE_PX}px) {
+    display: grid;
+    grid-template-columns: ${YEAR_COL_PX}px ${AXIS_COL_PX}px minmax(0, 1fr);
+    column-gap: 10px;
+    margin: 0 0 4px;
+
+    .cells {
+      display: grid;
+      grid-template-columns: ${ROW_COLUMNS_WIDE};
+      column-gap: ${WIDE_GAP_PX}px;
+      padding: 0 14px 6px 8px;
+      border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: ${({ theme }) => theme.colors.text.tertiary};
+    }
+    em {
+      margin-left: 8px;
+      font-style: normal;
+      font-weight: 500;
+      letter-spacing: 0;
+    }
+  }
 `
 
 const CenturyHead = styled.li`
@@ -354,7 +395,9 @@ const CenturyHead = styled.li`
     height: 1px;
     background: ${({ theme }) => ledgerHairline(theme.mode)};
   }
-  &:first-child {
+  /* 맨 앞(열 머리는 좁은 칸에서 숨으므로 그 바로 뒤도) */
+  &:first-child,
+  ${ColumnHead} + & {
     margin-top: 0;
   }
 `
@@ -519,21 +562,20 @@ const Body = styled.div`
   position: relative;
   min-width: 0;
   padding-bottom: 6px;
-
-  &:hover > button:last-child,
-  &:focus-within > button:last-child {
-    opacity: 1;
-  }
 `
 
+/*
+ * 행 단추 = 네 칸 격자(사진 · 수반 · 기간 · 사실). 칸 배치는 폭에 따라 바뀐다 — 맨 위 머리 주석 참고.
+ * 열 폭은 ColumnHead와 같은 값(ROW_COLUMNS_WIDE)을 써야 머리와 줄이 맞는다.
+ */
 const MainBtn = styled.button`
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   align-items: start;
   column-gap: 12px;
-  row-gap: 8px;
+  row-gap: 4px;
   width: 100%;
-  padding: 8px 40px 10px 8px;
+  padding: 8px 12px 10px 8px;
   border: none;
   border-radius: 10px;
   background: transparent;
@@ -542,6 +584,13 @@ const MainBtn = styled.button`
   color: inherit;
   cursor: pointer;
   transition: background-color 0.14s ease;
+
+  > :first-child {
+    grid-row: 1 / span 3;
+  }
+  > :not(:first-child) {
+    grid-column: 2;
+  }
 
   &:hover {
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
@@ -555,23 +604,50 @@ const MainBtn = styled.button`
     cursor: progress;
   }
 
-  /* 넓은 칸: 오른쪽 셋째 칸에 취임 · 퇴임 · 정당 */
-  /* 넓은 칸: 셋째 칸(취임 → 퇴임 · 정당)을 본문 바로 옆에 — 본문 칸을 1fr로 두면 셋째 칸이 오른쪽 끝으로
-     밀려 1440px에서 본문과 170px 떨어졌다 */
   @container (min-width: 760px) {
-    grid-template-columns: auto minmax(0, 440px) minmax(180px, 260px);
-    justify-content: start;
-    column-gap: 24px;
+    grid-template-columns: 44px minmax(0, 1fr) minmax(180px, 0.55fr);
+    column-gap: 20px;
+
+    > :first-child {
+      grid-row: 1 / span 2;
+    }
+    > :nth-child(4) {
+      grid-column: 3;
+      grid-row: 1 / span 2;
+    }
+  }
+
+  @container (min-width: ${WIDE_PX}px) {
+    grid-template-columns: ${ROW_COLUMNS_WIDE};
+    align-items: center;
+    column-gap: ${WIDE_GAP_PX}px;
+    padding: 8px 14px 8px 8px;
+
+    > :first-child {
+      grid-row: 1;
+    }
+    > :nth-child(2) {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    > :nth-child(3) {
+      grid-column: 3;
+      grid-row: 1;
+    }
+    > :nth-child(4) {
+      grid-column: 4;
+      grid-row: 1;
+    }
   }
 `
 
-/** 취임 방식 · 퇴임 사유 · 정당 — 좁으면 본문 아래, 넓으면 오른쪽 칸 */
-const AsideStack = styled.span`
-  grid-column: 2;
+/** 취임 → 퇴임 · 정당 · 나이 · 업적 — 좁으면 본문 아래, 중간이면 오른쪽 칸(왼쪽 가는 선), 넓으면 넷째 칸 */
+const FactsStack = styled.span`
+  /* 좁은 칸은 '임명 → 사임 · 취임 44세'를 한 줄로 — 위아래로 쌓으면 폰에서 행이 한 줄 더 길어졌다 */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
+  gap: 2px 12px;
   min-width: 0;
   font-size: 12px;
   line-height: 1.45;
@@ -588,9 +664,24 @@ const AsideStack = styled.span`
   .arrow {
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
-  .party {
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 12px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
+  }
+  .facts:empty {
+    display: none;
+  }
+  .facts > span {
     display: inline-flex;
     align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .party {
     gap: 5px;
     min-width: 0;
     padding: 1px 8px;
@@ -607,15 +698,22 @@ const AsideStack = styled.span`
     border-radius: 50%;
     background: ${({ theme }) => ledgerAccent(theme.mode)};
   }
+  .current {
+    font-weight: 700;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
 
   @container (min-width: 760px) {
-    grid-column: 3;
     flex-direction: column;
-    align-items: flex-start;
     flex-wrap: nowrap;
-    gap: 5px;
+    align-items: flex-start;
+    gap: 4px;
     padding: 2px 0 0 14px;
     border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+  @container (min-width: ${WIDE_PX}px) {
+    padding: 0;
+    border-left: none;
   }
 `
 
@@ -680,12 +778,11 @@ const Avatar = styled.span<{ $ring: string | null }>`
   }
 `
 
-const TextStack = styled.span`
+const IdentityStack = styled.span`
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
-  flex: 1;
 `
 
 const NameLine = styled.span<{ $continuation?: boolean }>`
@@ -726,29 +823,46 @@ const SubLine = styled.span`
   word-break: keep-all;
 `
 
-/* 구분점(·) 대신 간격으로 나눈다 — 좁은 칸에서 줄이 넘어가면 '· 2년 4개월'처럼 점이 줄 머리에 혼자 남았다 */
-const MetaLine = styled.span`
+/*
+ * 재임 기간 — 날짜 한 줄 + '2년 4개월 ▬▬▬'. 넓은 칸에선 막대가 칸 폭을 다 써(최장 대비) 행끼리 길이를 견준다.
+ * 구분점(·) 대신 간격으로 나눈다 — 좁은 칸에서 줄이 넘어가면 점이 줄 머리에 혼자 남았다.
+ */
+const PeriodStack = styled.span`
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
   gap: 2px 14px;
+  min-width: 0;
   font-size: 12px;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.tertiary};
   ${DIGIT_DISPLAY}
 
-  > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    white-space: nowrap;
-  }
   .range {
+    white-space: nowrap;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
-  .current {
-    font-weight: 700;
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  .duration {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  @container (min-width: ${WIDE_PX}px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+
+    .range {
+      font-size: 12.5px;
+    }
+    .duration {
+      display: flex;
+    }
+    .duration-text {
+      flex: 0 0 64px;
+    }
   }
 `
 
@@ -758,13 +872,12 @@ const EraLine = styled.span`
   word-break: keep-all;
 `
 
-/* 날짜 줄 안의 짧은 막대(최장 재임 대비 길이). 폰 폭에선 숨긴다 — 같은 정보의 글자가 바로 옆 */
+/* 재임 길이 막대(최장 재임 대비). 좁으면 글자 옆 짧은 막대, 넓은 칸에선 칸 폭을 다 쓴다. 폰 폭에선 숨긴다 */
 const DurationTrack = styled.span`
   display: inline-block;
   flex-shrink: 0;
   width: 72px;
   height: 4px;
-  margin-left: 6px;
   border-radius: 999px;
   background: ${({ theme }) => ledgerHairline(theme.mode)};
   overflow: hidden;
@@ -776,33 +889,12 @@ const DurationTrack = styled.span`
     background: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 
+  @container (min-width: ${WIDE_PX}px) {
+    flex: 1 1 auto;
+    width: auto;
+    height: 6px;
+  }
   @container (max-width: 560px) {
     display: none;
-  }
-`
-
-const EditBtn = styled.button`
-  position: absolute;
-  top: 8px;
-  right: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.14s ease;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-  &:focus-visible {
-    opacity: 1;
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
   }
 `

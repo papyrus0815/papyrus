@@ -2912,7 +2912,6 @@ export function CabinetsSection({
                         deletingCabinetId={deletingCabinetId}
                         onSelectCabinet={selectCabinetWithUrl}
                         onInspectPerson={setMentionPersonId}
-                        onEditCabinet={handleOpenEditCabinet}
                       />
                     ) : (
                     <CabinetsVerticalTimeline
@@ -3031,12 +3030,6 @@ export function CabinetsSection({
                       )}
                       hidePosTitle={Boolean(uniformHeadTitle)}
                       onSelect={(cabinetId) => selectCabinetWithUrl(cabinetId)}
-                      onEdit={(cabinetId, clickEvent) => {
-                        const target = timelineCabinetsMerged.find(
-                          (cabinetItem) => String(cabinetItem.id) === cabinetId,
-                        )
-                        if (target) handleOpenEditCabinet(target, clickEvent)
-                      }}
                     />
                     )}
                   </CabS.CabTimelineSummaryOuter>

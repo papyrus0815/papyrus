@@ -14,7 +14,6 @@ import React, { useMemo } from 'react'
 import {
   FiAward,
   FiCalendar,
-  FiEdit2,
   FiFileText,
   FiLink2,
   FiUsers,
@@ -69,10 +68,6 @@ export interface CabinetsLedgerViewProps {
   deletingCabinetId: string | null
   onSelectCabinet: (cabinetId: string) => void
   onInspectPerson?: (personId: string) => void
-  onEditCabinet?: (
-    cabinetItem: CabinetListItemDto,
-    mouseEvent: React.MouseEvent,
-  ) => void
 }
 
 interface RulingPartySummary {
@@ -156,7 +151,6 @@ export function CabinetsLedgerView({
   deletingCabinetId,
   onSelectCabinet,
   onInspectPerson,
-  onEditCabinet,
 }: CabinetsLedgerViewProps) {
   const distinctCenturyCount = useMemo(() => {
     const keys = new Set<string>()
@@ -175,13 +169,18 @@ export function CabinetsLedgerView({
   )
 
   return (
-    <LedgerShell role="region" aria-label="역대 행정부 원장 목록">
+    <LedgerShell
+      role="region"
+      aria-label="역대 행정부 원장 목록"
+      /* 직함을 요약 줄로 올렸으면 둘째 열엔 '제N대'뿐 — 168px 중 110px가 비어 표 가운데가 휑했다 */
+      style={{ '--ledger-ordinal-col': hidePositionTitle ? '92px' : '168px' } as React.CSSProperties}
+    >
       <LedgerHeaderRow>
         <span>출범 · 존속 기간</span>
         <span>{hidePositionTitle ? '대수' : '대수 · 직함'}</span>
         <span>수반 · 내각</span>
         <DesktopOnlyColHeader>취임 → 퇴임 · 정당</DesktopOnlyColHeader>
-        {/* 이 열은 대개 수정 단추뿐이라 '기록' 머리가 빈 열을 약속했다 — 머리를 비운다 */}
+        {/* 기록 칩(각료·업적·사건·조약)은 없는 나라가 많아 머리를 달면 빈 열을 약속한다 — 비워 둔다 */}
         <RightHeaderCol aria-hidden />
       </LedgerHeaderRow>
 
@@ -489,19 +488,6 @@ export function CabinetsLedgerView({
                       <span>연계</span>
                     </AccentChip>
                   )}
-                  {onEditCabinet && (
-                    <QuickEditBtn
-                      type="button"
-                      title="행정부·내각 정보 수정"
-                      aria-label={`${explicitCabinetName ?? personDisplayName} 수정`}
-                      onClick={(mouseEvent) => {
-                        mouseEvent.stopPropagation()
-                        onEditCabinet(cabinetItem, mouseEvent)
-                      }}
-                    >
-                      <FiEdit2 size={12} />
-                    </QuickEditBtn>
-                  )}
                 </MetaBadgeCell>
               </LedgerRow>
             </React.Fragment>
@@ -516,6 +502,15 @@ export function CabinetsLedgerView({
  * 열 접기는 화면 폭이 아니라 이 표의 폭으로 판단한다 — 국가 목록·내비 레일이 460px를 먹어 1440px 화면에서도
  * 표는 ~980px인데 @media(1120px)는 넓다고 보고 5열(합 1,028px)을 깔아 오른쪽 '구성' 열·상세 버튼이 잘렸다.
  */
+/*
+ * 열 — 기간 · 대수 · 수반·내각 · 취임→퇴임·정당 · 기록 칩. 마지막 열을 auto로 두면 행마다 칩 수만큼 폭이 달라
+ * 앞의 fr 열들이 행끼리 어긋났다(행 하나하나가 따로 격자) — 고정 폭으로 맞춘다.
+ */
+const LEDGER_COLUMNS_WIDE =
+  '184px var(--ledger-ordinal-col, 168px) minmax(200px, 1.15fr) minmax(200px, 1fr) 132px'
+/* 중간 폭은 첫 열 192px — 184px면 1024px 화면에서 'YYYY.MM.DD – YYYY.MM.DD'가 잘렸다 */
+const LEDGER_COLUMNS_MID = '192px var(--ledger-ordinal-col, 150px) minmax(0, 1fr) 112px'
+
 const LedgerShell = styled.div`
   container-type: inline-size;
   display: flex;
@@ -531,7 +526,7 @@ const DesktopOnlyColHeader = styled.span``
 
 const LedgerHeaderRow = styled.div`
   display: grid;
-  grid-template-columns: 184px 168px minmax(180px, 1fr) minmax(180px, 0.9fr) auto;
+  grid-template-columns: ${LEDGER_COLUMNS_WIDE};
   align-items: center;
   gap: 12px;
   padding: 9px 16px;
@@ -543,7 +538,7 @@ const LedgerHeaderRow = styled.div`
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 
   @container (max-width: 900px) {
-    grid-template-columns: 192px 150px minmax(0, 1fr) auto;
+    grid-template-columns: ${LEDGER_COLUMNS_MID};
 
     /* 넷째 열은 좁으면 수반 칸 아래로 내려가므로 머리에서 뺀다 */
     > ${DesktopOnlyColHeader} {
@@ -612,7 +607,7 @@ const LedgerRow = styled.div<{
 }>`
   position: relative;
   display: grid;
-  grid-template-columns: 184px 168px minmax(180px, 1fr) minmax(180px, 0.9fr) auto;
+  grid-template-columns: ${LEDGER_COLUMNS_WIDE};
   align-items: center;
   gap: 4px 12px;
   width: 100%;
@@ -654,7 +649,7 @@ const LedgerRow = styled.div<{
   }
 
   @container (max-width: 900px) {
-    grid-template-columns: 192px 150px minmax(0, 1fr) auto;
+    grid-template-columns: ${LEDGER_COLUMNS_MID};
   }
 
   @container (max-width: 640px) {
@@ -1008,7 +1003,7 @@ const MetaBadgeCell = styled.div`
   gap: 5px;
   flex-wrap: wrap;
 
-  /* 카드형(좁은 칸)에서는 기록 칩·수정 단추를 카드 오른쪽 위에 — 예전엔 연필 하나가 맨 아래 한 줄을 차지했다 */
+  /* 카드형(좁은 칸)에서는 기록 칩을 카드 오른쪽 위에 */
   @container (max-width: 640px) {
     position: absolute;
     top: 10px;
@@ -1039,41 +1034,4 @@ const AccentChip = styled.span`
   font-weight: 700;
   background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const QuickEditBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border-radius: ${RADIUS.XS};
-  border: 1px solid transparent;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease,
-    opacity 0.12s ease;
-
-  &:hover {
-    background: ${({ theme }) => ledgerChipFill(theme.mode)};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-  &:focus-visible {
-    opacity: 1;
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-
-  /* 마우스 기기에선 행에 올리거나 초점이 들어올 때만 — 19행 모두에 연필이 서 있던 것. 터치 기기는 늘 보인다 */
-  @media (hover: hover) {
-    opacity: 0;
-
-    ${LedgerRow}:hover &,
-    ${LedgerRow}:focus-within & {
-      opacity: 1;
-    }
-  }
 `
