@@ -30,6 +30,11 @@ import {
   primaryHouseLabel,
   STATE_STRUCTURE_LABEL,
 } from '@/entities/political-system/model/political-system'
+import {
+  DIGIT_DISPLAY,
+  ledgerHairline,
+  ledgerHairlineStrong,
+} from '@/entities/event/ui/ledger-tokens'
 import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
 import { GOV_BRAND } from '@/features/government-info/ui/government-ledger.styles'
 import {
@@ -61,6 +66,12 @@ const EMPTY_FACT_LABELS = [
   '국가 구조 (단일·연방)',
   '정당 체제',
 ] as const
+
+/** 연도 칸 글자 — '1603' · '기원전 52' */
+function yearLabelOf(era: 'BC' | 'AD' | null, year: number | null): string | null {
+  if (year == null) return null
+  return era === 'BC' ? `기원전 ${year}` : String(year)
+}
 
 interface HeadRegisterTarget {
   positionId: string | null
@@ -348,259 +359,232 @@ export function PoliticalSystemTab({
           </PrimaryActionButton>
         </EmptyCard>
       ) : (
-        <TimelineList>
+        /*
+          한 체제 = 한 줄. 행정부 연표와 같은 문법 — 왼쪽 연도 칸(시작 크게 · 끝 작게) + 이어지는 축 + 본문.
+          예전엔 체제마다 테두리 카드 · 회색 상자 4개(국가원수 · 정부수반 · 하원 · 상원) · 카드마다 '수정' 단추가
+          서 있어 네 체제가 화면 두 장을 넘겼고, 설명 글은 900px 한 줄로 늘어져 읽히지 않았다.
+          넓은 칸에선 본문을 둘로 — 왼쪽 이름 · 형태 · 구성, 오른쪽 설명 · 역대 내각. 수정은 ⋯ 안에.
+        */
+        <RegimeList aria-label="헌정 체제 연혁">
           {systems.map((system, sysIndex) => {
             const hos = headOfStateTitleOf(system)
             const hog = headOfGovernmentTitleOf(system)
             const isDistinctDual = Boolean(hos && hog && hos !== hog)
-            const hasSpecs = Boolean(
-              hos ||
-                hog ||
-                system.lowerHouseName ||
-                (system.legislatureType === 'BICAMERAL' &&
-                  system.upperHouseName),
-            )
             const fallbackTitle = system.governmentForm
               ? GOVERNMENT_FORM_LABEL[system.governmentForm]
               : '헌정 체제'
+            const displayName = system.name || fallbackTitle
             const matchedInfo = matchedCabinetsBySystemId.get(system.id)
+            const startLabel = yearLabelOf(system.startEra, system.startYear)
+            const endLabel =
+              yearLabelOf(system.endEra, system.endYear) ??
+              (system.isCurrent ? '현재' : null)
+            /* muted = 값 뒤 옅은 꼬리(' (상징)' · ' · 466석') — 구분 기호까지 담는다 */
+            const facts: Array<{ key: string; label: string; value: string; muted?: string }> = []
+            if (hos) {
+              facts.push({
+                key: 'hos',
+                label: isDistinctDual ? '국가원수' : '국가원수 · 정부수반',
+                value: hos,
+                muted: system.headOfStateHasPower === false ? ' (상징)' : undefined,
+              })
+            }
+            if (hog && (!hos || isDistinctDual)) {
+              facts.push({
+                key: 'hog',
+                label: '정부수반',
+                value: hog,
+                muted: system.headOfGovernmentHasPower === false ? ' (상징)' : undefined,
+              })
+            }
+            if (system.lowerHouseName) {
+              facts.push({
+                key: 'lower',
+                label: primaryHouseLabel(system.legislatureType),
+                value: system.lowerHouseName,
+                muted:
+                  system.lowerHouseSeats != null
+                    ? ` · ${system.lowerHouseSeats.toLocaleString()}석`
+                    : undefined,
+              })
+            }
+            if (system.legislatureType === 'BICAMERAL' && system.upperHouseName) {
+              facts.push({
+                key: 'upper',
+                label: '상원',
+                value: system.upperHouseName,
+                muted:
+                  system.upperHouseSeats != null
+                    ? ` · ${system.upperHouseSeats.toLocaleString()}석`
+                    : undefined,
+              })
+            }
+            const tags = [
+              system.governmentForm
+                ? { key: 'form', label: GOVERNMENT_FORM_LABEL[system.governmentForm], tone: 'form' as const }
+                : null,
+              system.legislatureType
+                ? { key: 'legislature', label: LEGISLATURE_TYPE_LABEL[system.legislatureType], tone: undefined }
+                : null,
+              system.stateStructure
+                ? { key: 'structure', label: STATE_STRUCTURE_LABEL[system.stateStructure], tone: undefined }
+                : null,
+              system.partySystem
+                ? { key: 'party', label: PARTY_SYSTEM_LABEL[system.partySystem], tone: undefined }
+                : null,
+            ].filter((tagItem): tagItem is NonNullable<typeof tagItem> => tagItem != null)
+            const hasCabinets = Boolean(matchedInfo && matchedInfo.count > 0)
+            const hasProse = Boolean(system.notes) || hasCabinets
+            const showPolity =
+              (historicalCountryId == null ||
+                system.historicalCountryId !== historicalCountryId) &&
+              system.historicalCountryId != null
 
             return (
-              <TimelineRow key={system.id}>
-                <TimelineRailCol>
-                  <RailNode $current={Boolean(system.isCurrent)} />
-                  {sysIndex < systems.length - 1 ? <RailLine /> : null}
-                </TimelineRailCol>
+              <RegimeRow key={system.id}>
+                <YearCol>
+                  <span className="start">{startLabel ?? '?'}</span>
+                  {endLabel ? <span className="end">– {endLabel}</span> : null}
+                </YearCol>
+                <AxisCol
+                  aria-hidden
+                  $first={sysIndex === 0}
+                  $last={sysIndex === systems.length - 1}
+                >
+                  <AxisNode $current={Boolean(system.isCurrent)} />
+                </AxisCol>
 
-                <RegimeCard $current={Boolean(system.isCurrent)}>
-                  <CardHeader>
-                    <CardTitleBlock>
-                      <TitleLine>
-                        <PeriodPill $current={Boolean(system.isCurrent)}>
-                          {formatPeriod(system)}
-                        </PeriodPill>
-                        <Name>{system.name || fallbackTitle}</Name>
-                        {system.isCurrent ? (
-                          <CurrentChip>현행 체제</CurrentChip>
-                        ) : null}
-                        {(historicalCountryId == null ||
-                          system.historicalCountryId !== historicalCountryId) &&
-                        system.historicalCountryId != null ? (
-                          <PastChip>
-                            <PolityDot aria-hidden />
-                            {system.historicalCountry?.name ?? '구성·과거 국가'}
-                          </PastChip>
-                        ) : null}
-                      </TitleLine>
+                <RegimeBody $hasProse={hasProse}>
+                  <RegimeMain>
+                    <TitleLine>
+                      <Name>{displayName}</Name>
+                      {system.isCurrent ? <CurrentChip>현행</CurrentChip> : null}
+                      {showPolity ? (
+                        <PastChip>
+                          <PolityDot aria-hidden />
+                          {system.historicalCountry?.name ?? '구성·과거 국가'}
+                        </PastChip>
+                      ) : null}
+                    </TitleLine>
 
-                      {(system.governmentForm ||
-                        system.legislatureType ||
-                        system.stateStructure ||
-                        system.partySystem) && (
-                        <Tags>
-                          {system.governmentForm ? (
-                            <Tag $tone="form">
-                              {GOVERNMENT_FORM_LABEL[system.governmentForm]}
-                            </Tag>
-                          ) : null}
-                          {system.legislatureType ? (
-                            <Tag $tone="legislature">
-                              {LEGISLATURE_TYPE_LABEL[system.legislatureType]}
-                            </Tag>
-                          ) : null}
-                          {system.stateStructure ? (
-                            <Tag>
-                              {STATE_STRUCTURE_LABEL[system.stateStructure]}
-                            </Tag>
-                          ) : null}
-                          {system.partySystem ? (
-                            <Tag>{PARTY_SYSTEM_LABEL[system.partySystem]}</Tag>
-                          ) : null}
-                        </Tags>
-                      )}
-                    </CardTitleBlock>
+                    {tags.length > 0 ? (
+                      <Tags>
+                        {tags.map((tagItem) => (
+                          <Tag key={tagItem.key} $tone={tagItem.tone}>
+                            {tagItem.label}
+                          </Tag>
+                        ))}
+                      </Tags>
+                    ) : null}
 
-                    <RowActions>
-                      <ActionBtn type="button" onClick={() => openEdit(system)}>
-                        <FiEdit2 size={12} />
-                        수정
-                      </ActionBtn>
-                      <GovMorePopover
-                        triggerSize="sm"
-                        ariaLabel={`${system.name || fallbackTitle} 관리 메뉴`}
-                        title="체제 관리 및 수장 등록"
-                        actions={[
-                          ...(hos
-                            ? [
-                                {
-                                  key: 'register-hos',
-                                  label: `${hos} 인물 등록`,
-                                  icon: <FiUserPlus size={13.5} />,
-                                  onClick: () =>
-                                    openHeadRegister({
-                                      positionId:
-                                        system.headOfStatePositionId ?? null,
-                                      positionTitle: hos,
-                                      positionType: 'HEAD_OF_STATE' as const,
-                                      historicalCountryId:
-                                        system.historicalCountryId ?? null,
-                                    }),
-                                },
-                              ]
-                            : []),
-                          ...(hog && (!hos || isDistinctDual)
-                            ? [
-                                {
-                                  key: 'register-hog',
-                                  label: `${hog} 인물 등록`,
-                                  icon: <FiUserPlus size={13.5} />,
-                                  onClick: () =>
-                                    openHeadRegister({
-                                      positionId:
-                                        system.headOfGovernmentPositionId ??
-                                        null,
-                                      positionTitle: hog,
-                                      positionType:
-                                        'HEAD_OF_GOVERNMENT' as const,
-                                      historicalCountryId:
-                                        system.historicalCountryId ?? null,
-                                    }),
-                                },
-                              ]
-                            : []),
-                          ...(matchedInfo &&
-                          matchedInfo.count > 0 &&
-                          onOpenCabinetsByRegime
-                            ? [
-                                {
-                                  key: 'open-cabinets',
-                                  label: '역대 행정부·내각 보기',
-                                  icon: <FiUsers size={13.5} />,
-                                  badge: String(matchedInfo.count),
-                                  onClick: () =>
-                                    onOpenCabinetsByRegime(system.id),
-                                },
-                              ]
-                            : []),
-                          {
-                            key: 'delete-system',
-                            label: '정체 기록 삭제',
-                            icon: <FiTrash2 size={13.5} />,
-                            danger: true,
-                            onClick: () => {
-                              void handleDelete(system)
-                            },
+                    {facts.length > 0 ? (
+                      <FactList>
+                        {facts.map((fact) => (
+                          <div key={fact.key}>
+                            <dt>{fact.label}</dt>
+                            <dd>
+                              {fact.value}
+                              {fact.muted ? <Muted>{fact.muted}</Muted> : null}
+                            </dd>
+                          </div>
+                        ))}
+                      </FactList>
+                    ) : null}
+                  </RegimeMain>
+
+                  {hasProse ? (
+                    <RegimeProse>
+                      {system.notes ? <Notes>{system.notes}</Notes> : null}
+                      {matchedInfo && hasCabinets ? (
+                        <CabinetLine>
+                          <FiUsers size={12.5} aria-hidden />
+                          <span className="names">
+                            {matchedInfo.leaderNames.length > 0 ? (
+                              <>
+                                <strong>{matchedInfo.leaderNames.join(' · ')}</strong>
+                                {matchedInfo.extraLeaderCount > 0
+                                  ? ` 외 ${matchedInfo.extraLeaderCount}명`
+                                  : ''}
+                              </>
+                            ) : (
+                              `연결된 행정부·내각 ${matchedInfo.count}개`
+                            )}
+                          </span>
+                          {onOpenCabinetsByRegime ? (
+                            <CabinetLinkBtn
+                              type="button"
+                              onClick={() => onOpenCabinetsByRegime(system.id)}
+                            >
+                              역대 내각 {matchedInfo.count}개
+                              <FiArrowRight size={12} aria-hidden />
+                            </CabinetLinkBtn>
+                          ) : null}
+                        </CabinetLine>
+                      ) : null}
+                    </RegimeProse>
+                  ) : null}
+
+                  <RowMenu>
+                    <GovMorePopover
+                      triggerSize="sm"
+                      ariaLabel={`${displayName} 관리 메뉴`}
+                      title="체제 수정 · 수장 등록 · 삭제"
+                      actions={[
+                        {
+                          key: 'edit-system',
+                          label: '체제 수정',
+                          icon: <FiEdit2 size={13.5} />,
+                          onClick: () => openEdit(system),
+                        },
+                        ...(hos
+                          ? [
+                              {
+                                key: 'register-hos',
+                                label: `${hos} 인물 등록`,
+                                icon: <FiUserPlus size={13.5} />,
+                                onClick: () =>
+                                  openHeadRegister({
+                                    positionId: system.headOfStatePositionId ?? null,
+                                    positionTitle: hos,
+                                    positionType: 'HEAD_OF_STATE' as const,
+                                    historicalCountryId: system.historicalCountryId ?? null,
+                                  }),
+                              },
+                            ]
+                          : []),
+                        ...(hog && (!hos || isDistinctDual)
+                          ? [
+                              {
+                                key: 'register-hog',
+                                label: `${hog} 인물 등록`,
+                                icon: <FiUserPlus size={13.5} />,
+                                onClick: () =>
+                                  openHeadRegister({
+                                    positionId: system.headOfGovernmentPositionId ?? null,
+                                    positionTitle: hog,
+                                    positionType: 'HEAD_OF_GOVERNMENT' as const,
+                                    historicalCountryId: system.historicalCountryId ?? null,
+                                  }),
+                              },
+                            ]
+                          : []),
+                        {
+                          key: 'delete-system',
+                          label: '정체 기록 삭제',
+                          icon: <FiTrash2 size={13.5} />,
+                          danger: true,
+                          onClick: () => {
+                            void handleDelete(system)
                           },
-                        ]}
-                      />
-                    </RowActions>
-                  </CardHeader>
-
-                  {hasSpecs ? (
-                    <SpecGrid>
-                      {hos ? (
-                        <SpecBox>
-                          <FactKey>
-                            {isDistinctDual
-                              ? '국가원수'
-                              : '국가원수 · 정부수반'}
-                          </FactKey>
-                          <FactValue>
-                            <span>
-                              {hos}
-                              {system.headOfStateHasPower === false ? (
-                                <Muted> (상징)</Muted>
-                              ) : null}
-                            </span>
-                          </FactValue>
-                        </SpecBox>
-                      ) : null}
-
-                      {hog && (!hos || isDistinctDual) ? (
-                        <SpecBox>
-                          <FactKey>정부수반</FactKey>
-                          <FactValue>
-                            <span>
-                              {hog}
-                              {system.headOfGovernmentHasPower === false ? (
-                                <Muted> (상징)</Muted>
-                              ) : null}
-                            </span>
-                          </FactValue>
-                        </SpecBox>
-                      ) : null}
-
-                      {system.lowerHouseName ? (
-                        <SpecBox>
-                          <FactKey>
-                            {primaryHouseLabel(system.legislatureType)}
-                          </FactKey>
-                          <FactValue>
-                            <span>
-                              {system.lowerHouseName}
-                              {system.lowerHouseSeats != null
-                                ? ` · ${system.lowerHouseSeats.toLocaleString()}석`
-                                : ''}
-                            </span>
-                          </FactValue>
-                        </SpecBox>
-                      ) : null}
-
-                      {system.legislatureType === 'BICAMERAL' &&
-                      system.upperHouseName ? (
-                        <SpecBox>
-                          <FactKey>상원</FactKey>
-                          <FactValue>
-                            <span>
-                              {system.upperHouseName}
-                              {system.upperHouseSeats != null
-                                ? ` · ${system.upperHouseSeats.toLocaleString()}석`
-                                : ''}
-                            </span>
-                          </FactValue>
-                        </SpecBox>
-                      ) : null}
-                    </SpecGrid>
-                  ) : null}
-
-                  {system.notes ? <Notes>{system.notes}</Notes> : null}
-
-                  {matchedInfo && matchedInfo.count > 0 ? (
-                    <RegimeCabinetLinkBar>
-                      <RegimeCabinetSummary>
-                        <FiUsers size={12.5} />
-                        <span>
-                          {matchedInfo.leaderNames.length > 0 ? (
-                            <>
-                              수반:{' '}
-                              <strong>
-                                {matchedInfo.leaderNames.join(' · ')}
-                              </strong>
-                              {matchedInfo.extraLeaderCount > 0
-                                ? ` 외 ${matchedInfo.extraLeaderCount}명`
-                                : ''}
-                            </>
-                          ) : (
-                            `연결된 행정부·내각 ${matchedInfo.count}개`
-                          )}
-                        </span>
-                      </RegimeCabinetSummary>
-                      {onOpenCabinetsByRegime ? (
-                        <RegimeCabinetBtn
-                          type="button"
-                          onClick={() => onOpenCabinetsByRegime(system.id)}
-                        >
-                          <span>역대 내각 {matchedInfo.count}개 보기</span>
-                          <FiArrowRight size={12.5} />
-                        </RegimeCabinetBtn>
-                      ) : null}
-                    </RegimeCabinetLinkBar>
-                  ) : null}
-                </RegimeCard>
-              </TimelineRow>
+                        },
+                      ]}
+                    />
+                  </RowMenu>
+                </RegimeBody>
+              </RegimeRow>
             )
           })}
-        </TimelineList>
+        </RegimeList>
       )}
 
       <ChamberCatalogSection countryId={countryId} historicalCountryId={historicalCountryId} />
@@ -895,83 +879,145 @@ const EmptySpecPill = styled.span`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
 `
 
-const TimelineList = styled.div`
-  display: flex;
-  flex-direction: column;
+/* 연도 칸 · 축 칸 폭과 노드 높이(이름 줄 가운데) — 행정부 연표와 같은 값 */
+const YEAR_COL_PX = 88
+const AXIS_COL_PX = 22
+const NODE_TOP_PX = 26
+/** 이 폭(체제 목록 칸)부터 본문을 두 칸(이름·구성 | 설명·내각)으로 */
+const REGIME_WIDE_PX = 860
+
+const RegimeList = styled.ol`
+  container-type: inline-size;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 `
 
-const TimelineRow = styled.div`
+const RegimeRow = styled.li`
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  gap: 12px;
-  align-items: stretch;
+  grid-template-columns: ${YEAR_COL_PX}px ${AXIS_COL_PX}px minmax(0, 1fr);
+  column-gap: 12px;
+
+  @container (max-width: 560px) {
+    grid-template-columns: 58px 18px minmax(0, 1fr);
+    column-gap: 8px;
+  }
 `
 
-const TimelineRailCol = styled.div`
+const YearCol = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding-top: 18px;
+  align-items: flex-end;
+  padding-top: ${NODE_TOP_PX - 11}px;
+  text-align: right;
+  ${DIGIT_DISPLAY}
+
+  .start {
+    font-size: 19px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: ${({ theme }) => theme.colors.text.primary};
+    word-break: keep-all;
+  }
+  .end {
+    margin-top: 3px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    white-space: nowrap;
+  }
+
+  @container (max-width: 560px) {
+    .start {
+      font-size: 16px;
+    }
+  }
 `
 
-const RailNode = styled.span<{ $current?: boolean }>`
-  width: 9px;
-  height: 9px;
+const AxisCol = styled.div<{ $first: boolean; $last: boolean }>`
+  position: relative;
+
+  &::before {
+    content: '';
+    display: ${({ $first }) => ($first ? 'none' : 'block')};
+    position: absolute;
+    left: 50%;
+    top: 0;
+    height: ${NODE_TOP_PX}px;
+    margin-left: -1px;
+    border-left: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+  &::after {
+    content: '';
+    display: ${({ $last }) => ($last ? 'none' : 'block')};
+    position: absolute;
+    left: 50%;
+    top: ${NODE_TOP_PX}px;
+    bottom: 0;
+    margin-left: -1px;
+    border-left: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+const AxisNode = styled.span<{ $current: boolean }>`
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: ${NODE_TOP_PX}px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
-  flex-shrink: 0;
-  background: ${({ $current, theme }) =>
-    $current
-      ? '#10b981'
-      : theme.mode === 'dark'
-        ? '#64748b'
-        : '#94a3b8'};
-`
-
-const RailLine = styled.span`
-  flex: 1;
-  width: 1px;
-  margin-top: 6px;
-  margin-bottom: -14px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.12)'
-      : 'rgba(20, 19, 34, 0.12)'};
-`
-
-const RegimeCard = styled.article<{ $current?: boolean }>`
-  margin-bottom: 10px;
-  padding: 15px 18px;
-  border-radius: 12px;
-  border: 1px solid
+  transform: translate(-50%, -50%);
+  border: 2px solid
     ${({ $current, theme }) =>
-      $current
-        ? theme.mode === 'dark'
-          ? 'rgba(52, 211, 153, 0.32)'
-          : '#a7f3d0'
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.08)'
-          : 'rgba(20, 19, 34, 0.08)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.015)' : '#ffffff'};
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+      $current ? '#10b981' : theme.mode === 'dark' ? '#64748b' : '#94a3b8'};
+  background: ${({ $current, theme }) =>
+    $current ? '#10b981' : theme.colors.background.primary};
 `
 
-const CardHeader = styled.div`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-`
-
-const CardTitleBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* 행 사이는 가는 선 하나 — 테두리 카드 대신. ⋯는 오른쪽 위에 */
+const RegimeBody = styled.div<{ $hasProse: boolean }>`
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px 40px;
   min-width: 0;
-  flex: 1;
+  padding: 16px 40px 20px 4px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  li:last-child > & {
+    border-bottom: none;
+  }
+
+  @container (min-width: ${REGIME_WIDE_PX}px) {
+    grid-template-columns: ${({ $hasProse }) =>
+      $hasProse ? 'minmax(0, 1fr) minmax(0, 1.05fr)' : 'minmax(0, 1fr)'};
+  }
+`
+
+const RegimeMain = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+`
+
+const RegimeProse = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+
+  @container (min-width: ${REGIME_WIDE_PX}px) {
+    padding-top: 4px;
+  }
+`
+
+const RowMenu = styled.div`
+  position: absolute;
+  top: 12px;
+  right: 0;
 `
 
 const TitleLine = styled.div`
@@ -979,28 +1025,7 @@ const TitleLine = styled.div`
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-`
-
-const PeriodPill = styled.span<{ $current?: boolean }>`
-  font-size: 12px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  padding: 3px 9px;
-  border-radius: 7px;
-  background: ${({ $current, theme }) =>
-    $current
-      ? theme.mode === 'dark'
-        ? 'rgba(16, 185, 129, 0.16)'
-        : '#dcfce7'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.07)'
-        : '#f1f5f9'};
-  color: ${({ $current, theme }) =>
-    $current
-      ? theme.mode === 'dark'
-        ? '#6ee7b7'
-        : '#15803d'
-      : theme.colors.text.primary};
+  min-height: 24px;
 `
 
 const Name = styled.h4`
@@ -1073,42 +1098,40 @@ const Tag = styled.span<{ $tone?: 'form' | 'legislature' }>`
         : theme.colors.text.secondary};
 `
 
-const SpecGrid = styled.dl`
+/* 국가원수 · 정부수반 · 하원 · 상원 — 회색 상자 대신 이름표 + 값만, 칸 사이는 간격으로 */
+const FactList = styled.dl`
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 8px;
-`
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px 20px;
 
-const SpecBox = styled.div`
-  padding: 9px 12px;
-  border-radius: 10px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#eef2f6'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
+  /* 폰 폭은 두 칸 — 150px면 한 칸씩 내려가 네 줄이 됐다 */
+  @container (max-width: 560px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+  }
 
-const FactKey = styled.dt`
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const FactValue = styled.dd`
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
+  > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding-left: 10px;
+    border-left: 2px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+  dt {
+    font-size: 11px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  dd {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: ${({ theme }) => theme.colors.text.primary};
+    word-break: keep-all;
+  }
 `
 
 const Muted = styled.span`
@@ -1116,51 +1139,15 @@ const Muted = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/* 설명 — 넓은 칸에선 오른쪽 반 칸이라 한 줄이 40자 남짓, 좁으면 72자에서 끊는다 */
 const Notes = styled.p`
   margin: 0;
-  padding-top: 8px;
-  border-top: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  font-size: 12.5px;
-  line-height: 1.6;
+  max-width: 72ch;
+  font-size: 13px;
+  line-height: 1.7;
   color: ${({ theme }) => theme.colors.text.secondary};
   white-space: pre-wrap;
-`
-
-const RowActions = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-`
-
-const ActionBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  transition:
-    background 0.14s,
-    color 0.14s;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f8fafc'};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
+  word-break: keep-all;
 `
 
 const PolityDot = styled.span`
@@ -1172,61 +1159,45 @@ const PolityDot = styled.span`
   flex-shrink: 0;
 `
 
-const RegimeCabinetLinkBar = styled.div`
+/* 이 체제 아래 수반들 + 역대 내각으로 — 예전 점선 띠·파란 상자 단추 대신 글자 한 줄 */
+const CabinetLine = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
   flex-wrap: wrap;
-  padding-top: 10px;
-  border-top: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.08)'
-        : 'rgba(15, 23, 42, 0.08)'};
-`
-
-const RegimeCabinetSummary = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  gap: 4px 10px;
   font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  min-width: 0;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 
+  .names {
+    min-width: 0;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
   strong {
     font-weight: 700;
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
-const RegimeCabinetBtn = styled.button`
+const CabinetLinkBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 7px;
+  gap: 4px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font: inherit;
   font-size: 12px;
   font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary)};
   cursor: pointer;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(59, 130, 246, 0.35)'
-        : 'rgba(37, 99, 235, 0.24)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(37, 99, 235, 0.14)'
-      : 'rgba(37, 99, 235, 0.06)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8')};
-  transition:
-    background 0.14s,
-    border-color 0.14s;
 
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(37, 99, 235, 0.24)'
-        : 'rgba(37, 99, 235, 0.12)'};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 `
