@@ -712,13 +712,11 @@ export function useDashboardMindMap({
     if (effectiveFallbackMode || !selectedCabinet) return null
     const raw = overviewQuery.data ?? null
     if (!raw) return null
-    if (raw.id === selectedCabinet.id) return raw
-    return overviewQuery.isFetching ? raw : null
+    return raw.id === selectedCabinet.id ? raw : null
   }, [
     effectiveFallbackMode,
     selectedCabinet,
     overviewQuery.data,
-    overviewQuery.isFetching,
   ])
 
   const activeCabinetScope = useMemo(() => {
@@ -1472,6 +1470,9 @@ export function useDashboardMindMap({
       endDate: activeCabinetScope.endDate,
     },
     totalDepartmentsCount: eraDepartments.length,
+    activeStepKey: effectiveFallbackMode
+      ? `fb:${activeFallbackHead?.id ?? 'empty'}`
+      : `cab:${selectedCabinet?.id ?? 'empty'}`,
     activeCabinetId: selectedCabinet?.id ?? null,
     activeHeadTenureId: head?.id ?? null,
     activeCabinetLabel,

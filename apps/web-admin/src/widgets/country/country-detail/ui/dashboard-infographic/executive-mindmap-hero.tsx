@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiArrowUpRight,
   FiChevronLeft,
@@ -10,7 +11,7 @@ import {
   FiUser,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled, { css, keyframes, useTheme } from 'styled-components'
+import styled, { css, useTheme } from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
@@ -62,7 +63,24 @@ import {
 const NODE_HEIGHT = 54
 const NODE_GAP = 10
 const GUTTER = 48
+const HUB_CARD_WIDTH = 256
+const HUB_CARD_HEIGHT = 296
 const DEFAULT_COLLAPSED_BRANCHES = 14
+
+const SLIDE_VARIANTS = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? '38%' : direction < 0 ? '-38%' : 0,
+    opacity: direction === 0 ? 1 : 0,
+  }),
+  center: {
+    x: '0%',
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    x: direction > 0 ? '-38%' : direction < 0 ? '38%' : 0,
+    opacity: 0,
+  }),
+}
 
 type MinistryDomainKey = 'security' | 'economy' | 'governance' | 'social'
 
@@ -121,7 +139,7 @@ function inferMinistryDomain(rawText: string, isMilitary = false): MinistryDomai
   if (isMilitary) return MINISTRY_DOMAINS.security
   const normalized = rawText.toLowerCase()
   if (
-    /(국무|외교|외무|국방|전쟁|보훈|통일|안보|해군|육군|공군|해병|병조|예조|사령|state|defense|foreign|war|veteran|security)/.test(
+    /(국무부|국무장관|외교|외무|국방|전쟁|보훈|통일|안보|해군|육군|공군|해병|병조|예조|사령|department of state|defense|foreign|war|veteran|security)/.test(
       normalized,
     )
   ) {
@@ -455,53 +473,56 @@ function BezierBranchGroup({
               type="button"
               $side={side}
               onClick={() => onSelectMilitaryCommand?.(cmd)}
-              title={`${cmd.unitName} 부대 상세`}
+              title={`${cmd.unitName} — 공석 (클릭하여 지휘관 임명)`}
             >
               <VacantDot aria-hidden $color={domColor} $bg={domSoft}>
-                <FiShield size={13} />
+                <FiShield size={14} />
               </VacantDot>
               <NodeMainText>
                 <NodeRoleLine>
                   <DomainMinistryBadge $color={domColor} $bg={domSoft}>
                     {cmd.unitName}
                   </DomainMinistryBadge>
+                  <span className="sub-role">지휘관</span>
                 </NodeRoleLine>
-                <VacantSubLine>
-                  {cleanInstitutionalVacant ? '군 상위 사령부' : '+ 지휘관 임명'}
-                </VacantSubLine>
+                <NodePersonLine>
+                  <VacantStatusLabel>공석</VacantStatusLabel>
+                </NodePersonLine>
               </NodeMainText>
+              <VacantAssignTag>+ 임명</VacantAssignTag>
             </VacantNodeBtn>
           )
         }
 
         const slotItem = item.slot
+        const showSubPosition =
+          Boolean(slotItem.positionTitle) &&
+          slotItem.positionTitle !== slotItem.departmentName
         return (
           <VacantNodeBtn
             key={item.key}
             type="button"
             $side={side}
             onClick={() => onSelectVacant(slotItem)}
-            title={
-              cleanInstitutionalVacant
-                ? `${slotItem.departmentName} (${slotItem.positionTitle})`
-                : `${slotItem.departmentName} (${slotItem.positionTitle}) 즉시 임명`
-            }
+            title={`${slotItem.departmentName} (${slotItem.positionTitle}) — 공석 (클릭하여 장관 임명)`}
           >
             <VacantDot aria-hidden $color={domColor} $bg={domSoft}>
-              {cleanInstitutionalVacant ? '🏛' : '+'}
+              <FiUser size={14} />
             </VacantDot>
             <NodeMainText>
               <NodeRoleLine>
                 <DomainMinistryBadge $color={domColor} $bg={domSoft}>
                   {slotItem.departmentName}
                 </DomainMinistryBadge>
+                {showSubPosition ? (
+                  <span className="sub-role">{slotItem.positionTitle}</span>
+                ) : null}
               </NodeRoleLine>
-              <VacantSubLine>
-                {cleanInstitutionalVacant
-                  ? slotItem.positionTitle
-                  : `${slotItem.positionTitle} · 임명`}
-              </VacantSubLine>
+              <NodePersonLine>
+                <VacantStatusLabel>공석</VacantStatusLabel>
+              </NodePersonLine>
             </NodeMainText>
+            <VacantAssignTag>+ 임명</VacantAssignTag>
           </VacantNodeBtn>
         )
       })}
@@ -618,7 +639,7 @@ export function MindMapDiagramStage({
 
   return (
     <MindMapStage>
-      {radialArcs.length > 1 && (
+      {radialArcs.length >= 1 && (
         <DomainLegendBar aria-label="부처 분야별 분포">
           {radialArcs.map((arc) => (
             <DomainLegendPill key={arc.key}>
@@ -630,9 +651,9 @@ export function MindMapDiagramStage({
         </DomainLegendBar>
       )}
 
-      <MindMapGrid $hasBranches={visible.length > 0}>
-        {visible.length > 0 && (
-          <MindMapSideCol $side="left">
+      <MindMapGrid>
+        <MindMapSideCol $side="left">
+          {leftItems.length > 0 ? (
             <BezierBranchGroup
               side="left"
               items={leftItems}
@@ -643,8 +664,8 @@ export function MindMapDiagramStage({
               onSelectVacant={onSelectVacant}
               onSelectMilitaryCommand={onSelectMilitaryCommand}
             />
-          </MindMapSideCol>
-        )}
+          ) : null}
+        </MindMapSideCol>
 
         <CenterHubStack>
           {sovereignsAbove.length > 0 && (
@@ -663,7 +684,7 @@ export function MindMapDiagramStage({
                     <AvatarThumb
                       imageUrl={cp.imageUrl}
                       name={cp.name}
-                      size={36}
+                      size={34}
                       monarch={Boolean(cp.isMonarchical)}
                     />
                     <CrownCardText>
@@ -685,6 +706,7 @@ export function MindMapDiagramStage({
             <LeaderCenterCard
               type="button"
               $monarch={isMonarchCenter}
+              title={`${head.title} ${head.name}`}
               onClick={() => {
                 if (head.personId) onSelectPerson(head.personId)
                 else onClickEmptyHead()
@@ -753,31 +775,38 @@ export function MindMapDiagramStage({
                 <AvatarThumb
                   imageUrl={head.imageUrl}
                   name={head.name}
-                  size={86}
+                  size={82}
                   monarch={isMonarchCenter}
                 />
               </HubRingPortraitBox>
 
-              <LeaderRoleRow>
-                <LeaderRoleChip $monarch={isMonarchCenter}>
-                  {head.ordinal != null ? `제${head.ordinal}대 ` : ''}
-                  {head.title}
-                </LeaderRoleChip>
-                {!head.endDate && !isHistorical && (
-                  <IncumbentBadge>현직</IncumbentBadge>
-                )}
-                {head.regnalEraLabel && (
-                  <RegnalEraChip>{head.regnalEraLabel}</RegnalEraChip>
-                )}
-              </LeaderRoleRow>
+              <LeaderIdentityBox>
+                <LeaderRoleRow>
+                  <LeaderRoleChip $monarch={isMonarchCenter}>
+                    {head.ordinal != null ? `제${head.ordinal}대 ` : ''}
+                    {head.title}
+                  </LeaderRoleChip>
+                  {!head.endDate && !isHistorical && (
+                    <IncumbentBadge>현직</IncumbentBadge>
+                  )}
+                  {head.regnalEraLabel && (
+                    <RegnalEraChip>{head.regnalEraLabel}</RegnalEraChip>
+                  )}
+                </LeaderRoleRow>
 
-              <LeaderName>{head.name}</LeaderName>
+                <LeaderName>{head.name}</LeaderName>
 
-              {polityLabel && <LeaderPolitySub>{polityLabel}</LeaderPolitySub>}
-
-              {headPeriodSummary && (
-                <LeaderPeriodText>{headPeriodSummary}</LeaderPeriodText>
-              )}
+                <LeaderPeriodText>
+                  {[
+                    polityLabel && polityLabel !== head.name
+                      ? polityLabel
+                      : null,
+                    headPeriodSummary,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || '재임 기간 미기재'}
+                </LeaderPeriodText>
+              </LeaderIdentityBox>
 
               <LeaderKpiMiniRow>
                 <LeaderKpiCell>
@@ -798,13 +827,30 @@ export function MindMapDiagramStage({
             </LeaderCenterCard>
           ) : (
             <LeaderEmptyCard type="button" onClick={onClickEmptyHead}>
-              <AvatarThumb imageUrl={null} name={emptyHeadLabel} size={68} />
-              <LeaderRoleChip $monarch={isHistorical}>
-                {emptyHeadLabel}
-              </LeaderRoleChip>
-              <LeaderEmptyPrompt>
-                <FiPlus size={13} /> 수반 · 통치자 등록하기
-              </LeaderEmptyPrompt>
+              <HubRingPortraitBox>
+                <AvatarThumb imageUrl={null} name={emptyHeadLabel} size={82} />
+              </HubRingPortraitBox>
+              <LeaderIdentityBox>
+                <LeaderRoleRow>
+                  <LeaderRoleChip $monarch={isHistorical}>
+                    {emptyHeadLabel}
+                  </LeaderRoleChip>
+                </LeaderRoleRow>
+                <LeaderName>공석</LeaderName>
+                <LeaderEmptyPrompt>
+                  <FiPlus size={12} /> 수반 · 통치자 등록하기
+                </LeaderEmptyPrompt>
+              </LeaderIdentityBox>
+              <LeaderKpiMiniRow>
+                <LeaderKpiCell>
+                  <span>임명 수장</span>
+                  <strong>{ministersCount}명</strong>
+                </LeaderKpiCell>
+                <LeaderKpiCell>
+                  <span>편제 기관</span>
+                  <strong>{departmentsCount}개</strong>
+                </LeaderKpiCell>
+              </LeaderKpiMiniRow>
             </LeaderEmptyCard>
           )}
 
@@ -838,8 +884,8 @@ export function MindMapDiagramStage({
           )}
         </CenterHubStack>
 
-        {visible.length > 0 && (
-          <MindMapSideCol $side="right">
+        <MindMapSideCol $side="right">
+          {rightItems.length > 0 ? (
             <BezierBranchGroup
               side="right"
               items={rightItems}
@@ -850,8 +896,8 @@ export function MindMapDiagramStage({
               onSelectVacant={onSelectVacant}
               onSelectMilitaryCommand={onSelectMilitaryCommand}
             />
-          </MindMapSideCol>
-        )}
+          ) : null}
+        </MindMapSideCol>
       </MindMapGrid>
 
       {(hiddenCount > 0 || expanded) && branches.length > collapsedLimit && (
@@ -917,10 +963,7 @@ export function ExecutiveMindMapBentoHero({
   const [branchDomain, setBranchDomain] = useState<'cabinet' | 'military'>(
     'cabinet',
   )
-  const [slideMotion, setSlideMotion] = useState<{
-    dir: 'left' | 'right' | null
-    tick: number
-  }>({ dir: null, tick: 0 })
+  const [slideDir, setSlideDir] = useState<number>(0)
 
   // 인플레이스 임명 모달 상태 (대시보드 이탈 없이 빈 부처·사령부 즉시 임명)
   const [appointmentTarget, setAppointmentTarget] = useState<{
@@ -977,17 +1020,21 @@ export function ExecutiveMindMapBentoHero({
       member,
     }))
     if (cabinetMindMapMode) {
-      if (filled.length > 0) return filled
-      // 행정 수반은 등록되어 있으나 각료가 아직 비어 있는 경우, 실제 DB에 등록된 해당 시대 부처만 최대 6개 기관 노드로 연결
       const realDeptSlots = mindmap.vacantSlots
         .filter((slot) => Boolean(slot.departmentId))
-        .slice(0, 6)
         .map<MindMapBranchItem>((slot) => ({
           kind: 'vacant',
           key: `v:${slot.key}`,
           slot,
         }))
-      return realDeptSlots
+      if (filled.length > 0 || realDeptSlots.length > 0) {
+        return [...filled, ...realDeptSlots]
+      }
+      return mindmap.vacantSlots.map((slot) => ({
+        kind: 'vacant',
+        key: `v:${slot.key}`,
+        slot,
+      }))
     }
     const vacant: MindMapBranchItem[] = mindmap.vacantSlots.map((slot) => ({
       kind: 'vacant',
@@ -1243,7 +1290,7 @@ export function ExecutiveMindMapBentoHero({
         </BentoHeaderActions>
       </BentoCardHeader>
 
-      {/* 2. 좌·우 사이드 화살표로 전환되는 중앙 수장 + 각 부처 마인드맵 스테이지 */}
+      {/* 2. 좌·우 사이드 화살표로 스르륵 전환되는 중앙 수장 + 각 부처 마인드맵 스테이지 */}
       <MindMapCarouselShell $withArrows={Boolean(mindmap.navigation)}>
         {mindmap.navigation ? (
           <StageEdgeArrowBtn
@@ -1252,7 +1299,7 @@ export function ExecutiveMindMapBentoHero({
             disabled={!mindmap.navigation.onOlder}
             onClick={() => {
               if (!mindmap.navigation?.onOlder) return
-              setSlideMotion((prev) => ({ dir: 'left', tick: prev.tick + 1 }))
+              setSlideDir(-1)
               mindmap.navigation.onOlder()
             }}
             aria-label={
@@ -1270,42 +1317,63 @@ export function ExecutiveMindMapBentoHero({
           </StageEdgeArrowBtn>
         ) : null}
 
-        <MindMapSlideTrack
-          key={slideMotion.tick}
-          $direction={slideMotion.dir}
-        >
-          <MindMapDiagramStage
-            head={mindmap.head}
-            emptyHeadLabel={mindmap.defaultEmptyHeadTitle}
-            polityLabel={mindmap.activePolityLabel}
-            headPeriodSummary={headPeriodSummary}
-            headVoteShare={mindmap.headVoteShare}
-            ministersCount={
-              branchDomain === 'military'
-                ? mindmap.militaryBranches.filter((branch) =>
-                    Boolean(branch.commanderName),
-                  ).length
-                : mindmap.members.length
-            }
-            departmentsCount={
-              branchDomain === 'military'
-                ? mindmap.militaryBranches.length
-                : mindmap.totalDepartmentsCount ||
-                  mindmap.members.length + mindmap.vacantSlots.length
-            }
-            isHistorical={Boolean(historicalCountryId)}
-            cleanInstitutionalVacant={cabinetMindMapMode}
-            sovereignsAbove={sovereignsAbove}
-            cabinetsDuringReign={cabinetsDuringReign}
-            branches={activeBranches}
-            collapsedLimit={cabinetMindMapMode ? 12 : DEFAULT_COLLAPSED_BRANCHES}
-            onSelectPerson={onSelectPerson}
-            onClickEmptyHead={() => onOpenCabinets(null)}
-            onSelectVacant={handleOpenVacantAppointment}
-            onSelectMilitaryCommand={handleMilitaryBranchClick}
-            onSelectReignCabinet={(cabId) => mindmap.selectCabinet(cabId)}
-          />
-        </MindMapSlideTrack>
+        <MindMapSlideViewport>
+          <AnimatePresence
+            initial={false}
+            custom={slideDir}
+            mode="popLayout"
+          >
+            <MindMapSlidePanel
+              key={mindmap.activeStepKey}
+              custom={slideDir}
+              variants={SLIDE_VARIANTS}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{
+                x: { duration: 0.42, ease: [0.22, 1, 0.36, 1] },
+                opacity: { duration: 0.28, ease: 'easeOut' },
+              }}
+            >
+              <MindMapDiagramStage
+                head={mindmap.head}
+                emptyHeadLabel={mindmap.defaultEmptyHeadTitle}
+                polityLabel={mindmap.activePolityLabel}
+                headPeriodSummary={headPeriodSummary}
+                headVoteShare={mindmap.headVoteShare}
+                ministersCount={
+                  branchDomain === 'military'
+                    ? mindmap.militaryBranches.filter((branch) =>
+                        Boolean(branch.commanderName),
+                      ).length
+                    : mindmap.members.length
+                }
+                departmentsCount={
+                  branchDomain === 'military'
+                    ? mindmap.militaryBranches.length
+                    : mindmap.totalDepartmentsCount ||
+                      mindmap.members.length + mindmap.vacantSlots.length
+                }
+                isHistorical={Boolean(historicalCountryId)}
+                cleanInstitutionalVacant={cabinetMindMapMode}
+                sovereignsAbove={sovereignsAbove}
+                cabinetsDuringReign={cabinetsDuringReign}
+                branches={activeBranches}
+                collapsedLimit={
+                  cabinetMindMapMode ? 12 : DEFAULT_COLLAPSED_BRANCHES
+                }
+                onSelectPerson={onSelectPerson}
+                onClickEmptyHead={() => onOpenCabinets(null)}
+                onSelectVacant={handleOpenVacantAppointment}
+                onSelectMilitaryCommand={handleMilitaryBranchClick}
+                onSelectReignCabinet={(cabId) => {
+                  setSlideDir(1)
+                  mindmap.selectCabinet(cabId)
+                }}
+              />
+            </MindMapSlidePanel>
+          </AnimatePresence>
+        </MindMapSlideViewport>
 
         {mindmap.navigation ? (
           <StageEdgeArrowBtn
@@ -1314,7 +1382,7 @@ export function ExecutiveMindMapBentoHero({
             disabled={!mindmap.navigation.onNewer}
             onClick={() => {
               if (!mindmap.navigation?.onNewer) return
-              setSlideMotion((prev) => ({ dir: 'right', tick: prev.tick + 1 }))
+              setSlideDir(1)
               mindmap.navigation.onNewer()
             }}
             aria-label={
@@ -1497,28 +1565,6 @@ const ModeSwitchBtn = styled.button<{ $active: boolean }>`
   cursor: pointer;
 `
 
-const slideFromLeft = keyframes`
-  from {
-    opacity: 0.45;
-    transform: translateX(-22px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-`
-
-const slideFromRight = keyframes`
-  from {
-    opacity: 0.45;
-    transform: translateX(22px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-`
-
 const MindMapCarouselShell = styled.div<{ $withArrows: boolean }>`
   position: relative;
   padding: ${({ $withArrows }) => ($withArrows ? '0 48px' : '0')};
@@ -1528,14 +1574,18 @@ const MindMapCarouselShell = styled.div<{ $withArrows: boolean }>`
   }
 `
 
-const MindMapSlideTrack = styled.div<{ $direction: 'left' | 'right' | null }>`
+const MindMapSlideViewport = styled.div`
+  position: relative;
+  width: 100%;
   min-width: 0;
-  animation: ${({ $direction }) =>
-    $direction === 'left'
-      ? css`${slideFromLeft} 240ms cubic-bezier(0.22, 1, 0.36, 1)`
-      : $direction === 'right'
-        ? css`${slideFromRight} 240ms cubic-bezier(0.22, 1, 0.36, 1)`
-        : 'none'};
+  overflow: hidden;
+`
+
+const MindMapSlidePanel = styled(motion.div)`
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  will-change: transform, opacity;
 `
 
 const StageEdgeArrowBtn = styled.button<{ $side: 'left' | 'right' }>`
@@ -1599,27 +1649,29 @@ const MindMapStage = styled.div`
   background: transparent;
 `
 
-const MindMapGrid = styled.div<{ $hasBranches: boolean }>`
+const MindMapGrid = styled.div`
   display: grid;
-  grid-template-columns: ${({ $hasBranches }) =>
-    $hasBranches
-      ? `minmax(186px, 1fr) 244px minmax(186px, 1fr)`
-      : 'minmax(0, 340px)'};
-  gap: ${({ $hasBranches }) => ($hasBranches ? `${GUTTER}px` : '0')};
+  grid-template-columns: minmax(186px, 1fr) ${HUB_CARD_WIDTH}px minmax(186px, 1fr);
+  gap: ${GUTTER}px;
   align-items: center;
   justify-content: center;
 
   @container (max-width: 680px) {
     grid-template-columns: minmax(0, 1fr);
     gap: 14px;
+    justify-items: center;
   }
 `
 
 const MindMapSideCol = styled.div<{ $side: 'left' | 'right' }>`
   min-width: 0;
+  width: 100%;
 
   @container (max-width: 680px) {
     order: ${({ $side }) => ($side === 'left' ? 2 : 3)};
+    &:empty {
+      display: none;
+    }
   }
 `
 
@@ -1627,6 +1679,8 @@ const CenterHubStack = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: ${HUB_CARD_WIDTH}px;
+  max-width: 100%;
   min-width: 0;
 
   @container (max-width: 680px) {
@@ -1848,8 +1902,9 @@ const DomainLegendPill = styled.span`
 
 const HubRingPortraitBox = styled.div`
   position: relative;
-  width: 118px;
-  height: 118px;
+  width: 112px;
+  height: 112px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1857,8 +1912,8 @@ const HubRingPortraitBox = styled.div`
   .ring-svg {
     position: absolute;
     inset: 0;
-    width: 118px;
-    height: 118px;
+    width: 112px;
+    height: 112px;
     pointer-events: none;
   }
 `
@@ -1926,13 +1981,27 @@ const PartyDot = styled.span<{ $color: string }>`
   flex-shrink: 0;
 `
 
-const VacantSubLine = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
+const VacantStatusLabel = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+`
+
+const VacantAssignTag = styled.span`
+  font-size: 10px;
+  font-weight: 680;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  flex-shrink: 0;
+  opacity: 0.72;
+  transition: opacity ${MOTION.fast} ease;
+
+  ${VacantNodeBtn}:hover & {
+    opacity: 1;
+  }
 `
 
 const NodeStartBadge = styled.span`
@@ -2031,9 +2100,13 @@ const LeaderCenterCard = styled.button<{ $monarch: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 7px;
-  width: 100%;
-  padding: 20px 16px 16px;
+  justify-content: space-between;
+  width: ${HUB_CARD_WIDTH}px;
+  max-width: 100%;
+  height: ${HUB_CARD_HEIGHT}px;
+  padding: 18px 16px 14px;
+  box-sizing: border-box;
+  flex-shrink: 0;
   border-radius: 24px;
   border: 1px solid
     ${({ theme, $monarch }) =>
@@ -2067,13 +2140,18 @@ const LeaderEmptyCard = styled.button`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 22px 16px;
+  justify-content: space-between;
+  width: ${HUB_CARD_WIDTH}px;
+  max-width: 100%;
+  height: ${HUB_CARD_HEIGHT}px;
+  padding: 18px 16px 14px;
+  box-sizing: border-box;
+  flex-shrink: 0;
   border-radius: 24px;
   border: 1.5px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   font-family: inherit;
+  text-align: center;
   cursor: pointer;
 
   &:hover {
@@ -2082,18 +2160,35 @@ const LeaderEmptyCard = styled.button`
   }
 `
 
+const LeaderIdentityBox = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 86px;
+  min-width: 0;
+  overflow: hidden;
+`
+
 const LeaderRoleRow = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  flex-wrap: wrap;
-  margin-top: 2px;
+  flex-wrap: nowrap;
+  height: 20px;
+  max-width: 100%;
+  overflow: hidden;
 `
 
 const LeaderRoleChip = styled.span<{ $monarch: boolean }>`
   font-size: 11px;
   font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: ${({ theme, $monarch }) =>
     $monarch
       ? theme.mode === 'dark'
@@ -2107,6 +2202,8 @@ const IncumbentBadge = styled.span`
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
   color: #ffffff;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? '#6366f1' : '#4f46e5'};
@@ -2115,6 +2212,8 @@ const IncumbentBadge = styled.span`
 const RegnalEraChip = styled.span`
   padding: 2px 7px;
   border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(255, 255, 255, 0.07)'
@@ -2125,21 +2224,28 @@ const RegnalEraChip = styled.span`
 `
 
 const LeaderName = styled.strong`
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: 21px;
+  max-height: 42px;
+  max-width: 100%;
   color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const LeaderPolitySub = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: keep-all;
 `
 
 const LeaderPeriodText = styled.span`
   font-size: 11px;
+  line-height: 16px;
+  height: 16px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: ${({ theme }) => theme.colors.text.secondary};
   ${DIGIT_DISPLAY}
 `
@@ -2150,7 +2256,9 @@ const LeaderKpiMiniRow = styled.span`
   justify-content: center;
   gap: 10px;
   width: 100%;
-  margin-top: 6px;
+  height: 46px;
+  flex-shrink: 0;
+  box-sizing: border-box;
   padding: 7px 10px;
   border-radius: 14px;
   background: ${({ theme }) =>
