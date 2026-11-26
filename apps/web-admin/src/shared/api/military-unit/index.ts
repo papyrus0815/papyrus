@@ -193,6 +193,7 @@ export interface MilitaryUnitDto {
       id: string
       name: string
       surname?: string | null
+      profileImageUrl?: string | null
     }
   }>
   sideDeployedUnits?: Array<{
@@ -201,6 +202,12 @@ export interface MilitaryUnitDto {
     note?: string | null
     parentUnitId?: string | null
     commanderId?: string | null
+    commander?: {
+      id: string
+      name: string
+      surname?: string | null
+      profileImageUrl?: string | null
+    } | null
     side: {
       id: string
       name: string
@@ -226,8 +233,16 @@ export interface MilitaryUnitDto {
 
 export type MilitaryUnit = MilitaryUnitDto
 
-export type MilitaryUnitTenureItem = AdministrationDepartmentTenureItem & {
+export type MilitaryUnitTenureItem = Omit<
+  AdministrationDepartmentTenureItem,
+  'person'
+> & {
   militaryUnitId?: string | null
+  person?:
+    | (NonNullable<AdministrationDepartmentTenureItem['person']> & {
+        profileImageUrl?: string | null
+      })
+    | null
 }
 
 async function fetchMilitaryJsonList<T>(path: string): Promise<T[]> {

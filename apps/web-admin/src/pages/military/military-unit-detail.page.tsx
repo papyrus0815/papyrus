@@ -15,11 +15,16 @@ import {
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
+import {
+  ledgerAccent,
+  ledgerBackground,
+  ledgerHoverFill,
+} from '@/entities/event/ui/ledger-tokens'
 import { militaryUnitQueryKeys } from '@/entities/military-unit'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { goBackOr, pathKeys } from '@/shared/router'
 import { PopoverMenu } from '@/shared/ui/popover-menu'
-import { LedgerToolbarButton } from '@/widgets/country/country-detail/ui/country-ledger-primitives'
+import { LedgerCompactAction } from '@/widgets/country/country-detail/ui/country-ledger-primitives'
 import { MilitaryUnitFormModal } from '@/widgets/country/country-detail/ui/military-unit-form.modal'
 import {
   type CreateSubUnitDefaults,
@@ -46,6 +51,9 @@ export function MilitaryUnitDetailPage() {
   const detailActionsRef = useRef<MilitaryUnitDetailActionsHandle | null>(null)
   const [loadedUnit, setLoadedUnit] =
     useState<MilitaryUnitDetailResponse | null>(null)
+  const [ancestorUnits, setAncestorUnits] = useState<
+    Array<{ id: string; name: string; abbreviation?: string | null }>
+  >([])
 
   const [unitFormOpen, setUnitFormOpen] = useState(false)
   const [unitFormEditingId, setUnitFormEditingId] = useState<string | null>(
@@ -94,12 +102,12 @@ export function MilitaryUnitDetailPage() {
     return (
       <PageCanvas>
         <TopBar>
-          <LedgerToolbarButton
+          <BackCrumbBtn
             type="button"
             onClick={() => goBackOr(navigate, pathKeys.military())}
           >
             <FiArrowLeft size={14} /> 이전 화면
-          </LedgerToolbarButton>
+          </BackCrumbBtn>
         </TopBar>
       </PageCanvas>
     )
@@ -115,24 +123,27 @@ export function MilitaryUnitDetailPage() {
       <TopBar>
         <TopBarLeft>
           {fromCountry?.id ? (
-            <LedgerToolbarButton
+            <BackCrumbBtn
               type="button"
               onClick={() => navigate(pathKeys.countryMilitary(fromCountry.id))}
             >
               <FiArrowLeft size={14} />
-              {fromCountry.name
-                ? `${fromCountry.name} 편제 · 사령부`
-                : '편제 · 사령부'}
-            </LedgerToolbarButton>
+              <span>
+                {fromCountry.name
+                  ? `${fromCountry.name} 편제 · 사령부`
+                  : '편제 · 사령부'}
+              </span>
+            </BackCrumbBtn>
           ) : listSearch ? (
-            <LedgerToolbarButton
+            <BackCrumbBtn
               type="button"
               onClick={() => navigate(`${pathKeys.military()}${listSearch}`)}
             >
-              <FiArrowLeft size={14} /> 군사 총람
-            </LedgerToolbarButton>
+              <FiArrowLeft size={14} />
+              <span>군사 총람</span>
+            </BackCrumbBtn>
           ) : (
-            <LedgerToolbarButton
+            <BackCrumbBtn
               type="button"
               onClick={() =>
                 goBackOr(
@@ -144,41 +155,65 @@ export function MilitaryUnitDetailPage() {
               }
             >
               <FiArrowLeft size={14} />
-              {countryName ? `${countryName} 편제 · 사령부` : '군사 총람'}
-            </LedgerToolbarButton>
+              <span>
+                {countryName ? `${countryName} 편제 · 사령부` : '군사 총람'}
+              </span>
+            </BackCrumbBtn>
           )}
+
+          {(ancestorUnits.length > 0
+            ? ancestorUnits
+            : loadedUnit?.parentUnit
+              ? [loadedUnit.parentUnit]
+              : []
+          ).map((ancUnit) => (
+            <span
+              key={ancUnit.id}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              <CrumbSep aria-hidden>/</CrumbSep>
+              <ParentCrumbBtn
+                type="button"
+                onClick={() => handleSelectUnit(ancUnit.id)}
+              >
+                {ancUnit.name}
+              </ParentCrumbBtn>
+            </span>
+          ))}
         </TopBarLeft>
 
         {loadedUnit ? (
           <TopBarRight>
-            <LedgerToolbarButton
+            <LedgerCompactAction
+              type="button"
+              onClick={() =>
+                handleCreateSubUnit({
+                  parentUnitId: loadedUnit.id,
+                  countryId: loadedUnit.countryId ?? null,
+                  historicalCountryId: loadedUnit.historicalCountryId ?? null,
+                  administrationDepartmentId:
+                    loadedUnit.administrationDepartmentId ??
+                    loadedUnit.administrationDepartment?.id ??
+                    null,
+                  branch: loadedUnit.branch ?? null,
+                })
+              }
+            >
+              <FiPlus size={12} /> 예하 추가
+            </LedgerCompactAction>
+
+            <LedgerCompactAction
               type="button"
               onClick={() => handleEditUnit(loadedUnit.id)}
             >
-              <FiEdit2 size={13} /> 수정
-            </LedgerToolbarButton>
+              <FiEdit2 size={12} /> 수정
+            </LedgerCompactAction>
 
             <PopoverMenu
+              size="sm"
               ariaLabel="부대 관리 및 이동 메뉴"
               title="예하 부대 추가 · 지휘관 임명 · 계보 · 이동 · 삭제"
               items={[
-                {
-                  id: 'add-sub',
-                  label: '예하 부대 추가',
-                  icon: <FiPlus size={13} />,
-                  onSelect: () =>
-                    handleCreateSubUnit({
-                      parentUnitId: loadedUnit.id,
-                      countryId: loadedUnit.countryId ?? null,
-                      historicalCountryId:
-                        loadedUnit.historicalCountryId ?? null,
-                      administrationDepartmentId:
-                        loadedUnit.administrationDepartmentId ??
-                        loadedUnit.administrationDepartment?.id ??
-                        null,
-                      branch: loadedUnit.branch ?? null,
-                    }),
-                },
                 {
                   id: 'appoint',
                   label: '지휘관 · 참모 임명',
@@ -235,6 +270,7 @@ export function MilitaryUnitDetailPage() {
         unitId={unitId}
         variant="page"
         onUnitLoaded={setLoadedUnit}
+        onAncestorsResolved={setAncestorUnits}
         onSelectUnit={handleSelectUnit}
         onEditUnit={handleEditUnit}
         onCreateSubUnit={handleCreateSubUnit}
@@ -277,12 +313,16 @@ export function MilitaryUnitDetailPage() {
 const PageCanvas = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   width: 100%;
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 22px clamp(18px, 2.5vw, 32px) 56px;
+  min-height: 100%;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  padding: 28px clamp(22px, 3vw, 48px) 96px;
   box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 18px 16px 80px;
+  }
 `
 
 const TopBar = styled.div`
@@ -293,16 +333,67 @@ const TopBar = styled.div`
   gap: 10px;
 `
 
-const TopBarLeft = styled.div`
+const TopBarLeft = styled.nav`
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  min-width: 0;
+`
+
+const BackCrumbBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px 0 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const CrumbSep = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.55;
+  user-select: none;
+`
+
+const ParentCrumbBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 `
 
 const TopBarRight = styled.div`
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 `

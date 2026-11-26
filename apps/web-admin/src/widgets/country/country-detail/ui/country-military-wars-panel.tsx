@@ -7,8 +7,6 @@ import {
   FiArrowUpRight,
   FiChevronDown,
   FiChevronRight,
-  FiCompass,
-  FiCornerDownRight,
   FiRotateCcw,
   FiSearch,
   FiShield,
@@ -21,14 +19,11 @@ import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import {
   DIGIT_DISPLAY,
   ledgerAccent,
-  ledgerAccentBorder,
   ledgerAccentSubtle,
   ledgerBackground,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
-  ledgerSubtleFill,
-  RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
 import {
   isPlaceholderSideName,
@@ -49,7 +44,6 @@ import { PopoverMenu } from '@/shared/ui/popover-menu'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal/country-inline-modal'
 
 import {
-  LedgerFilterChip,
   LedgerSearchBox,
   LedgerSearchInput,
 } from './country-ledger-primitives'
@@ -485,52 +479,62 @@ export function CountryMilitaryWarsPanel({
         />
       ) : null}
 
-      <ConflictsCard aria-label="참전 전쟁 및 군사 사건 원장">
+      <ConflictsCanvas aria-label="참전 전쟁 및 군사 사건 원장">
         <FilterToolbar>
           <ChipRow role="group" aria-label="군사 사건 유형 필터">
-            <LedgerFilterChip
+            <ConflictTabBtn
               type="button"
               $active={conflictFilter === 'ALL'}
               onClick={() => setConflictFilter('ALL')}
             >
-              전체 {bucketCounts.ALL}
-            </LedgerFilterChip>
-            <LedgerFilterChip
+              <span>전체</span>
+              <small>{bucketCounts.ALL}</small>
+            </ConflictTabBtn>
+            <ConflictTabBtn
               type="button"
               $active={conflictFilter === 'WAR'}
               onClick={() => setConflictFilter('WAR')}
             >
-              전쟁 {bucketCounts.WAR}
-            </LedgerFilterChip>
-            <LedgerFilterChip
+              <span>전쟁</span>
+              <small>{bucketCounts.WAR}</small>
+            </ConflictTabBtn>
+            <ConflictTabBtn
               type="button"
               $active={conflictFilter === 'BATTLE'}
               onClick={() => setConflictFilter('BATTLE')}
             >
-              전투·작전 {bucketCounts.BATTLE}
-            </LedgerFilterChip>
-            <LedgerFilterChip
-              type="button"
-              $active={conflictFilter === 'UPRISING_ATTACK'}
-              onClick={() => setConflictFilter('UPRISING_ATTACK')}
-            >
-              봉기·무력충돌 {bucketCounts.UPRISING_ATTACK}
-            </LedgerFilterChip>
-            <LedgerFilterChip
-              type="button"
-              $active={conflictFilter === 'OTHER'}
-              onClick={() => setConflictFilter('OTHER')}
-            >
-              선전포고·동원·기타 {bucketCounts.OTHER}
-            </LedgerFilterChip>
+              <span>전투·작전</span>
+              <small>{bucketCounts.BATTLE}</small>
+            </ConflictTabBtn>
+            {bucketCounts.UPRISING_ATTACK > 0 ||
+            conflictFilter === 'UPRISING_ATTACK' ? (
+              <ConflictTabBtn
+                type="button"
+                $active={conflictFilter === 'UPRISING_ATTACK'}
+                onClick={() => setConflictFilter('UPRISING_ATTACK')}
+              >
+                <span>봉기·무력충돌</span>
+                <small>{bucketCounts.UPRISING_ATTACK}</small>
+              </ConflictTabBtn>
+            ) : null}
+            {bucketCounts.OTHER > 0 || conflictFilter === 'OTHER' ? (
+              <ConflictTabBtn
+                type="button"
+                $active={conflictFilter === 'OTHER'}
+                onClick={() => setConflictFilter('OTHER')}
+              >
+                <span>선전포고·동원·기타</span>
+                <small>{bucketCounts.OTHER}</small>
+              </ConflictTabBtn>
+            ) : null}
           </ChipRow>
 
           <FilterRight>
-            <LedgerSearchBox style={{ maxWidth: 270 }}>
+            <LedgerSearchBox style={{ maxWidth: 268 }}>
               <FiSearch />
               <LedgerSearchInput
                 type="search"
-                placeholder="전쟁·전투명, 진영·교전국, 투입 부대 검색…"
+                placeholder="전쟁·전투, 진영·교전국, 투입 부대 검색…"
                 value={searchQuery}
                 onChange={(evt) => setSearchQuery(evt.target.value)}
               />
@@ -612,7 +616,7 @@ export function CountryMilitaryWarsPanel({
             flat
             icon={<FiSearch size={20} />}
             title="필터 조건에 맞는 전쟁·전투 기록이 없습니다"
-            description="유형 칩이나 검색어를 초기화해 보세요."
+            description="유형 필터나 검색어를 초기화해 보세요."
             primaryAction={{
               label: '필터 초기화',
               onClick: () => {
@@ -626,11 +630,11 @@ export function CountryMilitaryWarsPanel({
             <ConflictsTable>
               <thead>
                 <tr>
-                  <th style={{ width: 146 }}>시기</th>
+                  <th style={{ width: 142 }}>시기</th>
                   <th>전쟁 · 전투 · 투입 편제</th>
-                  <th style={{ width: 118 }}>분류</th>
-                  <th>참전 진영 · 승패 · 교전국</th>
-                  <th style={{ width: 116, textAlign: 'right' }}>전황·전투서열</th>
+                  <th style={{ width: 108 }}>분류</th>
+                  <th>진영 · 결과 · 상대국</th>
+                  <th style={{ width: 108, textAlign: 'right' }}>전황·서열</th>
                 </tr>
               </thead>
               <tbody>
@@ -711,16 +715,17 @@ export function CountryMilitaryWarsPanel({
                   const isCollapsed = collapsedWarIds.has(ev.id)
                   const showOrphanParent =
                     depth === 0 && Boolean(ev.parentEvent?.id)
+                  const isWarRow = ev.type === 'WAR' || childCount > 0
 
                   return (
-                    <tr key={ev.id} data-child-row={depth > 0 || undefined}>
+                    <tr key={ev.id}>
                       <td className="num">{periodText}</td>
                       <td>
                         <EventTitleCell $depth={depth}>
                           <EventTitleStack>
                             {depth > 0 ? (
                               <ChildIndentMark aria-hidden="true">
-                                <FiCornerDownRight size={12} />
+                                ↳
                               </ChildIndentMark>
                             ) : null}
                             {childCount > 0 ? (
@@ -743,24 +748,28 @@ export function CountryMilitaryWarsPanel({
 
                             <EventTitleLink
                               to={pathKeys.events.detail(ev.id)}
-                              $isWar={ev.type === 'WAR' || childCount > 0}
+                              $isWar={isWarRow}
                             >
                               {ev.title}
-                              <FiArrowUpRight size={12} />
+                              <OpenIcon aria-hidden="true">
+                                <FiArrowUpRight size={12} />
+                              </OpenIcon>
                             </EventTitleLink>
 
                             {childCount > 0 ? (
-                              <ChildCountChip
+                              <ChildCountBtn
                                 type="button"
                                 onClick={() => toggleWarCollapse(ev.id)}
                               >
-                                하위 {childCount}건
-                              </ChildCountChip>
+                                하위 {childCount}
+                              </ChildCountBtn>
                             ) : null}
 
-                            {distinctHistNames.map((histName) => (
-                              <PolityChip key={histName}>{histName}</PolityChip>
-                            ))}
+                            {distinctHistNames.length > 0 ? (
+                              <PolityHintText>
+                                {distinctHistNames.join(' · ')}
+                              </PolityHintText>
+                            ) : null}
 
                             {showOrphanParent && ev.parentEvent ? (
                               <ParentWarLink
@@ -773,38 +782,46 @@ export function CountryMilitaryWarsPanel({
 
                           {deployedUnits.length > 0 ? (
                             <DeployedUnitsRow>
-                              {deployedUnits.slice(0, 4).map((unitChip) => (
-                                <DeployedUnitChip
-                                  key={unitChip.id}
-                                  type="button"
-                                  title={
-                                    unitChip.unitType
-                                      ? `${militaryUnitTypeLabelKo(unitChip.unitType)} · 클릭 시 편제 상세 보기 (⌘/Ctrl+클릭: 단독 상세)`
-                                      : '클릭 시 편제 상세 보기'
-                                  }
-                                  onClick={(evt) => {
-                                    if (!shouldInterceptEntityClick(evt)) {
-                                      navigate(
-                                        pathKeys.militaryUnitDetail(unitChip.id),
-                                      )
-                                      return
+                              <DeployedPrefix>투입 편제</DeployedPrefix>
+                              {deployedUnits.slice(0, 5).map((unitChip, idx) => (
+                                <React.Fragment key={unitChip.id}>
+                                  {idx > 0 ? (
+                                    <UnitSepDot aria-hidden>·</UnitSepDot>
+                                  ) : null}
+                                  <DeployedUnitLinkBtn
+                                    type="button"
+                                    title={
+                                      unitChip.unitType
+                                        ? `${militaryUnitTypeLabelKo(unitChip.unitType)} 상세 보기`
+                                        : '편제 상세 보기'
                                     }
-                                    if (onSelectUnit) {
-                                      onSelectUnit(unitChip.id)
-                                    } else {
-                                      navigate(
-                                        pathKeys.militaryUnitDetail(unitChip.id),
-                                      )
-                                    }
-                                  }}
-                                >
-                                  <FiShield size={10} />
-                                  {unitChip.abbreviation || unitChip.name}
-                                </DeployedUnitChip>
+                                    onClick={(evt) => {
+                                      if (!shouldInterceptEntityClick(evt)) {
+                                        navigate(
+                                          pathKeys.militaryUnitDetail(
+                                            unitChip.id,
+                                          ),
+                                        )
+                                        return
+                                      }
+                                      if (onSelectUnit) {
+                                        onSelectUnit(unitChip.id)
+                                      } else {
+                                        navigate(
+                                          pathKeys.militaryUnitDetail(
+                                            unitChip.id,
+                                          ),
+                                        )
+                                      }
+                                    }}
+                                  >
+                                    {unitChip.abbreviation || unitChip.name}
+                                  </DeployedUnitLinkBtn>
+                                </React.Fragment>
                               ))}
-                              {deployedUnits.length > 4 ? (
+                              {deployedUnits.length > 5 ? (
                                 <MoreUnitsSpan>
-                                  +{deployedUnits.length - 4}개 편제
+                                  +{deployedUnits.length - 5}
                                 </MoreUnitsSpan>
                               ) : null}
                             </DeployedUnitsRow>
@@ -812,30 +829,30 @@ export function CountryMilitaryWarsPanel({
                         </EventTitleCell>
                       </td>
                       <td>
-                        <TypeBadge $isWar={ev.type === 'WAR'}>
+                        <TypeText $isWar={ev.type === 'WAR'}>
                           {typeLabel}
-                        </TypeBadge>
+                        </TypeText>
                       </td>
                       <td>
                         <MetaInline>
                           {outcomeLabel ? (
-                            <OutcomeBadge
+                            <OutcomeIndicator
                               $tone={resolveOutcomeTone(rawOutcome)}
                               title={sideMatch?.sideOutcomeNote ?? undefined}
                             >
                               {outcomeLabel}
-                            </OutcomeBadge>
+                            </OutcomeIndicator>
                           ) : null}
                           {sideName ? (
-                            <CoalitionPill>
+                            <CoalitionText>
                               {sideColor ? (
                                 <SideDot $color={sideColor} />
                               ) : null}
                               {sideName}
-                            </CoalitionPill>
+                            </CoalitionText>
                           ) : null}
                           {selfRoleText ? (
-                            <RolePill>{selfRoleText}</RolePill>
+                            <RoleText>{selfRoleText}</RoleText>
                           ) : null}
                           {counterparts.length > 0 ? (
                             <CounterpartText>
@@ -848,17 +865,17 @@ export function CountryMilitaryWarsPanel({
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         {ev.kind === 'COLLECTION' ? (
-                          <SurveyJumpLink
+                          <SurveyTextLink
                             to={`${pathKeys.events.detail(ev.id)}?tab=survey`}
                           >
-                            <FiCompass size={11} /> 조망·전황
-                          </SurveyJumpLink>
+                            조망·전황 ↗
+                          </SurveyTextLink>
                         ) : (
-                          <SurveyJumpLink
+                          <SurveyTextLink
                             to={`${pathKeys.events.detail(ev.id)}?tab=modules#module-sides`}
                           >
-                            <FiShield size={11} /> 전투서열
-                          </SurveyJumpLink>
+                            전투서열 ↗
+                          </SurveyTextLink>
                         )}
                       </td>
                     </tr>
@@ -868,7 +885,7 @@ export function CountryMilitaryWarsPanel({
             </ConflictsTable>
           </TableScroll>
         )}
-      </ConflictsCard>
+      </ConflictsCanvas>
     </PanelStack>
   )
 }
@@ -876,40 +893,13 @@ export function CountryMilitaryWarsPanel({
 const PanelStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 `
 
-const ConflictsCard = styled.section`
+const ConflictsCanvas = styled.section`
   display: flex;
   flex-direction: column;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
-  overflow: hidden;
-`
-
-const ConflictsHeader = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px 12px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-`
-
-const ConflictsTitle = styled.h3`
-  margin: 0;
-  font-size: 14.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  ${DIGIT_DISPLAY}
-`
-
-const ConflictsSub = styled.p`
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  min-width: 0;
 `
 
 const FilterToolbar = styled.div`
@@ -917,17 +907,49 @@ const FilterToolbar = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 18px;
+  gap: 10px 16px;
+  padding: 4px 0 12px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `
 
 const ChipRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+`
+
+const ConflictTabBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 7px;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+
+  small {
+    font-size: 11.5px;
+    font-weight: 600;
+    ${DIGIT_DISPLAY}
+    opacity: ${({ $active }) => ($active ? 0.95 : 0.65)};
+  }
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  }
 `
 
 const FilterRight = styled.div`
@@ -935,6 +957,7 @@ const FilterRight = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 `
 
 const ClearBtn = styled.button`
@@ -954,26 +977,54 @@ const TableScroll = styled.div`
   overflow-x: auto;
 `
 
+const OpenIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  opacity: 0;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  transition: opacity 0.12s ease, transform 0.12s ease;
+`
+
 const ConflictsTable = styled.table`
   width: 100%;
   border-collapse: collapse;
   text-align: left;
 
   th {
-    padding: 8.5px 14px;
-    font-size: 11px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8.5px 10px;
+    font-size: 11.5px;
     font-weight: 700;
     color: ${({ theme }) => theme.colors.text.tertiary};
+    background: ${({ theme }) => ledgerBackground(theme.mode)};
     border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
     white-space: nowrap;
+
+    &:first-child {
+      padding-left: 4px;
+    }
+
+    &:last-child {
+      padding-right: 4px;
+    }
   }
 
   td {
-    padding: 10px 14px;
-    font-size: 12.5px;
+    padding: 11px 10px;
+    font-size: 13px;
     color: ${({ theme }) => theme.colors.text.primary};
     border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
     vertical-align: middle;
+
+    &:first-child {
+      padding-left: 4px;
+    }
+
+    &:last-child {
+      padding-right: 4px;
+    }
   }
 
   td.num {
@@ -983,36 +1034,32 @@ const ConflictsTable = styled.table`
     font-size: 12px;
   }
 
-  tbody tr[data-child-row] td {
-    background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  }
-
-  tbody tr:last-child td {
-    border-bottom: none;
-  }
-
   tbody tr:hover td {
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+
+    ${OpenIcon} {
+      opacity: 0.9;
+      transform: translate(1px, -1px);
+    }
   }
 `
 
 const EventTitleCell = styled.div<{ $depth: number }>`
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding-left: ${({ $depth }) => ($depth > 0 ? $depth * 18 : 0)}px;
+  gap: 3px;
+  padding-left: ${({ $depth }) => ($depth > 0 ? $depth * 20 : 0)}px;
 `
 
 const EventTitleStack = styled.div`
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  align-items: baseline;
+  gap: 5px 8px;
 `
 
 const ChildIndentMark = styled.span`
-  display: inline-flex;
-  align-items: center;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -1020,36 +1067,36 @@ const CollapseWarBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   padding: 0;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: 5px;
+  border: none;
+  border-radius: 4px;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
 
   &:hover {
-    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
-const ChildCountChip = styled.button`
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+const ChildCountBtn = styled.button`
+  padding: 0;
+  border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   ${DIGIT_DISPLAY}
 
   &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
     color: ${({ theme }) => ledgerAccent(theme.mode)};
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 `
 
@@ -1057,18 +1104,27 @@ const EventTitleLink = styled(Link)<{ $isWar?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-weight: ${({ $isWar }) => ($isWar ? 700 : 600)};
+  font-size: ${({ $isWar }) => ($isWar ? '14px' : '13px')};
+  font-weight: ${({ $isWar }) => ($isWar ? 760 : 620)};
+  letter-spacing: -0.015em;
   color: ${({ theme }) => theme.colors.text.primary};
   text-decoration: none;
 
   &:hover {
     color: ${({ theme }) => ledgerAccent(theme.mode)};
     text-decoration: underline;
+    text-underline-offset: 3px;
   }
 `
 
+const PolityHintText = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 const ParentWarLink = styled(Link)`
-  font-size: 11px;
+  font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   text-decoration: none;
 
@@ -1081,26 +1137,35 @@ const ParentWarLink = styled(Link)`
 const DeployedUnitsRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
+  align-items: baseline;
+  gap: 4px 5px;
+  font-size: 11.5px;
 `
 
-const DeployedUnitChip = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1.5px 7px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+const DeployedPrefix = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-right: 2px;
+`
+
+const UnitSepDot = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.55;
+`
+
+const DeployedUnitLinkBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
   color: ${({ theme }) => ledgerAccent(theme.mode)};
   font-family: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    opacity: 0.88;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 `
 
@@ -1110,24 +1175,9 @@ const MoreUnitsSpan = styled.span`
   ${DIGIT_DISPLAY}
 `
 
-const PolityChip = styled.span`
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const TypeBadge = styled.span<{ $isWar?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 7px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  background: ${({ theme, $isWar }) =>
-    $isWar ? ledgerAccentSubtle(theme.mode) : ledgerSubtleFill(theme.mode)};
+const TypeText = styled.span<{ $isWar?: boolean }>`
+  font-size: 12px;
+  font-weight: ${({ $isWar }) => ($isWar ? 700 : 550)};
   color: ${({ theme, $isWar }) =>
     $isWar ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
 `
@@ -1136,28 +1186,18 @@ const MetaInline = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 5px 8px;
+  font-size: 12.5px;
 `
 
-const OutcomeBadge = styled.span<{
+const OutcomeIndicator = styled.span<{
   $tone: 'victory' | 'defeat' | 'neutral'
 }>`
   display: inline-flex;
   align-items: center;
-  padding: 1.5px 7px;
-  border-radius: 5px;
-  font-size: 11px;
+  gap: 5px;
+  font-size: 12px;
   font-weight: 700;
-  background: ${({ theme, $tone }) =>
-    $tone === 'victory'
-      ? theme.mode === 'dark'
-        ? 'rgba(16, 185, 129, 0.16)'
-        : 'rgba(16, 185, 129, 0.12)'
-      : $tone === 'defeat'
-        ? theme.mode === 'dark'
-          ? 'rgba(244, 63, 94, 0.16)'
-          : 'rgba(244, 63, 94, 0.1)'
-        : ledgerSubtleFill(theme.mode)};
   color: ${({ theme, $tone }) =>
     $tone === 'victory'
       ? theme.mode === 'dark'
@@ -1168,59 +1208,60 @@ const OutcomeBadge = styled.span<{
           ? '#fda4af'
           : '#be123c'
         : theme.colors.text.secondary};
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${({ $tone }) =>
+      $tone === 'victory'
+        ? '#10b981'
+        : $tone === 'defeat'
+          ? '#f43f5e'
+          : '#94a3b8'};
+  }
 `
 
-const CoalitionPill = styled.span`
+const CoalitionText = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 1.5px 7px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const SideDot = styled.span<{ $color: string }>`
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: ${({ $color }) => $color};
   flex-shrink: 0;
 `
 
-const RolePill = styled.span`
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  color: ${({ theme }) => theme.colors.text.secondary};
+const RoleText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const CounterpartText = styled.span`
-  font-size: 12px;
+  font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const SurveyJumpLink = styled(Link)`
+const SurveyTextLink = styled(Link)`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   color: ${({ theme }) => ledgerAccent(theme.mode)};
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 
   &:hover {
-    opacity: 0.88;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 `
 

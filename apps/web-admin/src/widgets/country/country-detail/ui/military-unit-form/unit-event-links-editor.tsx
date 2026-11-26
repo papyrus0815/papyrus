@@ -633,24 +633,17 @@ const SearchToolbar = styled.div`
 const EventCardStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  margin-top: 2px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const EventCard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.1)'
-        : 'rgba(15, 23, 42, 0.1)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.025)'
-      : 'rgba(248, 250, 252, 0.9)'};
+  padding: 12px 2px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
 `
 
 const EventCardHead = styled.div`
@@ -665,7 +658,7 @@ const EventTitleSide = styled.div`
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 13px;
+  font-size: 13.5px;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -678,17 +671,18 @@ const DateBadge = styled.span`
 const TrackSwitch = styled.div`
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px;
   margin-left: auto;
+  padding: 2px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const TrackChip = styled.button<{ $active: boolean }>`
   height: 23px;
   padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? theme.colors.primary : theme.colors.border.light};
+  border-radius: 5px;
+  border: none;
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
@@ -699,7 +693,7 @@ const TrackChip = styled.button<{ $active: boolean }>`
     $active ? theme.colors.primary : theme.colors.text.secondary};
   font: inherit;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: ${({ $active }) => ($active ? 700 : 550)};
   cursor: pointer;
 `
 
@@ -710,13 +704,17 @@ const RemoveBtn = styled.button`
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
+
   &:hover {
     color: #dc2626;
-    border-color: rgba(220, 38, 38, 0.4);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(239, 68, 68, 0.14)'
+        : 'rgba(239, 68, 68, 0.08)'};
   }
 `
 
@@ -742,7 +740,7 @@ const MiniSubLabel = styled.span`
 const SidePill = styled.button<{ $active: boolean }>`
   height: 24px;
   padding: 0 9px;
-  border-radius: 999px;
+  border-radius: 6px;
   border: 1px solid
     ${({ $active, theme }) =>
       $active ? theme.colors.primary : theme.colors.border.light};
@@ -750,13 +748,13 @@ const SidePill = styled.button<{ $active: boolean }>`
     $active
       ? theme.mode === 'dark'
         ? 'rgba(99, 102, 241, 0.2)'
-        : 'rgba(99, 102, 241, 0.09)'
+        : 'rgba(99, 102, 241, 0.08)'
       : 'transparent'};
   color: ${({ $active, theme }) =>
     $active ? theme.colors.primary : theme.colors.text.secondary};
   font: inherit;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: ${({ $active }) => ($active ? 700 : 550)};
   cursor: pointer;
 `
 

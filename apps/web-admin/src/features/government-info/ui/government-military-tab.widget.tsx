@@ -3,35 +3,27 @@
  *
  * 설계 원칙:
  * 1. 슬라이드 사이드바(Drawer) 없이 사령부·부대 행 클릭 시 곧바로 단독 상세 페이지(`/military/units/:unitId`)로 진입
- * 2. 국가 원장(`country-ledger-primitives`) 디자인 시스템 통일 — 1px 헤어라인, 평면 표면, 인디고 단일 강조색, 34px 툴바
- * 3. 상단 4단 제대 요약 스트립(전체 / 상급지휘부 / 작전·전략 / 전술·부대 원클릭 필터) + 군종·시대 알약 칩
- * 4. 지휘 계통 레일(`TreeChildrenRail`)과 주둔지·대표 지휘관·참전 전과·병력 요약이 한눈에 읽히는 편제 트리 및 원장 표 제공
+ * 2. 무카드 에디토리얼(Cardless Editorial) 레이아웃 — 바깥 테두리 상자·회색 띠·알약 배지 난립을 없애고 수평 헤어라인과 여백·타이포 위계로만 구성
+ * 3. 상단 인라인 제대 요약·필터 바 + 단일 행 검색·군종·보기 전환 툴바
+ * 4. 건축적 L자 계통선(`TreeChildrenRail`)과 주둔지·대표 지휘관·참전 기록이 한 줄 위계로 읽히는 편제 계통도 및 플랫 원장 표 제공
  */
-import { useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import {
-  FiAnchor,
   FiArrowUpRight,
-  FiAward,
   FiCalendar,
   FiCheck,
   FiChevronDown,
   FiChevronRight,
-  FiCompass,
-  FiCornerDownRight,
-  FiCrosshair,
   FiEdit2,
   FiGitBranch,
   FiLayers,
   FiList,
-  FiMapPin,
-  FiNavigation,
   FiPlus,
   FiRotateCcw,
   FiSearch,
   FiShield,
-  FiUser,
   FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
@@ -55,7 +47,6 @@ import type { MilitaryUnitType } from '@/shared/api/military-unit'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
-import { useThemeStore } from '@/shared/styles/theme.store'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import {
@@ -71,17 +62,14 @@ import {
   ledgerAccentSubtle,
   ledgerBackground,
   LedgerCompactAction,
-  LedgerFilterChip,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
   LedgerPrimaryButton,
   LedgerSearchBox,
   LedgerSearchInput,
-  ledgerSubtleFill,
   LedgerViewSwitch,
   LedgerViewSwitchItem,
-  RADIUS,
 } from '@/widgets/country/country-detail/ui/country-ledger-primitives'
 
 import {
@@ -209,12 +197,16 @@ function formatUnitCompactPeriod(unitItem: ExtendedMilitaryUnit): string {
     extractUnitSignedYear(unitItem.disbanded, unitItem.disbandedDate),
   )
   if (!estStr && !disStr) return ''
-  if (estStr && disStr) return `${estStr} ~ ${disStr}`
-  if (estStr) return `${estStr} ~ ${unitItem.isActive === false ? '해체' : '현재'}`
-  return `~ ${disStr}`
+  if (estStr && disStr) return `${estStr} – ${disStr}`
+  if (estStr)
+    return `${estStr} – ${unitItem.isActive === false ? '해체' : '현재'}`
+  return `– ${disStr}`
 }
 
-function resolveUnitLeadCommander(unitItem: ExtendedMilitaryUnit): string | null {
+function resolveUnitLeadCommanderInfo(unitItem: ExtendedMilitaryUnit): {
+  label: string
+  portraitUrl: string | null
+} | null {
   const firstTenure = unitItem.tenures?.[0]
   if (firstTenure?.person) {
     const nameStr =
@@ -225,9 +217,14 @@ function resolveUnitLeadCommander(unitItem: ExtendedMilitaryUnit): string | null
         country: firstTenure.person.country ?? undefined,
       }) || firstTenure.person.name
     if (nameStr) {
-      return firstTenure.rankTitle
-        ? `${firstTenure.rankTitle} ${nameStr}`
-        : nameStr
+      return {
+        label: firstTenure.rankTitle
+          ? `${firstTenure.rankTitle} ${nameStr}`
+          : nameStr,
+        portraitUrl: firstTenure.person.profileImageUrl
+          ? getUploadImageUrl(firstTenure.person.profileImageUrl)
+          : null,
+      }
     }
   }
   const leadCmd = unitItem.commanders?.[0]
@@ -238,7 +235,12 @@ function resolveUnitLeadCommander(unitItem: ExtendedMilitaryUnit): string | null
         surname: leadCmd.person.surname ?? undefined,
       }) || leadCmd.person.name
     if (nameStr) {
-      return leadCmd.rank ? `${leadCmd.rank} ${nameStr}` : nameStr
+      return {
+        label: leadCmd.rank ? `${leadCmd.rank} ${nameStr}` : nameStr,
+        portraitUrl: leadCmd.person.profileImageUrl
+          ? getUploadImageUrl(leadCmd.person.profileImageUrl)
+          : null,
+      }
     }
   }
   return null
@@ -266,69 +268,31 @@ function compareUnitsByEchelonAndYear(
   return left.name.localeCompare(right.name, 'ko')
 }
 
-function renderUnitBranchIcon(
-  branch: string | null | undefined,
-  unitType: string | null | undefined,
-  size = 14,
-) {
-  if (
-    unitType === 'SUPREME_COMMAND' ||
-    unitType === 'GENERAL_STAFF' ||
-    unitType === 'SERVICE_HQ'
-  ) {
-    return <FiAward size={size} aria-hidden />
-  }
-  if (branch === 'NAVY' || branch === 'COAST_GUARD' || unitType === 'FLEET') {
-    return <FiAnchor size={size} aria-hidden />
-  }
-  if (
-    branch === 'AIR_FORCE' ||
-    branch === 'SPACE_FORCE' ||
-    unitType === 'AIR_FLEET' ||
-    unitType === 'AIR_CORPS' ||
-    unitType === 'WING'
-  ) {
-    return <FiNavigation size={size} aria-hidden />
-  }
-  if (branch === 'JOINT') return <FiLayers size={size} aria-hidden />
-  if (unitType === 'SPECIAL_FORCES') {
-    return <FiCrosshair size={size} aria-hidden />
-  }
-  return <FiShield size={size} aria-hidden />
-}
-
 function UnitEmblemThumb({
   unitItem,
-  size = 30,
-  isDark,
+  size = 26,
 }: {
   unitItem: ExtendedMilitaryUnit
   size?: number
-  isDark: boolean
 }) {
   const [imgFailed, setImgFailed] = useState(false)
   const resolvedSrc = unitItem.insigniaUrl
     ? getUploadImageUrl(unitItem.insigniaUrl)
     : null
 
-  if (resolvedSrc && !imgFailed) {
-    return (
-      <EmblemImg
-        src={resolvedSrc}
-        alt=""
-        width={size}
-        height={size}
-        $size={size}
-        onError={() => setImgFailed(true)}
-      />
-    )
+  if (!resolvedSrc || imgFailed) {
+    return null
   }
 
-  const tier = getEchelonGroup(unitItem.unitType)
   return (
-    <EmblemFallback $size={size} $tier={tier} $dark={isDark}>
-      {renderUnitBranchIcon(unitItem.branch, unitItem.unitType, size * 0.48)}
-    </EmblemFallback>
+    <EmblemImg
+      src={resolvedSrc}
+      alt=""
+      width={size}
+      height={size}
+      $size={size}
+      onError={() => setImgFailed(true)}
+    />
   )
 }
 
@@ -342,7 +306,6 @@ export function GovernmentMilitaryTab({
   onNavigateToDepartment,
 }: GovernmentMilitaryTabProps) {
   const navigate = useNavigate()
-  const isDark = useThemeStore((state) => state.mode === 'dark')
   const isHistorical = country?.type === 'historical'
   const targetId = effectiveCountryId ?? country?.id ?? ''
 
@@ -737,9 +700,7 @@ export function GovernmentMilitaryTab({
           groupMap.set(groupKey, {
             key: groupKey,
             departmentId: effDept?.id ?? null,
-            departmentName: effDept
-              ? effDept.name
-              : '독립 · 상급 군령기구 미지정 편제',
+            departmentName: effDept ? effDept.name : '직할 · 독립 편제',
             departmentAbbreviation: effDept?.abbreviation,
             historicalCountryId: rootUnit.historicalCountryId ?? null,
             roots: [rootUnit],
@@ -966,10 +927,18 @@ export function GovernmentMilitaryTab({
     const isDisbanded = unitItem.isActive === false
     const echelonTier = getEchelonGroup(unitItem.unitType)
 
+    const typeText = unitItem.unitType
+      ? (MILITARY_UNIT_TYPE_LABELS[unitItem.unitType as MilitaryUnitType] ??
+        unitItem.unitType)
+      : null
     const branchText =
       unitItem.branch && branchFilter === 'ALL'
         ? (MILITARY_BRANCH_LABELS[unitItem.branch] ?? unitItem.branch)
         : null
+    const classificationText = [typeText, branchText]
+      .filter(Boolean)
+      .join(' · ')
+
     const eraTagText =
       !hideEraInMeta &&
       eraFilter === 'ALL' &&
@@ -980,18 +949,45 @@ export function GovernmentMilitaryTab({
 
     const garrisonText = unitItem.garrison?.trim() || null
     const strengthFirstLine = unitItem.strength?.trim()
-      ? unitItem.strength.trim().split('\n')[0].slice(0, 52)
+      ? unitItem.strength.trim().split('\n')[0].slice(0, 48)
       : null
-    const leadCommander = resolveUnitLeadCommander(unitItem)
+    const leadCommanderInfo = resolveUnitLeadCommanderInfo(unitItem)
     const combatCount =
       (unitItem.sideDeployedUnits?.length ?? 0) +
       (unitItem.eventRelations?.length ?? 0)
     const vesselCount =
       (unitItem.assignedNavalVessels ?? unitItem.navalVessels ?? []).length
 
+    const subMetaTokens: Array<{ key: string; node: React.ReactNode }> = []
+    if (periodLabel) {
+      subMetaTokens.push({ key: 'period', node: <span>{periodLabel}</span> })
+    }
+    if (isDisbanded) {
+      subMetaTokens.push({ key: 'disbanded', node: <span>해체</span> })
+    }
+    if (eraTagText) {
+      subMetaTokens.push({
+        key: 'era',
+        node: <EraPolitySpan>{eraTagText}</EraPolitySpan>,
+      })
+    }
+    if (garrisonText) {
+      subMetaTokens.push({
+        key: 'garrison',
+        node: <span>{garrisonText}</span>,
+      })
+    }
+    if (strengthFirstLine) {
+      subMetaTokens.push({
+        key: 'strength',
+        node: <StrengthSummaryText>{strengthFirstLine}</StrengthSummaryText>,
+      })
+    }
+
     return (
-      <TreeNodeWrap key={unitItem.id}>
+      <TreeNodeWrap key={unitItem.id} $child={depth > 0}>
         <TreeRow
+          $root={depth === 0}
           role="link"
           tabIndex={0}
           aria-label={`${unitItem.name} 상세 보기`}
@@ -1004,18 +1000,14 @@ export function GovernmentMilitaryTab({
           }}
         >
           <TreeLeftCluster>
-            {depth > 0 ? (
-              <ChildBranchConnector aria-hidden="true">
-                <FiCornerDownRight size={12} />
-              </ChildBranchConnector>
-            ) : null}
-
             <TreeCaretSlot>
               {hasChildren ? (
                 <CollapseToggleBtn
                   type="button"
                   aria-expanded={!isCollapsed}
-                  aria-label={isCollapsed ? '예하 부대 펼치기' : '예하 부대 접기'}
+                  aria-label={
+                    isCollapsed ? '예하 부대 펼치기' : '예하 부대 접기'
+                  }
                   title={
                     isCollapsed
                       ? `예하 ${children.length}개 편제 펼치기`
@@ -1033,33 +1025,72 @@ export function GovernmentMilitaryTab({
                   )}
                 </CollapseToggleBtn>
               ) : (
-                <TreeLeafDot $disbanded={isDisbanded} />
+                <TreeLeafNode
+                  $tier={echelonTier}
+                  $disbanded={isDisbanded}
+                  aria-hidden="true"
+                />
               )}
             </TreeCaretSlot>
 
-            <UnitEmblemThumb unitItem={unitItem} size={30} isDark={isDark} />
+            <UnitEmblemThumb unitItem={unitItem} size={depth === 0 ? 28 : 24} />
 
             <TreeTextBody>
               <TreeTitleLine>
-                <TreeUnitName>{unitItem.name}</TreeUnitName>
+                <TreeUnitName $root={depth === 0}>{unitItem.name}</TreeUnitName>
                 {unitItem.abbreviation?.trim() ? (
                   <TreeAbbrSpan>({unitItem.abbreviation.trim()})</TreeAbbrSpan>
                 ) : null}
                 {unitItem.nickname?.trim() ? (
                   <TreeNicknameSpan>
-                    &ldquo;{unitItem.nickname.trim()}&rdquo;
+                    “{unitItem.nickname.trim()}”
                   </TreeNicknameSpan>
                 ) : null}
-                {unitItem.unitType ? (
-                  <EchelonMiniBadge $tier={echelonTier}>
-                    {MILITARY_UNIT_TYPE_LABELS[
-                      unitItem.unitType as MilitaryUnitType
-                    ] ?? unitItem.unitType}
-                  </EchelonMiniBadge>
+                {classificationText ? (
+                  <TreeClassText $highCommand={echelonTier === 'HIGH_COMMAND'}>
+                    {classificationText}
+                  </TreeClassText>
                 ) : null}
-                {branchText ? <BranchMiniTag>{branchText}</BranchMiniTag> : null}
+                <RowOpenArrow aria-hidden="true">
+                  <FiArrowUpRight size={12.5} />
+                </RowOpenArrow>
+              </TreeTitleLine>
+
+              {subMetaTokens.length > 0 ? (
+                <TreeMetaStrip>
+                  {subMetaTokens.map((token, idx) => (
+                    <React.Fragment key={token.key}>
+                      {idx > 0 ? (
+                        <MetaDotSep aria-hidden="true">·</MetaDotSep>
+                      ) : null}
+                      {token.node}
+                    </React.Fragment>
+                  ))}
+                </TreeMetaStrip>
+              ) : null}
+            </TreeTextBody>
+          </TreeLeftCluster>
+
+          <TreeRightCluster>
+            {leadCommanderInfo ? (
+              <CommanderInline title={`대표 지휘관: ${leadCommanderInfo.label}`}>
+                {leadCommanderInfo.portraitUrl ? (
+                  <CommanderThumbImg
+                    src={leadCommanderInfo.portraitUrl}
+                    alt=""
+                    onError={(imgEvt) => {
+                      imgEvt.currentTarget.style.display = 'none'
+                    }}
+                  />
+                ) : null}
+                <span>{leadCommanderInfo.label}</span>
+              </CommanderInline>
+            ) : null}
+
+            {(hasChildren || vesselCount > 0 || combatCount > 0) && (
+              <RightFiguresGroup>
                 {hasChildren ? (
-                  <SubCountChip
+                  <SubCountTextBtn
                     type="button"
                     onClick={(evt) => {
                       evt.stopPropagation()
@@ -1067,63 +1098,23 @@ export function GovernmentMilitaryTab({
                     }}
                   >
                     예하 {children.length}
-                  </SubCountChip>
+                  </SubCountTextBtn>
                 ) : null}
-                <RowOpenArrow aria-hidden="true">
-                  <FiArrowUpRight size={12.5} />
-                </RowOpenArrow>
-              </TreeTitleLine>
-
-              {(periodLabel ||
-                isDisbanded ||
-                garrisonText ||
-                strengthFirstLine ||
-                eraTagText) && (
-                <TreeMetaStrip>
-                  {periodLabel ? (
-                    <TreeLifespanSpan>{periodLabel}</TreeLifespanSpan>
-                  ) : null}
-                  {isDisbanded ? (
-                    <TreeDisbandedBadge>해체</TreeDisbandedBadge>
-                  ) : null}
-                  {eraTagText ? (
-                    <EraPolityBadge>{eraTagText}</EraPolityBadge>
-                  ) : null}
-                  {garrisonText ? (
-                    <MetaInlineFact>
-                      <FiMapPin size={10.5} />
-                      {garrisonText}
-                    </MetaInlineFact>
-                  ) : null}
-                  {strengthFirstLine ? (
-                    <StrengthSummaryText>{strengthFirstLine}</StrengthSummaryText>
-                  ) : null}
-                </TreeMetaStrip>
-              )}
-            </TreeTextBody>
-          </TreeLeftCluster>
-
-          <TreeRightCluster>
-            {leadCommander ? (
-              <CommanderPill title={`대표 지휘관: ${leadCommander}`}>
-                <FiUser size={11} />
-                <span>{leadCommander}</span>
-              </CommanderPill>
-            ) : null}
-
-            {vesselCount > 0 ? (
-              <FactCountBadge title={`배속 함정 ${vesselCount}척`}>
-                <FiAnchor size={10.5} />
-                {vesselCount}
-              </FactCountBadge>
-            ) : null}
-
-            {combatCount > 0 ? (
-              <FactCountBadge $accent title={`참전·지령 기록 ${combatCount}건`}>
-                <FiCompass size={11} />
-                {combatCount}
-              </FactCountBadge>
-            ) : null}
+                {vesselCount > 0 ? (
+                  <QuietMetricSpan title={`배속 함정 ${vesselCount}척`}>
+                    함정 {vesselCount}
+                  </QuietMetricSpan>
+                ) : null}
+                {combatCount > 0 ? (
+                  <QuietMetricSpan
+                    $accent
+                    title={`참전·지령 기록 ${combatCount}건`}
+                  >
+                    참전 {combatCount}
+                  </QuietMetricSpan>
+                ) : null}
+              </RightFiguresGroup>
+            )}
 
             <RowQuickActions onClick={(evt) => evt.stopPropagation()}>
               <HoverAddSubBtn
@@ -1183,18 +1174,20 @@ export function GovernmentMilitaryTab({
       const showGroupHeader =
         deptGroups.length > 1 || Boolean(groupItem.departmentId)
       return (
-        <div key={groupItem.key}>
+        <DeptGroupSection
+          key={groupItem.key}
+          $first={groupIdx === 0 && !hideEraInMeta}
+        >
           {showGroupHeader ? (
-            <DeptGroupHeaderBar $first={groupIdx === 0 && !hideEraInMeta}>
+            <DeptGroupHeaderBar>
               <DeptGroupTitleWrap>
-                <FiShield size={13} />
                 <DeptGroupName>{groupItem.departmentName}</DeptGroupName>
                 {groupItem.departmentAbbreviation ? (
                   <DeptGroupAbbr>
                     ({groupItem.departmentAbbreviation})
                   </DeptGroupAbbr>
                 ) : null}
-                <DeptGroupCountPill>{groupItem.roots.length}</DeptGroupCountPill>
+                <DeptGroupCount>{groupItem.roots.length}</DeptGroupCount>
               </DeptGroupTitleWrap>
               <DeptGroupRightActions>
                 <PopoverMenu
@@ -1234,85 +1227,98 @@ export function GovernmentMilitaryTab({
               </DeptGroupRightActions>
             </DeptGroupHeaderBar>
           ) : null}
-          {groupItem.roots.map((rootUnit) =>
-            renderTreeNode(rootUnit, 0, new Set(), hideEraInMeta),
-          )}
-        </div>
+          <DeptRootsList>
+            {groupItem.roots.map((rootUnit) =>
+              renderTreeNode(rootUnit, 0, new Set(), hideEraInMeta),
+            )}
+          </DeptRootsList>
+        </DeptGroupSection>
       )
     })
 
   return (
     <SectionRoot aria-label="군사 조직 및 편제 현황">
-      {/* 1. 상단 4단 제대 구성 요약 & 원클릭 필터 스트립 */}
+      {/* 1. 상단 무카드 인라인 제대 요약 & 원클릭 필터 바 */}
       {countryUnits.length > 0 ? (
         <EchelonSummaryStrip role="region" aria-label="제대별 편제 요약">
-          <SummaryTierBtn
-            type="button"
-            $active={echelonGroupFilter === 'ALL'}
-            onClick={() => setEchelonGroupFilter('ALL')}
-          >
-            <SummaryTierLabel>전체 사령부 · 편제</SummaryTierLabel>
-            <SummaryTierValue>
-              {tierStats.total.toLocaleString('ko-KR')}
-              <small>개</small>
-            </SummaryTierValue>
-          </SummaryTierBtn>
+          <SummaryTiersGroup>
+            <SummaryTierBtn
+              type="button"
+              $active={echelonGroupFilter === 'ALL'}
+              onClick={() => setEchelonGroupFilter('ALL')}
+            >
+              <span className="tier-label">전체 사령부 · 편제</span>
+              <strong className="tier-val">
+                {tierStats.total.toLocaleString('ko-KR')}
+              </strong>
+            </SummaryTierBtn>
 
-          <SummaryTierBtn
-            type="button"
-            $active={echelonGroupFilter === 'HIGH_COMMAND'}
-            onClick={() =>
-              setEchelonGroupFilter((prev) =>
-                prev === 'HIGH_COMMAND' ? 'ALL' : 'HIGH_COMMAND',
-              )
-            }
-          >
-            <SummaryTierLabel>최고 · 상급지휘부</SummaryTierLabel>
-            <SummaryTierValue $muted={tierStats.highCommand === 0}>
-              {tierStats.highCommand.toLocaleString('ko-KR')}
-              <small>개</small>
-            </SummaryTierValue>
-          </SummaryTierBtn>
+            <SummaryTierBtn
+              type="button"
+              $active={echelonGroupFilter === 'HIGH_COMMAND'}
+              onClick={() =>
+                setEchelonGroupFilter((prev) =>
+                  prev === 'HIGH_COMMAND' ? 'ALL' : 'HIGH_COMMAND',
+                )
+              }
+            >
+              <span className="tier-label">최고 · 상급지휘부</span>
+              <strong
+                className="tier-val"
+                data-muted={tierStats.highCommand === 0 || undefined}
+              >
+                {tierStats.highCommand.toLocaleString('ko-KR')}
+              </strong>
+            </SummaryTierBtn>
 
-          <SummaryTierBtn
-            type="button"
-            $active={echelonGroupFilter === 'OPERATIONAL'}
-            onClick={() =>
-              setEchelonGroupFilter((prev) =>
-                prev === 'OPERATIONAL' ? 'ALL' : 'OPERATIONAL',
-              )
-            }
-          >
-            <SummaryTierLabel>작전 · 전략 제대</SummaryTierLabel>
-            <SummaryTierValue $muted={tierStats.operational === 0}>
-              {tierStats.operational.toLocaleString('ko-KR')}
-              <small>개</small>
-            </SummaryTierValue>
-          </SummaryTierBtn>
+            <SummaryTierBtn
+              type="button"
+              $active={echelonGroupFilter === 'OPERATIONAL'}
+              onClick={() =>
+                setEchelonGroupFilter((prev) =>
+                  prev === 'OPERATIONAL' ? 'ALL' : 'OPERATIONAL',
+                )
+              }
+            >
+              <span className="tier-label">작전 · 전략 제대</span>
+              <strong
+                className="tier-val"
+                data-muted={tierStats.operational === 0 || undefined}
+              >
+                {tierStats.operational.toLocaleString('ko-KR')}
+              </strong>
+            </SummaryTierBtn>
 
-          <SummaryTierBtn
-            type="button"
-            $active={echelonGroupFilter === 'TACTICAL'}
-            onClick={() =>
-              setEchelonGroupFilter((prev) =>
-                prev === 'TACTICAL' ? 'ALL' : 'TACTICAL',
-              )
-            }
-          >
-            <SummaryTierLabel>전술 · 특수 부대</SummaryTierLabel>
-            <SummaryTierValue $muted={tierStats.tactical === 0}>
-              {tierStats.tactical.toLocaleString('ko-KR')}
-              <small>개</small>
-            </SummaryTierValue>
-          </SummaryTierBtn>
+            <SummaryTierBtn
+              type="button"
+              $active={echelonGroupFilter === 'TACTICAL'}
+              onClick={() =>
+                setEchelonGroupFilter((prev) =>
+                  prev === 'TACTICAL' ? 'ALL' : 'TACTICAL',
+                )
+              }
+            >
+              <span className="tier-label">전술 · 특수 부대</span>
+              <strong
+                className="tier-val"
+                data-muted={tierStats.tactical === 0 || undefined}
+              >
+                {tierStats.tactical.toLocaleString('ko-KR')}
+              </strong>
+            </SummaryTierBtn>
+          </SummaryTiersGroup>
 
           <SummaryAuxFacts>
             <span>
-              역대 지휘관 <strong>{tierStats.commanderCount.toLocaleString('ko-KR')}</strong>건
+              지휘관{' '}
+              <strong>
+                {tierStats.commanderCount.toLocaleString('ko-KR')}
+              </strong>
             </span>
-            <span>·</span>
+            <span aria-hidden>·</span>
             <span>
-              참전·지령 <strong>{tierStats.combatLinks.toLocaleString('ko-KR')}</strong>건
+              참전·지령{' '}
+              <strong>{tierStats.combatLinks.toLocaleString('ko-KR')}</strong>
             </span>
           </SummaryAuxFacts>
         </EchelonSummaryStrip>
@@ -1336,280 +1342,293 @@ export function GovernmentMilitaryTab({
         }
       />
 
-      {/* 2. 본문 원장 카드 (필터 툴바 + 편제 트리 / 원장 표) */}
-      <LedgerCard>
-        <FilterToolbar>
-          <FilterChipsStack>
-            <ChipRow role="group" aria-label="군종 필터">
-              {branchTabs.map((tabItem) => (
-                <LedgerFilterChip
-                  key={tabItem.id}
-                  type="button"
-                  $active={branchFilter === tabItem.id}
-                  onClick={() => setBranchFilter(tabItem.id)}
-                >
-                  {tabItem.label} {tabItem.count}
-                </LedgerFilterChip>
-              ))}
-            </ChipRow>
-
-            {historicalErasAvailable.length > 0 ? (
-              <EraFilterRow
-                role="group"
-                aria-label={isHistorical ? '소속 정치체 필터' : '시대·정치체 필터'}
-              >
-                <EraRowLabel>{isHistorical ? '정치체' : '시대'}</EraRowLabel>
-                <EraMiniChip
-                  type="button"
-                  $active={eraFilter === 'ALL'}
-                  onClick={() => setEraFilter('ALL')}
-                >
-                  전체 {countryUnits.length}
-                </EraMiniChip>
-                {isHistorical && targetId ? (
-                  <EraMiniChip
-                    type="button"
-                    $active={eraFilter === targetId}
-                    onClick={() => setEraFilter(targetId)}
-                  >
-                    {country?.name ?? '본국'} 직속 {directCountryUnitCount}
-                  </EraMiniChip>
-                ) : directCountryUnitCount > 0 ? (
-                  <EraMiniChip
-                    type="button"
-                    $active={eraFilter === 'MODERN'}
-                    onClick={() => setEraFilter('MODERN')}
-                  >
-                    현대 직속 {directCountryUnitCount}
-                  </EraMiniChip>
+      {/* 2. 무카드 오픈 원장 지면 */}
+      <LedgerCanvas>
+        {countryUnits.length > 0 ? (
+          <FilterToolbar>
+            {(branchTabs.length > 2 ||
+              branchFilter !== 'ALL' ||
+              historicalErasAvailable.length > 0) ? (
+              <FilterChipsStack>
+                {branchTabs.length > 2 || branchFilter !== 'ALL' ? (
+                  <BranchTabsRow role="group" aria-label="군종 필터">
+                    {branchTabs.map((tabItem) => (
+                      <BranchFilterBtn
+                        key={tabItem.id}
+                        type="button"
+                        $active={branchFilter === tabItem.id}
+                        onClick={() => setBranchFilter(tabItem.id)}
+                      >
+                        <span>{tabItem.label}</span>
+                        <small>{tabItem.count}</small>
+                      </BranchFilterBtn>
+                    ))}
+                  </BranchTabsRow>
                 ) : null}
-                {historicalErasAvailable.map((eraItem) => (
-                  <EraMiniChip
-                    key={eraItem.id}
-                    type="button"
-                    $active={eraFilter === eraItem.id}
-                    onClick={() => setEraFilter(eraItem.id)}
-                  >
-                    {eraItem.name} {eraItem.count}
-                  </EraMiniChip>
-                ))}
-              </EraFilterRow>
-            ) : null}
-          </FilterChipsStack>
 
-          <FilterRight>
-            <LedgerSearchBox style={{ maxWidth: 276 }}>
-              <FiSearch />
-              <LedgerSearchInput
-                type="search"
-                value={searchQuery}
-                onChange={(evt) => setSearchQuery(evt.target.value)}
-                placeholder="사령부·부대명, 약칭, 지휘관, 주둔지 검색…"
-                aria-label="부대 이름 및 지휘관 검색"
-              />
-              {searchQuery ? (
-                <SearchClearBtn
-                  type="button"
-                  aria-label="검색어 지우기"
-                  onClick={() => setSearchQuery('')}
+                {historicalErasAvailable.length > 0 ? (
+                <EraFilterRow
+                  role="group"
+                  aria-label={
+                    isHistorical ? '소속 정치체 필터' : '시대·정치체 필터'
+                  }
                 >
-                  <FiX size={12} />
-                </SearchClearBtn>
+                  <EraRowLabel>
+                    {isHistorical ? '정치체' : '시대'}
+                  </EraRowLabel>
+                  <EraTextBtn
+                    type="button"
+                    $active={eraFilter === 'ALL'}
+                    onClick={() => setEraFilter('ALL')}
+                  >
+                    전체 {countryUnits.length}
+                  </EraTextBtn>
+                  {isHistorical && targetId ? (
+                    <EraTextBtn
+                      type="button"
+                      $active={eraFilter === targetId}
+                      onClick={() => setEraFilter(targetId)}
+                    >
+                      {country?.name ?? '본국'} 직속 {directCountryUnitCount}
+                    </EraTextBtn>
+                  ) : directCountryUnitCount > 0 ? (
+                    <EraTextBtn
+                      type="button"
+                      $active={eraFilter === 'MODERN'}
+                      onClick={() => setEraFilter('MODERN')}
+                    >
+                      현대 직속 {directCountryUnitCount}
+                    </EraTextBtn>
+                  ) : null}
+                  {historicalErasAvailable.map((eraItem) => (
+                    <EraTextBtn
+                      key={eraItem.id}
+                      type="button"
+                      $active={eraFilter === eraItem.id}
+                      onClick={() => setEraFilter(eraItem.id)}
+                    >
+                      {eraItem.name} {eraItem.count}
+                    </EraTextBtn>
+                  ))}
+                </EraFilterRow>
               ) : null}
-            </LedgerSearchBox>
+              </FilterChipsStack>
+            ) : null}
 
-            <LedgerViewSwitch role="group" aria-label="목록 표시 방식">
-              <LedgerViewSwitchItem
-                type="button"
-                $active={browseViewMode === 'TREE'}
-                onClick={() => setBrowseViewMode('TREE')}
-                title="상하 지휘 계통 편제 트리 보기"
-              >
-                <FiGitBranch size={13} />
-                편제 트리
-              </LedgerViewSwitchItem>
-              <LedgerViewSwitchItem
-                type="button"
-                $active={browseViewMode === 'LEDGER'}
-                onClick={() => setBrowseViewMode('LEDGER')}
-                title="창설·해체일, 제대·군종, 대표 지휘관·전과 원장 표 보기"
-              >
-                <FiList size={13} />
-                원장 표
-              </LedgerViewSwitchItem>
-            </LedgerViewSwitch>
+            <FilterRight>
+              <LedgerSearchBox style={{ maxWidth: 268 }}>
+                <FiSearch />
+                <LedgerSearchInput
+                  type="search"
+                  value={searchQuery}
+                  onChange={(evt) => setSearchQuery(evt.target.value)}
+                  placeholder="사령부·부대, 지휘관, 주둔지 검색…"
+                  aria-label="부대 이름 및 지휘관 검색"
+                />
+                {searchQuery ? (
+                  <SearchClearBtn
+                    type="button"
+                    aria-label="검색어 지우기"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    <FiX size={12} />
+                  </SearchClearBtn>
+                ) : null}
+              </LedgerSearchBox>
 
-            <PopoverMenu
-              ariaLabel="편제·사령부 상세 필터 및 보기 설정"
-              title="운용 상태 · 소관 부처 · 기준 연도 · 트리 접기 설정"
-              minWidth={264}
-              active={
-                echelonGroupFilter !== 'ALL' ||
-                statusFilter !== 'ALL' ||
-                deptFilter !== 'ALL' ||
-                parsedSnapshotYear != null
-              }
-            >
-              {(closeMenu) => (
-                <>
-                  {browseViewMode === 'TREE' ? (
-                    <>
-                      <PopoverMenuSectionLabel>
-                        편제 트리 보기
-                      </PopoverMenuSectionLabel>
-                      {eraFilter === 'ALL' &&
-                      historicalErasAvailable.length > 0 ? (
-                        <PopoverMenuItem
-                          type="button"
-                          onClick={() => setGroupByEra((prev) => !prev)}
+              <LedgerViewSwitch role="group" aria-label="목록 표시 방식">
+                <LedgerViewSwitchItem
+                  type="button"
+                  $active={browseViewMode === 'TREE'}
+                  onClick={() => setBrowseViewMode('TREE')}
+                  title="상하 지휘 계통 편제 트리 보기"
+                >
+                  <FiGitBranch size={13} />
+                  편제 트리
+                </LedgerViewSwitchItem>
+                <LedgerViewSwitchItem
+                  type="button"
+                  $active={browseViewMode === 'LEDGER'}
+                  onClick={() => setBrowseViewMode('LEDGER')}
+                  title="창설·해체일, 제대·군종, 대표 지휘관·전과 원장 표 보기"
+                >
+                  <FiList size={13} />
+                  원장 표
+                </LedgerViewSwitchItem>
+              </LedgerViewSwitch>
+
+              <PopoverMenu
+                ariaLabel="편제·사령부 상세 필터 및 보기 설정"
+                title="운용 상태 · 소관 부처 · 기준 연도 · 트리 접기 설정"
+                minWidth={264}
+                active={
+                  echelonGroupFilter !== 'ALL' ||
+                  statusFilter !== 'ALL' ||
+                  deptFilter !== 'ALL' ||
+                  parsedSnapshotYear != null
+                }
+              >
+                {(closeMenu) => (
+                  <>
+                    {browseViewMode === 'TREE' ? (
+                      <>
+                        <PopoverMenuSectionLabel>
+                          편제 계통 보기
+                        </PopoverMenuSectionLabel>
+                        {eraFilter === 'ALL' &&
+                        historicalErasAvailable.length > 0 ? (
+                          <PopoverMenuItem
+                            type="button"
+                            onClick={() => setGroupByEra((prev) => !prev)}
+                          >
+                            <FiLayers size={13} />
+                            <span>시대 · 정치체별 섹션 묶음</span>
+                            {groupByEra ? (
+                              <FiCheck
+                                size={13}
+                                style={{ marginLeft: 'auto' }}
+                              />
+                            ) : null}
+                          </PopoverMenuItem>
+                        ) : null}
+                        {hierarchyGroups.collapsibleParentIds.length > 0 ? (
+                          <PopoverMenuItem
+                            type="button"
+                            onClick={() => {
+                              toggleCollapseAll()
+                              closeMenu()
+                            }}
+                          >
+                            <FiGitBranch size={13} />
+                            <span>
+                              {allCollapsibleCollapsed
+                                ? '예하 편제 모두 펼치기'
+                                : '예하 편제 모두 접기'}
+                            </span>
+                          </PopoverMenuItem>
+                        ) : null}
+                        <PopoverMenuDivider />
+                      </>
+                    ) : null}
+
+                    <PopoverMenuSectionLabel>
+                      운용 상태 필터
+                    </PopoverMenuSectionLabel>
+                    <PopoverPillGrid>
+                      {(['ALL', 'ACTIVE', 'DISBANDED'] as const).map(
+                        (statusKey) => (
+                          <PopoverPillBtn
+                            key={statusKey}
+                            type="button"
+                            $active={statusFilter === statusKey}
+                            onClick={() => setStatusFilter(statusKey)}
+                          >
+                            {STATUS_FILTER_LABELS[statusKey]}
+                          </PopoverPillBtn>
+                        ),
+                      )}
+                    </PopoverPillGrid>
+
+                    {commandDepartments.length > 0 ? (
+                      <>
+                        <PopoverMenuSectionLabel>
+                          소관 국방 · 군정부처
+                        </PopoverMenuSectionLabel>
+                        <DeptFilterSelect
+                          aria-label="소관 국방·군정부처 필터"
+                          value={deptFilter}
+                          onChange={(evt) => setDeptFilter(evt.target.value)}
                         >
-                          <FiLayers size={13} />
-                          <span>시대 · 정치체별 섹션 묶음</span>
-                          {groupByEra ? (
-                            <FiCheck
-                              size={13}
-                              style={{ marginLeft: 'auto' }}
-                            />
+                          <option value="ALL">
+                            전체 지휘부 ({countryUnits.length})
+                          </option>
+                          {commandDepartments.map((deptItem) => (
+                            <option key={deptItem.id} value={deptItem.id}>
+                              {deptItem.name}
+                              {deptItem.abbreviation
+                                ? ` (${deptItem.abbreviation})`
+                                : ''}{' '}
+                              ({deptItem.count})
+                            </option>
+                          ))}
+                          {unlinkedDeptUnitCount > 0 ? (
+                            <option value="UNLINKED">
+                              지휘부 미지정 ({unlinkedDeptUnitCount})
+                            </option>
                           ) : null}
-                        </PopoverMenuItem>
+                        </DeptFilterSelect>
+                      </>
+                    ) : null}
+
+                    <PopoverMenuSectionLabel>
+                      기준 연도 스냅샷
+                    </PopoverMenuSectionLabel>
+                    <SnapshotYearWrap title="특정 연도(예: 1941, BC 221)에 존재했던 군부대만 필터링합니다">
+                      <FiCalendar size={12.5} aria-hidden />
+                      <SnapshotYearInput
+                        type="text"
+                        value={snapshotYearInput}
+                        onChange={(changeEvt) =>
+                          setSnapshotYearInput(changeEvt.target.value)
+                        }
+                        placeholder="연도 입력 (예: 1941, BC 221)"
+                        aria-label="기준 연도 스냅샷 필터"
+                      />
+                      {snapshotYearInput ? (
+                        <SearchClearBtn
+                          type="button"
+                          aria-label="기준 연도 지우기"
+                          onClick={() => setSnapshotYearInput('')}
+                        >
+                          <FiX size={11} />
+                        </SearchClearBtn>
                       ) : null}
-                      {hierarchyGroups.collapsibleParentIds.length > 0 ? (
+                    </SnapshotYearWrap>
+
+                    {hasActiveFilters ? (
+                      <>
+                        <PopoverMenuDivider />
                         <PopoverMenuItem
                           type="button"
+                          $danger
                           onClick={() => {
-                            toggleCollapseAll()
+                            resetAllFilters()
                             closeMenu()
                           }}
                         >
-                          <FiGitBranch size={13} />
-                          <span>
-                            {allCollapsibleCollapsed
-                              ? '예하 편제 모두 펼치기'
-                              : '예하 편제 모두 접기'}
-                          </span>
+                          <FiRotateCcw size={13} />
+                          <span>모든 필터 초기화</span>
                         </PopoverMenuItem>
-                      ) : null}
-                      <PopoverMenuDivider />
-                    </>
-                  ) : null}
-
-                  <PopoverMenuSectionLabel>
-                    운용 상태 필터
-                  </PopoverMenuSectionLabel>
-                  <PopoverPillGrid>
-                    {(['ALL', 'ACTIVE', 'DISBANDED'] as const).map(
-                      (statusKey) => (
-                        <PopoverPillBtn
-                          key={statusKey}
-                          type="button"
-                          $active={statusFilter === statusKey}
-                          onClick={() => setStatusFilter(statusKey)}
-                        >
-                          {STATUS_FILTER_LABELS[statusKey]}
-                        </PopoverPillBtn>
-                      ),
-                    )}
-                  </PopoverPillGrid>
-
-                  {commandDepartments.length > 0 ? (
-                    <>
-                      <PopoverMenuSectionLabel>
-                        소관 국방 · 군정부처
-                      </PopoverMenuSectionLabel>
-                      <DeptFilterSelect
-                        aria-label="소관 국방·군정부처 필터"
-                        value={deptFilter}
-                        onChange={(evt) => setDeptFilter(evt.target.value)}
-                      >
-                        <option value="ALL">
-                          전체 지휘부 ({countryUnits.length})
-                        </option>
-                        {commandDepartments.map((deptItem) => (
-                          <option key={deptItem.id} value={deptItem.id}>
-                            {deptItem.name}
-                            {deptItem.abbreviation
-                              ? ` (${deptItem.abbreviation})`
-                              : ''}{' '}
-                            ({deptItem.count})
-                          </option>
-                        ))}
-                        {unlinkedDeptUnitCount > 0 ? (
-                          <option value="UNLINKED">
-                            지휘부 미지정 ({unlinkedDeptUnitCount})
-                          </option>
-                        ) : null}
-                      </DeptFilterSelect>
-                    </>
-                  ) : null}
-
-                  <PopoverMenuSectionLabel>
-                    기준 연도 스냅샷
-                  </PopoverMenuSectionLabel>
-                  <SnapshotYearWrap title="특정 연도(예: 1941, BC 221)에 존재했던 군부대만 필터링합니다">
-                    <FiCalendar size={12.5} aria-hidden />
-                    <SnapshotYearInput
-                      type="text"
-                      value={snapshotYearInput}
-                      onChange={(changeEvt) =>
-                        setSnapshotYearInput(changeEvt.target.value)
-                      }
-                      placeholder="연도 입력 (예: 1941, BC 221)"
-                      aria-label="기준 연도 스냅샷 필터"
-                    />
-                    {snapshotYearInput ? (
-                      <SearchClearBtn
-                        type="button"
-                        aria-label="기준 연도 지우기"
-                        onClick={() => setSnapshotYearInput('')}
-                      >
-                        <FiX size={11} />
-                      </SearchClearBtn>
+                      </>
                     ) : null}
-                  </SnapshotYearWrap>
+                  </>
+                )}
+              </PopoverMenu>
 
-                  {hasActiveFilters ? (
-                    <>
-                      <PopoverMenuDivider />
-                      <PopoverMenuItem
-                        type="button"
-                        $danger
-                        onClick={() => {
-                          resetAllFilters()
-                          closeMenu()
-                        }}
-                      >
-                        <FiRotateCcw size={13} />
-                        <span>모든 필터 초기화</span>
-                      </PopoverMenuItem>
-                    </>
-                  ) : null}
-                </>
-              )}
-            </PopoverMenu>
-
-            {!hidePrimaryCta ? (
-              <LedgerPrimaryButton
-                type="button"
-                onClick={() => onCreateUnit(resolveDefaultCreateOptions())}
-              >
-                <FiPlus size={14} /> 사령부·부대 등록
-              </LedgerPrimaryButton>
-            ) : null}
-          </FilterRight>
-        </FilterToolbar>
+              {!hidePrimaryCta ? (
+                <LedgerPrimaryButton
+                  type="button"
+                  onClick={() => onCreateUnit(resolveDefaultCreateOptions())}
+                >
+                  <FiPlus size={14} /> 사령부·부대 등록
+                </LedgerPrimaryButton>
+              ) : null}
+            </FilterRight>
+          </FilterToolbar>
+        ) : null}
 
         {hasActiveFilters ? (
           <ActiveFilterBar>
             <ActiveFilterCount>
               표시 <strong>{filteredUnits.length}</strong> / 전체{' '}
-              {countryUnits.length}개 편제
+              {countryUnits.length}
             </ActiveFilterCount>
             {echelonGroupFilter !== 'ALL' ? (
               <ActiveFilterPill
                 type="button"
                 onClick={() => setEchelonGroupFilter('ALL')}
               >
-                제대: {ECHELON_GROUP_LABELS[echelonGroupFilter]}
+                {ECHELON_GROUP_LABELS[echelonGroupFilter]}
                 <FiX size={11} />
               </ActiveFilterPill>
             ) : null}
@@ -1618,7 +1637,7 @@ export function GovernmentMilitaryTab({
                 type="button"
                 onClick={() => setStatusFilter('ALL')}
               >
-                상태: {STATUS_FILTER_LABELS[statusFilter]}
+                {STATUS_FILTER_LABELS[statusFilter]}
                 <FiX size={11} />
               </ActiveFilterPill>
             ) : null}
@@ -1627,7 +1646,6 @@ export function GovernmentMilitaryTab({
                 type="button"
                 onClick={() => setSnapshotYearInput('')}
               >
-                기준 연도:{' '}
                 {parsedSnapshotYear < 0
                   ? `BC ${Math.abs(parsedSnapshotYear)}년`
                   : `${parsedSnapshotYear}년`}
@@ -1639,7 +1657,7 @@ export function GovernmentMilitaryTab({
                 type="button"
                 onClick={() => setEraFilter('ALL')}
               >
-                시대: {activeEraName}
+                {activeEraName}
                 <FiX size={11} />
               </ActiveFilterPill>
             ) : null}
@@ -1648,12 +1666,12 @@ export function GovernmentMilitaryTab({
                 type="button"
                 onClick={() => setDeptFilter('ALL')}
               >
-                지휘부: {activeDeptName}
+                {activeDeptName}
                 <FiX size={11} />
               </ActiveFilterPill>
             ) : null}
             <ResetFiltersLink type="button" onClick={resetAllFilters}>
-              초기화
+              필터 초기화
             </ResetFiltersLink>
           </ActiveFilterBar>
         ) : null}
@@ -1704,10 +1722,10 @@ export function GovernmentMilitaryTab({
         ) : (
           <TreeContainer>
             {hierarchyGroups.eraSections ? (
-              hierarchyGroups.eraSections.map((eraSection) => {
+              hierarchyGroups.eraSections.map((eraSection, secIdx) => {
                 const isEraCollapsed = collapsedEraIds.has(eraSection.id)
                 return (
-                  <EraSectionBlock key={eraSection.id}>
+                  <EraSectionBlock key={eraSection.id} $first={secIdx === 0}>
                     <EraStickyHeaderBar>
                       <EraStickyToggleBtn
                         type="button"
@@ -1715,14 +1733,12 @@ export function GovernmentMilitaryTab({
                         onClick={() => toggleEraCollapse(eraSection.id)}
                       >
                         {isEraCollapsed ? (
-                          <FiChevronRight size={13} />
+                          <FiChevronRight size={14} />
                         ) : (
-                          <FiChevronDown size={13} />
+                          <FiChevronDown size={14} />
                         )}
                         <EraStickyTitle>{eraSection.label}</EraStickyTitle>
-                        <DeptGroupCountPill>
-                          {eraSection.totalCount}개 편제
-                        </DeptGroupCountPill>
+                        <DeptGroupCount>{eraSection.totalCount}</DeptGroupCount>
                       </EraStickyToggleBtn>
                       <PopoverMenu
                         size="sm"
@@ -1764,77 +1780,75 @@ export function GovernmentMilitaryTab({
             )}
           </TreeContainer>
         )}
-      </LedgerCard>
+      </LedgerCanvas>
     </SectionRoot>
   )
 }
 
-/* ─── Styled Primitives (Country Ledger Design System) ─── */
+/* ─── Cardless Open Editorial Primitives (무카드 에디토리얼 스타일) ─── */
 
 const SectionRoot = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 `
 
 const EchelonSummaryStrip = styled.div`
   display: flex;
-  align-items: stretch;
+  align-items: baseline;
+  justify-content: space-between;
   flex-wrap: wrap;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
-  overflow: hidden;
+  gap: 10px 24px;
+  padding: 2px 0 0;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const SummaryTiersGroup = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 22px;
 `
 
 const SummaryTierBtn = styled.button<{ $active: boolean }>`
-  flex: 1 1 136px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 3px;
-  padding: 11px 15px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 8px 0 11px;
+  margin-bottom: -1px;
   border: none;
-  border-right: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   border-bottom: 2px solid
     ${({ theme, $active }) =>
       $active ? ledgerAccent(theme.mode) : 'transparent'};
-  background: ${({ theme, $active }) =>
-    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
-  text-align: left;
+  background: transparent;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.14s ease, border-color 0.14s ease;
+  transition: color 0.14s ease, border-color 0.14s ease;
 
-  &:hover {
-    background: ${({ theme, $active }) =>
-      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  .tier-label {
+    font-size: 12.5px;
+    font-weight: ${({ $active }) => ($active ? 700 : 500)};
+    color: ${({ theme, $active }) =>
+      $active ? theme.colors.text.primary : theme.colors.text.secondary};
   }
-`
 
-const SummaryTierLabel = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
+  .tier-val {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    ${DIGIT_DISPLAY}
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
 
-const SummaryTierValue = styled.span<{ $muted?: boolean }>`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  ${DIGIT_DISPLAY}
-  color: ${({ theme, $muted }) =>
-    $muted ? theme.colors.text.tertiary : theme.colors.text.primary};
+    &[data-muted] {
+      color: ${({ theme }) => theme.colors.text.tertiary};
+      font-weight: 600;
+    }
+  }
 
-  small {
-    font-size: 11.5px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.tertiary};
+  &:hover .tier-label {
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -1842,8 +1856,7 @@ const SummaryAuxFacts = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 10px 16px;
-  margin-left: auto;
+  padding-bottom: 10px;
   font-size: 12px;
   ${DIGIT_DISPLAY}
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -1851,80 +1864,99 @@ const SummaryAuxFacts = styled.div`
 
   strong {
     font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 920px) {
     display: none;
   }
 `
 
-const LedgerCard = styled.div`
+const LedgerCanvas = styled.div`
   display: flex;
   flex-direction: column;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
-  overflow: hidden;
   min-width: 0;
 `
 
 const FilterToolbar = styled.div`
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 10px 14px;
-  padding: 12px 16px;
+  gap: 10px 16px;
+  padding: 8px 0 12px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const FilterChipsStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
-  flex: 1 1 320px;
+  flex: 1 1 300px;
 `
 
-const ChipRow = styled.div`
+const BranchTabsRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+`
+
+const BranchFilterBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: none;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+
+  small {
+    font-size: 11.5px;
+    font-weight: 600;
+    ${DIGIT_DISPLAY}
+    opacity: ${({ $active }) => ($active ? 0.95 : 0.65)};
+  }
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  }
 `
 
 const EraFilterRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px 10px;
 `
 
 const EraRowLabel = styled.span`
   font-size: 11px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-right: 2px;
 `
 
-const EraMiniChip = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  height: 23px;
-  padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active
-        ? ledgerAccentBorder(theme.mode)
-        : ledgerHairline(theme.mode)};
-  background: ${({ theme, $active }) =>
-    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+const EraTextBtn = styled.button<{ $active: boolean }>`
+  padding: 2px 0;
+  border: none;
+  background: transparent;
   color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: ${({ $active }) => ($active ? 700 : 500)};
   ${DIGIT_DISPLAY}
   cursor: pointer;
@@ -1967,14 +1999,13 @@ const ActiveFilterBar = styled.div`
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 8px;
-  padding: 8px 16px;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  padding: 8px 0;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   font-size: 12px;
 `
 
 const ActiveFilterCount = styled.span`
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
   ${DIGIT_DISPLAY}
   margin-right: 4px;
 
@@ -1988,9 +2019,9 @@ const ActiveFilterPill = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 23px;
+  height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: 6px;
   border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
   background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   color: ${({ theme }) => ledgerAccent(theme.mode)};
@@ -2018,8 +2049,10 @@ const ResetFiltersLink = styled.button`
 `
 
 const SkeletonPad = styled.div`
-  padding: 18px;
+  padding: 18px 0;
 `
+
+/* ─── Architectural ORBAT Command Tree (무카드 건축형 편제 계통도) ─── */
 
 const TreeContainer = styled.div`
   display: flex;
@@ -2027,9 +2060,10 @@ const TreeContainer = styled.div`
   min-width: 0;
 `
 
-const EraSectionBlock = styled.div`
+const EraSectionBlock = styled.div<{ $first?: boolean }>`
   display: flex;
   flex-direction: column;
+  padding-top: ${({ $first }) => ($first ? '8px' : '28px')};
 `
 
 const EraStickyHeaderBar = styled.div`
@@ -2040,9 +2074,8 @@ const EraStickyHeaderBar = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 16px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? '#151822' : '#f8fafc'};
+  padding: 10px 0 8px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
@@ -2055,8 +2088,9 @@ const EraStickyToggleBtn = styled.button`
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   cursor: pointer;
 `
 
@@ -2066,51 +2100,49 @@ const EraStickyTitle = styled.span`
   text-overflow: ellipsis;
 `
 
-const DeptGroupHeaderBar = styled.div<{ $first?: boolean }>`
+const DeptGroupSection = styled.div<{ $first?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  margin-top: ${({ $first }) => ($first ? '0' : '22px')};
+`
+
+const DeptGroupHeaderBar = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 7px 16px;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  border-top: ${({ theme, $first }) =>
-    $first ? 'none' : `1px solid ${ledgerHairline(theme.mode)}`};
+  padding: 10px 2px 6px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const DeptGroupTitleWrap = styled.div`
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
   min-width: 0;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const DeptGroupName = styled.span`
+const DeptGroupName = styled.h3`
+  margin: 0;
   font-size: 12px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.secondary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 `
 
 const DeptGroupAbbr = styled.span`
-  font-size: 11px;
+  font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const DeptGroupCountPill = styled.span`
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
+const DeptGroupCount = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
   ${DIGIT_DISPLAY}
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.07)'
-      : 'rgba(15, 23, 42, 0.06)'};
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const DeptGroupRightActions = styled.div`
@@ -2120,16 +2152,38 @@ const DeptGroupRightActions = styled.div`
   flex-shrink: 0;
 `
 
-const TreeNodeWrap = styled.div`
+const DeptRootsList = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const TreeNodeWrap = styled.div<{ $child?: boolean }>`
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
+
+  ${({ $child, theme }) =>
+    $child
+      ? `
+    &::before {
+      content: '';
+      position: absolute;
+      left: -14px;
+      top: 22px;
+      width: 12px;
+      height: 1px;
+      background: ${ledgerHairlineStrong(theme.mode)};
+      pointer-events: none;
+    }
+  `
+      : ''}
 `
 
 const HoverAddSubBtn = styled(LedgerCompactAction)`
-  height: 25px;
-  padding: 0 8px;
-  font-size: 11.5px;
+  height: 24px;
+  padding: 0 7px;
+  font-size: 11px;
   opacity: 0;
   transition: opacity 0.12s ease;
 
@@ -2146,20 +2200,20 @@ const RowOpenArrow = styled.span`
   transition: opacity 0.12s ease, transform 0.12s ease;
 `
 
-const TreeUnitName = styled.span`
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+const TreeUnitName = styled.span<{ $root?: boolean }>`
+  font-size: ${({ $root }) => ($root ? '14.5px' : '13.5px')};
+  font-weight: ${({ $root }) => ($root ? 800 : 680)};
+  letter-spacing: -0.018em;
   color: ${({ theme }) => theme.colors.text.primary};
   transition: color 0.12s ease;
 `
 
-const TreeRow = styled.div`
+const TreeRow = styled.div<{ $root?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 14px;
+  padding: ${({ $root }) => ($root ? '12px 6px' : '8.5px 6px')};
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: transparent;
   cursor: pointer;
@@ -2193,17 +2247,9 @@ const TreeLeftCluster = styled.div`
   flex: 1;
 `
 
-const ChildBranchConnector = styled.span`
-  display: inline-flex;
-  align-items: center;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  flex-shrink: 0;
-  margin-right: -3px;
-`
-
 const TreeCaretSlot = styled.div`
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2214,8 +2260,8 @@ const CollapseToggleBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: none;
   border-radius: 5px;
@@ -2232,62 +2278,31 @@ const CollapseToggleBtn = styled.button`
   }
 `
 
-const TreeLeafDot = styled.span<{ $disbanded?: boolean }>`
+const TreeLeafNode = styled.span<{
+  $tier: Exclude<EchelonGroupKey, 'ALL'>
+  $disbanded?: boolean
+}>`
   width: 6px;
   height: 6px;
-  border-radius: 50%;
-  background: ${({ $disbanded }) => ($disbanded ? '#94a3b8' : '#10b981')};
-  opacity: ${({ $disbanded }) => ($disbanded ? 0.55 : 0.85)};
+  border-radius: ${({ $tier }) => ($tier === 'HIGH_COMMAND' ? '1.5px' : '50%')};
+  transform: ${({ $tier }) =>
+    $tier === 'HIGH_COMMAND' ? 'rotate(45deg)' : 'none'};
+  background: ${({ theme, $tier, $disbanded }) =>
+    $disbanded
+      ? theme.colors.text.tertiary
+      : $tier === 'HIGH_COMMAND'
+        ? ledgerAccent(theme.mode)
+        : '#10b981'};
+  opacity: ${({ $disbanded }) => ($disbanded ? 0.45 : 0.85)};
 `
 
 const EmblemImg = styled.img<{ $size: number }>`
   width: ${({ $size }) => $size}px;
   height: ${({ $size }) => $size}px;
-  border-radius: 7px;
-  object-fit: cover;
+  border-radius: 6px;
+  object-fit: contain;
   flex-shrink: 0;
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-`
-
-const EmblemFallback = styled.span<{
-  $size: number
-  $tier: Exclude<EchelonGroupKey, 'ALL'>
-  $dark: boolean
-}>`
-  width: ${({ $size }) => $size}px;
-  height: ${({ $size }) => $size}px;
-  border-radius: 7px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background: ${({ $tier, $dark, theme }) =>
-    $tier === 'HIGH_COMMAND'
-      ? $dark
-        ? 'rgba(245, 158, 11, 0.14)'
-        : '#fffbeb'
-      : $tier === 'OPERATIONAL'
-        ? ledgerAccentSubtle(theme.mode)
-        : $dark
-          ? 'rgba(255, 255, 255, 0.05)'
-          : '#f8fafc'};
-  border: 1px solid
-    ${({ $tier, $dark, theme }) =>
-      $tier === 'HIGH_COMMAND'
-        ? $dark
-          ? 'rgba(251, 191, 36, 0.28)'
-          : '#fde68a'
-        : $tier === 'OPERATIONAL'
-          ? ledgerAccentBorder(theme.mode)
-          : ledgerHairlineStrong(theme.mode)};
-  color: ${({ $tier, $dark, theme }) =>
-    $tier === 'HIGH_COMMAND'
-      ? $dark
-        ? '#fcd34d'
-        : '#b45309'
-      : $tier === 'OPERATIONAL'
-        ? ledgerAccent(theme.mode)
-        : theme.colors.text.secondary};
 `
 
 const TreeTextBody = styled.div`
@@ -2298,8 +2313,8 @@ const TreeTextBody = styled.div`
 const TreeTitleLine = styled.div`
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 5px 6px;
+  align-items: baseline;
+  gap: 4px 7px;
   line-height: 1.35;
 `
 
@@ -2310,111 +2325,40 @@ const TreeAbbrSpan = styled.span`
 `
 
 const TreeNicknameSpan = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TreeClassText = styled.span<{ $highCommand?: boolean }>`
   font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const EchelonMiniBadge = styled.span<{
-  $tier: Exclude<EchelonGroupKey, 'ALL'>
-}>`
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: 10.5px;
-  font-weight: 700;
-  background: ${({ theme, $tier }) =>
-    $tier === 'HIGH_COMMAND'
-      ? theme.mode === 'dark'
-        ? 'rgba(245, 158, 11, 0.16)'
-        : 'rgba(245, 158, 11, 0.12)'
-      : $tier === 'OPERATIONAL'
-        ? ledgerAccentSubtle(theme.mode)
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.06)'
-          : 'rgba(15, 23, 42, 0.05)'};
-  color: ${({ theme, $tier }) =>
-    $tier === 'HIGH_COMMAND'
-      ? theme.mode === 'dark'
-        ? '#fcd34d'
-        : '#b45309'
-      : $tier === 'OPERATIONAL'
-        ? ledgerAccent(theme.mode)
-        : theme.colors.text.secondary};
-`
-
-const BranchMiniTag = styled.span`
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: 10.5px;
-  font-weight: 600;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.05)'
-      : 'rgba(15, 23, 42, 0.045)'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const SubCountChip = styled.button`
-  padding: 1px 7px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font: inherit;
-  font-size: 10.5px;
-  font-weight: 600;
-  ${DIGIT_DISPLAY}
-  cursor: pointer;
-
-  &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
+  font-weight: ${({ $highCommand }) => ($highCommand ? 700 : 600)};
+  color: ${({ theme, $highCommand }) =>
+    $highCommand ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
 `
 
 const TreeMetaStrip = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  margin-top: 3px;
-`
-
-const TreeLifespanSpan = styled.span`
-  font-size: 11.5px;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 12px;
   ${DIGIT_DISPLAY}
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const TreeDisbandedBadge = styled.span`
-  padding: 0 5px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.06)'
-      : 'rgba(15, 23, 42, 0.06)'};
-  color: ${({ theme }) => theme.colors.text.tertiary};
+const MetaDotSep = styled.span`
+  opacity: 0.55;
+  user-select: none;
 `
 
-const EraPolityBadge = styled.span`
-  font-size: 11px;
+const EraPolitySpan = styled.span`
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const MetaInlineFact = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const StrengthSummaryText = styled.span`
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
   max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2424,50 +2368,75 @@ const StrengthSummaryText = styled.span`
 const TreeRightCluster = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   flex-shrink: 0;
 `
 
-const CommanderPill = styled.span`
+const CommanderInline = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  max-width: 156px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.05)'
-      : 'rgba(15, 23, 42, 0.04)'};
+  gap: 6px;
+  max-width: 184px;
+  font-size: 12.5px;
+  font-weight: 550;
   color: ${({ theme }) => theme.colors.text.secondary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 
-  @media (max-width: 720px) {
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (max-width: 760px) {
     display: none;
   }
 `
 
-const FactCountBadge = styled.span<{ $accent?: boolean }>`
+const CommanderThumbImg = styled.img`
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+const RightFiguresGroup = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
+  gap: 10px;
+  font-size: 12px;
   ${DIGIT_DISPLAY}
-  background: ${({ theme, $accent }) =>
-    $accent
-      ? ledgerAccentSubtle(theme.mode)
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : 'rgba(15, 23, 42, 0.05)'};
+`
+
+const SubCountTextBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  ${DIGIT_DISPLAY}
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const QuietMetricSpan = styled.span<{ $accent?: boolean }>`
+  font-weight: ${({ $accent }) => ($accent ? 650 : 500)};
   color: ${({ theme, $accent }) =>
-    $accent ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+    $accent ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
+
+  @media (max-width: 640px) {
+    display: none;
+  }
 `
 
 const RowQuickActions = styled.div`
@@ -2479,11 +2448,13 @@ const RowQuickActions = styled.div`
 const TreeChildrenRail = styled.div`
   display: flex;
   flex-direction: column;
-  margin-left: 24px;
-  border-left: 1.5px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  margin-left: 15px;
+  padding-left: 14px;
+  border-left: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 
   @media (max-width: 640px) {
-    margin-left: 14px;
+    margin-left: 10px;
+    padding-left: 10px;
   }
 `
 

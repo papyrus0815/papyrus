@@ -17,16 +17,9 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import styled, { useTheme } from 'styled-components'
+import styled, { css, useTheme } from 'styled-components'
 
 import {
-  BentoCard,
-  BentoCardBadge,
-  BentoCardBody,
-  BentoCardHeader,
-  BentoCardTitle,
-  BentoCardTitleGroup,
-  BentoGrid2Col,
   MiniDonutRing,
   type SegmentSlice,
   StackedSegmentBar,
@@ -34,15 +27,12 @@ import {
 import {
   DIGIT_DISPLAY,
   ledgerAccent,
-  ledgerAccentBorder,
   ledgerAccentSubtle,
   ledgerBackground,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
-  ledgerSubtleFill,
   MOTION,
-  RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
 import {
   extractUnitSignedYear,
@@ -72,6 +62,7 @@ import {
   GovernmentEraStrip,
 } from '@/pages/government/components/government-era-strip'
 import { militaryUnitApi } from '@/shared/api/military-unit'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
@@ -82,6 +73,10 @@ import {
   PopoverMenuItem,
   PopoverMenuSectionLabel,
 } from '@/shared/ui/popover-menu'
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from '@/shared/ui/searchable-select'
 import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
 import {
   LedgerFilterChip,
@@ -165,6 +160,9 @@ export function MilitaryCatalogPage() {
     () => searchParams.get('active') === '1',
   )
   const [collapsedCountryGroups, setCollapsedCountryGroups] = useState<
+    Set<string>
+  >(new Set())
+  const [collapsedTreeUnitIds, setCollapsedTreeUnitIds] = useState<
     Set<string>
   >(new Set())
 
@@ -747,15 +745,13 @@ export function MilitaryCatalogPage() {
       />
 
       {showInfographic ? (
-        <BentoGrid2Col aria-label="군사 총람 인포그래픽 요약">
-          <BentoCard>
-            <BentoCardHeader>
-              <BentoCardTitleGroup>
-                <BentoCardTitle>군종 전력 구성</BentoCardTitle>
-                <BentoCardBadge>
-                  {branchCounts.ALL.toLocaleString('ko-KR')}개 편제
-                </BentoCardBadge>
-              </BentoCardTitleGroup>
+        <EditorialSummaryGrid aria-label="군사 총람 인포그래픽 요약">
+          <EditorialSummaryCol>
+            <EditorialSummaryHead>
+              <EditorialSummaryTitle>
+                군종 전력 구성
+                <span>{branchCounts.ALL.toLocaleString('ko-KR')}개</span>
+              </EditorialSummaryTitle>
               <SummaryMetaGroup>
                 <span>
                   정치체{' '}
@@ -773,76 +769,72 @@ export function MilitaryCatalogPage() {
                   건
                 </span>
               </SummaryMetaGroup>
-            </BentoCardHeader>
-            <BentoCardBody>
-              {branchCounts.ALL > 0 ? (
-                <BranchSummaryLayout>
-                  <MiniDonutRing
-                    slices={branchSlices}
-                    size={74}
-                    strokeWidth={9}
-                    centerValue={branchCounts.ALL.toLocaleString('ko-KR')}
-                    centerLabel="편제"
-                  />
-                  <BranchSummaryRight>
-                    <StackedSegmentBar slices={branchSlices} height={10} />
-                    <SummaryFootNote>
-                      등록 총원 {kpiMetrics.totalUnits.toLocaleString('ko-KR')}개 ·
-                      현재 조건 일치{' '}
-                      {filteredUnits.length.toLocaleString('ko-KR')}개 부대
-                    </SummaryFootNote>
-                  </BranchSummaryRight>
-                </BranchSummaryLayout>
-              ) : (
-                <SummaryEmptyText>
-                  현재 필터 조건에 해당하는 군종 편제가 없습니다.
-                </SummaryEmptyText>
-              )}
-            </BentoCardBody>
-          </BentoCard>
+            </EditorialSummaryHead>
+            {branchCounts.ALL > 0 ? (
+              <BranchSummaryLayout>
+                <MiniDonutRing
+                  slices={branchSlices}
+                  size={74}
+                  strokeWidth={9}
+                  centerValue={branchCounts.ALL.toLocaleString('ko-KR')}
+                  centerLabel="편제"
+                />
+                <BranchSummaryRight>
+                  <StackedSegmentBar slices={branchSlices} height={10} />
+                  <SummaryFootNote>
+                    등록 총원 {kpiMetrics.totalUnits.toLocaleString('ko-KR')}개 ·
+                    현재 조건 일치{' '}
+                    {filteredUnits.length.toLocaleString('ko-KR')}개 부대
+                  </SummaryFootNote>
+                </BranchSummaryRight>
+              </BranchSummaryLayout>
+            ) : (
+              <SummaryEmptyText>
+                현재 필터 조건에 해당하는 군종 편제가 없습니다.
+              </SummaryEmptyText>
+            )}
+          </EditorialSummaryCol>
 
-          <BentoCard>
-            <BentoCardHeader>
-              <BentoCardTitleGroup>
-                <BentoCardTitle>지휘 제대 · 현역 편제 비중</BentoCardTitle>
-                <BentoCardBadge>
+          <EditorialSummaryCol>
+            <EditorialSummaryHead>
+              <EditorialSummaryTitle>
+                지휘 제대 · 현역 비중
+                <span>
                   상급·전략{' '}
                   {kpiMetrics.highAndStrategicCount.toLocaleString('ko-KR')}개
-                </BentoCardBadge>
-              </BentoCardTitleGroup>
+                </span>
+              </EditorialSummaryTitle>
               <SummaryMetaGroup>
                 <span>
                   현역 비율 <strong>{echelonAndStatusStats.activePct}%</strong>
                 </span>
               </SummaryMetaGroup>
-            </BentoCardHeader>
-            <BentoCardBody>
-              {filteredUnits.length > 0 ? (
-                <>
-                  <SummarySectionBlock>
-                    <SummarySubLabel>지휘 제대 구성</SummarySubLabel>
-                    <StackedSegmentBar
-                      slices={echelonAndStatusStats.echelonSlices}
-                      height={9}
-                    />
-                  </SummarySectionBlock>
-                  <SummaryHairline />
-                  <SummarySectionBlock>
-                    <SummarySubLabel>현역 · 해체 편제 비율</SummarySubLabel>
-                    <StackedSegmentBar
-                      slices={echelonAndStatusStats.statusSlices}
-                      height={7}
-                    />
-                  </SummarySectionBlock>
-                </>
-              ) : (
-                <SummaryEmptyText>
-                  현재 필터 조건에 해당하는 지휘 제대 데이터가 없습니다.
-                </SummaryEmptyText>
-              )}
-            </BentoCardBody>
-          </BentoCard>
-        </BentoGrid2Col>
+            </EditorialSummaryHead>
+            {filteredUnits.length > 0 ? (
+              <>
+                <SummarySectionBlock>
+                  <SummarySubLabel>지휘 제대 구성</SummarySubLabel>
+                  <StackedSegmentBar
+                    slices={echelonAndStatusStats.echelonSlices}
+                    height={9}
+                  />
+                </SummarySectionBlock>
+                <SummaryHairline />
+                <SummarySectionBlock>
+                  <SummarySubLabel>현역 · 해체 편제 비율</SummarySubLabel>
+                  <StackedSegmentBar
+                    slices={echelonAndStatusStats.statusSlices}
+                    height={7}
+                  />
+                </SummarySectionBlock>
+              </>
+            ) : (
+              <SummaryEmptyText>
+                현재 필터 조건에 해당하는 지휘 제대 데이터가 없습니다.
+              </SummaryEmptyText>
+            )}
+          </EditorialSummaryCol>
+        </EditorialSummaryGrid>
       ) : null}
 
       {(showEraStrip ||
@@ -877,12 +869,48 @@ export function MilitaryCatalogPage() {
       ) : null}
 
       <ToolbarRow>
-        <ToolbarLeftGroup>
-          <LedgerSearchBox>
+        <CatalogBranchRow role="group" aria-label="군종 필터">
+          {BRANCH_TABS.filter(
+            (tab) =>
+              tab.key === 'ALL' ||
+              branchCounts[tab.key] > 0 ||
+              branchTab === tab.key,
+          ).map((tab) => (
+            <CatalogBranchBtn
+              key={tab.key}
+              type="button"
+              $active={branchTab === tab.key}
+              onClick={() => setBranchTab(tab.key)}
+            >
+              <span>{tab.label}</span>
+              <small>{branchCounts[tab.key].toLocaleString('ko-KR')}</small>
+            </CatalogBranchBtn>
+          ))}
+        </CatalogBranchRow>
+
+        <ToolbarRightGroup>
+          <CountryPickerWrap>
+            <SearchableSelect
+              size="sm"
+              ariaLabel="국가 및 정치체 필터"
+              clearable
+              value={countryFilter}
+              onChange={(nextVal) => setCountryFilter(nextVal)}
+              placeholder={`전체 국가 · 정체 (${countryOptions.length})`}
+              searchPlaceholder="국가 · 시대 정치체 검색…"
+              options={countryOptions.map<SearchableSelectOption>((opt) => ({
+                value: opt.label,
+                label: opt.label,
+                meta: `${opt.count}개`,
+              }))}
+            />
+          </CountryPickerWrap>
+
+          <LedgerSearchBox style={{ maxWidth: 268 }}>
             <FiSearch />
             <LedgerSearchInput
               type="search"
-              placeholder="부대·사령부명, 약칭, 별칭, 지휘관, 주둔지, 국가 검색…"
+              placeholder="사령부·부대, 지휘관, 주둔지 검색…"
               value={searchInput}
               onChange={(evt) => setSearchInput(evt.target.value)}
             />
@@ -897,35 +925,6 @@ export function MilitaryCatalogPage() {
             ) : null}
           </LedgerSearchBox>
 
-          <ToolbarSelect
-            aria-label="국가 및 정치체 필터"
-            value={countryFilter}
-            onChange={(evt) => setCountryFilter(evt.target.value)}
-          >
-            <option value="">전체 국가 · 정치체 ({countryOptions.length})</option>
-            {countryOptions.map((opt) => (
-              <option key={opt.label} value={opt.label}>
-                {opt.label} ({opt.count})
-              </option>
-            ))}
-          </ToolbarSelect>
-
-          <ToolbarSelect
-            aria-label="군종 필터"
-            value={branchTab}
-            onChange={(evt) =>
-              setBranchTab(evt.target.value as BranchTabKey)
-            }
-          >
-            {BRANCH_TABS.map((tab) => (
-              <option key={tab.key} value={tab.key}>
-                {tab.label} ({branchCounts[tab.key].toLocaleString('ko-KR')})
-              </option>
-            ))}
-          </ToolbarSelect>
-        </ToolbarLeftGroup>
-
-        <ToolbarRightGroup>
           <LedgerViewSwitch role="group" aria-label="보기 방식 전환">
             <LedgerViewSwitchItem
               type="button"
@@ -1005,21 +1004,26 @@ export function MilitaryCatalogPage() {
 
                 <PopoverMenuDivider />
                 <PopoverMenuSectionLabel>제대 규모 필터</PopoverMenuSectionLabel>
-                <ToolbarSelect
-                  aria-label="제대 규모 필터"
-                  value={echelonTier}
-                  onChange={(evt) =>
-                    setEchelonTier(evt.target.value as EchelonTierFilter)
-                  }
-                  style={{ maxWidth: '100%', width: '100%' }}
-                >
-                  {ECHELON_TIER_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </ToolbarSelect>
+                {ECHELON_TIER_OPTIONS.map((opt) => {
+                  const isActiveTier = echelonTier === opt.value
+                  return (
+                    <PopoverMenuItem
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setEchelonTier(opt.value)
+                        closeMenu()
+                      }}
+                    >
+                      <span>{opt.label}</span>
+                      {isActiveTier ? (
+                        <FiCheck size={13} style={{ marginLeft: 'auto' }} />
+                      ) : null}
+                    </PopoverMenuItem>
+                  )
+                })}
 
+                <PopoverMenuDivider />
                 <PopoverMenuSectionLabel>기준 연도 스냅샷</PopoverMenuSectionLabel>
                 <SnapshotInputWrap
                   style={{ width: '100%', boxSizing: 'border-box' }}
@@ -1268,44 +1272,150 @@ export function MilitaryCatalogPage() {
                   if (visited.has(node.id)) return null
                   const nextVisited = new Set(visited)
                   nextVisited.add(node.id)
-                  const childNodes = childrenMap.get(node.id) ?? []
+                  const childNodes = (childrenMap.get(node.id) ?? []).filter(
+                    (childCandidate) => !nextVisited.has(childCandidate.id),
+                  )
+                  const hasChildren = childNodes.length > 0
+                  const isNodeCollapsed = collapsedTreeUnitIds.has(node.id)
                   const typeLabel = node.unitType
                     ? (UNIT_TYPE_LABELS[node.unitType] ?? node.unitType)
-                    : '편제'
+                    : null
                   const branchText = node.branch
                     ? (BRANCH_LABELS[node.branch] ?? node.branch)
                     : null
+                  const classText = [typeLabel, branchText]
+                    .filter(Boolean)
+                    .join(' · ')
+
+                  const startYr = extractSignedYear(
+                    node.established,
+                    node.establishedDate,
+                  )
+                  const endYr = extractSignedYear(
+                    node.disbanded,
+                    node.disbandedDate,
+                  )
+                  const fmtYr = (yr: number) =>
+                    yr < 0 ? `BC ${Math.abs(yr)}` : String(yr)
+                  const periodShort =
+                    startYr != null && endYr != null
+                      ? startYr === endYr
+                        ? fmtYr(startYr)
+                        : `${fmtYr(startYr)}–${fmtYr(endYr)}`
+                      : startYr != null
+                        ? node.isActive === false
+                          ? `${fmtYr(startYr)}–?`
+                          : `${fmtYr(startYr)}–`
+                        : endYr != null
+                          ? `–${fmtYr(endYr)}`
+                          : node.isActive === false
+                            ? '해체'
+                            : null
+
+                  const leadTenurePerson = node.tenures?.[0]?.person
+                  const leadLegacyPerson = node.commanders?.[0]?.person
+                  const leadPerson = leadTenurePerson ?? leadLegacyPerson
+                  const leadCommanderName = leadPerson
+                    ? [leadPerson.name, leadPerson.surname]
+                        .filter(Boolean)
+                        .join(' ')
+                    : null
+
+                  const combatCount =
+                    (node.sideDeployedUnits?.length ?? 0) +
+                    (node.eventRelations?.length ?? 0)
 
                   return (
-                    <React.Fragment key={node.id}>
+                    <CatalogTreeNodeWrap key={node.id} $child={depth > 0}>
                       <TreeUnitRow
-                        type="button"
-                        $depth={depth}
+                        $root={depth === 0}
+                        role="link"
+                        tabIndex={0}
                         onClick={() => handleSelectUnitRow(node)}
+                        onKeyDown={(keyEvt) => {
+                          if (keyEvt.key === 'Enter' || keyEvt.key === ' ') {
+                            keyEvt.preventDefault()
+                            handleSelectUnitRow(node)
+                          }
+                        }}
                       >
                         <TreeRowLeft>
-                          {depth > 0 ? (
-                            <TreeIndentConnector>↳</TreeIndentConnector>
+                          {hasChildren ? (
+                            <TreeNodeToggleBtn
+                              type="button"
+                              aria-label={
+                                isNodeCollapsed
+                                  ? '예하 편제 펼치기'
+                                  : '예하 편제 접기'
+                              }
+                              onClick={(evt) => {
+                                evt.stopPropagation()
+                                setCollapsedTreeUnitIds((prev) => {
+                                  const next = new Set(prev)
+                                  if (next.has(node.id)) next.delete(node.id)
+                                  else next.add(node.id)
+                                  return next
+                                })
+                              }}
+                            >
+                              {isNodeCollapsed ? (
+                                <FiChevronRight size={13.5} />
+                              ) : (
+                                <FiChevronDown size={13.5} />
+                              )}
+                            </TreeNodeToggleBtn>
+                          ) : (
+                            <TreeLeafDot aria-hidden />
+                          )}
+
+                          {node.insigniaUrl ? (
+                            <TreeEmblemImg
+                              src={getUploadImageUrl(node.insigniaUrl)}
+                              alt=""
+                              onError={(imgEvt) => {
+                                imgEvt.currentTarget.style.display = 'none'
+                              }}
+                            />
                           ) : null}
-                          <TreeEchelonTag>{typeLabel}</TreeEchelonTag>
-                          {branchText ? (
-                            <TreeBranchTag>{branchText}</TreeBranchTag>
-                          ) : null}
-                          <TreeUnitTitle>
+
+                          <TreeUnitTitle $root={depth === 0}>
                             {node.name}
-                            {node.abbreviation ? ` (${node.abbreviation})` : ''}
+                            {node.abbreviation ? (
+                              <TreeAbbrSpan>
+                                {' '}
+                                ({node.abbreviation})
+                              </TreeAbbrSpan>
+                            ) : null}
                           </TreeUnitTitle>
+
+                          {classText ? (
+                            <TreeClassSpan>{classText}</TreeClassSpan>
+                          ) : null}
+
+                          {periodShort ? (
+                            <TreePeriodSpan>· {periodShort}</TreePeriodSpan>
+                          ) : null}
                         </TreeRowLeft>
+
                         <TreeRowRight>
-                          {childNodes.length > 0 ? (
+                          {leadCommanderName ? (
+                            <TreeCmdSpan>{leadCommanderName}</TreeCmdSpan>
+                          ) : null}
+                          {hasChildren ? (
                             <TreeSubCount>예하 {childNodes.length}</TreeSubCount>
+                          ) : null}
+                          {combatCount > 0 ? (
+                            <TreeCombatCount>참전 {combatCount}</TreeCombatCount>
                           ) : null}
                         </TreeRowRight>
                       </TreeUnitRow>
-                      {childNodes.length > 0
-                        ? renderTreeNodes(childNodes, depth + 1, nextVisited)
-                        : null}
-                    </React.Fragment>
+
+                      {hasChildren && !isNodeCollapsed ? (
+                        <CatalogTreeChildrenRail>
+                          {renderTreeNodes(childNodes, depth + 1, nextVisited)}
+                        </CatalogTreeChildrenRail>
+                      ) : null}
+                    </CatalogTreeNodeWrap>
                   )
                 })
 
@@ -1405,21 +1515,125 @@ const PageCanvas = styled.div`
   }
 `
 
+const EditorialSummaryGrid = styled.section`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 6px 0 22px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  > *:first-child {
+    padding-right: 32px;
+  }
+
+  > *:nth-child(2) {
+    padding-left: 32px;
+    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+
+  @media (max-width: 960px) {
+    grid-template-columns: 1fr;
+
+    > *:first-child {
+      padding-right: 0;
+    }
+
+    > *:nth-child(2) {
+      padding-left: 0;
+      border-left: none;
+      margin-top: 22px;
+      padding-top: 22px;
+      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+    }
+  }
+`
+
+const EditorialSummaryCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+`
+
+const EditorialSummaryHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 12px;
+`
+
+const EditorialSummaryTitle = styled.h2`
+  margin: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.022em;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  span {
+    font-size: 12px;
+    font-weight: 600;
+    ${DIGIT_DISPLAY}
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
 const ToolbarRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 10px 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
-const ToolbarLeftGroup = styled.div`
+const CatalogBranchRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 560px;
+  gap: 4px;
   min-width: 0;
+`
+
+const CatalogBranchBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 7px;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+  transition: background ${MOTION.fast} ease, color ${MOTION.fast} ease;
+
+  small {
+    font-size: 11.5px;
+    font-weight: 600;
+    ${DIGIT_DISPLAY}
+    opacity: ${({ $active }) => ($active ? 0.95 : 0.65)};
+  }
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  }
+`
+
+const CountryPickerWrap = styled.div`
+  width: 210px;
+  min-width: 170px;
 `
 
 const ToolbarRightGroup = styled.div`
@@ -1427,6 +1641,7 @@ const ToolbarRightGroup = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 `
 
 const ActiveFilterBar = styled.div`
@@ -1434,30 +1649,6 @@ const ActiveFilterBar = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-`
-
-const ToolbarSelect = styled.select`
-  ${toolbarControlHeight}
-  padding: 0 28px 0 10px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background-color: ${({ theme }) => ledgerBackground(theme.mode)};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  max-width: 220px;
-  cursor: pointer;
-  outline: none;
-  transition: border-color ${MOTION.fast} ease;
-
-  &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  }
-
-  &:focus {
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
 `
 
 const SnapshotInputWrap = styled.label`
@@ -1516,11 +1707,7 @@ const ClearIconBtn = styled.button`
 const LedgerSurfacePanel = styled.div`
   display: flex;
   flex-direction: column;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
-  overflow: hidden;
-  min-height: 320px;
+  min-height: 240px;
 `
 
 const LoadingBox = styled.div`
@@ -1533,14 +1720,12 @@ const LoadingBox = styled.div`
 const CountryTreeContainer = styled.div`
   display: flex;
   flex-direction: column;
+  gap: 18px;
 `
 
 const CountryTreeSection = styled.div`
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-
-  &:last-child {
-    border-bottom: none;
-  }
+  display: flex;
+  flex-direction: column;
 `
 
 const CountryGroupBand = styled.div`
@@ -1548,9 +1733,9 @@ const CountryGroupBand = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 14px;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  padding: 10px 2px 8px;
+  background: transparent;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const CountryGroupToggle = styled.button`
@@ -1562,7 +1747,9 @@ const CountryGroupToggle = styled.button`
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
   cursor: pointer;
 `
 
@@ -1573,48 +1760,55 @@ const CountryGroupCount = styled.span`
   ${DIGIT_DISPLAY}
 `
 
-const CountryJumpBtn = styled.button`
-  padding: 3px 8px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  }
-`
-
 const CountryTreeList = styled.div`
   display: flex;
   flex-direction: column;
 `
 
-const TreeUnitRow = styled.button<{ $depth: number }>`
+const CatalogTreeNodeWrap = styled.div<{ $child?: boolean }>`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+
+  ${({ $child, theme }) =>
+    $child
+      ? css`
+          &::before {
+            content: '';
+            position: absolute;
+            left: -16px;
+            top: 19px;
+            width: 12px;
+            border-top: 1px solid ${ledgerHairlineStrong(theme.mode)};
+            pointer-events: none;
+          }
+        `
+      : ''}
+`
+
+const CatalogTreeChildrenRail = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-left: 14px;
+  padding-left: 16px;
+  border-left: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+const TreeUnitRow = styled.div<{ $root?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   width: 100%;
   text-align: left;
-  padding: 8.5px 14px 8.5px ${({ $depth }) => 16 + Math.min($depth, 7) * 22}px;
-  border: none;
+  padding: ${({ $root }) => ($root ? '11px 6px' : '8.5px 6px')};
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
   cursor: pointer;
+  box-sizing: border-box;
   transition: background ${MOTION.fast} ease;
-
-  &:last-child {
-    border-bottom: none;
-  }
 
   &:hover {
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
@@ -1625,64 +1819,103 @@ const TreeRowLeft = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
 `
 
-const TreeIndentConnector = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const TreeEchelonTag = styled.span`
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: 10.5px;
-  font-weight: 700;
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const TreeBranchTag = styled.span`
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: 10.5px;
-  font-weight: 600;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+const TreeNodeToggleBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
 `
 
-const TreeUnitTitle = styled.span`
-  font-size: 13px;
-  font-weight: 600;
+const TreeLeafDot = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+const TreeEmblemImg = styled.img`
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  object-fit: contain;
+  flex-shrink: 0;
+`
+
+const TreeUnitTitle = styled.span<{ $root?: boolean }>`
+  font-size: ${({ $root }) => ($root ? '14.5px' : '13.5px')};
+  font-weight: ${({ $root }) => ($root ? 800 : 680)};
+  letter-spacing: -0.015em;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const TreeUnitNick = styled.span`
-  font-size: 11.5px;
+const TreeAbbrSpan = styled.span`
+  font-size: 0.88em;
+  font-weight: 550;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const TreeClassSpan = styled.span`
+  font-size: 12px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TreePeriodSpan = styled.span`
+  font-size: 12px;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const TreeRowRight = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   flex-shrink: 0;
 `
 
-const TreeStatPill = styled.span`
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  ${DIGIT_DISPLAY}
+const TreeCmdSpan = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const TreeSubCount = styled.span`
-  font-size: 11px;
+  font-size: 11.5px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const TreeCombatCount = styled.span`
+  font-size: 11.5px;
+  font-weight: 650;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
   ${DIGIT_DISPLAY}
 `
 

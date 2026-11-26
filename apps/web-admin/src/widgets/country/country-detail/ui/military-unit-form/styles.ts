@@ -190,18 +190,14 @@ export const FormGroupSummaryBadge = styled.span`
   display: inline-flex;
   align-items: center;
   max-width: 60%;
-  padding: 2px 9px;
-  border-radius: 999px;
+  padding: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => `var(--unit-branch-text, ${theme.colors.primary})`};
-  background: ${({ theme }) =>
-    `rgba(var(--unit-branch-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.16 : 0.08})`};
-  border: 1px solid rgba(var(--unit-branch-rgb, 99, 102, 241), 0.22);
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /* 2단 분할 — 사건 폼 SplitColumnsGrid / SplitColumnLeft·Right와 같은 값 */
@@ -294,13 +290,18 @@ export const OptionalRevealBtn = styled.button<{ $open?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 28px;
-  padding: 0 11px;
-  border-radius: 999px;
-  border: 1px dashed
+  height: 27px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid
     ${({ $open, theme }) =>
-      $open ? theme.colors.primary : S.getC(theme).border.default};
-  background: transparent;
+      $open ? theme.colors.primary : S.getC(theme).border.light};
+  background: ${({ $open, theme }) =>
+    $open
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.12)'
+        : 'rgba(99, 102, 241, 0.05)'
+      : 'transparent'};
   color: ${({ $open, theme }) =>
     $open ? theme.colors.primary : theme.colors.text.secondary};
   font: inherit;
@@ -309,7 +310,8 @@ export const OptionalRevealBtn = styled.button<{ $open?: boolean }>`
   cursor: pointer;
   transition:
     color 0.14s ease,
-    border-color 0.14s ease;
+    border-color 0.14s ease,
+    background-color 0.14s ease;
 
   &:hover,
   &:focus-visible {
@@ -371,43 +373,30 @@ export const TitleSuggestionRow = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(59, 130, 246, 0.12)'
-      : 'rgba(37, 99, 235, 0.07)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(96, 165, 250, 0.28)'
-        : 'rgba(37, 99, 235, 0.2)'};
+  padding: 6px 0 2px;
 `
 
 export const TitleSuggestionLabel = styled.span`
   font-size: 11.5px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 export const TitleSuggestionButton = styled.button`
-  padding: 3px 9px;
+  padding: 3px 8px;
   border-radius: 6px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(96, 165, 250, 0.35)'
-        : 'rgba(37, 99, 235, 0.25)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(30, 58, 138, 0.35)' : '#ffffff'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8')};
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: border-color 0.14s ease, color 0.14s ease;
 
   &:hover {
-    opacity: 0.9;
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
   }
 `
 
@@ -415,23 +404,25 @@ export const SimilarUnitsBar = styled.div`
   display: flex;
   flex-direction: column;
   gap: 5px;
-  padding: 8px 11px;
-  border-radius: 8px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(245, 158, 11, 0.1)'
-      : 'rgba(245, 158, 11, 0.08)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(251, 191, 36, 0.28)'
-        : 'rgba(217, 119, 6, 0.24)'};
+  padding: 8px 0 2px;
+  border-top: 1px solid ${({ theme }) => S.getC(theme).border.light};
 `
 
 export const SimilarUnitsLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11.5px;
   font-weight: 700;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#b45309')};
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #f59e0b;
+  }
 `
 
 export const SimilarUnitsList = styled.div`
@@ -441,12 +432,11 @@ export const SimilarUnitsList = styled.div`
 `
 
 export const SimilarUnitChip = styled.span`
-  padding: 2px 8px;
+  padding: 2px 7px;
   border-radius: 5px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
   font-size: 11.5px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.5)' : '#ffffff'};
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const ContextCard = styled.div`

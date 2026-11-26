@@ -1,27 +1,18 @@
 import { type MouseEvent, useMemo, useState } from 'react'
 import {
-  FiAnchor,
   FiArrowDown,
   FiArrowUp,
   FiArrowUpRight,
-  FiAward,
-  FiCompass,
-  FiCrosshair,
   FiEdit2,
-  FiGitCommit,
-  FiLayers,
-  FiMapPin,
-  FiNavigation,
   FiPlus,
-  FiShield,
-  FiUser,
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
+  DIGIT_DISPLAY,
   ledgerAccent,
-  ledgerAccentBorder,
   ledgerAccentSubtle,
+  ledgerBackground,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
@@ -107,6 +98,7 @@ export interface LedgerMilitaryUnitItem {
       id: string
       name: string
       surname?: string | null
+      profileImageUrl?: string | null
     }
   }>
   tenures?: MilitaryUnitTenureItem[]
@@ -151,42 +143,6 @@ export interface MilitaryUnitsLedgerViewProps {
 
 type SortField = 'echelon' | 'established' | 'name'
 type SortDirection = 'asc' | 'desc'
-
-function renderLedgerBranchIcon(
-  branch: string | null | undefined,
-  unitType: string | null | undefined,
-) {
-  if (
-    unitType === 'SUPREME_COMMAND' ||
-    unitType === 'GENERAL_STAFF' ||
-    unitType === 'SERVICE_HQ'
-  ) {
-    return <FiAward size={12} />
-  }
-  if (branch === 'NAVY' || branch === 'COAST_GUARD' || unitType === 'FLEET') {
-    return <FiAnchor size={12} />
-  }
-  if (
-    branch === 'AIR_FORCE' ||
-    branch === 'SPACE_FORCE' ||
-    unitType === 'AIR_FLEET' ||
-    unitType === 'AIR_CORPS' ||
-    unitType === 'WING'
-  ) {
-    return <FiNavigation size={12} />
-  }
-  if (
-    branch === 'MARINE_CORPS' ||
-    branch === 'SPECIAL_FORCES' ||
-    unitType === 'SPECIAL_FORCES'
-  ) {
-    return <FiCrosshair size={12} />
-  }
-  if (branch === 'JOINT') {
-    return <FiLayers size={12} />
-  }
-  return <FiShield size={12} />
-}
 
 function formatUnitYearPoint(
   structuredParts: MilitaryUnitDatePartsDto | null | undefined,
@@ -401,7 +357,7 @@ export function MilitaryUnitsLedgerView({
                   $active={sortField === 'name'}
                   onClick={() => toggleSort('name')}
                 >
-                  <span>부대 · 사령부명</span>
+                  <span>사령부 · 부대</span>
                   {sortField === 'name' ? (
                     sortDirection === 'asc' ? (
                       <FiArrowUp size={11} />
@@ -412,9 +368,9 @@ export function MilitaryUnitsLedgerView({
                 </SortableThBtn>
               </Th>
               {showCountryColumn ? (
-                <Th style={{ width: compact ? 118 : 148 }}>국가 · 정치체</Th>
+                <Th style={{ width: compact ? 118 : 148 }}>국가 · 정체</Th>
               ) : null}
-              <Th style={{ width: compact ? 124 : 168 }}>
+              <Th style={{ width: compact ? 124 : 162 }}>
                 <SortableThBtn
                   type="button"
                   $active={sortField === 'echelon'}
@@ -431,15 +387,18 @@ export function MilitaryUnitsLedgerView({
                 </SortableThBtn>
               </Th>
               {!compact ? (
-                <Th style={{ width: 170 }}>상급 편제 · 소관 부처</Th>
+                <Th style={{ width: 176 }}>상급 편제 · 소관</Th>
               ) : null}
               {!compact ? (
-                <Th style={{ width: 168, textAlign: 'right' }}>
-                  지휘관 · 개편 · 전과
+                <Th style={{ width: 190, textAlign: 'right' }}>
+                  대표 지휘관 · 기록
                 </Th>
               ) : null}
               {hasRowActions ? (
-                <Th style={{ width: 44, textAlign: 'right' }} aria-label="관리" />
+                <Th
+                  style={{ width: 40, textAlign: 'right' }}
+                  aria-label="관리"
+                />
               ) : null}
             </tr>
           </thead>
@@ -457,10 +416,10 @@ export function MilitaryUnitsLedgerView({
                 unitRow.isActive === false || Boolean(disLabel)
               const periodText =
                 estLabel || disLabel
-                  ? `${estLabel ?? '?'} ~ ${disLabel ?? (unitRow.isActive === false ? '해체' : '현재')}`
+                  ? `${estLabel ?? '?'} – ${disLabel ?? (unitRow.isActive === false ? '해체' : '현재')}`
                   : unitRow.isActive === false
-                    ? '해체 (연도 미상)'
-                    : '연도 미등록'
+                    ? '해체'
+                    : '연도 미상'
               const echelonText = unitRow.unitType
                 ? (unitTypeLabels[unitRow.unitType] ?? unitRow.unitType)
                 : '편제'
@@ -496,7 +455,7 @@ export function MilitaryUnitsLedgerView({
               const countryLabel =
                 unitRow.historicalCountry?.name ??
                 unitRow.country?.name ??
-                '국가 미지정'
+                '미지정'
               const countryJumpId =
                 unitRow.historicalCountry?.id ?? unitRow.country?.id ?? null
               const showConstituentPolityBadge =
@@ -505,6 +464,24 @@ export function MilitaryUnitsLedgerView({
                 (!isHistorical ||
                   (targetPolityId != null &&
                     unitRow.historicalCountryId !== targetPolityId))
+
+              const subInfoParts: string[] = []
+              if (showConstituentPolityBadge && unitRow.historicalCountry?.name) {
+                subInfoParts.push(unitRow.historicalCountry.name)
+              }
+              if (garrisonText) {
+                subInfoParts.push(garrisonText)
+              }
+              if (compact && parentRef) {
+                subInfoParts.push(`↳ ${parentRef.name}`)
+              } else if (compact && effDept) {
+                subInfoParts.push(effDept.name)
+              }
+
+              const recordParts: string[] = []
+              if (vesselCount > 0) recordParts.push(`함정 ${vesselCount}`)
+              if (lineageTotal > 0) recordParts.push(`개편 ${lineageTotal}`)
+              if (battleCount > 0) recordParts.push(`참전 ${battleCount}`)
 
               return (
                 <Tr
@@ -530,14 +507,7 @@ export function MilitaryUnitsLedgerView({
                             imgEvt.currentTarget.style.display = 'none'
                           }}
                         />
-                      ) : (
-                        <LedgerUnitThumbIcon $highCommand={isHighCommand}>
-                          {renderLedgerBranchIcon(
-                            unitRow.branch,
-                            unitRow.unitType,
-                          )}
-                        </LedgerUnitThumbIcon>
-                      )}
+                      ) : null}
                       <NameCellBody>
                         <NamePrimary>
                           <NameTitleSpan>{unitRow.name}</NameTitleSpan>
@@ -545,32 +515,15 @@ export function MilitaryUnitsLedgerView({
                             <AbbrTag>({unitRow.abbreviation.trim()})</AbbrTag>
                           ) : null}
                           {nicknameText ? (
-                            <NicknameTag>&ldquo;{nicknameText}&rdquo;</NicknameTag>
+                            <NicknameTag>“{nicknameText}”</NicknameTag>
                           ) : null}
                           <DetailOpenIcon aria-hidden="true">
                             <FiArrowUpRight size={12} />
                           </DetailOpenIcon>
                         </NamePrimary>
-                        {(showConstituentPolityBadge ||
-                          garrisonText ||
-                          (compact && (parentRef || effDept))) && (
-                          <SubInfoRow>
-                            {showConstituentPolityBadge ? (
-                              <EraTag>{unitRow.historicalCountry!.name}</EraTag>
-                            ) : null}
-                            {garrisonText ? (
-                              <GarrisonHint>
-                                <FiMapPin size={10} />
-                                {garrisonText}
-                              </GarrisonHint>
-                            ) : null}
-                            {compact && parentRef ? (
-                              <ParentHint>↳ {parentRef.name}</ParentHint>
-                            ) : compact && effDept ? (
-                              <ParentHint>소관: {effDept.name}</ParentHint>
-                            ) : null}
-                          </SubInfoRow>
-                        )}
+                        {subInfoParts.length > 0 ? (
+                          <SubInfoRow>{subInfoParts.join(' · ')}</SubInfoRow>
+                        ) : null}
                       </NameCellBody>
                     </NameCellRow>
                   </Td>
@@ -600,14 +553,9 @@ export function MilitaryUnitsLedgerView({
                     </Td>
                   ) : null}
                   <Td>
-                    <BadgeRow>
-                      <EchelonBadge $echelon={unitRow.unitType ?? ''}>
-                        {echelonText}
-                      </EchelonBadge>
-                      {branchText ? (
-                        <BranchBadge>{branchText}</BranchBadge>
-                      ) : null}
-                    </BadgeRow>
+                    <ClassCellText $highCommand={isHighCommand}>
+                      {[echelonText, branchText].filter(Boolean).join(' · ')}
+                    </ClassCellText>
                   </Td>
                   {!compact ? (
                     <Td>
@@ -617,7 +565,6 @@ export function MilitaryUnitsLedgerView({
                         </ParentCellText>
                       ) : effDept ? (
                         <DeptCellText title={effDept.name}>
-                          <FiShield size={11} />
                           {effDept.name}
                         </DeptCellText>
                       ) : (
@@ -627,45 +574,22 @@ export function MilitaryUnitsLedgerView({
                   ) : null}
                   {!compact ? (
                     <Td style={{ textAlign: 'right' }}>
-                      <MetricGroup>
-                        {commanderText ? (
-                          <CommanderChip
-                            title={`대표 지휘관: ${commanderText}`}
-                          >
-                            <FiUser size={10.5} />
-                            {commanderText}
-                          </CommanderChip>
-                        ) : null}
-                        {vesselCount > 0 ? (
-                          <MetricChip title={`배속 함정 ${vesselCount}척`}>
-                            <FiAnchor size={10.5} />
-                            {vesselCount}
-                          </MetricChip>
-                        ) : null}
-                        {lineageTotal > 0 ? (
-                          <MetricChip
-                            title={`전신 ${predCount} · 후신 ${succCount}`}
-                          >
-                            <FiGitCommit size={11} />
-                            {lineageTotal}
-                          </MetricChip>
-                        ) : null}
-                        {battleCount > 0 ? (
-                          <MetricChip
-                            $combat
-                            title={`참전 사건·전투 ${battleCount}건`}
-                          >
-                            <FiCompass size={11} />
-                            {battleCount}
-                          </MetricChip>
-                        ) : null}
-                        {!commanderText &&
-                        vesselCount === 0 &&
-                        lineageTotal === 0 &&
-                        battleCount === 0 ? (
-                          <DashText>—</DashText>
-                        ) : null}
-                      </MetricGroup>
+                      {commanderText || recordParts.length > 0 ? (
+                        <RightMetaStack>
+                          {commanderText ? (
+                            <CommanderLabel title={`대표 지휘관: ${commanderText}`}>
+                              {commanderText}
+                            </CommanderLabel>
+                          ) : null}
+                          {recordParts.length > 0 ? (
+                            <RecordCountsText $accent={battleCount > 0}>
+                              {recordParts.join(' · ')}
+                            </RecordCountsText>
+                          ) : null}
+                        </RightMetaStack>
+                      ) : (
+                        <DashText>—</DashText>
+                      )}
                     </Td>
                   ) : null}
                   {hasRowActions ? (
@@ -731,18 +655,13 @@ const LedgerHeaderBar = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.07)'
-        : 'rgba(20, 19, 34, 0.07)'};
+  padding: 10px 2px 8px;
 `
 
 const LedgerMetaText = styled.span`
   font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
 
   strong {
     font-weight: 700;
@@ -771,14 +690,22 @@ const Th = styled.th`
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 8px 12px;
-  font-size: 11px;
+  padding: 8px 10px;
+  font-size: 11.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? '#121319' : '#fafafb'};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   white-space: nowrap;
+
+  &:first-child {
+    padding-left: 4px;
+  }
+
+  &:last-child {
+    padding-right: 4px;
+  }
 `
 
 const SortableThBtn = styled.button<{ $active?: boolean }>`
@@ -789,7 +716,7 @@ const SortableThBtn = styled.button<{ $active?: boolean }>`
   border: none;
   background: transparent;
   font: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   color: ${({ theme, $active }) =>
     $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
@@ -802,9 +729,6 @@ const SortableThBtn = styled.button<{ $active?: boolean }>`
 
 const Tr = styled.tr<{ $selected: boolean }>`
   cursor: pointer;
-  border-left: 2.5px solid
-    ${({ theme, $selected }) =>
-      $selected ? ledgerAccent(theme.mode) : 'transparent'};
   background: ${({ theme, $selected }) =>
     $selected ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
@@ -819,9 +743,17 @@ const Tr = styled.tr<{ $selected: boolean }>`
 `
 
 const Td = styled.td`
-  padding: 9px 12px;
+  padding: 11px 10px;
   vertical-align: middle;
-  font-size: 12.5px;
+  font-size: 13px;
+
+  &:first-child {
+    padding-left: 4px;
+  }
+
+  &:last-child {
+    padding-right: 4px;
+  }
 `
 
 const PeriodStack = styled.div`
@@ -836,11 +768,12 @@ const StatusDot = styled.span<{ $disbanded: boolean }>`
   border-radius: 999px;
   flex-shrink: 0;
   background: ${({ $disbanded }) => ($disbanded ? '#94a3b8' : '#10b981')};
+  opacity: ${({ $disbanded }) => ($disbanded ? 0.5 : 0.85)};
 `
 
 const PeriodText = styled.span<{ $muted: boolean }>`
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  ${DIGIT_DISPLAY}
   white-space: nowrap;
   color: ${({ theme, $muted }) =>
     $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
@@ -861,55 +794,19 @@ const NameCellBody = styled.div`
 const LedgerUnitThumbImg = styled.img`
   width: 26px;
   height: 26px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 6px;
   flex-shrink: 0;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.12)'
-        : 'rgba(15, 23, 42, 0.1)'};
-`
-
-const LedgerUnitThumbIcon = styled.span<{ $highCommand?: boolean }>`
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: ${({ theme, $highCommand }) =>
-    $highCommand
-      ? theme.mode === 'dark'
-        ? 'rgba(245, 158, 11, 0.14)'
-        : '#fffbeb'
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.05)'
-        : '#f8fafc'};
-  border: 1px solid
-    ${({ theme, $highCommand }) =>
-      $highCommand
-        ? theme.mode === 'dark'
-          ? 'rgba(251, 191, 36, 0.28)'
-          : '#fde68a'
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.1)'
-          : 'rgba(15, 23, 42, 0.09)'};
-  color: ${({ theme, $highCommand }) =>
-    $highCommand
-      ? theme.mode === 'dark'
-        ? '#fcd34d'
-        : '#b45309'
-      : theme.colors.text.secondary};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const NamePrimary = styled.div`
   display: flex;
-  align-items: center;
+  align-items: baseline;
   flex-wrap: wrap;
   gap: 5px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 720;
   color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.35;
 `
@@ -936,206 +833,99 @@ const DetailOpenIcon = styled.span`
 `
 
 const AbbrTag = styled.span`
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const NicknameTag = styled.span`
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 550;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const SubInfoRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
   margin-top: 2px;
-`
-
-const GarrisonHint = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 11px;
+  font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const EraTag = styled.span`
-  font-size: 10.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const ParentHint = styled.span`
-  font-size: 10.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const BadgeRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
 const CountryCellBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 7px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  padding: 0;
+  border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 11.5px;
+  font-family: inherit;
+  font-size: 12.5px;
   font-weight: 600;
+  text-align: left;
   cursor: pointer;
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition:
-    color 0.12s ease,
-    border-color 0.12s ease,
-    background 0.12s ease;
 
   &:hover {
     color: ${({ theme }) => ledgerAccent(theme.mode)};
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 `
 
 const CountryCellText = styled.span<{ $muted?: boolean }>`
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   color: ${({ theme, $muted }) =>
     $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
 `
 
-const EchelonBadge = styled.span<{ $echelon: string }>`
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: 10.5px;
-  font-weight: 700;
-  background: ${({ theme, $echelon }) =>
-    ['SUPREME_COMMAND', 'GENERAL_STAFF', 'SERVICE_HQ'].includes($echelon)
-      ? theme.mode === 'dark'
-        ? 'rgba(245, 158, 11, 0.16)'
-        : 'rgba(245, 158, 11, 0.12)'
-      : [
-            'THEATER',
-            'ARMY_GROUP',
-            'FRONT',
-            'MILITARY_DISTRICT',
-            'FIELD_ARMY',
-            'FLEET',
-            'AIR_FLEET',
-            'CORPS',
-            'AIR_CORPS',
-          ].includes($echelon)
-        ? ledgerAccentSubtle(theme.mode)
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.06)'
-          : 'rgba(20, 19, 34, 0.05)'};
-  color: ${({ theme, $echelon }) =>
-    ['SUPREME_COMMAND', 'GENERAL_STAFF', 'SERVICE_HQ'].includes($echelon)
-      ? theme.mode === 'dark'
-        ? '#fcd34d'
-        : '#b45309'
-      : [
-            'THEATER',
-            'ARMY_GROUP',
-            'FRONT',
-            'MILITARY_DISTRICT',
-            'FIELD_ARMY',
-            'FLEET',
-            'AIR_FLEET',
-            'CORPS',
-            'AIR_CORPS',
-          ].includes($echelon)
-        ? ledgerAccent(theme.mode)
-        : theme.colors.text.secondary};
-`
-
-const BranchBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: 10.5px;
-  font-weight: 600;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.06)'
-      : 'rgba(20, 19, 34, 0.05)'};
-  color: ${({ theme }) => theme.colors.text.secondary};
+const ClassCellText = styled.span<{ $highCommand?: boolean }>`
+  font-size: 12.5px;
+  font-weight: ${({ $highCommand }) => ($highCommand ? 680 : 550)};
+  color: ${({ theme, $highCommand }) =>
+    $highCommand ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
 `
 
 const ParentCellText = styled.span`
-  font-size: 12px;
+  font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const DeptCellText = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const DashText = styled.span`
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const MetricGroup = styled.div`
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 5px;
-`
-
-const CommanderChip = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.06)'
-      : 'rgba(20, 19, 34, 0.045)'};
+  font-size: 12.5px;
+  font-weight: 550;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const MetricChip = styled.span<{ $combat?: boolean }>`
+const DashText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RightMetaStack = styled.div`
   display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  background: ${({ theme, $combat }) =>
-    $combat
-      ? ledgerAccentSubtle(theme.mode)
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : 'rgba(20, 19, 34, 0.05)'};
-  color: ${({ theme, $combat }) =>
-    $combat ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+`
+
+const CommanderLabel = styled.span`
+  max-width: 168px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RecordCountsText = styled.span<{ $accent?: boolean }>`
+  font-size: 11.5px;
+  font-weight: ${({ $accent }) => ($accent ? 650 : 500)};
+  ${DIGIT_DISPLAY}
+  color: ${({ theme, $accent }) =>
+    $accent ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
 `

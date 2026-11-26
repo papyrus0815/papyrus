@@ -3,6 +3,12 @@ import React, { lazy, Suspense, useState } from 'react'
 import { FiLayers, FiMapPin } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentSubtle,
+  ledgerHairlineStrong,
+} from '@/entities/event/ui/ledger-tokens'
 import { HeadquartersMapPreview } from '@/shared/ui/headquarters-location-field'
 
 import type {
@@ -29,9 +35,7 @@ export interface UnitSpatialMapCardProps {
 }
 
 /**
- * 사령부·부대 상세 지면의 통합 공간 지도 카드.
- * - 관할·작전구역 도형(POLYGON/LINE), 본영 핀 좌표, 또는 예하부대 핀 좌표가 있으면 즉시 Leaflet 통합 전술 지도를 펼친다.
- * - 좌표 없이 주둔지 텍스트만 있는 레거시 행이면 HeadquartersMapPreview(명칭 검색)를 기본 펼침으로 보여준다.
+ * 사령부·부대 상세 지면의 공간 작전지도 블록 (무카드 오픈 헤더 + 라운드 캔버스).
  */
 export const UnitSpatialMapCard: React.FC<UnitSpatialMapCardProps> = ({
   unitName,
@@ -76,7 +80,7 @@ export const UnitSpatialMapCard: React.FC<UnitSpatialMapCardProps> = ({
         departmentName={unitName}
         defaultExpanded
         showHeadline
-        mapHeight={compact ? 210 : 260}
+        mapHeight={compact ? 200 : 230}
       />
     )
   }
@@ -89,26 +93,32 @@ export const UnitSpatialMapCard: React.FC<UnitSpatialMapCardProps> = ({
       }
     : null
 
+  const resolvedAccent = jurisdictionGeometry?.color || accentColor
+  const summaryParts: string[] = []
+  if (garrisonPoint) {
+    summaryParts.push(garrison?.trim() || '본영 좌표 지정')
+  }
+  if (hasGeometry && jurisdictionGeometry) {
+    summaryParts.push(
+      jurisdictionGeometry.type === 'POLYGON' ? '관할구역' : '담당전선',
+    )
+  }
+  if (subUnitPins.length > 0) {
+    summaryParts.push(`예하 ${subUnitPins.length}곳`)
+  }
+
   return (
-    <CardWrap>
-      <CardBar>
-        <LegendRow>
-          <FiMapPin size={12.5} />
-          <TitleText>주둔지 · 관할 작전지도</TitleText>
-          {garrisonPoint ? (
-            <LegendPill>★ 본영: {garrison || unitName}</LegendPill>
+    <MapBlock>
+      <MapHeadRow>
+        <MapHeadLeft>
+          <MapEyebrow>
+            <FiMapPin size={12} />
+            <span>위치 · 관할 지도</span>
+          </MapEyebrow>
+          {summaryParts.length > 0 ? (
+            <MapMetaText>{summaryParts.join(' · ')}</MapMetaText>
           ) : null}
-          {hasGeometry && jurisdictionGeometry ? (
-            <LegendPill>
-              {jurisdictionGeometry.type === 'POLYGON'
-                ? '관할·작전구역'
-                : '담당 전선'}
-            </LegendPill>
-          ) : null}
-          {subUnitPins.length > 0 ? (
-            <LegendPill>▪ 예하 주둔지 {subUnitPins.length}곳</LegendPill>
-          ) : null}
-        </LegendRow>
+        </MapHeadLeft>
 
         <LayerSwitch role="group" aria-label="지도 레이어 전환">
           <LayerBtn
@@ -126,100 +136,81 @@ export const UnitSpatialMapCard: React.FC<UnitSpatialMapCardProps> = ({
             <FiLayers size={10} /> 위성
           </LayerBtn>
         </LayerSwitch>
-      </CardBar>
+      </MapHeadRow>
 
-      <Suspense
-        fallback={
-          <MapLoading $height={compact ? 220 : 280}>
-            작전지도를 불러오는 중…
-          </MapLoading>
-        }
-      >
-        <LazyJurisdictionLeafletCanvas
-          mode="view"
-          geometryType={jurisdictionGeometry?.type ?? 'POLYGON'}
-          coordinates={hasGeometry ? jurisdictionGeometry!.coordinates : []}
-          accentColor={jurisdictionGeometry?.color || accentColor}
-          mapLayer={mapLayer}
-          garrisonPoint={garrisonPoint}
-          subUnitPins={subUnitPins}
-          height={compact ? 220 : 280}
-          onSelectSubUnit={onSelectSubUnit}
-        />
-      </Suspense>
-    </CardWrap>
+      <MapFrame>
+        <Suspense
+          fallback={
+            <MapLoading $height={compact ? 200 : 240}>
+              지도를 불러오는 중…
+            </MapLoading>
+          }
+        >
+          <LazyJurisdictionLeafletCanvas
+            mode="view"
+            geometryType={jurisdictionGeometry?.type ?? 'POLYGON'}
+            coordinates={hasGeometry ? jurisdictionGeometry!.coordinates : []}
+            accentColor={resolvedAccent}
+            mapLayer={mapLayer}
+            garrisonPoint={garrisonPoint}
+            subUnitPins={subUnitPins}
+            height={compact ? 200 : 240}
+            onSelectSubUnit={onSelectSubUnit}
+          />
+        </Suspense>
+      </MapFrame>
+    </MapBlock>
   )
 }
 
-const CardWrap = styled.div`
+const MapBlock = styled.div`
   display: flex;
   flex-direction: column;
-  margin-top: 10px;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.1)'
-        : 'rgba(15, 23, 42, 0.1)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#f8fafc'};
+  gap: 8px;
+  min-width: 0;
 `
 
-const CardBar = styled.div`
+const MapHeadRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 7px 12px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.08)'
-        : 'rgba(15, 23, 42, 0.08)'};
+  gap: 6px 10px;
 `
 
-const LegendRow = styled.div`
+const MapHeadLeft = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const MapEyebrow = styled.div`
   display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const MapMetaText = styled.div`
   font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const TitleText = styled.strong`
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const LegendPill = styled.span`
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.07)'
-      : 'rgba(15, 23, 42, 0.06)'};
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
 const LayerSwitch = styled.div`
   display: inline-flex;
   padding: 2px;
   border-radius: 6px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.12)'
-        : 'rgba(15, 23, 42, 0.1)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  flex-shrink: 0;
 `
 
 const LayerBtn = styled.button<{ $active: boolean }>`
@@ -231,17 +222,24 @@ const LayerBtn = styled.button<{ $active: boolean }>`
   border: none;
   border-radius: 4px;
   background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.25)'
-        : 'rgba(99, 102, 241, 0.12)'
-      : 'transparent'};
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   color: ${({ $active, theme }) =>
-    $active ? theme.colors.primary : theme.colors.text.secondary};
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
   font: inherit;
   font-size: 10.5px;
   font-weight: 600;
   cursor: pointer;
+
+  &:hover {
+    color: ${({ $active, theme }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  }
+`
+
+const MapFrame = styled.div`
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const MapLoading = styled.div<{ $height: number }>`

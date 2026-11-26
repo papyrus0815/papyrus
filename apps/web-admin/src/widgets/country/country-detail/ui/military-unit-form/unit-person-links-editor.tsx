@@ -696,24 +696,17 @@ const SearchToolbar = styled.div`
 const PersonList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  margin-top: 2px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const PersonCard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.1)'
-        : 'rgba(15, 23, 42, 0.1)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.025)'
-      : 'rgba(248, 250, 252, 0.9)'};
+  padding: 12px 2px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
 `
 
 const PersonCardTop = styled.div`
@@ -727,24 +720,25 @@ const PersonIdentity = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 13.5px;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const RoleKindSwitch = styled.div`
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px;
   margin-left: auto;
+  padding: 2px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const RoleChip = styled.button<{ $active: boolean }>`
   height: 23px;
   padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? theme.colors.primary : theme.colors.border.light};
+  border-radius: 5px;
+  border: none;
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
@@ -755,7 +749,7 @@ const RoleChip = styled.button<{ $active: boolean }>`
     $active ? theme.colors.primary : theme.colors.text.secondary};
   font: inherit;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: ${({ $active }) => ($active ? 700 : 550)};
   cursor: pointer;
 `
 
@@ -766,13 +760,17 @@ const RemoveRowBtn = styled.button`
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
+
   &:hover {
     color: #dc2626;
-    border-color: rgba(220, 38, 38, 0.4);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(239, 68, 68, 0.14)'
+        : 'rgba(239, 68, 68, 0.08)'};
   }
 `
 

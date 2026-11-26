@@ -79,7 +79,12 @@ export interface MilitaryUnitDetailResponse {
     startDate?: string | null
     endDate?: string | null
     isCurrent?: boolean
-    person?: { id: string; name: string; surname?: string | null } | null
+    person?: {
+      id: string
+      name: string
+      surname?: string | null
+      profileImageUrl?: string | null
+    } | null
   }>
   assignedNavalVessels?: Array<{
     id: string
@@ -99,7 +104,12 @@ export interface MilitaryUnitDetailResponse {
     role?: string | null
     note?: string | null
     parentUnit?: { id: string; name: string; unitType?: string | null } | null
-    commander?: { id: string; name: string; surname?: string | null } | null
+    commander?: {
+      id: string
+      name: string
+      surname?: string | null
+      profileImageUrl?: string | null
+    } | null
     deployedWeapons?: Array<{
       id: string
       quantity?: number | null
