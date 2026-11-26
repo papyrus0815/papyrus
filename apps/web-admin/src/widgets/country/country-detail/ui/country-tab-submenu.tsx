@@ -10,8 +10,13 @@
  *            └──────────────────────┘
  *
  * - 탭 줄은 가로 스크롤(overflow-x:auto)이라 안에 두면 잘린다 → body로 포털, 탭 아래에 fixed 배치.
- * - 마우스: 올리면 열고(90ms), 탭·메뉴 밖으로 나가면 닫는다(180ms 유예 — 탭에서 메뉴로 옮겨 가는 틈).
- *   누르면 원래대로 그 탭으로 가면서 메뉴도 열린다(터치 기기는 이것이 유일한 여는 길).
+ * - 마우스: 머물면 열고(180ms — 탭 줄을 가로질러 본문으로 가는 길엔 안 뜨게), 탭·메뉴 밖으로 나가면 닫는다
+ *   (180ms 유예 — 탭에서 메뉴로 옮겨 가는 틈).
+ *   메뉴는 한 번에 하나 — 하나가 열린 채 옆 탭으로 옮기면 앞 메뉴는 바로 닫고 새 메뉴는 기다림 없이 연다
+ *   (메뉴 막대처럼. 예전엔 두 메뉴가 약 0.1초 겹쳐 보였다).
+ * - 누르기: 다른 탭이면 그 탭(기본 구역)으로 가면서 메뉴가 열린다. 지금 있는 탭이면 이동 없이 메뉴만 연다 —
+ *   예전엔 '정체·헌정'을 보다 메뉴를 열려고 '정부·행정'을 누르면 행정부·내각으로 튕겼다(터치는 누르기가 유일한 길).
+ * - 2차 메뉴가 있는 탭엔 글자 옆에 흐린 ▾ — 14개 탭 중 어느 것에 메뉴가 있는지 겉으로 보이게.
  * - 키보드: 탭에서 ↓로 열고 ↑↓로 이동, Enter로 이동, Esc로 닫고 탭으로 돌아간다.
  * - 2차 구역이 URL로 열리는 탭만 등록한다 — 정부·행정·군사·경제·통계(?sub=), 정당·선거(?subtab=),
  *   지리·행정구역(?region_view=). 인물·과거국가의 알약은 구역이 아니라 '보기 방식'이라 넣지 않는다.
@@ -19,7 +24,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
-import { FiCheck } from 'react-icons/fi'
+import { FiCheck, FiChevronDown } from 'react-icons/fi'
 import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -100,8 +105,17 @@ const COUNTRY_TAB_SUBMENUS: Partial<Record<OverviewSubTab, SubmenuSpec>> = {
   },
 }
 
-const OPEN_DELAY_MS = 90
+const OPEN_DELAY_MS = 180
 const CLOSE_DELAY_MS = 180
+
+/**
+ * 지금 열린 메뉴 하나 — 탭마다 따로 그려지는 메뉴들이 '한 번에 하나'를 지키는 자리.
+ * 다른 탭 메뉴가 열리면 앞 주인의 close를 불러 바로 닫는다.
+ */
+const openMenuSlot: { ownerId: string | null; close: (() => void) | null } = {
+  ownerId: null,
+  close: null,
+}
 
 function countryIdFromPath(pathname: string): string | null {
   const matched = /^\/country\/([^/]+)/.exec(pathname)
@@ -110,6 +124,7 @@ function countryIdFromPath(pathname: string): string | null {
 
 /** 탭 단추에 덧대는 속성 — 원래 onClick·onKeyDown은 그대로 부른다 */
 interface TriggerProps {
+  children?: React.ReactNode
   onClick?: (clickEvent: React.MouseEvent<HTMLButtonElement>) => void
   onKeyDown?: (keyboardEvent: React.KeyboardEvent<HTMLButtonElement>) => void
   'aria-haspopup'?: 'menu'
@@ -179,9 +194,35 @@ function SubmenuAnchor({
 
   const openNow = useCallback(() => {
     clearTimers()
+    if (openMenuSlot.ownerId && openMenuSlot.ownerId !== menuId) openMenuSlot.close?.()
+    openMenuSlot.ownerId = menuId
+    openMenuSlot.close = () => {
+      clearTimers()
+      setOpen(false)
+    }
     placeMenu()
     setOpen(true)
-  }, [placeMenu])
+  }, [placeMenu, menuId])
+
+  /* 닫히면(어느 길로든) 자리를 비운다 — 다음 탭이 '다른 메뉴가 열려 있다'고 착각해 즉시 열지 않게 */
+  useEffect(() => {
+    if (open) return undefined
+    if (openMenuSlot.ownerId === menuId) {
+      openMenuSlot.ownerId = null
+      openMenuSlot.close = null
+    }
+    return undefined
+  }, [open, menuId])
+
+  useEffect(
+    () => () => {
+      if (openMenuSlot.ownerId === menuId) {
+        openMenuSlot.ownerId = null
+        openMenuSlot.close = null
+      }
+    },
+    [menuId],
+  )
 
   const scheduleOpen = () => {
     if (closeTimerRef.current != null) {
@@ -189,10 +230,14 @@ function SubmenuAnchor({
       closeTimerRef.current = null
     }
     if (open || openTimerRef.current != null) return
+    /* 옆 탭 메뉴가 이미 열려 있으면 메뉴 막대처럼 바로 갈아탄다 */
+    if (openMenuSlot.ownerId && openMenuSlot.ownerId !== menuId) {
+      openNow()
+      return
+    }
     openTimerRef.current = window.setTimeout(() => {
       openTimerRef.current = null
-      placeMenu()
-      setOpen(true)
+      openNow()
     }, OPEN_DELAY_MS)
   }
 
@@ -256,29 +301,35 @@ function SubmenuAnchor({
   const isItemCurrent = (item: SubmenuItem) =>
     active && (currentValue ?? null) === (item.value ?? null)
 
-  const trigger = React.cloneElement(children, {
-    'aria-haspopup': 'menu',
-    'aria-expanded': open,
-    /* 닫혀 있을 땐 탭 원래의 aria-controls(탭 패널)를 덮지 않는다 */
-    ...(open ? { 'aria-controls': menuId } : {}),
-    onClick: (clickEvent: React.MouseEvent<HTMLButtonElement>) => {
-      children.props.onClick?.(clickEvent)
-      openNow()
-    },
-    onKeyDown: (keyboardEvent: React.KeyboardEvent<HTMLButtonElement>) => {
-      children.props.onKeyDown?.(keyboardEvent)
-      if (keyboardEvent.key === 'ArrowDown') {
-        keyboardEvent.preventDefault()
-        keyboardEvent.stopPropagation()
+  const trigger = React.cloneElement(
+    children,
+    {
+      'aria-haspopup': 'menu',
+      'aria-expanded': open,
+      /* 닫혀 있을 땐 탭 원래의 aria-controls(탭 패널)를 덮지 않는다 */
+      ...(open ? { 'aria-controls': menuId } : {}),
+      onClick: (clickEvent: React.MouseEvent<HTMLButtonElement>) => {
+        /* 지금 있는 탭: 이동하면 기본 구역으로 튕기므로 메뉴만 연다(이미 열려 있으면 그대로) */
+        if (!active) children.props.onClick?.(clickEvent)
         openNow()
-        const currentIndex = Math.max(0, spec.items.findIndex(isItemCurrent))
-        requestAnimationFrame(() => itemRefs.current[currentIndex]?.focus({ preventScroll: true }))
-      } else if (keyboardEvent.key === 'Escape' && open) {
-        keyboardEvent.preventDefault()
-        closeNow(true)
-      }
+      },
+      onKeyDown: (keyboardEvent: React.KeyboardEvent<HTMLButtonElement>) => {
+        children.props.onKeyDown?.(keyboardEvent)
+        if (keyboardEvent.key === 'ArrowDown') {
+          keyboardEvent.preventDefault()
+          keyboardEvent.stopPropagation()
+          openNow()
+          const currentIndex = Math.max(0, spec.items.findIndex(isItemCurrent))
+          requestAnimationFrame(() => itemRefs.current[currentIndex]?.focus({ preventScroll: true }))
+        } else if (keyboardEvent.key === 'Escape' && open) {
+          keyboardEvent.preventDefault()
+          closeNow(true)
+        }
+      },
     },
-  })
+    children.props.children,
+    <SubmenuCaret key="submenu-caret" size={11} aria-hidden data-open={open} />,
+  )
 
   const handleMenuKeyDown = (keyboardEvent: React.KeyboardEvent<HTMLDivElement>) => {
     const currentIndex = itemRefs.current.findIndex((button) => button === document.activeElement)
@@ -340,6 +391,21 @@ function SubmenuAnchor({
     </SubmenuAnchorSpan>
   )
 }
+
+/* 탭 단추의 gap(6px)을 조금 거둬 글자에 붙인다 — 흐리게, 열리면 뒤집힌다 */
+const SubmenuCaret = styled(FiChevronDown)`
+  flex-shrink: 0;
+  margin-left: -3px;
+  opacity: 0.45;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
+
+  &[data-open='true'] {
+    opacity: 0.8;
+    transform: rotate(180deg);
+  }
+`
 
 const SubmenuAnchorSpan = styled.span`
   display: inline-flex;
