@@ -6,7 +6,6 @@ import {
   FiArrowLeft,
   FiArrowUpRight,
   FiCompass,
-  FiEdit2,
   FiGlobe,
 } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -422,17 +421,7 @@ function CountryDetailInner({
                           </TabStyles.CompactMeta>
                         )}
                       </TabStyles.CompactCountryBtn>
-                      {onEdit && (
-                        <TabStyles.CompactActions>
-                          <TabStyles.CompactActionBtn
-                            type="button"
-                            onClick={() => onEdit(country)}
-                          >
-                            <FiEdit2 aria-hidden />
-                            기본 정보 수정
-                          </TabStyles.CompactActionBtn>
-                        </TabStyles.CompactActions>
-                      )}
+                      {/* '기본 정보 수정'은 머리에서 뺐다 — 자리만 차지했다. 수정은 대시보드의 국가 머리에서 */}
                     </TabStyles.CompactContextBar>
                   ) : undefined
                 }

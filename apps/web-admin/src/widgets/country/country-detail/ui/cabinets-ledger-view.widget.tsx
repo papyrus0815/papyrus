@@ -162,6 +162,24 @@ export function CabinetsLedgerView({
     return keys.size
   }, [items])
 
+  /*
+   * 기록 칩(각료·업적·사건·조약·연계)이 한 행에도 없으면 오른쪽 열 자체를 접는다 — 일본처럼 기록이 없는 나라는
+   * 132px 빈 띠가 표 오른쪽을 차지했다. 하나라도 있으면 행끼리 줄이 맞게 고정 폭 열을 둔다.
+   */
+  const hasRecordChips = useMemo(
+    () =>
+      items.some(
+        (cabinetItem) =>
+          resolveCabinetMinisterCount(cabinetItem._count) > 0 ||
+          (Array.isArray(cabinetItem.headTenure?.achievements) &&
+            cabinetItem.headTenure.achievements.length > 0) ||
+          (cabinetItem._count?.events ?? 0) > 0 ||
+          (cabinetItem._count?.treatySignatories ?? 0) > 0 ||
+          Boolean(cabinetItem.linkageGroup),
+      ),
+    [items],
+  )
+
   const showCenturyDividers = distinctCenturyCount > 1
   const reshuffleMetaMap = useMemo(
     () => computeCabinetReshuffleMetaMap([...items]),
@@ -173,7 +191,14 @@ export function CabinetsLedgerView({
       role="region"
       aria-label="역대 행정부 원장 목록"
       /* 직함을 요약 줄로 올렸으면 둘째 열엔 '제N대'뿐 — 168px 중 110px가 비어 표 가운데가 휑했다 */
-      style={{ '--ledger-ordinal-col': hidePositionTitle ? '92px' : '168px' } as React.CSSProperties}
+      style={
+        {
+          '--ledger-ordinal-col': hidePositionTitle ? '92px' : '168px',
+          '--ledger-record-col': hasRecordChips ? '132px' : '0px',
+          '--ledger-record-col-mid': hasRecordChips ? '112px' : '0px',
+        } as React.CSSProperties
+      }
+      data-record-col={hasRecordChips ? 'on' : 'off'}
     >
       <LedgerHeaderRow>
         <span>출범 · 존속 기간</span>
@@ -507,9 +532,10 @@ export function CabinetsLedgerView({
  * 앞의 fr 열들이 행끼리 어긋났다(행 하나하나가 따로 격자) — 고정 폭으로 맞춘다.
  */
 const LEDGER_COLUMNS_WIDE =
-  '184px var(--ledger-ordinal-col, 168px) minmax(200px, 1.15fr) minmax(200px, 1fr) 132px'
+  '184px var(--ledger-ordinal-col, 168px) minmax(240px, 1.3fr) minmax(160px, 0.8fr) var(--ledger-record-col, 132px)'
 /* 중간 폭은 첫 열 192px — 184px면 1024px 화면에서 'YYYY.MM.DD – YYYY.MM.DD'가 잘렸다 */
-const LEDGER_COLUMNS_MID = '192px var(--ledger-ordinal-col, 150px) minmax(0, 1fr) 112px'
+const LEDGER_COLUMNS_MID =
+  '192px var(--ledger-ordinal-col, 150px) minmax(0, 1fr) var(--ledger-record-col-mid, 112px)'
 
 const LedgerShell = styled.div`
   container-type: inline-size;
@@ -568,6 +594,10 @@ const DesktopOnlyCol = styled.div`
 
 const RightHeaderCol = styled.span`
   text-align: right;
+
+  [data-record-col='off'] & {
+    display: none;
+  }
 `
 
 const LedgerBody = styled.div`
@@ -1002,6 +1032,11 @@ const MetaBadgeCell = styled.div`
   justify-content: flex-end;
   gap: 5px;
   flex-wrap: wrap;
+
+  /* 기록 칩이 한 행에도 없으면 열을 접는다(LedgerShell data-record-col) */
+  [data-record-col='off'] & {
+    display: none;
+  }
 
   /* 카드형(좁은 칸)에서는 기록 칩을 카드 오른쪽 위에 */
   @container (max-width: 640px) {
