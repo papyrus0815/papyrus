@@ -16,6 +16,8 @@
  *   (메뉴 막대처럼. 예전엔 두 메뉴가 약 0.1초 겹쳐 보였다).
  * - 누르기: 다른 탭이면 그 탭(기본 구역)으로 가면서 메뉴가 열린다. 지금 있는 탭이면 이동 없이 메뉴만 연다 —
  *   예전엔 '정체·헌정'을 보다 메뉴를 열려고 '정부·행정'을 누르면 행정부·내각으로 튕겼다(터치는 누르기가 유일한 길).
+ * - 정부·행정 메뉴 아래칸엔 도구(관직 사전·직능 분류·전 국가 허브) — 본문의 「행정부·내각 19 … ⋯」 제목 줄을
+ *   자리만 차지한다고 뺐을 때 ⋯가 맡던 것들. 사전·분류는 ?tool=로 정부·행정 지면이 열고, 보던 구역(sub)은 그대로 둔다.
  * - 2차 메뉴가 있는 탭엔 글자 옆에 흐린 ▾ — 14개 탭 중 어느 것에 메뉴가 있는지 겉으로 보이게.
  * - 키보드: 탭에서 ↓로 열고 ↑↓로 이동, Enter로 이동, Esc로 닫고 탭으로 돌아간다.
  * - 2차 구역이 URL로 열리는 탭만 등록한다 — 정부·행정·군사·경제·통계(?sub=), 정당·선거(?subtab=),
@@ -24,7 +26,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
-import { FiCheck, FiChevronDown } from 'react-icons/fi'
+import { FiAward, FiCheck, FiChevronDown, FiGlobe, FiGrid } from 'react-icons/fi'
 import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -44,6 +46,16 @@ interface SubmenuItem {
   hint?: string
 }
 
+/** 구역이 아닌 도구 — 메뉴 아래칸, 구분선 밑 */
+interface SubmenuTool {
+  key: string
+  label: string
+  icon: React.ReactNode
+  /** 갈 곳 — 지금 이 탭에 있으면(active) 보던 쿼리를 살려 덧붙인다 */
+  buildUrl: (context: { countryId: string; active: boolean; search: string; currentValue: string | null }) => string
+  navigateState?: unknown
+}
+
 interface SubmenuSpec {
   param: string
   buildPath: (countryId: string) => string
@@ -52,6 +64,16 @@ interface SubmenuSpec {
   defaultValue?: string
   /** 쿼리 말고 경로로 구역이 정해지는 경우(정당 상세 /elections/party/:id = 정당) */
   valueFromPath?: (pathname: string) => string | null
+  tools?: SubmenuTool[]
+}
+
+/** 정부·행정 지면이 ?tool=로 여는 도구 — 이 탭에 있으면 보던 구역(sub 등)을 살린 채 tool만 덧붙인다 */
+function govToolUrl(tool: 'positions' | 'categories') {
+  return ({ countryId, active, search }: { countryId: string; active: boolean; search: string }) => {
+    const params = new URLSearchParams(active ? search : '')
+    params.set('tool', tool)
+    return `${pathKeys.countryGovernment(countryId)}?${params.toString()}`
+  }
 }
 
 const COUNTRY_TAB_SUBMENUS: Partial<Record<OverviewSubTab, SubmenuSpec>> = {
@@ -64,6 +86,18 @@ const COUNTRY_TAB_SUBMENUS: Partial<Record<OverviewSubTab, SubmenuSpec>> = {
       label: GOV_TAB_META[tabKey].label,
       hint: GOV_TAB_META[tabKey].hint,
     })),
+    tools: [
+      { key: 'positions', label: '고유 관직 · 직제 사전', icon: <FiAward size={13} />, buildUrl: govToolUrl('positions') },
+      { key: 'categories', label: '전역 직능 분류 관리', icon: <FiGrid size={13} />, buildUrl: govToolUrl('categories') },
+      {
+        key: 'global-hub',
+        label: '전 국가 정부·내각 허브 ↗',
+        icon: <FiGlobe size={13} />,
+        buildUrl: ({ currentValue }) =>
+          pathKeys.government.list({ tab: currentValue === 'ministries' ? 'departments' : 'cabinets' }),
+        navigateState: { skipGovernmentMemoryRestore: true },
+      },
+    ],
   },
   military: {
     param: 'sub',
@@ -298,6 +332,16 @@ function SubmenuAnchor({
     navigate(`${spec.buildPath(countryId)}${query}`)
   }
 
+  const runTool = (tool: SubmenuTool) => {
+    closeNow(false)
+    if (!countryId) return
+    const url = tool.buildUrl({ countryId, active, search: location.search, currentValue: currentValue ?? null })
+    navigate(url, tool.navigateState ? { state: tool.navigateState } : undefined)
+  }
+
+  const tools = spec.tools ?? []
+  const focusableCount = spec.items.length + tools.length
+
   const isItemCurrent = (item: SubmenuItem) =>
     active && (currentValue ?? null) === (item.value ?? null)
 
@@ -339,7 +383,7 @@ function SubmenuAnchor({
     } else if (keyboardEvent.key === 'ArrowDown' || keyboardEvent.key === 'ArrowUp') {
       keyboardEvent.preventDefault()
       const step = keyboardEvent.key === 'ArrowDown' ? 1 : -1
-      const nextIndex = (currentIndex + step + spec.items.length) % spec.items.length
+      const nextIndex = (currentIndex + step + focusableCount) % focusableCount
       itemRefs.current[nextIndex]?.focus({ preventScroll: true })
     } else if (keyboardEvent.key === 'Tab') {
       closeNow(false)
@@ -384,6 +428,23 @@ function SubmenuAnchor({
                   </MenuItem>
                 )
               })}
+              {tools.length > 0 ? <MenuDivider role="separator" /> : null}
+              {tools.map((tool, toolIndex) => (
+                <ToolItem
+                  key={tool.key}
+                  ref={(element) => {
+                    itemRefs.current[spec.items.length + toolIndex] = element
+                  }}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => runTool(tool)}
+                >
+                  <span className="icon" aria-hidden>
+                    {tool.icon}
+                  </span>
+                  <span>{tool.label}</span>
+                </ToolItem>
+              ))}
             </Menu>,
             document.body,
           )
@@ -424,6 +485,44 @@ const Menu = styled.div`
   background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1c1f' : '#ffffff')};
   box-shadow: ${({ theme }) =>
     theme.mode === 'dark' ? '0 12px 32px rgba(0,0,0,0.5)' : '0 12px 32px rgba(15,23,42,0.14)'};
+`
+
+const MenuDivider = styled.div`
+  height: 1px;
+  margin: 6px 4px;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#eef2f7')};
+`
+
+const ToolItem = styled.button`
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px 7px 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  .icon {
+    display: inline-flex;
+    justify-content: center;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.05)'};
+  }
 `
 
 const MenuItem = styled.button<{ $current: boolean }>`

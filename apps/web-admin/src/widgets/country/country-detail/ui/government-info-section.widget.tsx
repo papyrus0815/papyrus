@@ -5,20 +5,14 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FiAward, FiGlobe, FiGrid } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { usePoliticalSystems } from '@/entities/political-system/api'
-import { countCountryScopedPositions } from '@/features/government-info/model/count-country-scoped-positions'
 import {
   GOVERNMENT_TAB_ORDER,
-  GOV_TAB_META,
   type GovernmentContentTab,
 } from '@/features/government-info/model/government-content-tab'
-import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
-import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
-import { GovSectionTitle } from '@/features/government-info/ui/gov-section-title'
 import {
   GovLedgerPage,
 } from '@/features/government-info/ui/government-ledger.styles'
@@ -130,6 +124,29 @@ export function GovernmentInfoSection({
     // contentTab은 일부러 빼둔다 — 지면 안 전환(switchSubTab)이 URL보다 먼저 state를 바꾸는 순간 되돌리지 않게
   }, [rawSubQuery, validSubQuery, departmentIdQuery, initialContentTab])
 
+  /*
+   * 머리 탭 '정부·행정 ▾' 메뉴의 도구 칸이 여는 것 — ?tool=positions(고유 관직·직제 사전) · ?tool=categories(직능 분류).
+   * 한 번 열고 쿼리는 지운다. sub는 건드리지 않아 보던 구역에 그대로 머문다.
+   */
+  const toolQuery = searchParams.get('tool')
+  useEffect(() => {
+    if (toolQuery !== 'positions' && toolQuery !== 'categories') return
+    if (toolQuery === 'positions') {
+      setPositionFilterContext(null)
+      setPositionsDrawerOpen(true)
+    } else {
+      setCategoryModalOpen(true)
+    }
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous)
+        next.delete('tool')
+        return next
+      },
+      { replace: true },
+    )
+  }, [toolQuery, setSearchParams])
+
   const switchSubTab = useCallback(
     (
       nextTab: GovernmentContentTab,
@@ -223,27 +240,6 @@ export function GovernmentInfoSection({
     staleTime: 60_000,
   })
 
-  const { data: constituentPolities = [] } = useConstituentHistoricalPolities(
-    isHistorical ? effectiveCountryId : undefined,
-  )
-
-  const positionsCountQuery = useQuery({
-    queryKey: ['position-definitions', 'all'],
-    queryFn: () => personCareerApi.getPositionDefinitions({}),
-    enabled: Boolean(effectiveCountryId),
-    staleTime: 60_000,
-  })
-
-  const dedicatedPositionCount = useMemo(
-    () =>
-      countCountryScopedPositions(
-        positionsCountQuery.data ?? [],
-        country,
-        constituentPolities,
-      ),
-    [positionsCountQuery.data, country, constituentPolities],
-  )
-
   const visibleCabinetCount = useMemo(() => {
     if (!cabinetsCountQuery.data) return undefined
     const totalLen = cabinetsCountQuery.data.length
@@ -253,12 +249,6 @@ export function GovernmentInfoSection({
     ).length
     return nonCeremonialLen > 0 ? nonCeremonialLen : totalLen
   }, [cabinetsCountQuery.data])
-
-  const tabCountByKey: Partial<Record<GovernmentContentTab, number>> = {
-    system: politicalSystemsQuery.data?.length,
-    cabinets: visibleCabinetCount,
-    ministries: departmentsQuery.data?.length,
-  }
 
   // URL에 서브탭이 명시되지 않았고 「행정부·내각」이 비어 있는 국가는 데이터가 있는 탭(중앙부처 → 정체·헌정)으로 스마트 폴백
   useEffect(() => {
@@ -359,67 +349,10 @@ export function GovernmentInfoSection({
   return (
     <>
       <GovLedgerPage>
-        {/* 구역 제목 — 구역 고르기는 머리 탭 '정부·행정'의 2차 메뉴가 맡는다 */}
-        <GovSectionTitle
-          label={GOV_TAB_META[contentTab].label}
-          hint={GOV_TAB_META[contentTab].hint}
-          count={
-            typeof tabCountByKey[contentTab] === 'number' && (tabCountByKey[contentTab] ?? 0) > 0
-              ? tabCountByKey[contentTab]
-              : null
-          }
-          actions={
-            <>
-            {/* 행정부 상세에선 바로 아래 줄에 그 행정부의 ⋯가 있어 ⋯ 두 개가 34px 간격으로 겹쳐 보였다 — 상세 동안 숨김 */}
-            {effectiveCountryId && !(contentTab === 'cabinets' && cabinetIdQuery) ? (
-          <GovMorePopover
-            ariaLabel="정부·행정 도구 및 사전 메뉴"
-            title="관직 사전 · 직능 분류 · 전 국가 허브"
-            triggerSize="sm"
-            hasActiveIndicator={positionsDrawerOpen || categoryModalOpen}
-            actions={[
-              {
-                key: 'country-positions',
-                label: '고유 관직 · 직제 사전',
-                icon: <FiAward size={14} />,
-                badge:
-                  dedicatedPositionCount > 0
-                    ? String(dedicatedPositionCount)
-                    : undefined,
-                active: positionsDrawerOpen,
-                onClick: () => {
-                  setPositionFilterContext(null)
-                  setPositionsDrawerOpen(true)
-                },
-              },
-              {
-                key: 'global-categories',
-                label: '전역 직능 분류 관리',
-                icon: <FiGrid size={14} />,
-                onClick: () => openCategoryModal(),
-              },
-              {
-                key: 'global-hub',
-                label: '전 국가 정부·내각 허브 ↗',
-                icon: <FiGlobe size={14} />,
-                onClick: () =>
-                  navigate(
-                    pathKeys.government.list({
-                      tab:
-                        contentTab === 'ministries'
-                          ? 'departments'
-                          : 'cabinets',
-                    }),
-                    { state: { skipGovernmentMemoryRestore: true } },
-                  ),
-              },
-            ]}
-          />
-            ) : null}
-            </>
-          }
-        />
-
+        {/*
+          구역 제목 줄(「행정부·내각 19 … ⋯」)은 뺐다 — 자리만 차지했다. 지금 구역은 머리 탭 '정부·행정 ▾' 메뉴의 ✓가,
+          ⋯에 있던 도구(관직 사전·직능 분류·전 국가 허브)는 같은 메뉴 아래칸이 맡는다(?tool= → 아래 효과).
+        */}
         {contentTab === 'system' && (
           <GovContentStage aria-label="정체·헌정">
             <PoliticalSystemTab

@@ -88,7 +88,6 @@ export function SectionSubNav<Key extends string = string>({
 
 /**
  * 지금 구역 제목 — '국채 금리 12'. 구역을 고르는 일은 머리 탭 2차 메뉴가 하고, 이건 어디에 와 있는지만 말한다.
- * 정부·행정의 구역 제목(GovSectionTitle)도 같은 부품을 쓴다.
  */
 export function SectionHeading({
   label,
