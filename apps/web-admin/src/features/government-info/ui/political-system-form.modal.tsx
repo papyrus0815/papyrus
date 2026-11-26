@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
+import { FiAlertCircle } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type {
@@ -9,7 +10,6 @@ import type {
 } from '@/entities/political-system/api'
 import {
   GOVERNMENT_FORM_LABEL,
-  GOVERNMENT_FORM_ORDER,
   LEGISLATURE_TYPE_LABEL,
   LEGISLATURE_TYPE_ORDER,
   PARTY_SYSTEM_LABEL,
@@ -23,7 +23,47 @@ import {
 import { chamberApi, chamberKeys, chamberLabel, chamberSeatsAt } from '@/shared/api/chamber'
 import { personCareerApi } from '@/shared/api/person-career'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
-import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
+import { buildPartialDateString, parsePartialDateString } from '@/shared/lib/partial-date-string'
+import { AlertBox } from '@/shared/ui/alert-box/alert-box'
+import { DatePickerModal, type DatePickerPrecision } from '@/shared/ui/date-picker/date-picker-modal'
+import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inline-date-field'
+import {
+  type ChoiceChipGroupDef,
+  ChoiceChips,
+  type ChoiceChipOption,
+  KitBusyBar,
+  KitChoiceChip,
+} from '@/shared/ui/register-form-kit/register-form-kit'
+import {
+  FieldControl,
+  FieldHint,
+  FieldLabel,
+  FieldRow,
+  FormGroup,
+  FormGroupTitle,
+  Input,
+  LabeledRowsWrap,
+  OptionalTag,
+  SubField,
+  SubFieldLabel,
+  SubFieldPair,
+} from '@/shared/ui/register-form-layout'
+import {
+  FooterActions,
+  FooterHint,
+  FooterReadyBadge,
+  FooterReadyGroup,
+  useModalSubmitShortcut,
+} from '@/shared/ui/register-modal-shell/register-modal-chrome'
+import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
+import {
+  PersonRegisterModalCancelBtn,
+  PersonRegisterModalFormScroll,
+  PersonRegisterModalPrimaryBtn,
+  PersonRegisterModalStickyFooter,
+  PersonRegisterModalTextarea,
+} from '@/shared/ui/register-modal-shell/register-modal-shell'
+import { SearchableSelect, type SearchableSelectOption } from '@/shared/ui/searchable-select'
 import { notify } from '@/shared/ui/toast'
 
 interface Props {
@@ -127,6 +167,55 @@ const DUAL_EXECUTIVE_FORMS = new Set<string>([
   'ONE_PARTY',
   'THEOCRACY',
 ])
+
+/**
+ * 정부 형태 칩 묶음 — 사건 등록 모달의 카테고리 칩처럼 성격별로 한 줄씩.
+ * 칩 위에 마우스를 올리면 그 형태가 무엇인지 한 줄 풀이.
+ */
+const GOVERNMENT_FORM_GROUPS: ChoiceChipGroupDef<GovernmentForm>[] = [
+  {
+    label: '공화정',
+    options: [
+      { value: 'PRESIDENTIAL', label: GOVERNMENT_FORM_LABEL.PRESIDENTIAL, title: '대통령이 국가원수이자 정부수반' },
+      { value: 'PARLIAMENTARY', label: GOVERNMENT_FORM_LABEL.PARLIAMENTARY, title: '의회 다수파가 내각을 구성, 총리가 정부수반' },
+      { value: 'SEMI_PRESIDENTIAL', label: GOVERNMENT_FORM_LABEL.SEMI_PRESIDENTIAL, title: '직선 대통령과 의회 책임 총리가 권한을 나눔' },
+    ],
+  },
+  {
+    label: '군주정',
+    options: [
+      { value: 'CONSTITUTIONAL_MONARCHY', label: GOVERNMENT_FORM_LABEL.CONSTITUTIONAL_MONARCHY, title: '군주는 헌법 아래, 실제 통치는 내각' },
+      { value: 'ABSOLUTE_MONARCHY', label: GOVERNMENT_FORM_LABEL.ABSOLUTE_MONARCHY, title: '군주가 입법·행정·사법을 직접 장악' },
+    ],
+  },
+  {
+    label: '기타 체제',
+    options: [
+      { value: 'MILITARY', label: GOVERNMENT_FORM_LABEL.MILITARY },
+      { value: 'ONE_PARTY', label: GOVERNMENT_FORM_LABEL.ONE_PARTY },
+      { value: 'THEOCRACY', label: GOVERNMENT_FORM_LABEL.THEOCRACY },
+      { value: 'PROVISIONAL', label: GOVERNMENT_FORM_LABEL.PROVISIONAL },
+      { value: 'OTHER', label: GOVERNMENT_FORM_LABEL.OTHER },
+    ],
+  },
+]
+
+const LEGISLATURE_OPTIONS: ChoiceChipOption<LegislatureType>[] = LEGISLATURE_TYPE_ORDER.map((key) => ({
+  value: key,
+  label: LEGISLATURE_TYPE_LABEL[key],
+}))
+const STATE_STRUCTURE_OPTIONS: ChoiceChipOption[] = STATE_STRUCTURE_ORDER.map((key) => ({
+  value: key,
+  label: STATE_STRUCTURE_LABEL[key],
+}))
+const PARTY_SYSTEM_OPTIONS: ChoiceChipOption[] = PARTY_SYSTEM_ORDER.map((key) => ({
+  value: key,
+  label: PARTY_SYSTEM_LABEL[key],
+}))
+const POWER_OPTIONS: ChoiceChipOption<'power' | 'symbolic'>[] = [
+  { value: 'power', label: '실권 있음' },
+  { value: 'symbolic', label: '상징적' },
+]
 
 /** 카탈로그에서 이 축에 쓸 수 있는 유형 */
 type HeadAxis = 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
@@ -511,624 +600,524 @@ export function PoliticalSystemFormModal({
     }
   }
 
+  /* ── 날짜: 사건 등록 모달과 같은 한 칸 날짜 + 달력 드롭다운 ── */
+  const startAnchorId = useId()
+  const endAnchorId = useId()
+  const [activeDatePicker, setActiveDatePicker] = useState<'start' | 'end' | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const pickerParts =
+    activeDatePicker === 'end'
+      ? { era: form.endEra, year: form.endYear, month: form.endMonth, day: form.endDay }
+      : { era: form.startEra, year: form.startYear, month: form.startMonth, day: form.startDay }
+  const pickerInitialDate = buildPartialDateString(pickerParts) || undefined
+  const pickerInitialPrecision: DatePickerPrecision | null = pickerParts.day.trim()
+    ? 'day'
+    : pickerParts.month.trim()
+      ? 'month'
+      : pickerParts.year.trim()
+        ? 'year'
+        : null
+  const applyPickedDate = (isoString: string, precision: DatePickerPrecision) => {
+    if (!activeDatePicker) return
+    const parsed = parsePartialDateString(isoString)
+    const month = precision === 'year' ? '' : parsed.month
+    const day = precision === 'day' ? parsed.day : ''
+    setForm((prev) =>
+      activeDatePicker === 'start'
+        ? { ...prev, startEra: parsed.era, startYear: parsed.year, startMonth: month, startDay: day }
+        : { ...prev, endEra: parsed.era, endYear: parsed.year, endMonth: month, endDay: day, isCurrent: false },
+    )
+    setActiveDatePicker(null)
+  }
+
+  const isDateInverted = (() => {
+    const startYear = numberOrNull(form.startYear)
+    const endYear = form.isCurrent ? null : numberOrNull(form.endYear)
+    if (startYear == null || endYear == null) return false
+    const startKey =
+      (form.startEra === 'BC' ? -startYear : startYear) * 10000 +
+      (numberOrNull(form.startMonth) ?? 1) * 100 +
+      (numberOrNull(form.startDay) ?? 1)
+    const endKey =
+      (form.endEra === 'BC' ? -endYear : endYear) * 10000 +
+      (numberOrNull(form.endMonth) ?? 12) * 100 +
+      (numberOrNull(form.endDay) ?? 31)
+    return startKey > endKey
+  })()
+
+  useModalSubmitShortcut({
+    enabled: open && !saving && activeDatePicker === null,
+    scrollContainerRef: scrollRef,
+    onSubmit: () => {
+      void handleSubmit()
+    },
+  })
+
+  /* 소속 — 현대 국가 본국 + 연결된 과거 국가(일본 / 일본 제국 / 도쿠가와 막부) 칩 */
+  const polityOptions: ChoiceChipOption[] =
+    !historicalCountryId && linkedHistoricalCountries.length > 0
+      ? [
+          { value: '__MODERN__', label: countryName ? `${countryName} (현대)` : '현대 국가' },
+          ...linkedHistoricalCountries.map((hcItem) => ({ value: hcItem.id, label: hcItem.name })),
+        ]
+      : []
+
+  const headOptions = (axis: HeadAxis): SearchableSelectOption[] => [
+    ...optionsFor(axis).map((def) => ({
+      value: def.id,
+      label: def.title,
+      meta: def.titleLocal ?? undefined,
+    })),
+    { value: CUSTOM_TITLE, label: '목록에 없음 — 직접 입력', group: '직접' },
+  ]
+
+  const chamberChips = (side: 'lower' | 'upper'): ChoiceChipOption[] =>
+    chambers
+      .filter((chamber) =>
+        side === 'upper' ? chamber.role === 'UPPER' || chamber.role === 'OTHER' : chamber.role !== 'UPPER',
+      )
+      .map((chamber) => ({ value: chamber.id, label: chamberLabel(chamber) }))
+
+  const renderHouse = (side: 'lower' | 'upper') => {
+    const chamberId = side === 'lower' ? form.lowerChamberId : form.upperChamberId
+    const nameKey = side === 'lower' ? 'lowerHouseName' : 'upperHouseName'
+    const seatsKey = side === 'lower' ? 'lowerHouseSeats' : 'upperHouseSeats'
+    const label = side === 'lower' ? primaryHouseLabel(legislature) : '상원'
+    const chips = chamberChips(side)
+    return (
+      <FieldRow>
+        <FieldLabel as="div">
+          {label} <OptionalTag>(선택)</OptionalTag>
+        </FieldLabel>
+        <FieldControl>
+          {chips.length > 0 ? (
+            <ChoiceChips
+              ariaLabel={`${label} — 원 카탈로그`}
+              options={chips}
+              value={chamberId}
+              allowDeselect
+              onChange={(nextId) =>
+                nextId
+                  ? pickChamber(side, nextId)
+                  : setForm((prev) => ({ ...prev, [`${side}ChamberId`]: '' }))
+              }
+            />
+          ) : null}
+          <SubFieldPair $cols={2}>
+            <SubField>
+              <SubFieldLabel>이름</SubFieldLabel>
+              <Input
+                value={form[nameKey]}
+                readOnly={Boolean(chamberId)}
+                title={chamberId ? '고른 원의 이름 — 바꾸려면 원을 고치거나 칩 선택을 푸세요' : undefined}
+                onChange={(event) => set(nameKey, event.target.value)}
+                placeholder={side === 'upper' ? '참의원 · 상원 · 귀족원' : isBicameral ? '중의원 · 하원' : '국회'}
+              />
+            </SubField>
+            <SubField>
+              <SubFieldLabel>의석</SubFieldLabel>
+              <Input
+                inputMode="numeric"
+                value={form[seatsKey]}
+                onChange={(event) => set(seatsKey, event.target.value.replace(/[^0-9]/g, ''))}
+                placeholder={side === 'upper' ? '100' : '300'}
+              />
+            </SubField>
+          </SubFieldPair>
+          {chips.length === 0 ? (
+            <FieldHint>
+              이 나라에 등록된 원이 없어 이름만 적습니다 — 아래 「의회 · 원」에서 원을 등록하면 여기서 고를 수 있습니다.
+            </FieldHint>
+          ) : null}
+        </FieldControl>
+      </FieldRow>
+    )
+  }
+
+  const renderHead = (axis: 'headOfState' | 'headOfGovernment') => {
+    const isState = axis === 'headOfState'
+    const choice = isState ? form.headOfStateChoice : form.headOfGovernmentChoice
+    const title = isState ? form.headOfStateTitle : form.headOfGovernmentTitle
+    const hasPower = isState ? form.headOfStateHasPower : form.headOfGovernmentHasPower
+    const label = isState
+      ? isDualExecutive
+        ? '국가원수'
+        : form.governmentForm === 'ABSOLUTE_MONARCHY'
+          ? '군주'
+          : '수반'
+      : '정부수반'
+    const placeholder = isState
+      ? isDualExecutive
+        ? '대통령 · 국왕 · 천황 · 황제'
+        : '대통령 · 국왕 · 쇼군'
+      : '총리 · 수상 · 내각총리대신'
+    return (
+      <FieldRow>
+        <FieldLabel as="div">
+          {label} 직함 <OptionalTag>(선택)</OptionalTag>
+        </FieldLabel>
+        <FieldControl>
+          <SearchableSelect
+            options={headOptions(isState ? 'HEAD_OF_STATE' : 'HEAD_OF_GOVERNMENT')}
+            value={choice}
+            onChange={(nextValue) => set(isState ? 'headOfStateChoice' : 'headOfGovernmentChoice', nextValue)}
+            placeholder={placeholder}
+            searchPlaceholder="관직 사전에서 찾기"
+            ariaLabel={`${label} 직함`}
+            clearable
+            emptyMessage="이 나라 관직 사전에 해당 직함이 없습니다"
+          />
+          {choice === CUSTOM_TITLE ? (
+            <Input
+              value={title}
+              onChange={(event) => set(isState ? 'headOfStateTitle' : 'headOfGovernmentTitle', event.target.value)}
+              placeholder={isState ? '연합회의 의장 · 국가주석' : '임시정부 수반 · 국무원 총리'}
+              aria-label={`${label} 직함 직접 입력`}
+            />
+          ) : null}
+          {choice && (isDualExecutive || !isState) ? (
+            <ChoiceChips
+              ariaLabel={`${label} 실권`}
+              options={POWER_OPTIONS}
+              value={hasPower ? 'power' : 'symbolic'}
+              onChange={(next) =>
+                set(isState ? 'headOfStateHasPower' : 'headOfGovernmentHasPower', next !== 'symbolic')
+              }
+            />
+          ) : null}
+        </FieldControl>
+      </FieldRow>
+    )
+  }
+
+  const title = `${editing ? '정체 수정' : '정체 추가'}${countryName ? ` · ${countryName}` : ''}`
+
   return (
-    <Modal
+    <RegisterModal
       isOpen={open}
       onClose={onClose}
-      title={editing ? '정체 수정' : '정체 추가'}
-      subtitle={
-        countryName
-          ? `${countryName} · 정부 형태와 입법부 구성`
-          : '정부 형태와 입법부 구성'
-      }
-      size="wide"
+      title={title}
+      maxWidth="min(1040px, 96vw)"
+      minHeight="80vh"
+      fullBleedOnMobile
+      closeOnOverlayClick={false}
+      closeOnEsc={!saving && activeDatePicker === null}
     >
-      <ModalBody>
-        <SectionLabel>기간</SectionLabel>
-        <Grid>
-          <Field
-            style={{
-              gridColumn:
-                !historicalCountryId && linkedHistoricalCountries.length > 0
-                  ? undefined
-                  : 'span 2',
+      <PersonRegisterModalFormScroll ref={scrollRef}>
+        {saving ? (
+          <KitBusyBar role="status" aria-live="polite">
+            {editing ? '수정 사항을 저장하는 중...' : '정체를 등록하는 중...'}
+          </KitBusyBar>
+        ) : null}
+        <LabeledRowsWrap>
+          {/* ① 이름 · 소속 · 기간 */}
+          <FormGroup>
+            <FormGroupTitle>이름 · 소속 · 기간</FormGroupTitle>
+            <FieldRow>
+              <FieldLabel htmlFor="political-system-name">
+                이름 <OptionalTag>(선택)</OptionalTag>
+              </FieldLabel>
+              <FieldControl>
+                <Input
+                  id="political-system-name"
+                  value={form.name}
+                  onChange={(event) => set('name', event.target.value)}
+                  placeholder="제5공화국 · 바이마르 공화국 · 메이지 헌법 체제"
+                />
+                <FieldHint>비우면 정부 형태(예: 의원내각제)가 이름 대신 쓰입니다.</FieldHint>
+              </FieldControl>
+            </FieldRow>
+
+            {polityOptions.length > 0 ? (
+              <FieldRow>
+                <FieldLabel as="div">소속 시대 · 국가</FieldLabel>
+                <FieldControl>
+                  <ChoiceChips
+                    ariaLabel="소속 시대 및 국가"
+                    options={polityOptions}
+                    value={form.historicalCountryId || '__MODERN__'}
+                    onChange={(next) => set('historicalCountryId', next === '__MODERN__' ? '' : next)}
+                  />
+                </FieldControl>
+              </FieldRow>
+            ) : null}
+
+            <FieldRow>
+              <FieldLabel as="div">기간</FieldLabel>
+              <FieldControl>
+                <DateRangeGrid>
+                  <SubField>
+                    {/* 끝 쪽 머리엔 '지금도 이 정체' 칩이 서서 높이가 다르다 — 같은 머리 높이로 두 칸 날짜를 한 줄에 */}
+                    <SubFieldHead>
+                      <SubFieldLabel>시작</SubFieldLabel>
+                    </SubFieldHead>
+                    <InlineDateField
+                      appearance="field"
+                      anchorId={startAnchorId}
+                      pickerOpen={activeDatePicker === 'start'}
+                      era={form.startEra}
+                      year={form.startYear}
+                      month={form.startMonth}
+                      day={form.startDay}
+                      onEra={(era) => set('startEra', era)}
+                      onYear={(value) => set('startYear', value)}
+                      onMonth={(value) => set('startMonth', value)}
+                      onDay={(value) => set('startDay', value)}
+                      onOpenPicker={() => setActiveDatePicker('start')}
+                      ariaLabel="정체 시작일"
+                    />
+                  </SubField>
+                  <SubField>
+                    <SubFieldHead>
+                      <SubFieldLabel>
+                        끝 <OptionalTag>{form.isCurrent ? '(현행)' : '(모르면 비움)'}</OptionalTag>
+                      </SubFieldLabel>
+                      <KitChoiceChip
+                        type="button"
+                        $selected={form.isCurrent}
+                        aria-pressed={form.isCurrent}
+                        onClick={() =>
+                          setForm((prev) =>
+                            prev.isCurrent
+                              ? { ...prev, isCurrent: false }
+                              : { ...prev, isCurrent: true, endYear: '', endMonth: '', endDay: '' },
+                          )
+                        }
+                      >
+                        지금도 이 정체
+                      </KitChoiceChip>
+                    </SubFieldHead>
+                    <InlineDateField
+                      appearance="field"
+                      anchorId={endAnchorId}
+                      pickerOpen={activeDatePicker === 'end'}
+                      era={form.endEra}
+                      year={form.endYear}
+                      month={form.endMonth}
+                      day={form.endDay}
+                      onEra={(era) => set('endEra', era)}
+                      onYear={(value) => set('endYear', value)}
+                      onMonth={(value) => set('endMonth', value)}
+                      onDay={(value) => set('endDay', value)}
+                      onOpenPicker={() => setActiveDatePicker('end')}
+                      disabled={form.isCurrent}
+                      disabledLabel="현행 — 끝 없음"
+                      error={isDateInverted}
+                      ariaLabel="정체 종료일"
+                    />
+                  </SubField>
+                </DateRangeGrid>
+                {isDateInverted ? (
+                  <AlertBox variant="danger" icon={<FiAlertCircle />}>
+                    끝이 시작보다 앞섭니다. 기원(서기/기원전)과 연·월·일을 확인해 주세요.
+                  </AlertBox>
+                ) : null}
+              </FieldControl>
+            </FieldRow>
+          </FormGroup>
+
+          {/* ② 정부 형태 · 수반 — 형태를 고르면 수반 칸 구성(겸임/이원)과 실권 기본값이 따라온다 */}
+          <FormGroup>
+            <FormGroupTitle>정부 형태 · 수반</FormGroupTitle>
+            <FieldRow>
+              <FieldLabel as="div">
+                정부 형태 <OptionalTag>(선택)</OptionalTag>
+              </FieldLabel>
+              <FieldControl>
+                <ChoiceChips
+                  ariaLabel="정부 형태"
+                  groups={GOVERNMENT_FORM_GROUPS}
+                  value={form.governmentForm as GovernmentForm | ''}
+                  allowDeselect
+                  onChange={(next) => setForm((prev) => applyGovernmentFormDefaults(next, prev))}
+                />
+              </FieldControl>
+            </FieldRow>
+
+            {renderHead('headOfState')}
+            {isDualExecutive ? renderHead('headOfGovernment') : null}
+
+            <FieldRow>
+              <span aria-hidden />
+              <FieldControl>
+                <SplitRow>
+                  <FieldHint>
+                    {isDualExecutive
+                      ? '국가원수와 정부수반이 나뉜 이원 체제입니다.'
+                      : '국가원수와 정부수반을 한 사람이 겸합니다.'}{' '}
+                    고른 직함은 행정부 · 수반 등록과 이어집니다.
+                  </FieldHint>
+                  {!isDualExecutive ? (
+                    <SplitToggleBtn type="button" onClick={() => setForceSplitExecutive(true)}>
+                      + 정부수반 따로 지정
+                    </SplitToggleBtn>
+                  ) : !isNaturallyDualExecutive ? (
+                    <SplitToggleBtn
+                      type="button"
+                      onClick={() => {
+                        setForceSplitExecutive(false)
+                        setForm((prev) => ({ ...prev, headOfGovernmentChoice: '', headOfGovernmentTitle: '' }))
+                      }}
+                    >
+                      겸임으로 합치기
+                    </SplitToggleBtn>
+                  ) : null}
+                </SplitRow>
+              </FieldControl>
+            </FieldRow>
+          </FormGroup>
+
+          {/* ③ 입법부 — 양원제일 때만 상원 칸이 열린다 */}
+          <FormGroup>
+            <FormGroupTitle>입법부</FormGroupTitle>
+            <FieldRow>
+              <FieldLabel as="div">
+                의회 구성 <OptionalTag>(선택)</OptionalTag>
+              </FieldLabel>
+              <FieldControl>
+                <ChoiceChips
+                  ariaLabel="의회 구성"
+                  options={LEGISLATURE_OPTIONS}
+                  value={form.legislatureType as LegislatureType | ''}
+                  allowDeselect
+                  onChange={(next) => set('legislatureType', next)}
+                />
+              </FieldControl>
+            </FieldRow>
+            {hasLegislature && form.legislatureType ? renderHouse('lower') : null}
+            {isBicameral ? renderHouse('upper') : null}
+          </FormGroup>
+
+          {/* ④ 국가 구조 · 정당제 · 설명 */}
+          <FormGroup>
+            <FormGroupTitle>국가 구조 · 정당제 · 설명</FormGroupTitle>
+            <FieldRow>
+              <FieldLabel as="div">
+                국가 구조 <OptionalTag>(선택)</OptionalTag>
+              </FieldLabel>
+              <FieldControl>
+                <ChoiceChips
+                  ariaLabel="국가 구조"
+                  options={STATE_STRUCTURE_OPTIONS}
+                  value={form.stateStructure}
+                  allowDeselect
+                  onChange={(next) => set('stateStructure', next)}
+                />
+              </FieldControl>
+            </FieldRow>
+            <FieldRow>
+              <FieldLabel as="div">
+                정당제 <OptionalTag>(선택)</OptionalTag>
+              </FieldLabel>
+              <FieldControl>
+                <ChoiceChips
+                  ariaLabel="정당제"
+                  options={PARTY_SYSTEM_OPTIONS}
+                  value={form.partySystem}
+                  allowDeselect
+                  onChange={(next) => set('partySystem', next)}
+                />
+              </FieldControl>
+            </FieldRow>
+            <FieldRow>
+              <FieldLabel htmlFor="political-system-notes">
+                설명 <OptionalTag>(선택)</OptionalTag>
+              </FieldLabel>
+              <FieldControl>
+                <PersonRegisterModalTextarea
+                  id="political-system-notes"
+                  rows={5}
+                  value={form.notes}
+                  onChange={(event) => set('notes', event.target.value)}
+                  placeholder="헌법 제정·개정 배경, 정체 전환의 계기, 권력 구조의 특징"
+                />
+              </FieldControl>
+            </FieldRow>
+          </FormGroup>
+        </LabeledRowsWrap>
+      </PersonRegisterModalFormScroll>
+
+      <PersonRegisterModalStickyFooter>
+        <FooterHint $warning={isDateInverted}>
+          {isDateInverted ? (
+            <span>기간을 확인해 주세요 — 끝이 시작보다 앞섭니다</span>
+          ) : (
+            <FooterReadyGroup>
+              <FooterReadyBadge>{editing ? '수정 준비 완료' : '등록 준비 완료'}</FooterReadyBadge>
+            </FooterReadyGroup>
+          )}
+        </FooterHint>
+        <FooterActions>
+          <PersonRegisterModalCancelBtn type="button" disabled={saving} onClick={onClose}>
+            취소
+          </PersonRegisterModalCancelBtn>
+          <PersonRegisterModalPrimaryBtn
+            type="button"
+            disabled={saving || isDateInverted}
+            onClick={() => {
+              void handleSubmit()
             }}
           >
-            이름
-            <Input
-              value={form.name}
-              onChange={(event) => set('name', event.target.value)}
-              placeholder="제5공화국 · 바이마르 공화국 (선택)"
-            />
-          </Field>
-          {!historicalCountryId && linkedHistoricalCountries.length > 0 && (
-            <Field>
-              소속 시대 · 국가
-              <Select
-                value={form.historicalCountryId}
-                onChange={(event) =>
-                  set('historicalCountryId', event.target.value)
-                }
-                aria-label="소속 시대 및 국가"
-              >
-                <option value="">
-                  {countryName ? `${countryName} (현대 국가)` : '현대 국가'}
-                </option>
-                {linkedHistoricalCountries.map((hcItem) => (
-                  <option key={hcItem.id} value={hcItem.id}>
-                    {hcItem.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          )}
-          <Field>
-            시작 (연 · 월 · 일)
-            <Inline>
-              <Select
-                value={form.startEra}
-                onChange={(event) =>
-                  set('startEra', event.target.value as 'BC' | 'AD')
-                }
-                aria-label="시작 시대"
-              >
-                <option value="AD">서기</option>
-                <option value="BC">기원전</option>
-              </Select>
-              <Input
-                type="number"
-                value={form.startYear}
-                onChange={(event) => set('startYear', event.target.value)}
-                placeholder="1948"
-                aria-label="시작 연도"
-              />
-              <Input
-                type="number"
-                min={1}
-                max={12}
-                value={form.startMonth}
-                onChange={(event) => set('startMonth', event.target.value)}
-                placeholder="월"
-                aria-label="시작 월"
-                style={{ width: 64 }}
-              />
-              <Input
-                type="number"
-                min={1}
-                max={31}
-                value={form.startDay}
-                onChange={(event) => set('startDay', event.target.value)}
-                placeholder="일"
-                aria-label="시작 일"
-                style={{ width: 64 }}
-              />
-            </Inline>
-          </Field>
-          <Field>
-            종료 (연 · 월 · 일)
-            <Inline>
-              <Select
-                value={form.endEra}
-                onChange={(event) =>
-                  set('endEra', event.target.value as 'BC' | 'AD')
-                }
-                aria-label="종료 시대"
-                disabled={form.isCurrent}
-              >
-                <option value="AD">서기</option>
-                <option value="BC">기원전</option>
-              </Select>
-              <Input
-                type="number"
-                value={form.endYear}
-                onChange={(event) => set('endYear', event.target.value)}
-                placeholder={form.isCurrent ? '현행' : '1960'}
-                aria-label="종료 연도"
-                disabled={form.isCurrent}
-              />
-              <Input
-                type="number"
-                min={1}
-                max={12}
-                value={form.endMonth}
-                onChange={(event) => set('endMonth', event.target.value)}
-                placeholder="월"
-                aria-label="종료 월"
-                disabled={form.isCurrent}
-                style={{ width: 64 }}
-              />
-              <Input
-                type="number"
-                min={1}
-                max={31}
-                value={form.endDay}
-                onChange={(event) => set('endDay', event.target.value)}
-                placeholder="일"
-                aria-label="종료 일"
-                disabled={form.isCurrent}
-                style={{ width: 64 }}
-              />
-            </Inline>
-          </Field>
-          <Field style={{ justifyContent: 'flex-end' }}>
-            <CheckLabel>
-              <input
-                type="checkbox"
-                checked={form.isCurrent}
-                onChange={(event) => {
-                  set('isCurrent', event.target.checked)
-                  if (event.target.checked) {
-                    set('endYear', '')
-                    set('endMonth', '')
-                    set('endDay', '')
-                  }
-                }}
-              />
-              지금도 이 정체
-            </CheckLabel>
-          </Field>
-        </Grid>
+            {saving ? '저장 중...' : editing ? '변경사항 저장' : '정체 등록'}
+          </PersonRegisterModalPrimaryBtn>
+        </FooterActions>
+      </PersonRegisterModalStickyFooter>
 
-        <SectionLabel>정부 형태 · 입법부</SectionLabel>
-        <Grid>
-          <Field>
-            정부 형태
-            <Select
-              value={form.governmentForm}
-              onChange={(event) =>
-                setForm((prev) =>
-                  applyGovernmentFormDefaults(event.target.value, prev),
-                )
-              }
-            >
-              <option value="">선택 안 함</option>
-              {GOVERNMENT_FORM_ORDER.map((key) => (
-                <option key={key} value={key}>
-                  {GOVERNMENT_FORM_LABEL[key]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field>
-            입법부 구성
-            <Select
-              value={form.legislatureType}
-              onChange={(event) => set('legislatureType', event.target.value)}
-            >
-              <option value="">선택 안 함</option>
-              {LEGISLATURE_TYPE_ORDER.map((key) => (
-                <option key={key} value={key}>
-                  {LEGISLATURE_TYPE_LABEL[key]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </Grid>
-
-        {hasLegislature && (
-          <Grid>
-            <Field>
-              {primaryHouseLabel(legislature)} — 원 카탈로그
-              <Select value={form.lowerChamberId} onChange={(event) => pickChamber('lower', event.target.value)}>
-                <option value="">고르지 않음(이름만)</option>
-                {chambers
-                  .filter((chamber) => chamber.role !== 'UPPER')
-                  .map((chamber) => (
-                    <option key={chamber.id} value={chamber.id}>
-                      {chamberLabel(chamber)}
-                    </option>
-                  ))}
-              </Select>
-            </Field>
-            <Field>
-              {primaryHouseLabel(legislature)} 이름
-              <Input
-                value={form.lowerHouseName}
-                readOnly={Boolean(form.lowerChamberId)}
-                title={form.lowerChamberId ? '원 카탈로그에서 고른 원의 이름 — 바꾸려면 원을 고치거나 선택을 푸세요' : undefined}
-                onChange={(event) => set('lowerHouseName', event.target.value)}
-                placeholder={isBicameral ? '국민의회 · 하원' : '국회'}
-              />
-            </Field>
-            <Field>
-              {primaryHouseLabel(legislature)} 의석
-              <Input
-                type="number"
-                value={form.lowerHouseSeats}
-                onChange={(event) => set('lowerHouseSeats', event.target.value)}
-                placeholder="300"
-              />
-            </Field>
-            {isBicameral && (
-              <>
-                <Field>
-                  상원 — 원 카탈로그
-                  <Select value={form.upperChamberId} onChange={(event) => pickChamber('upper', event.target.value)}>
-                    <option value="">고르지 않음(이름만)</option>
-                    {chambers
-                      .filter((chamber) => chamber.role === 'UPPER' || chamber.role === 'OTHER')
-                      .map((chamber) => (
-                        <option key={chamber.id} value={chamber.id}>
-                          {chamberLabel(chamber)}
-                        </option>
-                      ))}
-                  </Select>
-                </Field>
-                <Field>
-                  상원 이름
-                  <Input
-                    value={form.upperHouseName}
-                    readOnly={Boolean(form.upperChamberId)}
-                    title={form.upperChamberId ? '원 카탈로그에서 고른 원의 이름 — 바꾸려면 원을 고치거나 선택을 푸세요' : undefined}
-                    onChange={(event) =>
-                      set('upperHouseName', event.target.value)
-                    }
-                    placeholder="참의원 · 상원 · 귀족원"
-                  />
-                </Field>
-                <Field>
-                  상원 의석
-                  <Input
-                    type="number"
-                    value={form.upperHouseSeats}
-                    onChange={(event) =>
-                      set('upperHouseSeats', event.target.value)
-                    }
-                    placeholder="100"
-                  />
-                </Field>
-              </>
-            )}
-          </Grid>
-        )}
-
-        <SectionHeaderRow>
-          <SectionLabel style={{ margin: 0 }}>
-            {isDualExecutive
-              ? '국가원수 · 정부수반 직함 (이원 체제)'
-              : '국가수반 직함 (국가원수 · 정부수반 겸임)'}
-          </SectionLabel>
-          {!isDualExecutive ? (
-            <SplitToggleBtn
-              type="button"
-              onClick={() => setForceSplitExecutive(true)}
-            >
-              + 정부수반 직함 별도 지정
-            </SplitToggleBtn>
-          ) : (
-            !isNaturallyDualExecutive && (
-              <SplitToggleBtn
-                type="button"
-                onClick={() => {
-                  setForceSplitExecutive(false)
-                  setForm((prev) => ({
-                    ...prev,
-                    headOfGovernmentChoice: '',
-                    headOfGovernmentTitle: '',
-                  }))
-                }}
-              >
-                단일 수반(겸임)으로 합치기
-              </SplitToggleBtn>
-            )
-          )}
-        </SectionHeaderRow>
-        {/*
-          직함은 관직 정의 카탈로그에서 고른다 — 재임·재위가 참조하는 그 목록이다.
-          대통령제·절대군주제 같은 일원 체제에서는 국가원수와 정부수반이 한 사람이므로
-          단일 칸으로 받고, 의원내각제·입헌군주제·이원집정부제이거나 별도 지정을 켠 경우에만
-          국가원수와 정부수반 두 칸으로 나눈다.
-        */}
-        <Grid>
-          <Field>
-            {isDualExecutive
-              ? '국가원수 직함 (대통령 · 국왕 · 황제 등)'
-              : form.governmentForm === 'ABSOLUTE_MONARCHY'
-                ? '군주 · 국가원수 직함'
-                : '수반 직함 (국가원수 · 정부수반)'}
-            <Select
-              value={form.headOfStateChoice}
-              onChange={(event) => set('headOfStateChoice', event.target.value)}
-            >
-              <option value="">지정 안 함</option>
-              {optionsFor('HEAD_OF_STATE').map((def) => (
-                <option key={def.id} value={def.id}>
-                  {def.title}
-                </option>
-              ))}
-              <option value={CUSTOM_TITLE}>직접 입력…</option>
-            </Select>
-            {form.headOfStateChoice === CUSTOM_TITLE && (
-              <Input
-                value={form.headOfStateTitle}
-                onChange={(event) => set('headOfStateTitle', event.target.value)}
-                placeholder="연합회의 의장 · 국가주석"
-                aria-label="국가원수 직함 직접 입력"
-              />
-            )}
-            {form.headOfStateChoice && isDualExecutive && (
-              <CheckLabel>
-                <input
-                  type="checkbox"
-                  checked={form.headOfStateHasPower}
-                  onChange={(event) =>
-                    set('headOfStateHasPower', event.target.checked)
-                  }
-                />
-                실권이 있다 (해제 시 상징적 국가원수)
-              </CheckLabel>
-            )}
-          </Field>
-          {isDualExecutive && (
-            <Field>
-              정부수반 직함 (총리 · 수상 · 내각총리대신 등)
-              <Select
-                value={form.headOfGovernmentChoice}
-                onChange={(event) =>
-                  set('headOfGovernmentChoice', event.target.value)
-                }
-              >
-                <option value="">지정 안 함</option>
-                {optionsFor('HEAD_OF_GOVERNMENT').map((def) => (
-                  <option key={def.id} value={def.id}>
-                    {def.title}
-                  </option>
-                ))}
-                <option value={CUSTOM_TITLE}>직접 입력…</option>
-              </Select>
-              {form.headOfGovernmentChoice === CUSTOM_TITLE && (
-                <Input
-                  value={form.headOfGovernmentTitle}
-                  onChange={(event) =>
-                    set('headOfGovernmentTitle', event.target.value)
-                  }
-                  placeholder="임시정부 수반 · 국무원 총리"
-                  aria-label="정부수반 직함 직접 입력"
-                />
-              )}
-              {form.headOfGovernmentChoice && (
-                <CheckLabel>
-                  <input
-                    type="checkbox"
-                    checked={form.headOfGovernmentHasPower}
-                    onChange={(event) =>
-                      set('headOfGovernmentHasPower', event.target.checked)
-                    }
-                  />
-                  실권이 있다
-                </CheckLabel>
-              )}
-            </Field>
-          )}
-        </Grid>
-        <FieldHint>
-          여기서 지정한 수장 직함(예: 대통령, 국왕, 내각총리대신)은 아래 행정부 · 수반 등록과 자동 연결됩니다.
-        </FieldHint>
-
-        <SectionLabel>국가 구조 · 정당제</SectionLabel>
-        <Grid>
-          <Field>
-            국가 구조
-            <Select
-              value={form.stateStructure}
-              onChange={(event) => set('stateStructure', event.target.value)}
-            >
-              <option value="">선택 안 함</option>
-              {STATE_STRUCTURE_ORDER.map((key) => (
-                <option key={key} value={key}>
-                  {STATE_STRUCTURE_LABEL[key]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field>
-            정당제
-            <Select
-              value={form.partySystem}
-              onChange={(event) => set('partySystem', event.target.value)}
-            >
-              <option value="">선택 안 함</option>
-              {PARTY_SYSTEM_ORDER.map((key) => (
-                <option key={key} value={key}>
-                  {PARTY_SYSTEM_LABEL[key]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </Grid>
-
-        <Field style={{ marginTop: 14 }}>
-          설명
-          <TextArea
-            value={form.notes}
-            onChange={(event) => set('notes', event.target.value)}
-            placeholder="헌법 개정 배경, 정체 전환의 계기 등"
-          />
-        </Field>
-      </ModalBody>
-
-      <ModalFooter>
-        <GhostButton type="button" onClick={onClose}>
-          취소
-        </GhostButton>
-        <PrimaryButton type="button" onClick={handleSubmit} disabled={saving}>
-          {editing ? '수정 저장' : '추가'}
-        </PrimaryButton>
-      </ModalFooter>
-    </Modal>
+      {activeDatePicker ? (
+        <DatePickerModal
+          isOpen
+          onClose={() => setActiveDatePicker(null)}
+          allowPartial
+          initialDate={pickerInitialDate}
+          initialPrecision={pickerInitialPrecision}
+          anchorEl={
+            typeof document !== 'undefined'
+              ? document.getElementById(activeDatePicker === 'start' ? startAnchorId : endAnchorId)
+              : null
+          }
+          onSelect={applyPickedDate}
+        />
+      ) : null}
+    </RegisterModal>
   )
 }
 
-const SectionHeaderRow = styled.div`
+const DateRangeGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(226px, 1fr));
+  gap: 12px 16px;
+  min-width: 0;
+`
+
+const SubFieldHead = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin: 18px 0 10px;
+  gap: 8px;
+  min-height: 34px;
+`
+
+const SplitRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
 `
 
 const SplitToggleBtn = styled.button`
+  flex-shrink: 0;
   padding: 0;
   border: none;
   background: none;
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.active};
   cursor: pointer;
 
   &:hover {
     text-decoration: underline;
+    text-underline-offset: 3px;
   }
-`
-
-const SectionLabel = styled.h3`
-  margin: 18px 0 10px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-
-  &:first-child {
-    margin-top: 0;
-  }
-`
-
-const Grid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px 14px;
-`
-
-const Field = styled.label`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  min-width: 0;
-`
-
-const Inline = styled.div`
-  display: flex;
-  gap: 6px;
-
-  select {
-    flex: 0 0 84px;
-  }
-
-  input {
-    flex: 1;
-    min-width: 0;
-  }
-`
-
-const controlBase = `
-  height: 34px;
-  padding: 0 9px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 400;
-  width: 100%;
-  box-sizing: border-box;
-`
-
-/* 카탈로그로 유도하는 한 줄 — 폼 아래 회색 각주 톤 */
-const FieldHint = styled.p`
-  margin: 8px 2px 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const Input = styled.input`
-  ${controlBase}
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.active};
-  }
-
-  &:disabled {
-    opacity: 0.5;
-  }
-`
-
-const Select = styled.select`
-  ${controlBase}
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  cursor: pointer;
-
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.active};
-  }
-
-  &:disabled {
-    opacity: 0.5;
-  }
-`
-
-const TextArea = styled.textarea`
-  padding: 9px 10px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 400;
-  min-height: 70px;
-  resize: vertical;
-
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.active};
-  }
-`
-
-const CheckLabel = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-
-  input {
-    cursor: pointer;
-  }
-`
-
-const PrimaryButton = styled.button`
-  padding: 9px 18px;
-  border-radius: 9px;
-  border: none;
-  background: ${({ theme }) => theme.colors.active};
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
-const GhostButton = styled.button`
-  padding: 9px 16px;
-  border-radius: 9px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: none;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 13px;
-  cursor: pointer;
 `
