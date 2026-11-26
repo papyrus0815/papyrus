@@ -800,7 +800,8 @@ export function PoliticalSystemFormModal({
       maxWidth="min(1040px, 96vw)"
       minHeight="80vh"
       fullBleedOnMobile
-      closeOnOverlayClick={false}
+      /* 바깥을 누르면 닫는다 — 저장 중이거나 달력이 떠 있을 땐(그 바깥 클릭은 달력만 닫아야) 막는다 */
+      closeOnOverlayClick={!saving && activeDatePicker === null}
       closeOnEsc={!saving && activeDatePicker === null}
     >
       <PersonRegisterModalFormScroll ref={scrollRef}>
