@@ -73,6 +73,7 @@ import {
   formatSignedYear,
 } from '@/shared/lib/lifespan-text'
 import { pathKeys } from '@/shared/router'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
@@ -81,7 +82,6 @@ import type { CalendarEventItem } from '../model/use-country-dashboard-stats'
 import {
   countryTabCanvasPadding,
   LedgerFilterChip,
-  LedgerPrimaryButton,
   LedgerToolbarButton,
   LedgerViewSwitch,
   LedgerViewSwitchItem,
@@ -870,14 +870,13 @@ export function EventsTimelineSection({
 
               {/* 비어 있으면 등록은 빈 화면의 버튼 하나만 */}
               {isLoading || list.length === 0 ? null : (
-                <LedgerPrimaryButton
-                  type="button"
+                <PrimaryActionButton
                   onClick={openCreate}
                   aria-label="새 사건 등록"
                 >
                   <FiPlus size={14} />
                   <span>새 사건 등록</span>
-                </LedgerPrimaryButton>
+                </PrimaryActionButton>
               )}
           </>
         }

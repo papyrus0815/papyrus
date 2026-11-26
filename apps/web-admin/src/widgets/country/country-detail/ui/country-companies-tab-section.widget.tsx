@@ -59,7 +59,7 @@ import { pathKeys } from '@/shared/router'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { AddButton } from '@/shared/ui/section-page-layout'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { notify } from '@/shared/ui/toast'
 import {
   COMPANY_STATUS_META,
@@ -541,13 +541,10 @@ export function CountryCompaniesTabSection({
               업종 카탈로그
             </SecondaryBtn>
             {isLoading || countryCompanies.length === 0 ? null : (
-              <AddButton
-                type="button"
-                onClick={() => setModalTarget('new')}
-              >
+              <PrimaryActionButton onClick={() => setModalTarget('new')}>
                 <FiPlus size={14} />
                 기업 등록
-              </AddButton>
+              </PrimaryActionButton>
             )}
           </HeaderButtons>
         }

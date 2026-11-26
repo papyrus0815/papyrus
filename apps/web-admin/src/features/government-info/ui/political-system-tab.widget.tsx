@@ -43,6 +43,7 @@ import {
   shouldHideCabinetFromExecutiveTimeline,
 } from '@/shared/lib/ministry-department/department-cabinet-matcher'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { getSignedDateChronologyKey } from '@/shared/lib/tenure-person-utils'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -318,10 +319,10 @@ export function PoliticalSystemTab({
           ) : null}
         </ToolbarMeta>
 
-        <PrimaryAddBtn type="button" onClick={openCreate}>
+        <PrimaryActionButton onClick={openCreate}>
           <FiPlus size={15} />
           정체·헌정 추가
-        </PrimaryAddBtn>
+        </PrimaryActionButton>
       </ToolbarSurface>
 
       {query.isLoading ? (
@@ -341,10 +342,10 @@ export function PoliticalSystemTab({
               <EmptySpecPill key={label}>{label}</EmptySpecPill>
             ))}
           </EmptySpecPreview>
-          <PrimaryAddBtn type="button" onClick={openCreate}>
+          <PrimaryActionButton $size="lg" onClick={openCreate}>
             <FiPlus size={15} />
             첫 정체·헌정 체제 등록
-          </PrimaryAddBtn>
+          </PrimaryActionButton>
         </EmptyCard>
       ) : (
         <TimelineList>
@@ -826,36 +827,6 @@ const PolityFilterSelect = styled.select`
         : 'rgba(20, 19, 34, 0.1)'};
   cursor: pointer;
   outline: none;
-`
-
-const PrimaryAddBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 13px;
-  border-radius: 8px;
-  border: none;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.14s ease;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? GOV_BRAND.primaryHoverDark
-        : GOV_BRAND.primaryHover};
-  }
-
-  @media (max-width: 768px) {
-    height: 40px;
-  }
 `
 
 const EmptyCard = styled.div`

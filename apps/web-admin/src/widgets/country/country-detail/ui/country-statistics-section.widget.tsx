@@ -5,7 +5,6 @@ import { useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
-  BentoActionBtn,
   BentoCard,
   BentoCardBody,
   BentoCardHeader,
@@ -13,6 +12,7 @@ import {
   BentoCardTitleGroup,
   BentoSubLabel,
 } from '@/entities/event/ui/bento-primitives'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { SectionSubNav } from '@/shared/ui/section-sub-nav/section-sub-nav'
 
 import { CountryDataManagerModal } from './country-data-manager/country-data-manager-modal'
@@ -114,14 +114,10 @@ export function CountryStatisticsSection({
         activeTab={subTab}
         onTabChange={handleSelectSubTab}
         actions={
-          <BentoActionBtn
-            type="button"
-            $accent
-            onClick={() => setManagerOpen(true)}
-          >
-            <FiEdit2 size={13} />
+          <PrimaryActionButton onClick={() => setManagerOpen(true)}>
+            <FiEdit2 size={14} />
             데이터 편집
-          </BentoActionBtn>
+          </PrimaryActionButton>
         }
       />
 

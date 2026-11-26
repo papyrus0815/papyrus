@@ -24,6 +24,7 @@ import {
   ModalTitle,
 } from '@/shared/ui/modal/modal.styles'
 import { FieldControl } from '@/shared/ui/register-form-layout'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 
 import {
@@ -1037,38 +1038,7 @@ export const CabListSortBadge = styled.button.attrs({ type: 'button' })`
 `
 
 /** 행정부 등록 — 사건 페이지 Primary CTA 규격 (34px / 8px / 플랫 인디고) */
-export const CabListRegisterBtn = styled.button`
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 13px;
-  height: 34px;
-  box-sizing: border-box;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  box-shadow: none;
-  transition: background 0.14s ease;
-  &:hover {
-    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
-      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-  @media (max-width: 768px) {
-    height: 40px;
-  }
-`
+export const CabListRegisterBtn = PrimaryActionButton
 
 /** 군주 등록 — 행정부 등록 옆 보조 CTA (플랫 모노크롬 윤곽선) */
 export const CabListMonarchRegisterBtn = styled.button`

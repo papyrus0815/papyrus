@@ -23,9 +23,7 @@ import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import {
   ledgerAccent,
   ledgerAccentBorder,
-  ledgerAccentHover,
   ledgerAccentSubtle,
-  ledgerBackground,
   ledgerHairlineStrong,
 } from '@/entities/event/ui/ledger-tokens'
 import { useCountries } from '@/features/country/api'
@@ -41,6 +39,7 @@ import {
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { notify } from '@/shared/ui/toast'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import type { GovernmentPositionDefinition } from '@/shared/api/government-positions'
@@ -50,7 +49,6 @@ import {
   FormHeader,
   FormHeaderTitle,
   BackButton,
-  SubmitButton,
   FormSectionInner,
   FormRows,
   FieldRow,
@@ -211,6 +209,8 @@ export interface PositionDefinitionsSectionProps {
   onOpenDepartmentDetail?: (departmentId: string) => void
   /** 초기 적용 범위 필터 (국가 고유 관직 패널에서는 'country_only' 기본 적용) */
   defaultScopeFilter?: ScopeFilterMode
+  /** 모달 본문 내부에 마운트될 때 중복 섹션 제목을 숨긴다 */
+  embeddedInModal?: boolean
 }
 
 type ScopeFilterMode = 'applicable' | 'country_only' | 'global_only' | 'all'
@@ -318,36 +318,6 @@ const SectionSub = styled.p`
   margin: 0;
   font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const AddBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 13px;
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.14s ease;
-  &:hover {
-    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
-      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-  @media (max-width: 768px) {
-    height: 40px;
-  }
 `
 
 const PositionLedgerGrid = styled.ul`
@@ -858,6 +828,7 @@ export function PositionDefinitionsSection({
   onClearFixedFilter,
   onOpenDepartmentDetail,
   defaultScopeFilter,
+  embeddedInModal = false,
 }: PositionDefinitionsSectionProps) {
   const queryClient = useQueryClient()
 
@@ -1296,10 +1267,12 @@ export function PositionDefinitionsSection({
     <Section>
       <SectionHead>
         <SectionTitleBlock>
-          <SectionTitle>
-            <FiLayers size={18} color="#6366f1" />
-            직위 정의
-          </SectionTitle>
+          {!embeddedInModal && (
+            <SectionTitle>
+              <FiLayers size={18} color="#6366f1" />
+              직위 정의
+            </SectionTitle>
+          )}
           {/* 이 목록은 국가로 걸러지지 않는다 — 전역 카탈로그 전체다.
               "이 국가 소속"이라고 적으면 거짓이 되므로 적용 범위 칩으로 구분을 넘긴다. */}
           <SectionSub>
@@ -1320,10 +1293,13 @@ export function PositionDefinitionsSection({
           </SectionSub>
         </SectionTitleBlock>
         {view === 'list' && (
-          <AddBtn type="button" onClick={() => openForm(null)}>
-            <FiPlus size={14} />
+          <PrimaryActionButton
+            $size="md"
+            icon={<FiPlus size={14} />}
+            onClick={() => openForm(null)}
+          >
             직위 등록
-          </AddBtn>
+          </PrimaryActionButton>
         )}
       </SectionHead>
 
@@ -2187,9 +2163,9 @@ export function PositionDefinitionsSection({
               </FormSectionInner>
 
               <FormActions>
-                <SubmitButton type="submit">
+                <PrimaryActionButton type="submit" $size="md">
                   {editingId ? '수정 완료' : '등록'}
-                </SubmitButton>
+                </PrimaryActionButton>
                 <CancelBtn type="button" onClick={() => setView('list')}>
                   취소
                 </CancelBtn>

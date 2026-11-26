@@ -263,7 +263,10 @@ export function InlineDateRange({
   const isEmpty = !dateLabel
   return (
     <ReadRow data-edit-host>
-      <ReadValue data-empty={isEmpty || undefined}>
+      <ReadValue
+        data-empty={isEmpty || undefined}
+        onClick={() => setEditing(true)}
+      >
         {dateLabel ?? emptyLabel}
       </ReadValue>
       <S.InlineEditButton

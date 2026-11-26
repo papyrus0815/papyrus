@@ -18,6 +18,7 @@ import {
   ledgerRowWash,
 } from '@/entities/event/ui/ledger-tokens'
 import { glassOrSolidMixin } from '@/shared/styles/mixins'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 
 /** 본문 패널 */
@@ -550,39 +551,8 @@ export const PartyShareStats = styled.span`
   white-space: normal;
 `
 
-/** 툴바 버튼 — 사건 페이지 플랫 원장 규격 (34px / 8px) */
-export const ToolbarPrimaryBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 13px;
-  border-radius: 8px;
-  border: none;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  cursor: pointer;
-  box-shadow: none;
-  transition: background 0.14s ease;
-  &:hover:not(:disabled) {
-    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
-      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-  &:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-  @media (max-width: 768px) {
-    height: 40px;
-  }
-`
+/** 툴바 주 액션 버튼 — 공용 PrimaryActionButton 정본 재노출 */
+export const ToolbarPrimaryBtn = PrimaryActionButton
 
 export const ToolbarGhostBtn = styled.button`
   display: inline-flex;

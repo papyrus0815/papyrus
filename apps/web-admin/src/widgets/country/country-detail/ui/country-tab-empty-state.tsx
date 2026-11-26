@@ -12,6 +12,8 @@ import type { IconType } from 'react-icons'
 import { FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
+
 export interface CountryTabEmptyFeature {
   Icon: IconType
   title: string
@@ -49,10 +51,10 @@ export function CountryTabEmptyState({
         {(actionLabel && onAction) || secondaryAction ? (
           <EmptyActions>
             {actionLabel && onAction ? (
-              <EmptyAction type="button" onClick={onAction}>
+              <PrimaryActionButton $size="lg" onClick={onAction}>
                 <FiPlus size={15} strokeWidth={2.25} aria-hidden="true" />
                 {actionLabel}
-              </EmptyAction>
+              </PrimaryActionButton>
             ) : null}
             {secondaryAction ? (
               <EmptySecondaryAction type="button" onClick={secondaryAction.onClick}>
@@ -162,34 +164,6 @@ const EmptySecondaryAction = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary};
     outline-offset: 2px;
-  }
-`
-
-const EmptyAction = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 16px;
-  border: none;
-  border-radius: 8px;
-  background: ${({ theme }) => theme.colors.primary};
-  color: #ffffff;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    filter 0.15s ease,
-    box-shadow 0.15s ease;
-
-  &:hover {
-    filter: brightness(1.06);
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px
-      ${({ theme }) => (theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.35)' : 'rgba(99, 102, 241, 0.25)')};
   }
 `
 

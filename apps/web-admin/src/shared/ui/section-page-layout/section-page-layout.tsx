@@ -21,7 +21,6 @@ import {
   MOTION,
   RADIUS,
   ledgerAccent,
-  ledgerAccentHover,
   ledgerBackground,
   ledgerHairlineHover,
   ledgerHairlineStrong,
@@ -31,6 +30,7 @@ import {
 } from '@/entities/event/ui/ledger-tokens'
 import { metaText, toolbarControlHeight } from '@/pages/events/styles/theme'
 import { scrollbarMixin } from '@/shared/styles/mixins'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 
 // ─── Styled Components ────────────────────────────────────────────────────────
 
@@ -297,53 +297,7 @@ const FormCardBody = styled.div`
   ${scrollbarMixin}
 `
 
-export const AddButton = styled.button`
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  ${toolbarControlHeight}
-  padding: 0 13px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? ledgerBackground('dark') : '#ffffff'};
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  box-shadow: none;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background ${MOTION.fast} ease,
-    opacity ${MOTION.fast} ease;
-
-  svg {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-  }
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
-      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-
-  &:disabled {
-    opacity: 0.48;
-    cursor: not-allowed;
-  }
-`
+export const AddButton = PrimaryActionButton
 
 export const ErrorBox = styled.div`
   margin-bottom: 20px;
@@ -405,9 +359,8 @@ export const SaveButton = styled.button<{ $saving?: boolean }>`
   gap: 6px;
   ${toolbarControlHeight}
   padding: 0 16px;
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? ledgerBackground('dark') : '#ffffff'};
+  background: ${({ theme }) => theme.colors.primary};
+  color: #ffffff;
   border: 1px solid transparent;
   border-radius: 8px;
   font-family: inherit;
@@ -421,14 +374,14 @@ export const SaveButton = styled.button<{ $saving?: boolean }>`
     background ${MOTION.fast} ease;
 
   &:hover:not(:disabled) {
-    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
+    background: ${({ theme }) => theme.colors.button.hover};
   }
 
   &:focus-visible {
     outline: none;
     box-shadow:
-      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
-      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
+      0 0 0 2px ${({ theme }) => theme.colors.background.primary},
+      0 0 0 4px ${({ theme }) => theme.colors.primary};
   }
 `
 

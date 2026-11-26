@@ -10,6 +10,8 @@
  */
 import styled, { css } from 'styled-components'
 
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
+
 export const GOV_BRAND = {
   primary: '#4f46e5',
   primaryDark: '#a5b4fc',
@@ -355,55 +357,8 @@ export const GovToolbarBtn = styled.button<{ $active?: boolean }>`
   }
 `
 
-/** 34px 주 등록 버튼 — 사건 상세 LedgerAccent와 동일한 인디고 플랫 CTA */
-export const GovPrimaryBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 13px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  box-shadow: none;
-  cursor: pointer;
-  transition:
-    background 0.14s ease,
-    opacity 0.14s ease;
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? GOV_BRAND.primaryHoverDark
-        : GOV_BRAND.primaryHover};
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 2px ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')},
-      0 0 0 4px
-        ${({ theme }) =>
-          theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  @media (max-width: 768px) {
-    height: 40px;
-  }
-`
+/** 34px 주 등록 버튼 — 공용 PrimaryActionButton 정본 재노출 */
+export const GovPrimaryBtn = PrimaryActionButton
 
 export const GovViewMeta = styled.span`
   display: inline-flex;

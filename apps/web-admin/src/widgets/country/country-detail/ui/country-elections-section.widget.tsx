@@ -174,7 +174,7 @@ import {
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextProseWithEntityClicks } from '@/shared/ui/rich-text-read-view'
-import { AddButton } from '@/shared/ui/section-page-layout'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { SectionSubNav } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { notify } from '@/shared/ui/toast'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
@@ -2451,8 +2451,7 @@ export function CountryElectionsSection({
               {/* 목록이 비어 있으면 빈 상태의 등록 버튼 하나만 — 같은 버튼이 두 개 서지 않게 */}
               {politicsViewTab === 'elections' ? (
                 listLoading || list.length === 0 ? null : (
-                  <AddButton
-                    type="button"
+                  <PrimaryActionButton
                     onClick={() => setElectionModal({ mode: 'create' })}
                     title={
                       historicalCountryId
@@ -2462,11 +2461,10 @@ export function CountryElectionsSection({
                   >
                     <FiPlus size={14} strokeWidth={2.25} aria-hidden />
                     선거 등록
-                  </AddButton>
+                  </PrimaryActionButton>
                 )
               ) : !electionPartyId && parties.length > 0 ? (
-                <AddButton
-                  type="button"
+                <PrimaryActionButton
                   onClick={() => setPartyCreateTick((tick) => tick + 1)}
                   title={
                     historicalCountryId
@@ -2476,7 +2474,7 @@ export function CountryElectionsSection({
                 >
                   <FiPlus size={14} strokeWidth={2.25} aria-hidden />
                   정당 등록
-                </AddButton>
+                </PrimaryActionButton>
               ) : null}
             </>
           }

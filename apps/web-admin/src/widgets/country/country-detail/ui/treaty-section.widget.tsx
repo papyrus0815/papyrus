@@ -86,7 +86,7 @@ import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
-import { AddButton } from '@/shared/ui/section-page-layout'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -1142,9 +1142,9 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
               조약 카탈로그
             </TreatySecondaryBtn>
             {isLoading || treaties.length === 0 ? null : (
-              <AddButton type="button" onClick={() => setCreateOpen(true)}>
+              <PrimaryActionButton onClick={() => setCreateOpen(true)}>
                 <FiPlus size={14} /> 조약 등록
-              </AddButton>
+              </PrimaryActionButton>
             )}
           </TreatyHeaderActions>
         }

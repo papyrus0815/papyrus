@@ -11,6 +11,7 @@
  *  - 색은 전부 테마 토큰
  */
 import { CountryTabEmptyState } from './country-tab-empty-state'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -255,9 +256,9 @@ function SectionHead({
         <Title>{title}</Title>
         <Description>{description}</Description>
       </HeadText>
-      <AddButton type="button" onClick={onAdd}>
+      <PrimaryActionButton onClick={onAdd}>
         <FiPlus aria-hidden /> {addLabel}
-      </AddButton>
+      </PrimaryActionButton>
     </Head>
   )
 }
@@ -2188,30 +2189,6 @@ const Description = styled.p`
   margin: 0;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const AddButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 7px 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 6px;
-  background: transparent;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  cursor: pointer;
-  white-space: nowrap;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.active};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
-  }
 `
 
 const FilterToolbar = styled.div`

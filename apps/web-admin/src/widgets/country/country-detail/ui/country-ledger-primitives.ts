@@ -30,6 +30,7 @@ import {
   ledgerSubtleFill,
 } from '@/entities/event/ui/ledger-tokens'
 import { DANGER, metaText, toolbarControlHeight } from '@/pages/events/styles/theme'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 
 export {
   DANGER,
@@ -59,58 +60,8 @@ export const countryTabCanvasPadding = css`
   }
 `
 
-/** 화면당 단 하나만 쓰는 주 등록/생성 CTA (사건 목록 CreateEventButton + 사건 상세 LedgerAccent 결합) */
-export const LedgerPrimaryButton = styled.button`
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  ${toolbarControlHeight}
-  padding: 0 13px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? ledgerBackground('dark') : '#ffffff'};
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  box-shadow: none;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background ${MOTION.fast} ease,
-    opacity ${MOTION.fast} ease;
-
-  svg {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-  }
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
-  }
-
-  &:active:not(:disabled) {
-    opacity: 0.92;
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
-      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-
-  &:disabled {
-    opacity: 0.48;
-    cursor: not-allowed;
-  }
-`
+/** 화면당 단 하나만 쓰는 주 등록/생성 CTA — 공용 PrimaryActionButton 정본 재노출 */
+export const LedgerPrimaryButton = PrimaryActionButton
 
 /** 보조 아웃라인 / 고스트 툴바 버튼 (평소 무채색, $active 시에만 인디고 틴트) */
 export const LedgerToolbarButton = styled.button<{

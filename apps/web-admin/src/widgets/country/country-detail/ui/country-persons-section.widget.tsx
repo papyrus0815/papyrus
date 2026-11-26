@@ -61,6 +61,7 @@ import {
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
@@ -69,7 +70,6 @@ import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-i
 import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
   LedgerFilterChip,
-  LedgerPrimaryButton,
   LedgerToolbarButton,
   LedgerViewSwitch,
   LedgerViewSwitchItem,
@@ -976,8 +976,7 @@ export function CountryPersonsSection({
               </LedgerToolbarButton>
               {/* 비어 있으면 등록은 빈 화면의 버튼 하나만 */}
               {isLoading || !hasAny ? null : (
-                <LedgerPrimaryButton
-                  type="button"
+                <PrimaryActionButton
                   onClick={() => {
                     setEditPersonId(null)
                     setRegisterModalOpen(true)
@@ -985,7 +984,7 @@ export function CountryPersonsSection({
                 >
                   <FiPlus size={14} />
                   <span>인물 등록</span>
-                </LedgerPrimaryButton>
+                </PrimaryActionButton>
               )}
             </>
           }

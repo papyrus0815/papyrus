@@ -72,6 +72,7 @@ import {
   toLinkScopedPeriod,
 } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import {
@@ -89,10 +90,7 @@ import {
 } from '../model/linked-historical-labels'
 import { useLinkedHistoricalData } from '../model/use-linked-historical-data.hook'
 import * as DashboardStyles from './country-detail-dashboard.styles'
-import {
-  LedgerFilterChip,
-  LedgerPrimaryButton,
-} from './country-ledger-primitives'
+import { LedgerFilterChip } from './country-ledger-primitives'
 import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 
@@ -843,14 +841,13 @@ export function LinkedHistoricalCountriesSection({
             <>
             {/* 비어 있으면 등록은 빈 화면의 버튼 하나만 */}
             {isLinkedDataLoading || count === 0 ? null : (
-              <LedgerPrimaryButton
-                type="button"
+              <PrimaryActionButton
                 disabled={isMutatingLink}
                 onClick={() => setIsPickerOpen(true)}
               >
                 <FiPlus size={14} />
                 <span>과거 국가 연결</span>
-              </LedgerPrimaryButton>
+              </PrimaryActionButton>
             )}
             </>
           }

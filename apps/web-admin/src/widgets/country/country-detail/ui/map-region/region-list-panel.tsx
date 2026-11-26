@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fi'
 
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 
 import { type RegionPalette } from './use-region-palette'
 
@@ -149,44 +150,16 @@ interface RegisterButtonProps {
   label?: string
 }
 
-/** "+ 등록" 액션 버튼 */
+/** "+ 등록" 액션 버튼 — 공용 PrimaryActionButton 정본 사용 */
 export function RegisterButton({
-  palette,
   onClick,
   label = '등록',
 }: RegisterButtonProps) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 5,
-        height: 30,
-        padding: '0 11px',
-        fontSize: 12,
-        fontWeight: 700,
-        color: palette.isDark ? '#0e0f12' : '#ffffff',
-        background: palette.primary,
-        border: 'none',
-        borderRadius: 6,
-        cursor: 'pointer',
-        whiteSpace: 'nowrap',
-        flexShrink: 0,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = palette.isDark
-          ? '#c7d2fe'
-          : '#4338ca'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = palette.primary
-      }}
-    >
+    <PrimaryActionButton $size="sm" onClick={onClick}>
       <FiPlus size={13} />
       <span>{label}</span>
-    </button>
+    </PrimaryActionButton>
   )
 }
 

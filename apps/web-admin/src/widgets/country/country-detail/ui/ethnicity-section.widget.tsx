@@ -47,7 +47,7 @@ import { pathKeys } from '@/shared/router'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { AddButton } from '@/shared/ui/section-page-layout'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
@@ -340,10 +340,10 @@ export function EthnicitySection({
               민족 전체 관리
             </SecondaryBtn>
             {isLoading || list.length === 0 ? null : (
-              <AddButton type="button" onClick={openEditModal}>
+              <PrimaryActionButton onClick={openEditModal}>
                 <FiPlus size={14} />
                 구성 민족 편집
-              </AddButton>
+              </PrimaryActionButton>
             )}
           </HeaderActions>
         }

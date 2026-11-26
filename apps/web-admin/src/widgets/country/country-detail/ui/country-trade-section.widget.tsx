@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { FiEdit2, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { BentoActionBtn } from '@/entities/event/ui/bento-primitives'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import {
   ModalBody,
   ModalBoxWide,
@@ -59,14 +59,10 @@ export function CountryTradeSection({
       <SectionSubNav
         summary={<span>연도별 수출·수입 · 교역 상대국 · 품목</span>}
         actions={
-          <BentoActionBtn
-            type="button"
-            $accent
-            onClick={() => setEditorOpen(true)}
-          >
-            <FiEdit2 size={13} />
+          <PrimaryActionButton onClick={() => setEditorOpen(true)}>
+            <FiEdit2 size={14} />
             교역 데이터 편집
-          </BentoActionBtn>
+          </PrimaryActionButton>
         }
       />
 
