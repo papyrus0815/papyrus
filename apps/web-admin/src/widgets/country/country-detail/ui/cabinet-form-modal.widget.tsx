@@ -3346,7 +3346,12 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         activeDatePicker === null &&
         !headerMoreMenuOpen
       }
-      closeOnOverlayClick={false}
+      /* 바깥을 누르면 닫는다 — requestClose가 작성 중이면 확인을 묻는다. 저장 중·달력·더보기 메뉴가 떠 있을 땐 막는다 */
+      closeOnOverlayClick={
+        !saveCabinetMutation.isPending &&
+        activeDatePicker === null &&
+        !headerMoreMenuOpen
+      }
       headerActions={
         !onboardingCabinetId ? (
           <HeaderRightBar>
