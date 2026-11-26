@@ -1,11 +1,10 @@
 import { CountryTabEmptyState } from './country-tab-empty-state'
-import { useCallback, useEffect, useId, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiBookOpen,
-  FiChevronRight,
   FiClock,
   FiEdit2,
   FiLayers,
@@ -44,38 +43,20 @@ import {
   updateLaw,
 } from '@/shared/api/election'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
-import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
-import {
-  FieldLabel,
-  FieldRow,
-  FormRows,
-  Input,
-  Required,
-  Textarea,
-} from '@/shared/ui/register-form-layout'
-import {
-  SelectModal,
-  type SelectOption,
-} from '@/shared/ui/select-modal/select-modal'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
+import { Input } from '@/shared/ui/register-form-layout'
+import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { notify } from '@/shared/ui/toast'
 
 import {
-  PoliticsTabPanel,
-  RowIconBtn,
-  SubsectionAddBtn,
-} from './country-politics-tab.styles'
-
-function getLawTypeHierarchyRank(label: string): number {
-  if (/헌법|기본법|대헌장|장전/.test(label)) return 0
-  if (/법률|법전|율령|대전|통전/.test(label)) return 1
-  if (/조약|협약|국제법/.test(label)) return 2
-  if (/대통령령|칙령|시행령|정령|명령|교지/.test(label)) return 3
-  if (/총리령|부령|시행규칙|규칙|조례|예규/.test(label)) return 4
-  if (label === '미분류') return 9
-  return 5
-}
+  formatClauseLabel,
+  getLawTypeHierarchyRank,
+  LawFormModal,
+  type LawFormSubmitPayload,
+} from './country-law-form-modal'
+import { LedgerToolbarButton } from './country-ledger-primitives'
+import { PoliticsTabPanel, RowIconBtn } from './country-politics-tab.styles'
 
 function parseLawSignedYear(raw: string | null | undefined): number | null {
   if (!raw) return null
@@ -114,37 +95,6 @@ function listParams(input: {
 const qkLaws = (scopeKey: string) => ['laws', scopeKey] as const
 const qkLawTypes = ['law-types'] as const
 
-/** 숫자만 허용, 비어 있으면 null, 1 이상만 API로 전달 */
-function parseClauseDigits(raw: string): number | null {
-  const digitsOnly = raw.replace(/\D/g, '').trim()
-  if (digitsOnly === '') return null
-  const parsed = parseInt(digitsOnly, 10)
-  if (!Number.isFinite(parsed) || parsed < 1) return null
-  return parsed
-}
-
-function formatClauseLabel(
-  articleNumber: number | null | undefined,
-  paragraphNumber: number | null | undefined,
-): string | null {
-  if (articleNumber == null && paragraphNumber == null) return null
-  if (articleNumber != null && paragraphNumber != null) {
-    return `제${articleNumber}조 제${paragraphNumber}항`
-  }
-  if (articleNumber != null) return `제${articleNumber}조`
-  return `제${paragraphNumber}항`
-}
-
-function toDateInputString(raw: string | null | undefined): string {
-  if (!raw) return ''
-  const dateObj = new Date(raw)
-  if (Number.isNaN(dateObj.getTime())) return ''
-  const year = dateObj.getUTCFullYear()
-  const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(dateObj.getUTCDate()).padStart(2, '0')
-  return `${String(year).padStart(4, '0')}-${month}-${day}`
-}
-
 function formatLawDotDate(raw: string | null | undefined): string | null {
   if (!raw) return null
   const dateObj = new Date(raw)
@@ -170,49 +120,29 @@ function formatLawDateBadge(
 export function CountryLawsSection({
   countryId,
   historicalCountryId,
+  linkedHistoricalCountries = [],
 }: {
   countryId?: string
   historicalCountryId?: string
+  linkedHistoricalCountries?: ReadonlyArray<{ id: string; name: string }>
 }) {
   const queryClient = useQueryClient()
   const scopeKey = lawsScopeKey({ countryId, historicalCountryId })
   const params = listParams({ countryId, historicalCountryId })
 
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [editing, setEditing] = useState<LawRow | null>(null)
-  const [name, setName] = useState('')
-  const [summary, setSummary] = useState('')
-  const [articleInput, setArticleInput] = useState('')
-  const [paragraphInput, setParagraphInput] = useState('')
-  const [startDateInput, setStartDateInput] = useState('')
-  const [endDateInput, setEndDateInput] = useState('')
-  const [noteInput, setNoteInput] = useState('')
-  const [lawTypeId, setLawTypeId] = useState('')
+  const [editorState, setEditorState] = useState<{
+    mode: 'create' | 'edit'
+    editing: LawRow | null
+  } | null>(null)
   const [newLawTypeName, setNewLawTypeName] = useState('')
   const [lawTypeAddOpen, setLawTypeAddOpen] = useState(false)
-  const [lawTypePickerOpen, setLawTypePickerOpen] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('ALL')
   const [searchParams] = useSearchParams()
   const highlightedLawId = searchParams.get('lawId')?.trim() || ''
 
-  const reactFormId = useId()
-  const formId = `country-law-form-${reactFormId.replace(/:/g, '')}`
-
-  const resetEditorForm = useCallback(() => {
-    setEditing(null)
-    setName('')
-    setSummary('')
-    setArticleInput('')
-    setParagraphInput('')
-    setStartDateInput('')
-    setEndDateInput('')
-    setNoteInput('')
-    setLawTypeId('')
-  }, [])
-
-  const { data: lawTypes = [], isLoading: lawTypesLoading } = useQuery({
+  const { data: lawTypes = [] } = useQuery({
     queryKey: qkLawTypes,
     queryFn: () => getLawTypes(),
   })
@@ -344,15 +274,15 @@ export function CountryLawsSection({
       if (maxY - minY <= 160 && minY >= 1700) {
         mode = 'decade'
         for (const y of datedYears) {
-          const d = Math.floor(y / 10) * 10
-          const cur = bucketMap.get(d)
+          const decade = Math.floor(y / 10) * 10
+          const cur = bucketMap.get(decade)
           if (cur) {
             cur.count += 1
           } else {
-            bucketMap.set(d, {
-              key: String(d),
-              label: `${d}년대`,
-              shortLabel: `'${String(d).slice(-2)}s`,
+            bucketMap.set(decade, {
+              key: String(decade),
+              label: `${decade}년대`,
+              shortLabel: `'${String(decade).slice(-2)}s`,
               count: 1,
             })
           }
@@ -360,15 +290,18 @@ export function CountryLawsSection({
       } else {
         mode = 'century'
         for (const y of datedYears) {
-          const c = y > 0 ? Math.ceil(y / 100) : -Math.ceil(Math.abs(y) / 100)
-          const cur = bucketMap.get(c)
+          const century =
+            y > 0 ? Math.ceil(y / 100) : -Math.ceil(Math.abs(y) / 100)
+          const cur = bucketMap.get(century)
           if (cur) {
             cur.count += 1
           } else {
-            bucketMap.set(c, {
-              key: String(c),
-              label: c > 0 ? `${c}세기` : `BC ${Math.abs(c)}세기`,
-              shortLabel: c > 0 ? `${c}c` : `B${Math.abs(c)}c`,
+            bucketMap.set(century, {
+              key: String(century),
+              label:
+                century > 0 ? `${century}세기` : `BC ${Math.abs(century)}세기`,
+              shortLabel:
+                century > 0 ? `${century}c` : `B${Math.abs(century)}c`,
               count: 1,
             })
           }
@@ -380,7 +313,10 @@ export function CountryLawsSection({
       .sort((left, right) => left[0] - right[0])
       .slice(-12)
       .map(([, val]) => val)
-    const maxBucketCount = Math.max(0, ...buckets.map((b) => b.count))
+    const maxBucketCount = Math.max(
+      0,
+      ...buckets.map((bucket) => bucket.count),
+    )
     const peakBucket = buckets.reduce<{ label: string; count: number } | null>(
       (best, cur) => (!best || cur.count > best.count ? cur : best),
       null,
@@ -424,39 +360,16 @@ export function CountryLawsSection({
     })
   }, [sorted, typeFilter, searchQuery])
 
-  const lawTypeSelectOptions = useMemo((): SelectOption<string>[] => {
-    const fromApi = lawTypes.map((typeItem) => ({
-      value: typeItem.id,
-      label: typeItem.name,
-    }))
-    const staleSelection =
-      lawTypeId !== '' &&
-      !lawTypes.some((typeItem) => typeItem.id === lawTypeId)
-    const orphan: SelectOption<string>[] = staleSelection
-      ? [{ value: lawTypeId, label: '(목록에 없는 분류)' }]
-      : []
-    return [{ value: '', label: '(분류 없음)' }, ...orphan, ...fromApi]
-  }, [lawTypes, lawTypeId])
-
-  const lawTypeButtonLabel = useMemo(() => {
-    if (!lawTypeId) return '(분류 없음)'
-    const found = lawTypes.find((typeItem) => typeItem.id === lawTypeId)
-    if (found) return found.name
-    if (lawTypesLoading) return '…'
-    return '(목록에 없는 분류)'
-  }, [lawTypeId, lawTypes, lawTypesLoading])
-
-  const invalidate = () => {
+  const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['laws'] })
-  }
+  }, [queryClient])
 
   const lawTypeCreateMut = useMutation({
-    mutationFn: () => createLawType({ name: newLawTypeName.trim() }),
-    onSuccess: (created) => {
+    mutationFn: (typeName: string) => createLawType({ name: typeName.trim() }),
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qkLawTypes })
       setNewLawTypeName('')
       setLawTypeAddOpen(false)
-      if (created?.id) setLawTypeId(created.id)
       notify.success('법 분류를 추가했습니다.')
     },
     onError: (err: Error) => notify.error(err.message),
@@ -466,20 +379,21 @@ export function CountryLawsSection({
     mutationFn: (body: Parameters<typeof createLaw>[0]) => createLaw(body),
     onSuccess: () => {
       invalidate()
-      setEditorOpen(false)
-      resetEditorForm()
       notify.success('법령을 등록했습니다.')
     },
     onError: (err: Error) => notify.error(err.message),
   })
 
   const updateMut = useMutation({
-    mutationFn: (body: Parameters<typeof updateLaw>[1]) =>
-      updateLaw(editing!.id, body),
+    mutationFn: ({
+      lawId,
+      body,
+    }: {
+      lawId: string
+      body: Parameters<typeof updateLaw>[1]
+    }) => updateLaw(lawId, body),
     onSuccess: () => {
       invalidate()
-      setEditorOpen(false)
-      resetEditorForm()
       notify.success('저장했습니다.')
     },
     onError: (err: Error) => notify.error(err.message),
@@ -495,82 +409,48 @@ export function CountryLawsSection({
   })
 
   const openCreate = () => {
-    resetEditorForm()
-    setEditorOpen(true)
+    setEditorState({ mode: 'create', editing: null })
   }
 
   const openEdit = (row: LawRow) => {
-    setEditing(row)
-    setName(row.name ?? '')
-    setSummary(row.summary ?? '')
-    setArticleInput(row.articleNumber != null ? String(row.articleNumber) : '')
-    setParagraphInput(
-      row.paragraphNumber != null ? String(row.paragraphNumber) : '',
-    )
-    setStartDateInput(toDateInputString(row.startDate))
-    setEndDateInput(toDateInputString(row.endDate))
-    setNoteInput(row.note ?? '')
-    setLawTypeId(row.lawTypeId ?? row.lawType?.id ?? '')
-    setEditorOpen(true)
+    setEditorState({ mode: 'edit', editing: row })
   }
 
-  const busy = createMut.isPending || updateMut.isPending || deleteMut.isPending
+  const handleModalSubmit = useCallback(
+    async (payload: LawFormSubmitPayload): Promise<boolean> => {
+      try {
+        if (payload.mode === 'edit' && payload.id) {
+          await updateMut.mutateAsync({
+            lawId: payload.id,
+            body: payload.body,
+          })
+          setEditorState(null)
+          return true
+        }
+        await createMut.mutateAsync(payload.body)
+        if (!payload.continueAfterSave) {
+          setEditorState(null)
+        }
+        return true
+      } catch {
+        return false
+      }
+    },
+    [createMut, updateMut],
+  )
 
-  const submitLawForm = () => {
-    if (!name.trim()) {
-      notify.error('명칭을 입력하세요.')
-      return
-    }
-    const article = parseClauseDigits(articleInput)
-    const paragraph = parseClauseDigits(paragraphInput)
-    if (articleInput.trim() !== '' && article == null) {
-      notify.error('조 번호는 1 이상의 숫자만 입력할 수 있습니다.')
-      return
-    }
-    if (paragraphInput.trim() !== '' && paragraph == null) {
-      notify.error('항 번호는 1 이상의 숫자만 입력할 수 있습니다.')
-      return
-    }
-    if (paragraph != null && article == null) {
-      notify.error('항을 입력하려면 조 번호를 먼저 입력하세요.')
-      return
-    }
+  const handleCreateLawTypeFromModal = useCallback(
+    async (typeName: string) => {
+      try {
+        return await lawTypeCreateMut.mutateAsync(typeName)
+      } catch {
+        return null
+      }
+    },
+    [lawTypeCreateMut],
+  )
 
-    const startDate = startDateInput.trim() || null
-    const endDate = endDateInput.trim() || null
-    if (startDate && endDate && Date.parse(endDate) < Date.parse(startDate)) {
-      notify.error('폐지·종료일은 제정·시행일보다 빠를 수 없습니다.')
-      return
-    }
-
-    const payload = {
-      name: name.trim(),
-      summary: summary.trim() || null,
-      articleNumber: article,
-      paragraphNumber: paragraph,
-      startDate,
-      endDate,
-      note: noteInput.trim() || null,
-      lawTypeId: lawTypeId || null,
-      countryId: countryId ?? null,
-      historicalCountryId: historicalCountryId ?? null,
-    }
-
-    if (editing) {
-      updateMut.mutate({
-        name: payload.name,
-        summary: payload.summary,
-        articleNumber: payload.articleNumber,
-        paragraphNumber: payload.paragraphNumber,
-        startDate: payload.startDate,
-        endDate: payload.endDate,
-        note: payload.note,
-        lawTypeId: payload.lawTypeId,
-      })
-    } else {
-      createMut.mutate(payload)
-    }
-  }
+  const savingLaw = createMut.isPending || updateMut.isPending
 
   const hasActiveFilter =
     typeFilter !== 'ALL' || searchQuery.trim().length > 0
@@ -587,19 +467,20 @@ export function CountryLawsSection({
           }
           actions={
             <>
-              <HeaderGhostBtn
+              <LedgerToolbarButton
                 type="button"
+                $active={lawTypeAddOpen}
                 onClick={() => setLawTypeAddOpen((prev) => !prev)}
                 aria-expanded={lawTypeAddOpen}
               >
                 <FiPlus size={14} strokeWidth={2.25} />법 분류 추가
-              </HeaderGhostBtn>
+              </LedgerToolbarButton>
               {/* 비어 있으면 등록은 빈 화면의 버튼 하나만 */}
               {isLoading || sorted.length === 0 ? null : (
-                <SubsectionAddBtn type="button" onClick={openCreate}>
-                  <FiPlus size={15} strokeWidth={2.25} />
+                <PrimaryActionButton onClick={openCreate}>
+                  <FiPlus size={14} strokeWidth={2.25} />
                   법령 등록
-                </SubsectionAddBtn>
+                </PrimaryActionButton>
               )}
             </>
           }
@@ -624,7 +505,7 @@ export function CountryLawsSection({
                   if (keyEvent.key === 'Enter') {
                     keyEvent.preventDefault()
                     if (newLawTypeName.trim() && !lawTypeCreateMut.isPending)
-                      lawTypeCreateMut.mutate()
+                      lawTypeCreateMut.mutate(newLawTypeName)
                   }
                 }}
               />
@@ -633,7 +514,7 @@ export function CountryLawsSection({
                 disabled={
                   lawTypeCreateMut.isPending || !newLawTypeName.trim()
                 }
-                onClick={() => lawTypeCreateMut.mutate()}
+                onClick={() => lawTypeCreateMut.mutate(newLawTypeName)}
               >
                 분류 저장
               </LawTypeSaveBtn>
@@ -939,219 +820,25 @@ export function CountryLawsSection({
           )}
         </LawPanelBody>
 
-        <FormSidePanel
-          isOpen={editorOpen}
-          title={editing ? '법령 수정' : '법령 등록'}
-          onClose={() => {
-            if (!busy) {
-              setEditorOpen(false)
-              resetEditorForm()
-            }
-          }}
-          submitLabel={editing ? '저장' : '등록'}
-          formId={formId}
-          submitDisabled={busy || !name.trim()}
-          panelWidth={760}
-        >
-          <form
-            id={formId}
-            onSubmit={(submitEvent) => {
-              submitEvent.preventDefault()
-              submitLawForm()
-            }}
-          >
-            <FormRows>
-              <FieldRow>
-                <FieldLabel htmlFor="country-law-name">
-                  명칭 <Required>*</Required>
-                </FieldLabel>
-                <ModalFieldWide>
-                  <Input
-                    id="country-law-name"
-                    value={name}
-                    onChange={(changeEvent) =>
-                      setName(changeEvent.target.value)
-                    }
-                    autoComplete="off"
-                  />
-                </ModalFieldWide>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel id="country-law-type-label">법 분류</FieldLabel>
-                <ModalFieldWide>
-                  <LawTypePickerCard
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setLawTypePickerOpen(true)}
-                    aria-labelledby="country-law-type-label"
-                    aria-haspopup="dialog"
-                    aria-expanded={lawTypePickerOpen}
-                  >
-                    <LawTypePickerValue>
-                      {lawTypeButtonLabel}
-                    </LawTypePickerValue>
-                    <LawTypePickerGo aria-hidden>
-                      <FiChevronRight size={20} strokeWidth={2} />
-                    </LawTypePickerGo>
-                  </LawTypePickerCard>
-                </ModalFieldWide>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel htmlFor="country-law-article">조</FieldLabel>
-                <ModalFieldWide>
-                  <ClauseInputWrap>
-                    <Input
-                      id="country-law-article"
-                      inputMode="numeric"
-                      value={articleInput}
-                      onChange={(changeEvent) =>
-                        setArticleInput(
-                          changeEvent.target.value.replace(/\D/g, ''),
-                        )
-                      }
-                      placeholder="1"
-                      autoComplete="off"
-                      style={{ width: 80, textAlign: 'center' }}
-                      aria-describedby="country-law-article-hint"
-                    />
-                    <ClauseSuffix>조</ClauseSuffix>
-                  </ClauseInputWrap>
-                  <span
-                    id="country-law-article-hint"
-                    style={{
-                      display: 'block',
-                      marginTop: 6,
-                      fontSize: 12,
-                      color: 'var(--text-secondary, #64748b)',
-                    }}
-                  >
-                    1조만 해당하면 숫자 <strong>1</strong>만 입력합니다.
-                  </span>
-                </ModalFieldWide>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel htmlFor="country-law-paragraph">항</FieldLabel>
-                <ModalFieldWide>
-                  <ClauseInputWrap>
-                    <Input
-                      id="country-law-paragraph"
-                      inputMode="numeric"
-                      value={paragraphInput}
-                      onChange={(changeEvent) =>
-                        setParagraphInput(
-                          changeEvent.target.value.replace(/\D/g, ''),
-                        )
-                      }
-                      placeholder=""
-                      autoComplete="off"
-                      style={{ width: 80, textAlign: 'center' }}
-                    />
-                    <ClauseSuffix>항</ClauseSuffix>
-                  </ClauseInputWrap>
-                </ModalFieldWide>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel htmlFor="country-law-start-date">
-                  제정·시행일
-                </FieldLabel>
-                <ModalFieldWide>
-                  <Input
-                    id="country-law-start-date"
-                    type="date"
-                    value={startDateInput}
-                    onChange={(changeEvent) =>
-                      setStartDateInput(changeEvent.target.value)
-                    }
-                    style={{ maxWidth: 220 }}
-                  />
-                </ModalFieldWide>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel htmlFor="country-law-end-date">
-                  폐지·종료일
-                </FieldLabel>
-                <ModalFieldWide>
-                  <Input
-                    id="country-law-end-date"
-                    type="date"
-                    value={endDateInput}
-                    onChange={(changeEvent) =>
-                      setEndDateInput(changeEvent.target.value)
-                    }
-                    style={{ maxWidth: 220 }}
-                  />
-                </ModalFieldWide>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>요약</FieldLabel>
-                <FullWidthControl>
-                  <Textarea
-                    value={summary}
-                    onChange={(changeEvent) =>
-                      setSummary(changeEvent.target.value)
-                    }
-                    rows={4}
-                  />
-                </FullWidthControl>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>비고·제헌 경위</FieldLabel>
-                <FullWidthControl>
-                  <Textarea
-                    value={noteInput}
-                    onChange={(changeEvent) =>
-                      setNoteInput(changeEvent.target.value)
-                    }
-                    rows={2}
-                    placeholder="예: 제헌의회 의결·국민투표 경위, 개정 연혁 등"
-                  />
-                </FullWidthControl>
-              </FieldRow>
-            </FormRows>
-          </form>
-        </FormSidePanel>
-
-        <SelectModal
-          isOpen={lawTypePickerOpen}
-          onClose={() => setLawTypePickerOpen(false)}
-          title="법 분류 선택"
-          options={lawTypeSelectOptions}
-          selectedValue={lawTypeId}
-          onSelect={(value) => {
-            setLawTypeId(typeof value === 'string' ? value : String(value))
-            setLawTypePickerOpen(false)
-          }}
-        />
+        {editorState ? (
+          <LawFormModal
+            isOpen
+            mode={editorState.mode}
+            initial={editorState.editing}
+            lawScope={{ countryId, historicalCountryId }}
+            historicalCountryOptions={linkedHistoricalCountries}
+            lawTypes={lawTypes}
+            saving={savingLaw}
+            creatingLawType={lawTypeCreateMut.isPending}
+            onCreateLawType={handleCreateLawTypeFromModal}
+            onClose={() => setEditorState(null)}
+            onSubmit={handleModalSubmit}
+          />
+        ) : null}
       </LawsPoliticsTabPanel>
     </CountryLawsSectionRoot>
   )
 }
-
-const ModalFieldWide = styled.div`
-  grid-column: 2;
-  min-width: 0;
-  max-width: min(720px, 100%);
-`
-
-const FullWidthControl = styled.div`
-  grid-column: 2;
-  min-width: 0;
-  max-width: 100%;
-  width: 100%;
-`
-
-const ClauseInputWrap = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-`
-
-const ClauseSuffix = styled.span`
-  font-size: 15px;
-  color: ${({ theme }) => theme.colors?.text?.secondary ?? '#64748b'};
-  user-select: none;
-`
 
 const LawTypeAddStrip = styled.div`
   display: flex;
@@ -1195,84 +882,6 @@ const LawTypeSaveBtn = styled.button`
 
   &:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
-const LawTypePickerCard = styled.button`
-  display: flex;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 16px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.background.secondary : '#fafafa'};
-  transition:
-    background 0.18s ease,
-    border-color 0.18s ease;
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? theme.colors.background.tertiary : '#f4f4f5'};
-    border-color: ${({ theme }) => theme.colors.border.medium};
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
-const LawTypePickerValue = styled.span`
-  flex: 1;
-  min-width: 0;
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-const LawTypePickerGo = styled.span`
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  opacity: 0.85;
-`
-
-const HeaderGhostBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: ${({ theme }) => theme.colors?.text?.secondary ?? '#64748b'};
-  background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors?.border?.default ?? '#cbd5e1'};
-  border-radius: 8px;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  }
-  &:disabled {
-    opacity: 0.55;
     cursor: not-allowed;
   }
 `

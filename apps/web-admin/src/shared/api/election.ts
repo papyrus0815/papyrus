@@ -606,6 +606,8 @@ export async function updateLaw(
     endDate: string | null
     note: string | null
     lawTypeId: string | null
+    countryId: string | null
+    historicalCountryId: string | null
   }>,
 ) {
   return requestJson<LawRow>(`/laws/${encodeURIComponent(lawId)}`, {

@@ -28,6 +28,7 @@ import { useNaturalFeatures } from '@/entities/country/api.natural-feature'
 import { useExportImports } from '@/entities/country/api.trade'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { companyApi } from '@/shared/api/company'
+import { politicalPartyApi } from '@/shared/api/political-party'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import {
   formatCountryPeriod,
@@ -200,6 +201,13 @@ function CountryDetailInner({
     staleTime: 60_000,
     enabled: Boolean(modernCountry?.id),
   })
+  const { data: politicalParties = [], isLoading: partiesLoading } = useQuery({
+    queryKey: ['political-parties', `c:${modernCountry?.id ?? ''}`],
+    queryFn: () =>
+      politicalPartyApi.getAll({ countryId: modernCountry!.id }),
+    staleTime: 60_000,
+    enabled: Boolean(modernCountry?.id),
+  })
 
   const tabCounts = useMemo<
     Partial<Record<OverviewSubTab, number>> | undefined
@@ -248,20 +256,25 @@ function CountryDetailInner({
         ? undefined
         : dashboardStats.eventCount,
       'linked-historical': dashboardStats.historicalCountryCount,
-      regions: regionsLoading ? undefined : regionsTotal,
+      regions: regionsLoading
+        ? undefined
+        : regionsTotal || dashboardStats.cityCount,
       government: dashboardStats.loading.administration
         ? undefined
         : dashboardStats.administrationCount +
           dashboardStats.currentHeads.length,
-      military: dashboardStats.loading.military
-        ? undefined
-        : dashboardStats.militaryCount,
+      military:
+        dashboardStats.loading.military && dashboardStats.loading.events
+          ? undefined
+          : dashboardStats.militaryCount +
+            dashboardStats.warSummary.totalMilitaryEvents,
       ethnicity: dashboardStats.loading.ethnicity
         ? undefined
         : dashboardStats.ethnicityCount,
-      elections: dashboardStats.loading.elections
-        ? undefined
-        : dashboardStats.electionCount,
+      elections:
+        dashboardStats.loading.elections && partiesLoading
+          ? undefined
+          : dashboardStats.electionCount + politicalParties.length,
       laws: dashboardStats.loading.laws ? undefined : dashboardStats.lawCount,
       treaty: dashboardStats.loading.treaties
         ? undefined
@@ -273,6 +286,8 @@ function CountryDetailInner({
   }, [
     modernCountry,
     allCompanies,
+    politicalParties.length,
+    partiesLoading,
     economicRows,
     demographicRows,
     developmentRows,
@@ -557,7 +572,15 @@ function CountryDetailInner({
 
                 {activeSubTab === 'laws' && (
                   <S.TabContentPane>
-                    <CountryLawsSection countryId={country.id} />
+                    <CountryLawsSection
+                      countryId={country.id}
+                      linkedHistoricalCountries={
+                        country.historicalCountries?.map((hist) => ({
+                          id: hist.id,
+                          name: hist.name,
+                        })) ?? []
+                      }
+                    />
                   </S.TabContentPane>
                 )}
 
@@ -1278,11 +1301,6 @@ function EmptyState({
       <ExplorerInner>
         <ExplorerHeader>
           <ExplorerHeaderText>
-            <ExplorerEyebrow>
-              {isHistoricalAtlasMode
-                ? 'HISTORICAL POLITIES ATLAS'
-                : 'GLOBAL ATLAS INFOGRAPHIC'}
-            </ExplorerEyebrow>
             <ExplorerTitle>
               {isHistoricalAtlasMode
                 ? '역사 정치체 · 왕조 · 제국 아카이브 현황판'
@@ -1291,7 +1309,9 @@ function EmptyState({
             <ExplorerDescription>
               {isHistoricalAtlasMode
                 ? '고대(BC)부터 근현대까지의 성립 시대·국체 분포를 필터링하고, 존속 기간 비례 랭킹으로 과거 국가 대시보드에 바로 진입하세요.'
-                : '대륙 막대와 세계 버블 지도를 클릭해 필터링하거나, 상위 랭킹·역사 왕조 카드로 바로 진입하세요.'}
+                : atlasWorldPoints.length > 0
+                  ? '대륙 막대와 세계 버블 지도를 클릭해 필터링하거나, 상위 랭킹·역사 왕조 카드로 바로 진입하세요.'
+                  : '대륙별 분포와 시대별 성립 추이를 필터링하거나, 규모 상위 국가·역사 왕조 카드로 바로 진입하세요.'}
             </ExplorerDescription>
           </ExplorerHeaderText>
 
@@ -1876,7 +1896,9 @@ function EmptyState({
                 <div>
                   <AtlasCardTitleWrap>
                     <AtlasCardTitle>
-                      월드 버블 아틀라스 · 스케일 Top 8
+                      {atlasWorldPoints.length > 0
+                        ? '월드 버블 아틀라스 · 스케일 Top 8'
+                        : '현대 주권국 규모 Top 8'}
                       {selectedContinentName ? ` · ${selectedContinentName}` : ''}
                     </AtlasCardTitle>
                     <AtlasCardBadge>
@@ -1884,7 +1906,9 @@ function EmptyState({
                     </AtlasCardBadge>
                   </AtlasCardTitleWrap>
                   <CoverageSubText>
-                    세계 지도 버블 및 상위 8개국 비례 랭킹 · 호버하여 지표 확인, 클릭 시 대시보드 이동
+                    {atlasWorldPoints.length > 0
+                      ? '세계 지도 버블 및 상위 8개국 비례 랭킹 · 호버하여 지표 확인, 클릭 시 대시보드 이동'
+                      : '등록된 현대 국가 중 상위 8개국 비례 비교 · 클릭 시 대시보드 이동'}
                   </CoverageSubText>
                 </div>
               </CoverageLeadGroup>
@@ -2222,13 +2246,6 @@ const ExplorerHeaderRight = styled.div`
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-`
-
-const ExplorerEyebrow = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
 `
 
 const ExplorerTitle = styled.h1`
