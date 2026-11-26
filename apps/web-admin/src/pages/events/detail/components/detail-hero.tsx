@@ -307,6 +307,8 @@ export function DetailHero({
           startDatePrecision={event.startDatePrecision}
           endDate={event.endDate}
           endDatePrecision={event.endDatePrecision}
+          emptyLabel="발생 시기(연도 · 기간) 지정"
+          label="발생 시기"
           allowPartial
           onSave={(patch) => onPatch(patch)}
         />

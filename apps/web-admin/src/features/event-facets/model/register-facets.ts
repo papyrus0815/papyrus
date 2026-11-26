@@ -31,8 +31,10 @@ import {
   updateEvent,
 } from '@/shared/api/events'
 import { updateElection } from '@/shared/api/election'
+import { createObservation } from '@/shared/api/evidence'
 import { personCareerApi } from '@/shared/api/person-career'
 import { treatyApi } from '@/shared/api/treaty'
+import { parseQuickObservationInput } from '@/entities/evidence/lib/parse-quick-observation'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import {
@@ -214,6 +216,14 @@ export interface RegisterFacetDrafts {
   }>
   /** 선거 */
   election: { id: string; name: string } | null
+  /** 등록 시 함께 적는 사건 전체 주요 수치(사망자·부상자·참여 인원 등) */
+  metrics?: Array<{
+    metricKey: string
+    label?: string
+    raw: string
+    approx?: boolean
+    qualifier?: string
+  }>
 }
 
 export const emptyRegisterFacetDrafts = (): RegisterFacetDrafts => ({
@@ -272,6 +282,9 @@ export function pruneFacetDraftsForType(
         ? (drafts.politicalParties ?? [])
         : [],
     election: core.has('election') ? drafts.election : null,
+    ...(drafts.metrics && drafts.metrics.length > 0
+      ? { metrics: drafts.metrics }
+      : {}),
   }
 }
 
@@ -308,7 +321,8 @@ export function hasAnyFacetDraft(drafts: RegisterFacetDrafts): boolean {
     drafts.treaty.mode !== 'none' ||
     drafts.organizations.length > 0 ||
     (drafts.politicalParties?.length ?? 0) > 0 ||
-    drafts.election !== null
+    drafts.election !== null ||
+    (drafts.metrics ?? []).some((item) => item.raw.trim().length > 0)
   )
 }
 
@@ -847,6 +861,28 @@ export async function commitRegisterFacets(input: CommitInput): Promise<CommitRe
     await attempt('선거', async () => {
       await updateElection(election.id, { eventId })
       return `선거 ${election.name}`
+    })
+  }
+
+  // 등록 시 입력한 주요 수치(사건 전체 Observation)
+  for (const metricDraft of drafts.metrics ?? []) {
+    const rawText = metricDraft.raw.trim()
+    if (!rawText) continue
+    const metricTitle = metricDraft.label ?? metricDraft.metricKey
+    await attempt(`수치 ${metricTitle}`, async () => {
+      const parsed = parseQuickObservationInput(rawText, metricDraft.approx ?? true)
+      if (!parsed.ok) {
+        throw new Error(parsed.error)
+      }
+      await createObservation({
+        subjectType: 'EVENT',
+        subjectId: eventId,
+        metricKey: metricDraft.metricKey,
+        ...parsed.data,
+        qualifier: metricDraft.qualifier?.trim() || null,
+        citations: [],
+      })
+      return `수치 ${metricTitle}`
     })
   }
 

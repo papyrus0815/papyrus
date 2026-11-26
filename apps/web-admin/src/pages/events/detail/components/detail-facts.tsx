@@ -87,18 +87,69 @@ const COUNTRIES_PER_ROLE = 4
 /** 주요 인물 한 줄에 세우는 인물 수 — 넘치면 '외 N'(참여 행위자 섹션으로). */
 const PERSONS_PREVIEW_LIMIT = 4
 
-/** 장부 '사상자' 줄이 고르는 지표 — 앞에 있을수록 우선(정의가 다른 수를 섞지 않는다) */
-const CASUALTY_METRIC_PRIORITY = [
-  'military.casualties_total',
-  'military.deaths_total',
-  'military.combat_deaths',
-  'military.killed_in_action',
-  'military.deaths_unspecified',
-  'human.deaths_total',
-  'human.executed',
-  'civilian.killed',
-  'civilian.wounded',
+/**
+ * 장부 '사상자' 줄이 묶어 보여 주는 인명 피해 범주.
+ * 예전엔 우선순위 첫 지표 하나만 찍고 끝내서 사망과 부상을 둘 다 적어도 부상자가 사라졌다.
+ * 범주(사망 · 부상 · 실종 · 포로/체포)마다 대표 지표 하나씩만 골라 '사망자 약 3~4명 · 부상자 약 50명'처럼 나란히 잇고,
+ * 세부 범주가 없을 때만 사상자 합계(military.casualties_total · human.casualties)를 단독으로 쓴다.
+ */
+const CASUALTY_CATEGORY_BUCKETS: ReadonlyArray<{
+  keys: ReadonlyArray<string>
+}> = [
+  {
+    keys: [
+      'military.deaths_total',
+      'military.combat_deaths',
+      'military.killed_in_action',
+      'military.deaths_unspecified',
+      'human.deaths',
+      'human.deaths_total',
+      'human.executed',
+      'civilian.killed',
+    ],
+  },
+  {
+    keys: ['military.wounded', 'human.wounded', 'civilian.wounded'],
+  },
+  {
+    keys: ['military.missing', 'human.missing'],
+  },
+  {
+    keys: ['military.captured', 'society.arrested'],
+  },
 ]
+
+const TOTAL_CASUALTY_KEYS = ['military.casualties_total', 'human.casualties'] as const
+
+function summarizeCasualtyObservations(
+  own: ReadonlyArray<{
+    id: string
+    subjectType: string
+    subjectId: string
+    metric: { key: string; name: string; valueKind: 'COUNT' | 'MONEY' | 'RATIO' | 'INDEX' | 'MEASURE'; unit: string | null }
+    value: string | null
+    low: string | null
+    high: string | null
+    approx: boolean
+    atLeast: boolean
+    estimateRole?: string | null
+    currency: { code: string; name: string; symbol: string } | null
+  }>,
+): string | null {
+  const pickFirst = (keys: ReadonlyArray<string>) => {
+    for (const key of keys) {
+      const candidates = own.filter((observation) => observation.metric.key === key)
+      const hit = representativeOf(candidates) ?? candidates[0]
+      if (hit) return `${hit.metric.name} ${formatObservationValue(hit)}`
+    }
+    return null
+  }
+  const parts = CASUALTY_CATEGORY_BUCKETS.map((bucket) => pickFirst(bucket.keys)).filter(
+    (part): part is string => Boolean(part),
+  )
+  if (parts.length > 0) return parts.join(' · ')
+  return pickFirst(TOTAL_CASUALTY_KEYS)
+}
 
 export function DetailFacts({
   event,
@@ -167,28 +218,21 @@ export function DetailFacts({
       const own = observations.filter(
         (observation) => observation.subjectType === 'EVENT_SIDE' && observation.subjectId === side.id,
       )
-      for (const key of CASUALTY_METRIC_PRIORITY) {
-        /* 같은 지표에 추정치가 여럿이면 채택값 — 없으면 첫 값 */
-        const candidates = own.filter((observation) => observation.metric.key === key)
-        const hit = representativeOf(candidates) ?? candidates[0]
-        if (hit) return `${side.name} — ${hit.metric.name} ${formatObservationValue(hit)}`
-      }
-      return null
+      const summary = summarizeCasualtyObservations(own)
+      return summary ? `${side.name} — ${summary}` : null
     })
     .filter((line): line is string => Boolean(line))
-  const eventCasualties = (() => {
-    if (sideCasualties.length > 0) return []
-    const own = observations.filter(
+  const eventCasualtyLine = summarizeCasualtyObservations(
+    observations.filter(
       (observation) => observation.subjectType === 'EVENT' && observation.subjectId === event.id,
-    )
-    for (const key of CASUALTY_METRIC_PRIORITY) {
-      const candidates = own.filter((observation) => observation.metric.key === key)
-      const hit = representativeOf(candidates) ?? candidates[0]
-      if (hit) return [`${hit.metric.name} ${formatObservationValue(hit)}`]
-    }
-    return []
-  })()
-  const casualties = sideCasualties.length > 0 ? sideCasualties : eventCasualties
+    ),
+  )
+  const casualties = [
+    ...(eventCasualtyLine
+      ? [sideCasualties.length > 0 ? `전체 — ${eventCasualtyLine}` : eventCasualtyLine]
+      : []),
+    ...sideCasualties,
+  ]
 
   const roleGroups = groupCountriesByRole(
     [
@@ -280,11 +324,18 @@ export function DetailFacts({
     <Panel aria-label="사건 개요">
       <DateHeaderRow>
         <DatePrimaryLine data-filled={Boolean(event.startDate || event.endDate) || undefined}>
+          {!event.startDate && !event.endDate && (
+            <PinIcon aria-hidden>
+              <FiCalendar />
+            </PinIcon>
+          )}
           <InlineDateRange
             startDate={event.startDate}
             startDatePrecision={event.startDatePrecision}
             endDate={event.endDate}
             endDatePrecision={event.endDatePrecision}
+            emptyLabel="발생 시기(연도 · 기간) 지정"
+            label="발생 시기"
             allowPartial
             onSave={(patch) => onPatch(patch)}
           />
@@ -544,7 +595,7 @@ export function DetailFacts({
       </Rows>
 
       {metaAddItems.length > 0 && (
-        <FactsFooterRow>
+        <FactsFooterRow data-has-rows={rowCount > 0 || undefined}>
           <PopoverMenu
             items={metaAddItems}
             align="left"
@@ -1086,10 +1137,18 @@ const FactsFooterRow = styled.div`
   gap: 8px 12px;
   margin-top: 8px;
 
+  &:not([data-has-rows]) {
+    margin-top: 10px;
+    padding-top: 12px;
+    border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+
   @container eventdetail (max-width: 919px) {
     order: 11;
     flex-basis: 100%;
     margin-top: 2px;
+    padding-top: 0;
+    border-top: none;
   }
 `
 

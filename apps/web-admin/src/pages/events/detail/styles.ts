@@ -1207,38 +1207,45 @@ export const StateBackLink = styled(Link)`
 /* ───────────────────────── Empty state & Self-Explanatory Guide ───────────────────────── */
 
 /**
- * 표준 빈 섹션 가이드 — 데이터가 없을 때 "우측 버튼을 누르세요"처럼 떠넘기지 않고,
- * 넉넉한 상하 여백 속에서 이 기능이 무엇을 기록하며 어떤 결과를 만드는지 한눈에 보여주고
- * 바로 그 자리에서 1클릭으로 시작하게 유도한다. (중첩 박스 테두리 없음)
+ * 개별 섹션이 비어 있을 때의 빈 상태(Section Empty State) —
+ * 탭 전체가 비었을 때는 EventTabEmptyState가 단독으로 서고, 탭 안 일부 데이터가 채워진 뒤
+ * 개별 하위 섹션만 비어 있을 때 고요한 중앙 정렬 빈 상태로 안내한다.
  */
 export const EmptyGuide = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 20px 0 28px;
-  max-width: ${PROSE_MAX_WIDTH};
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding: 36px 24px;
+  width: 100%;
+  border-radius: ${RADIUS.MD};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
 `
 
 export const EmptyGuideBody = styled.div`
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 6px;
+  max-width: 460px;
 `
 
 export const EmptyGuideTitle = styled.p`
   margin: 0;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
   line-height: 1.45;
   letter-spacing: -0.01em;
+  word-break: keep-all;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 export const EmptyGuideDesc = styled.p`
   margin: 0;
-  font-size: 13.5px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.6;
   word-break: keep-all;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
@@ -1247,8 +1254,9 @@ export const EmptyGuideActions = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  margin-top: 2px;
+  margin-top: 4px;
 `
 
 export const EmptyPrimaryAction = styled.button`

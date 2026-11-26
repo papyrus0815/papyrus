@@ -1,220 +1,207 @@
-import { FiPlus } from 'react-icons/fi'
-import styled from 'styled-components'
-
+import { Suspense, lazy, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
-  ledgerAccent,
-  ledgerHairline,
-  ledgerHairlineStrong,
-  ledgerHoverFill,
-  MOTION,
-  RADIUS,
-} from '@/entities/event/ui/ledger-tokens'
-import { metaText } from '@/pages/events/styles/theme'
+  FiBookOpen,
+  FiClock,
+  FiCompass,
+  FiEdit3,
+  FiFileText,
+  FiGitCommit,
+  FiLayers,
+  FiPlus,
+} from 'react-icons/fi'
 
-import * as S from '../styles'
+import { type EventDetail, eventKeys } from '../use-event-detail'
+import {
+  type EventEmptyQuietLink,
+  EventTabEmptyState,
+} from './event-tab-empty-state'
+
+const LazyEventRegisterModal = lazy(() =>
+  import('@/widgets/event-form/ui/event-register-modal').then((module) => ({
+    default: module.EventRegisterModal,
+  })),
+)
+
+interface CollectionWholeTextNoticeProps {
+  event: Pick<EventDetail, 'id' | 'title' | 'domain' | 'kind'>
+  readOnly?: boolean
+  onWriteSummary?: () => void
+  onWriteBackground?: () => void
+  onWriteNarrative?: () => void
+  onWriteAftermath?: () => void
+  onGatherExisting?: () => void
+  onAddTreaty?: () => void
+}
 
 /**
- * 개요 본문이 완전히 비어 있을 때의 시작 가이드 —
- * 빽빽한 가로줄 대신 각 서사 단계(핵심 요약 · 배경 · 전개 · 여파)가 무슨 역할인지
- * 한눈에 파악하고 클릭 한 번으로 바로 작성에 들어갈 수 있는 정돈된 스타터 그리드로 안내한다.
+ * 개요 탭 본문이 통째로 비어 있을 때의 빈 상태(Empty State) —
+ * 네 칸짜리 버튼 그리드 대신 고요한 단일 빈 상태 화면을 세우고,
+ * 클릭 한 번으로 요약 에디터·첫 하위 사건 등록 모달·전개 단락 작성으로 바로 진입하게 한다.
  */
 export function CollectionWholeTextNotice({
+  event,
+  readOnly = false,
   onWriteSummary,
   onWriteBackground,
   onWriteNarrative,
   onWriteAftermath,
-}: {
-  /** 요약도 비었으면 — 빈 요약 자리표시를 따로 세우지 않고 여기서 쓴다 */
-  onWriteSummary?: () => void
-  onWriteBackground: () => void
-  /** 단일 사건의 '아직 글이 없다' 안내로 쓸 때 — 단일 사건은 전개도 제 글이라 전개 쓰기가 붙는다 */
-  onWriteNarrative?: () => void
-  onWriteAftermath: () => void
-}) {
-  const isSingleEvent = Boolean(onWriteNarrative)
-  const slots: Array<{
-    key: string
-    step: string
-    label: string
-    hint: string
-    actionLabel: string
-    primary?: boolean
-    onClick: () => void
-  }> = [
-    ...(onWriteSummary
-      ? [
-          {
-            key: 'summary',
-            step: '도입',
-            label: '사건 핵심 요약',
-            hint: '이 사건이 언제·누구 사이에서 일어난 어떤 사건이며 역사적으로 어떤 의의를 지니는지 한두 문단으로 먼저 개괄합니다.',
-            actionLabel: '요약 작성하기',
-            primary: true,
-            onClick: onWriteSummary,
-          },
+  onGatherExisting,
+  onAddTreaty,
+}: CollectionWholeTextNoticeProps) {
+  const queryClient = useQueryClient()
+  const [createChildOpen, setCreateChildOpen] = useState(false)
+  const isCollection = event.kind === 'COLLECTION'
+
+  const handleChildCreated = () => {
+    void queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
+    void queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+  }
+
+  if (isCollection) {
+    const quietLinks: EventEmptyQuietLink[] = readOnly
+      ? []
+      : [
+          ...(onGatherExisting ? [{ label: '기존 사건 모으기', onClick: onGatherExisting }] : []),
+          ...(onWriteBackground ? [{ label: '배경 쓰기', onClick: onWriteBackground }] : []),
+          ...(onWriteAftermath ? [{ label: '여파 쓰기', onClick: onWriteAftermath }] : []),
+          ...(onAddTreaty ? [{ label: '조약 연결', onClick: onAddTreaty }] : []),
         ]
-      : []),
-    {
-      key: 'background',
-      step: '01 · 원인',
-      label: '배경',
-      hint: '사건이 일어나게 된 구조적 원인, 직전 정세, 직접적인 도화선을 기록합니다.',
-      actionLabel: '배경 작성하기',
-      onClick: onWriteBackground,
-    },
-    ...(onWriteNarrative
-      ? [
-          {
-            key: 'narrative',
-            step: '02 · 경과',
-            label: '전개',
-            hint: '사건의 발단부터 주요 전환점·결말까지 시간 흐름에 따라 단락으로 나누어 기록합니다.',
-            actionLabel: '전개 작성하기',
-            onClick: onWriteNarrative,
-          },
-        ]
-      : []),
-    {
-      key: 'aftermath',
-      step: isSingleEvent ? '03 · 결과' : '02 · 결과',
-      label: '여파',
-      hint: '사건 직후의 결과와 제도·영토·국제질서·후속 사건에 미친 파장을 기록합니다.',
-      actionLabel: '여파 작성하기',
-      onClick: onWriteAftermath,
-    },
-  ]
+
+    return (
+      <>
+        <EventTabEmptyState
+          Icon={FiBookOpen}
+          ariaLabel="묶음 사건 개요 빈 상태"
+          title="아직 등록된 하위 사건과 본문이 없습니다"
+          description={
+            readOnly
+              ? '이 묶음 사건에 작성된 요약·배경·여파 본문이나 하위 사건이 없습니다.'
+              : '세부 하위 사건을 등록해 전체 연표를 구성하거나, 이 묶음 사건 전체를 아우르는 핵심 요약부터 작성할 수 있습니다.'
+          }
+          primaryAction={
+            !readOnly
+              ? {
+                  label: '첫 하위 사건 등록',
+                  Icon: FiPlus,
+                  onClick: () => setCreateChildOpen(true),
+                }
+              : undefined
+          }
+          secondaryAction={
+            !readOnly && onWriteSummary
+              ? {
+                  label: '전체 요약 작성',
+                  Icon: FiEdit3,
+                  onClick: onWriteSummary,
+                }
+              : undefined
+          }
+          quietLinks={quietLinks}
+          features={
+            readOnly
+              ? undefined
+              : [
+                  {
+                    Icon: FiLayers,
+                    title: '하위 사건 연표 전개',
+                    description: '전투·회담·조약 같은 세부 사건이 날짜와 국면 순서로 쌓여 연표와 조망을 이룹니다.',
+                  },
+                  {
+                    Icon: FiFileText,
+                    title: '전체 핵심 요약',
+                    description: '이 묶음 사건 전체의 성격과 역사적 의의를 한두 문단으로 먼저 개괄합니다.',
+                  },
+                  {
+                    Icon: FiCompass,
+                    title: '배경 · 구조적 원인',
+                    description: '사건군 전체가 일어나게 된 시대 배경과 직접적인 도화선을 기록합니다.',
+                  },
+                  {
+                    Icon: FiGitCommit,
+                    title: '여파 · 역사적 파장',
+                    description: '종결 직후의 결과와 제도·국제질서에 남긴 장기적 영향을 정리합니다.',
+                  },
+                ]
+          }
+        />
+        {createChildOpen && (
+          <Suspense fallback={null}>
+            <LazyEventRegisterModal
+              isOpen
+              onClose={() => setCreateChildOpen(false)}
+              initialParent={{ id: event.id, title: event.title, domain: event.domain }}
+              onSaved={handleChildCreated}
+            />
+          </Suspense>
+        )}
+      </>
+    )
+  }
+
+  const quietLinks: EventEmptyQuietLink[] = readOnly
+    ? []
+    : [
+        ...(onWriteBackground ? [{ label: '배경부터 쓰기', onClick: onWriteBackground }] : []),
+        ...(onWriteAftermath ? [{ label: '여파부터 쓰기', onClick: onWriteAftermath }] : []),
+        ...(onAddTreaty ? [{ label: '체결 조약 연결', onClick: onAddTreaty }] : []),
+      ]
 
   return (
-    <NoticeSection
-      role="region"
-      aria-label={isSingleEvent ? '사건 본문 작성 시작' : '묶음 사건 전체 글 작성 시작'}
-    >
-      <S.SectionHeaderGroup>
-        <S.SectionHeader>
-          <S.SectionTitle>
-            {isSingleEvent ? '사건 서사 기록하기' : '묶음 사건 개괄 기록하기'}
-          </S.SectionTitle>
-        </S.SectionHeader>
-        <NoticeSubtitle>
-          {isSingleEvent
-            ? '아직 작성된 본문이 없습니다. 읽는 사람이 사건의 전모를 한눈에 이해할 수 있도록 핵심 요약부터 작성하거나 필요한 단계만 선택해 기록하세요.'
-            : '세부 사건들의 흐름은 아래 ‘전개(하위 사건)’에서 다루고, 여기에는 이 묶음 사건 전체를 아우르는 핵심 요약과 배경·여파를 기록합니다.'}
-        </NoticeSubtitle>
-      </S.SectionHeaderGroup>
-
-      <StarterGrid>
-        {slots.map((slot) => (
-          <StarterSlot key={slot.key} type="button" onClick={slot.onClick}>
-            <StarterTop>
-              <StepKicker>{slot.step}</StepKicker>
-              <StarterTitle>{slot.label}</StarterTitle>
-              <StarterHint>{slot.hint}</StarterHint>
-            </StarterTop>
-            <StarterCta $primary={slot.primary}>
-              <FiPlus size={13} aria-hidden />
-              {slot.actionLabel}
-            </StarterCta>
-          </StarterSlot>
-        ))}
-      </StarterGrid>
-    </NoticeSection>
+    <EventTabEmptyState
+      Icon={FiBookOpen}
+      ariaLabel="사건 본문 빈 상태"
+      title="아직 작성된 사건 본문이 없습니다"
+      description={
+        readOnly
+          ? '이 사건에 작성된 요약·배경·전개·여파 본문이 없습니다.'
+          : '핵심 요약부터 배경·전개·여파까지 시간 흐름에 따라 기록하면 우측 목차와 연표 흐름이 자동으로 구성됩니다.'
+      }
+      primaryAction={
+        !readOnly && onWriteSummary
+          ? {
+              label: '핵심 요약 작성',
+              Icon: FiEdit3,
+              onClick: onWriteSummary,
+            }
+          : undefined
+      }
+      secondaryAction={
+        !readOnly && onWriteNarrative
+          ? {
+              label: '전개 단락 쓰기',
+              Icon: FiPlus,
+              onClick: onWriteNarrative,
+            }
+          : undefined
+      }
+      quietLinks={quietLinks}
+      features={
+        readOnly
+          ? undefined
+          : [
+              {
+                Icon: FiFileText,
+                title: '사건 핵심 요약',
+                description: '언제·누구 사이에서 일어난 어떤 사건인지 핵심 의의를 한두 문단으로 개괄합니다.',
+              },
+              {
+                Icon: FiCompass,
+                title: '배경 · 원인',
+                description: '사건이 일어나게 된 구조적 원인과 직전 정세, 직접적인 도화선을 기록합니다.',
+              },
+              {
+                Icon: FiClock,
+                title: '시간순 전개',
+                description: '발단부터 전환점·결말까지 단락으로 나누면 우측 목차가 함께 만들어집니다.',
+              },
+              {
+                Icon: FiGitCommit,
+                title: '여파 · 파장',
+                description: '사건 직후의 결과와 제도·영토·후속 사건에 미친 파장을 기록합니다.',
+              },
+            ]
+      }
+    />
   )
 }
-
-const NoticeSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  width: 100%;
-  padding-bottom: 12px;
-`
-
-const NoticeSubtitle = styled.p`
-  margin: 0;
-  max-width: ${S.PROSE_MAX_WIDTH};
-  word-break: keep-all;
-  font-size: 13px;
-  line-height: 1.6;
-  color: ${metaText};
-`
-
-const StarterGrid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-
-  @container eventdetail (min-width: 760px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px 24px;
-  }
-`
-
-const StarterSlot = styled.button`
-  appearance: none;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 20px 22px;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color ${MOTION.fast} ease,
-    background ${MOTION.fast} ease;
-
-  &:hover {
-    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-  }
-`
-
-const StarterTop = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const StepKicker = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const StarterTitle = styled.strong`
-  font-size: 15.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const StarterHint = styled.span`
-  font-size: 13px;
-  line-height: 1.6;
-  word-break: keep-all;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const StarterCta = styled.span<{ $primary?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12.5px;
-  font-weight: 650;
-  color: ${({ theme, $primary }) =>
-    $primary ? ledgerAccent(theme.mode) : theme.colors.text.primary};
-
-  ${StarterSlot}:hover & {
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`

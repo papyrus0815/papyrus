@@ -48,19 +48,27 @@ export function buildSideMetricRows<Entry extends MetricObservationLike>(
 /** 손실 쪽 지표 — 앞에 있을수록 우선(장부 '사상자' 줄과 같은 우선순위 — 정의가 다른 수를 섞지 않는다) */
 export const LOSS_METRIC_PRIORITY = [
   'military.casualties_total',
+  'human.casualties',
   'military.deaths_total',
   'military.combat_deaths',
   'military.killed_in_action',
   'military.deaths_unspecified',
+  'human.deaths',
   'human.deaths_total',
   'human.executed',
   'civilian.killed',
+  'human.wounded',
+  'civilian.wounded',
 ] as const
 
 export const PERSONNEL_METRIC = 'military.personnel'
 
-/** 동원·참여 인원 쪽 지표 — 정규군 병력이 없으면 봉기·시위의 참여 인원(society.participants)으로 가늠 */
-export const SIZE_METRIC_PRIORITY = ['military.personnel', 'society.participants'] as const
+/** 동원·참여 인원 쪽 지표 — 정규군 병력이 없으면 경찰·치안 병력(security.personnel) 또는 시위·봉기 참여 인원(society.participants)으로 가늠 */
+export const SIZE_METRIC_PRIORITY = [
+  'military.personnel',
+  'security.personnel',
+  'society.participants',
+] as const
 
 /**
  * 한 칸의 대표값 — 값이 하나면 그것, 여럿이면 **채택(PREFERRED)이 정확히 하나**일 때 그것.
@@ -199,7 +207,11 @@ export function sideLossOf<Entry extends MetricObservationLike>(
  */
 export function orderSideMetricRows<Row extends { key: string }>(rows: ReadonlyArray<Row>): Row[] {
   const rank = (key: string) =>
-    (SIZE_METRIC_PRIORITY as ReadonlyArray<string>).includes(key) ? 0 : key === 'military.casualties_total' ? 1 : 2
+    (SIZE_METRIC_PRIORITY as ReadonlyArray<string>).includes(key)
+      ? 0
+      : key === 'military.casualties_total' || key === 'human.casualties'
+        ? 1
+        : 2
   return rows
     .map((row, index) => ({ row, index }))
     .sort((left, right) => rank(left.row.key) - rank(right.row.key) || left.index - right.index)
@@ -207,18 +219,25 @@ export function orderSideMetricRows<Row extends { key: string }>(rows: ReadonlyA
 }
 
 /**
- * 손실 구성 요소 — 사망·부상·실종·포로(전통적 '손실 합계'의 네 몫). 사망은 전투 사망 쪽 정의만:
- * 질병 사망까지 든 '군 총사망'은 손실 합계의 몫이 아니라 섞지 않는다.
+ * 손실 구성 요소 — 사망·부상·실종·포로/체포(전통적 '손실 합계'의 네 몫).
+ * 질병 사망까지 든 '군 총사망'(military.deaths_total)과 '총사망(군+민)'(human.deaths_total)은 손실 합계의 부분 몫과 겹칠 수 있어 섞지 않는다.
  */
 export const LOSS_COMPONENTS = [
   {
     key: 'deaths',
     label: '사망',
-    metricKeys: ['military.killed_in_action', 'military.combat_deaths', 'military.deaths_unspecified'],
+    metricKeys: [
+      'military.killed_in_action',
+      'military.combat_deaths',
+      'military.deaths_unspecified',
+      'human.deaths',
+      'civilian.killed',
+      'human.executed',
+    ],
   },
-  { key: 'wounded', label: '부상', metricKeys: ['military.wounded'] },
-  { key: 'missing', label: '실종', metricKeys: ['military.missing'] },
-  { key: 'captured', label: '포로', metricKeys: ['military.captured'] },
+  { key: 'wounded', label: '부상', metricKeys: ['military.wounded', 'human.wounded', 'civilian.wounded'] },
+  { key: 'missing', label: '실종', metricKeys: ['military.missing', 'human.missing'] },
+  { key: 'captured', label: '포로', metricKeys: ['military.captured', 'society.arrested'] },
 ] as const
 
 export interface LossPart<Entry> {
@@ -255,7 +274,9 @@ export function lossCompositionOf<Entry extends MetricObservationLike>(
   }
   if (parts.length === 0) return null
   const sum = parts.reduce((total, part) => total + part.value, 0)
-  const total = comparableOf(rows.find((row) => row.key === 'military.casualties_total')?.cells.get(sideId) ?? [])
+  const total =
+    comparableOf(rows.find((row) => row.key === 'military.casualties_total')?.cells.get(sideId) ?? []) ??
+    comparableOf(rows.find((row) => row.key === 'human.casualties')?.cells.get(sideId) ?? [])
   return {
     sideId,
     parts,
@@ -317,7 +338,10 @@ export function lossRate(
     return null
   }
 
-  const personnel = resolveMetric(PERSONNEL_METRIC, false) ?? resolveMetric('society.participants', false)
+  const personnel =
+    resolveMetric(PERSONNEL_METRIC, false) ??
+    resolveMetric('security.personnel', false) ??
+    resolveMetric('society.participants', false)
   if (!personnel) return null
   for (const key of LOSS_METRIC_PRIORITY) {
     const loss = resolveMetric(key, true)

@@ -429,7 +429,7 @@ export function DetailPoliticalParties({
           {relations.length > 0 && (
             <S.SectionSubtitle>{relations.length}개 정당</S.SectionSubtitle>
           )}
-          {!readOnly && (
+          {!readOnly && relations.length > 0 && (
             <S.SectionActions>
               <HeaderControlBtn
                 type="button"
@@ -566,9 +566,31 @@ export function DetailPoliticalParties({
           })}
         </Rows>
       ) : (
-        <S.HelperText>
-          아직 연결된 정당이 없습니다 — 우측 ‘정당 잇기’로 기존 정당을 찾거나 새 정당을 등록해 연결하세요.
-        </S.HelperText>
+        <S.EmptyGuide>
+          <S.EmptyGuideBody>
+            <S.EmptyGuideTitle>아직 연결된 관련 정당이 없습니다</S.EmptyGuideTitle>
+            <S.EmptyGuideDesc>
+              선거·연정·혁명·창당·해산 등 사건에서 각 정당이 맡은 역할과 입장을 기록합니다.
+            </S.EmptyGuideDesc>
+          </S.EmptyGuideBody>
+          {!readOnly && (
+            <S.EmptyGuideActions>
+              <S.EmptyPrimaryAction
+                type="button"
+                onClick={() => {
+                  setInitialDraft(null)
+                  setLinkModalOpen(true)
+                }}
+              >
+                <FiPlus aria-hidden />
+                관련 정당 연결
+              </S.EmptyPrimaryAction>
+              <S.EmptySecondaryAction type="button" onClick={() => setCreatingOpen(true)}>
+                새 정당 등록
+              </S.EmptySecondaryAction>
+            </S.EmptyGuideActions>
+          )}
+        </S.EmptyGuide>
       )}
 
       {modalsNode}

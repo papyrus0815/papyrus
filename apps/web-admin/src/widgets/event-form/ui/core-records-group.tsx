@@ -17,8 +17,10 @@ import styled from 'styled-components'
 import {
   type EventFacetKey,
   type EventTypeKey,
+  metricsFor,
   typeFacets,
 } from '@/entities/event/model/event-type-registry'
+import { parseQuickObservationInput } from '@/entities/evidence/lib/parse-quick-observation'
 import {
   type EventCountryParticipant,
   type EventCountryRole,
@@ -100,8 +102,38 @@ const LazyPoliticalPartyQuickCreateModal = lazy(() =>
   ),
 )
 
-/** 등록 뒤 상세에서 적는 기록 — 출처·진영별 값이 필요해 등록 칸으로는 받지 않는다 */
+/** 등록 뒤 상세에서 정밀하게 적는 기록 — 수치는 필요 시 아래 '추가 기록'에서 사망·부상 등 핵심 숫자만 먼저 초안으로 적을 수 있다 */
 const DETAIL_ONLY: EventFacetKey[] = ['metrics', 'military', 'cabinets']
+
+const QUICK_METRIC_META: Record<string, { label: string; unit: string }> = {
+  'human.deaths': { label: '사망자', unit: '명' },
+  'human.wounded': { label: '부상자', unit: '명' },
+  'human.missing': { label: '실종자', unit: '명' },
+  'human.casualties': { label: '사상자 합계', unit: '명' },
+  'human.executed': { label: '처형·학살 사망', unit: '명' },
+  'human.deaths_total': { label: '총사망(군+민)', unit: '명' },
+  'society.participants': { label: '참여 인원', unit: '명' },
+  'society.arrested': { label: '체포·구금 인원', unit: '명' },
+  'security.personnel': { label: '경찰·치안 병력', unit: '명' },
+  'military.personnel': { label: '동원 병력', unit: '명' },
+  'military.killed_in_action': { label: '군 전사자', unit: '명' },
+  'military.wounded': { label: '군 부상자', unit: '명' },
+  'military.casualties_total': { label: '군 손실 합계', unit: '명' },
+  'civilian.killed': { label: '민간인 사망', unit: '명' },
+  'civilian.wounded': { label: '민간인 부상', unit: '명' },
+  'civilian.displaced': { label: '피난·이재민', unit: '명' },
+  'disaster.magnitude': { label: '지진 규모', unit: 'M' },
+  'disaster.buildings_destroyed': { label: '파괴된 건물', unit: '채' },
+  'demography.population': { label: '인구', unit: '명' },
+  'territory.area_ceded': { label: '할양 면적', unit: 'km²' },
+}
+
+const DEFAULT_QUICK_METRIC_KEYS = [
+  'human.deaths',
+  'human.wounded',
+  'society.participants',
+  'society.arrested',
+] as const
 
 type PickerKind = 'persons' | 'power' | 'organizations' | 'treaty' | 'election'
 
@@ -245,9 +277,25 @@ export function CoreRecordsGroup({
     facets.optional.includes('persons') ||
     expandedOptional.includes('persons') ||
     drafts.persons.length > 0
+  const quickMetricKeys = useMemo(() => {
+    const presetKeys = metricsFor(type, domain).presets.filter(
+      (key) => key in QUICK_METRIC_META,
+    )
+    const keys =
+      presetKeys.length > 0 ? presetKeys.slice(0, 5) : [...DEFAULT_QUICK_METRIC_KEYS]
+    const existingKeys = (drafts.metrics ?? []).map((item) => item.metricKey)
+    return [...new Set([...keys, ...existingKeys])].filter(
+      (key) => key in QUICK_METRIC_META,
+    )
+  }, [type, domain, drafts.metrics])
+  const hasFilledMetrics = (drafts.metrics ?? []).some(
+    (item) => item.raw.trim().length > 0,
+  )
+  const showMetrics = expandedOptional.includes('metrics') || hasFilledMetrics
   const canExpandOrganizations = !showOrganizations
   const canExpandPersons =
     facets.optional.includes('persons') && !showPersons
+  const canExpandMetrics = !showMetrics
 
   useEffect(() => {
     const handleExpandForJump = (jumpEvent: Event) => {
@@ -1697,13 +1745,92 @@ export function CoreRecordsGroup({
         />
       )}
 
-      {(canExpandOrganizations || canExpandPersons) && (
+      {showMetrics && (
+        <S.FormRow data-core-record="metrics">
+          <S.FormLabel as="span">
+            주요 수치<RecordOptionalTag>(선택)</RecordOptionalTag>
+          </S.FormLabel>
+          <S.FormField>
+            <S.Hint style={{ marginBottom: 6 }}>
+              사건 전체 기준 숫자를 바로 남깁니다(예: <strong>3~4</strong>, <strong>50여</strong>, <strong>1,000+</strong>). 출처 연결과 진영별 비교는 등록 후 상세 화면에서 이어집니다.
+            </S.Hint>
+            <QuickMetricsGrid>
+              {quickMetricKeys.map((metricKey) => {
+                const meta = QUICK_METRIC_META[metricKey]
+                const existing = (drafts.metrics ?? []).find(
+                  (item) => item.metricKey === metricKey,
+                )
+                const rawVal = existing?.raw ?? ''
+                const parsed = rawVal.trim()
+                  ? parseQuickObservationInput(rawVal, existing?.approx ?? true)
+                  : null
+                const invalid = Boolean(parsed && !parsed.ok)
+                return (
+                  <QuickMetricFieldWrap key={metricKey}>
+                    <QuickMetricFieldLabel htmlFor={`reg-metric-${metricKey}`}>
+                      <span>{meta?.label ?? metricKey}</span>
+                      {meta?.unit && <small>({meta.unit})</small>}
+                    </QuickMetricFieldLabel>
+                    <S.Input
+                      id={`reg-metric-${metricKey}`}
+                      aria-label={`${meta?.label ?? metricKey} 수치`}
+                      aria-invalid={invalid || undefined}
+                      value={rawVal}
+                      placeholder="예: 3~4 · 50"
+                      onChange={(changeEvent) => {
+                        const nextRaw = changeEvent.target.value
+                        const currentList = drafts.metrics ?? []
+                        const hasEntry = currentList.some(
+                          (item) => item.metricKey === metricKey,
+                        )
+                        const nextList = hasEntry
+                          ? currentList.map((item) =>
+                              item.metricKey === metricKey
+                                ? { ...item, raw: nextRaw, label: meta?.label }
+                                : item,
+                            )
+                          : [
+                              ...currentList,
+                              {
+                                metricKey,
+                                label: meta?.label,
+                                raw: nextRaw,
+                                approx: true,
+                              },
+                            ]
+                        update({ metrics: nextList })
+                      }}
+                    />
+                    {invalid && parsed && !parsed.ok && (
+                      <S.ErrorMessage role="alert">{parsed.error}</S.ErrorMessage>
+                    )}
+                  </QuickMetricFieldWrap>
+                )
+              })}
+            </QuickMetricsGrid>
+          </S.FormField>
+        </S.FormRow>
+      )}
+
+      {(canExpandOrganizations || canExpandPersons || canExpandMetrics) && (
         <S.FormRow>
           <S.FormLabel as="span">
             추가 기록<RecordOptionalTag>(선택)</RecordOptionalTag>
           </S.FormLabel>
           <S.FormField>
             <OrgActionRow>
+              {canExpandMetrics && (
+                <KitAddButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    setExpandedOptional((prev) => [...prev, 'metrics'])
+                  }}
+                >
+                  <FiPlus size={15} />
+                  주요 수치 추가 (사망·부상·참여 인원 등)
+                </KitAddButton>
+              )}
               {canExpandOrganizations && (
                 <KitAddButton
                   type="button"
@@ -5814,4 +5941,32 @@ const RecordOptionalTag = styled.span`
   font-size: 11.5px;
   font-weight: 500;
   color: ${({ theme }) => S.getC(theme).text.muted};
+`
+
+const QuickMetricsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+`
+
+const QuickMetricFieldWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+const QuickMetricFieldLabel = styled.label`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  small {
+    font-size: 11px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 `

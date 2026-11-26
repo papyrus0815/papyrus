@@ -9,15 +9,26 @@
  * 예전엔 별도 지면(`/events/:id`가 판정해 조망/문서로 갈라 보냄)이었다. 묶음 사건이 명시 종류가
  * 되면서 상세 한 지면으로 합쳤다 — 개요 탭은 배경·전개(=하위 사건)·여파, 이 탭은 하위 전부의 집계.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiX } from 'react-icons/fi'
+import {
+  FiCheckSquare,
+  FiCompass,
+  FiLayers,
+  FiLink2,
+  FiMapPin,
+  FiPlus,
+  FiUsers,
+  FiX,
+} from 'react-icons/fi'
 import { useSearchParams } from 'react-router-dom'
 import { useTheme } from 'styled-components'
 
+import { type EventDomainKey } from '@/entities/event/model/event-domain'
 import { eventTypeDef } from '@/entities/event/model/event-type-registry'
 import { EventPanelLoading } from '@/entities/event/ui/panel-loading'
+import { EventTabEmptyState } from '../detail/components/event-tab-empty-state'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { getOfficeHoldingTimeline, officeHoldingTimelineKey } from '@/shared/api/sovereign-reigns'
@@ -102,8 +113,15 @@ type SurveyView = (typeof SURVEY_VIEWS)[number]['id']
 const isSurveyView = (value: string | null): value is SurveyView =>
   SURVEY_VIEWS.some((view) => view.id === value)
 
+const LazyEventRegisterModal = lazy(() =>
+  import('@/widgets/event-form/ui/event-register-modal').then((module) => ({
+    default: module.EventRegisterModal,
+  })),
+)
+
 interface EventOverviewPanelProps {
   eventId: string
+  readOnly?: boolean
   /** 하위 사건이 없을 때 '기존 사건 모으기'로 갈 길 — 상세가 연관 탭을 연다 */
   onGatherExisting?: () => void
   /** 인물 이름 → 상세의 인물 모달(?person=) — 참여 탭과 같은 길 */
@@ -114,6 +132,7 @@ interface EventOverviewPanelProps {
 
 export function EventOverviewPanel({
   eventId,
+  readOnly = false,
   onGatherExisting,
   onPersonClick,
   accessionTargets = [],
@@ -230,6 +249,7 @@ export function EventOverviewPanel({
   const [hotId, setHotId] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const [attaching, setAttaching] = useState(false)
+  const [createChildOpen, setCreateChildOpen] = useState(false)
   /** 조망 안 탭 — URL `?sv=`(기본 전개, 단 `?unit=` 단독 진입 시 참여·부대 탭 우선). 상세의 `?tab=survey`와 겹치지 않는 이름 */
   const viewParam = searchParams.get('sv')
   const activeView: SurveyView = isSurveyView(viewParam)
@@ -440,15 +460,74 @@ export function EventOverviewPanel({
   if (descendants.length === 0) {
     return (
       <S.Page>
-        <S.EmptyStrip>
-          <strong>아직 하위 사건이 없습니다</strong> — 조망은 하위 사건 전부를 한 화면에 모아
-          전개·참여국·분포·기록 상태를 봅니다.{' '}
-          {onGatherExisting && (
-            <S.TextButton type="button" onClick={onGatherExisting}>
-              기존 사건을 하위로 모으기
-            </S.TextButton>
-          )}
-        </S.EmptyStrip>
+        <EventTabEmptyState
+          Icon={FiCompass}
+          ariaLabel="조망 빈 상태"
+          title="아직 등록된 하위 사건이 없습니다"
+          description={
+            readOnly
+              ? '이 묶음 사건에 속한 하위 사건이 없어 조망 데이터를 표시할 수 없습니다.'
+              : '하위 사건을 등록하거나 기존 사건을 모으면 전개 간트 차트, 참여국 매트릭스, 발생 위치 지도, 기록 충실도를 한 화면에서 조망합니다.'
+          }
+          primaryAction={
+            !readOnly
+              ? {
+                  label: '첫 하위 사건 등록',
+                  Icon: FiPlus,
+                  onClick: () => setCreateChildOpen(true),
+                }
+              : undefined
+          }
+          secondaryAction={
+            !readOnly && onGatherExisting
+              ? {
+                  label: '기존 사건 모으기',
+                  Icon: FiLink2,
+                  onClick: onGatherExisting,
+                }
+              : undefined
+          }
+          features={
+            readOnly
+              ? undefined
+              : [
+                  {
+                    Icon: FiLayers,
+                    title: '전개 간트 · 시기 분포',
+                    description: '모든 하위 사건의 기간과 국면 배치를 시간축 위에서 한눈에 비교합니다.',
+                  },
+                  {
+                    Icon: FiUsers,
+                    title: '참여국 × 하위 매트릭스',
+                    description: '어느 국가와 인물이 어떤 세부 국면에 개입했는지 교차표로 집계합니다.',
+                  },
+                  {
+                    Icon: FiMapPin,
+                    title: '발생 위치 지도 · 인과망',
+                    description: '하위 사건들의 지리적 분포와 사건끼리의 원인·결과 연결을 지도로 봅니다.',
+                  },
+                  {
+                    Icon: FiCheckSquare,
+                    title: '하위 사건 기록 점검표',
+                    description: '요약·날짜·위치·참여국 중 비어 있는 항목을 찾아 바로 보완합니다.',
+                  },
+                ]
+          }
+        />
+        {createChildOpen && (
+          <Suspense fallback={null}>
+            <LazyEventRegisterModal
+              isOpen
+              onClose={() => setCreateChildOpen(false)}
+              initialParent={{
+                id: root.id,
+                title: root.title,
+                domain: (root.domain as EventDomainKey | null) ?? 'POLITICS',
+              }}
+              onSaved={() => invalidateEventQueries(queryClient, { eventId: root.id })}
+            />
+          </Suspense>
+        )}
       </S.Page>
     )
   }

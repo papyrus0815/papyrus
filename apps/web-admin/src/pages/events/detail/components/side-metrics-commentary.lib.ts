@@ -164,14 +164,17 @@ export function buildSideCommentary(
       break
     }
   }
-  /* 한쪽은 정규 병력, 다른 쪽은 참여 인원(봉기·진압 등) — 그래프의 PAIRED_SIZE_KEY와 같은 규칙 */
+  /* 한쪽은 병력(정규군·경찰), 다른 쪽은 참여 인원(봉기·시위 등) — 그래프의 PAIRED_SIZE_KEY와 같은 규칙 */
   if (!matchedSize) {
-    const firstSize =
-      resolveForKey('military.personnel', pair[0].id, rows, memberCells, unitCells, format) ??
-      resolveForKey('society.participants', pair[0].id, rows, memberCells, unitCells, format)
-    const secondSize =
-      resolveForKey('military.personnel', pair[1].id, rows, memberCells, unitCells, format) ??
-      resolveForKey('society.participants', pair[1].id, rows, memberCells, unitCells, format)
+    const resolveAnySize = (sideId: string) => {
+      for (const sizeKey of SIZE_METRIC_PRIORITY) {
+        const resolved = resolveForKey(sizeKey, sideId, rows, memberCells, unitCells, format)
+        if (resolved) return resolved
+      }
+      return null
+    }
+    const firstSize = resolveAnySize(pair[0].id)
+    const secondSize = resolveAnySize(pair[1].id)
     if (firstSize && secondSize) {
       const label =
         firstSize.metricName === secondSize.metricName

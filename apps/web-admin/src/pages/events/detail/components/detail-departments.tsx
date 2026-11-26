@@ -481,7 +481,7 @@ export function DetailDepartments({
         <S.SectionHeader>
           <S.SectionTitle $sub>국가 기관 · 사령부</S.SectionTitle>
           {relations.length > 0 && <S.SectionSubtitle>{relations.length}곳</S.SectionSubtitle>}
-          {!readOnly && (
+          {!readOnly && relations.length > 0 && (
             <S.SectionActions>
               <HeaderControlBtn
                 type="button"
@@ -718,9 +718,28 @@ export function DetailDepartments({
           })}
         </Rows>
       ) : (
-        <S.HelperText>
-          아직 연결된 기관·사령부가 없습니다 — 우측 ‘기관·사령부 잇기’로 발령·집행 기관을 연결하세요.
-        </S.HelperText>
+        <S.EmptyGuide>
+          <S.EmptyGuideBody>
+            <S.EmptyGuideTitle>아직 연결된 국가 기관 · 사령부가 없습니다</S.EmptyGuideTitle>
+            <S.EmptyGuideDesc>
+              내각 부처·참모본부·야전사령부 등 기관을 발령·수령 역할로 연결하면 명령 전달 흐름도가 표시됩니다.
+            </S.EmptyGuideDesc>
+          </S.EmptyGuideBody>
+          {!readOnly && (
+            <S.EmptyGuideActions>
+              <S.EmptyPrimaryAction
+                type="button"
+                onClick={() => {
+                  setInitialDraft(null)
+                  setLinkModalOpen(true)
+                }}
+              >
+                <FiPlus aria-hidden />
+                기관 · 사령부 연결
+              </S.EmptyPrimaryAction>
+            </S.EmptyGuideActions>
+          )}
+        </S.EmptyGuide>
       )}
 
       {linkModalNode}

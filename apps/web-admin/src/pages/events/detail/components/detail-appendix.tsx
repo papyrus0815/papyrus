@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { FiPlus, FiStar, FiUploadCloud, FiX } from 'react-icons/fi'
+import { FiFileText, FiImage, FiLink, FiPlus, FiStar, FiUploadCloud, FiX } from 'react-icons/fi'
 import { createPortal } from 'react-dom'
 import styled, { css } from 'styled-components'
 
@@ -21,10 +21,12 @@ import { metaText } from '@/pages/events/styles/theme'
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
+import { EventTabEmptyState } from './event-tab-empty-state'
 import { InlineText } from './inline'
 
 interface DetailAppendixProps {
   event: EventDetail
+  readOnly?: boolean
   onPatch: (patch: UpdateEventDto) => void
 }
 
@@ -37,7 +39,7 @@ interface DetailAppendixProps {
  * Primary: 별 아이콘 토글 — 한 번에 1개만 primary.
  * 삭제: 우상단 ✕.
  */
-export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
+export function DetailAppendix({ event, readOnly = false, onPatch }: DetailAppendixProps) {
   const [lightbox, setLightbox] = useState<{ src: string; caption?: string } | null>(
     null,
   )
@@ -239,37 +241,39 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
 
   return (
     <S.Section id="appendix">
-      <S.SectionHeaderGroup>
-        <S.SectionHeader>
-          <S.SectionTitle>이미지</S.SectionTitle>
-          {images.length > 0 && (
-            <S.SectionSubtitle>{images.length}건</S.SectionSubtitle>
-          )}
-          {(images.length > 0 || adding) && (
-            <S.SectionActions>
-              <HeaderControlBtn
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-              >
-                <FiUploadCloud size={13} aria-hidden />
-                {uploading ? '업로드 중…' : '파일 업로드'}
-              </HeaderControlBtn>
-              <HeaderControlBtn
-                type="button"
-                $active={adding}
-                onClick={() => setAdding((previous) => !previous)}
-              >
-                <FiPlus size={13} aria-hidden />
-                URL로 추가
-              </HeaderControlBtn>
-            </S.SectionActions>
-          )}
-        </S.SectionHeader>
-        <SectionHintText>
-          사건과 관련된 지도·사진·사료 이미지를 등록하고 대표 이미지와 캡션·출처를 관리합니다.
-        </SectionHintText>
-      </S.SectionHeaderGroup>
+      {(images.length > 0 || adding) && (
+        <S.SectionHeaderGroup>
+          <S.SectionHeader>
+            <S.SectionTitle>이미지</S.SectionTitle>
+            {images.length > 0 && (
+              <S.SectionSubtitle>{images.length}건</S.SectionSubtitle>
+            )}
+            {!readOnly && (
+              <S.SectionActions>
+                <HeaderControlBtn
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  <FiUploadCloud size={13} aria-hidden />
+                  {uploading ? '업로드 중…' : '파일 업로드'}
+                </HeaderControlBtn>
+                <HeaderControlBtn
+                  type="button"
+                  $active={adding}
+                  onClick={() => setAdding((previous) => !previous)}
+                >
+                  <FiPlus size={13} aria-hidden />
+                  URL로 추가
+                </HeaderControlBtn>
+              </S.SectionActions>
+            )}
+          </S.SectionHeader>
+          <SectionHintText>
+            사건과 관련된 지도·사진·사료 이미지를 등록하고 대표 이미지와 캡션·출처를 관리합니다.
+          </SectionHintText>
+        </S.SectionHeaderGroup>
+      )}
 
       {adding && (
         <AddForm>
@@ -328,59 +332,86 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
       )}
 
       {images.length === 0 && !adding && (
-        <EmptyDropZone
-          $dragOver={dragOver}
-          onDragOver={(dragEvent) => {
-            if (uploading) return
-            dragEvent.preventDefault()
-            if (!dragOver) setDragOver(true)
-          }}
-          onDragLeave={(dragEvent) => {
-            const next = dragEvent.relatedTarget as Node | null
-            if (next && dragEvent.currentTarget.contains(next)) return
-            setDragOver(false)
-          }}
-          onDrop={(dropEvent) => {
-            dropEvent.preventDefault()
-            setDragOver(false)
-            if (uploading) return
-            const files = dropEvent.dataTransfer?.files
-            if (files && files.length > 0) void handleFiles(files)
-          }}
-          aria-label="이미지 자료 업로드 영역"
-        >
-          <EmptyDropIcon aria-hidden>
-            <FiUploadCloud />
-          </EmptyDropIcon>
-          <EmptyDropMain>
-            <strong>
-              {uploading
-                ? '이미지 파일을 업로드하는 중…'
-                : '사건 대표 이미지 · 지도 · 사료 사진을 등록하세요'}
-            </strong>
-          </EmptyDropMain>
-          <EmptyDropSub>
-            이미지 파일을 이 영역에 끌어다 놓거나 아래 버튼으로 업로드합니다. 첫 번째 이미지는 사건 상단 대표 이미지로 자동 지정됩니다.
-          </EmptyDropSub>
-          <EmptyDropActions>
-            <S.EmptyPrimaryAction
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-            >
-              <FiUploadCloud aria-hidden />
-              {uploading ? '업로드 중…' : '파일 선택하여 업로드'}
-            </S.EmptyPrimaryAction>
-            <S.EmptySecondaryAction
-              type="button"
-              onClick={() => setAdding(true)}
-              disabled={uploading}
-            >
-              <FiPlus aria-hidden />
-              외부 이미지 URL로 추가
-            </S.EmptySecondaryAction>
-          </EmptyDropActions>
-        </EmptyDropZone>
+        <EventTabEmptyState
+          Icon={FiImage}
+          ariaLabel="이미지 자료 빈 상태"
+          dragActive={dragOver}
+          onDragOver={
+            readOnly
+              ? undefined
+              : (dragEvent) => {
+                  if (uploading) return
+                  dragEvent.preventDefault()
+                  if (!dragOver) setDragOver(true)
+                }
+          }
+          onDragLeave={
+            readOnly
+              ? undefined
+              : (dragEvent) => {
+                  const next = dragEvent.relatedTarget as Node | null
+                  if (next && dragEvent.currentTarget.contains(next)) return
+                  setDragOver(false)
+                }
+          }
+          onDrop={
+            readOnly
+              ? undefined
+              : (dropEvent) => {
+                  dropEvent.preventDefault()
+                  setDragOver(false)
+                  if (uploading) return
+                  const files = dropEvent.dataTransfer?.files
+                  if (files && files.length > 0) void handleFiles(files)
+                }
+          }
+          title={
+            uploading
+              ? '이미지 파일을 업로드하는 중…'
+              : '아직 등록된 이미지 자료가 없습니다'
+          }
+          description={
+            readOnly
+              ? '이 사건에 등록된 사진·전투 지도·문서 스캔 이미지가 없습니다.'
+              : '당시 사진·지도·사료 스캔본을 등록하면 상단 대표 이미지와 자료 갤러리가 구성됩니다. 이미지 파일을 이 영역에 끌어다 놓아도 바로 업로드됩니다.'
+          }
+          primaryAction={
+            !readOnly
+              ? {
+                  label: uploading ? '업로드 중…' : '이미지 파일 업로드',
+                  Icon: FiUploadCloud,
+                  onClick: () => fileInputRef.current?.click(),
+                  disabled: uploading,
+                }
+              : undefined
+          }
+          secondaryAction={
+            !readOnly
+              ? {
+                  label: '외부 URL로 추가',
+                  Icon: FiLink,
+                  onClick: () => setAdding(true),
+                  disabled: uploading,
+                }
+              : undefined
+          }
+          features={
+            readOnly
+              ? undefined
+              : [
+                  {
+                    Icon: FiStar,
+                    title: '상단 대표 이미지 자동 지정',
+                    description: '첫 번째 등록 이미지는 사건 헤더 대표 썸네일로 자동 지정되며 언제든 변경할 수 있습니다.',
+                  },
+                  {
+                    Icon: FiFileText,
+                    title: '캡션 · 사료 출처 및 확대 보기',
+                    description: '이미지마다 설명과 사료 출처를 남기고 클릭 한 번으로 원본 비율을 크게 확인합니다.',
+                  },
+                ]
+          }
+        />
       )}
 
       {images.length > 0 && (
@@ -536,79 +567,6 @@ const Grid = styled.div<{ $dragOver: boolean; $wide: boolean }>`
       /* 드래그 중 강조면 — 생 rgba(99,102,241)이 아니라 액센트 면 토큰으로. */
       background: ${ledgerAccentSubtle(theme.mode)};
     `}
-`
-
-/**
- * 빈 드롭존 — 여유 있는 클릭·드롭 영역.
- */
-const EmptyDropZone = styled.div<{ $dragOver: boolean }>`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 52px 28px;
-  border-radius: ${RADIUS.MD};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  text-align: center;
-  transition: border-color 0.14s, color 0.14s, background 0.14s;
-
-  ${({ $dragOver, theme }) =>
-    $dragOver &&
-    css`
-      border-color: ${ledgerAccent(theme.mode)};
-      color: ${theme.colors.text.primary};
-      background: ${ledgerAccentSubtle(theme.mode)};
-    `}
-`
-
-const EmptyDropIcon = styled.div`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 2px;
-  border-radius: 50%;
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-
-  svg {
-    width: 20px;
-    height: 20px;
-  }
-`
-
-const EmptyDropMain = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-
-  strong {
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const EmptyDropSub = styled.span`
-  max-width: 540px;
-  font-size: 13px;
-  line-height: 1.6;
-  word-break: keep-all;
-  color: ${metaText};
-`
-
-const EmptyDropActions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 8px;
 `
 
 const HiddenFileInput = styled.input`

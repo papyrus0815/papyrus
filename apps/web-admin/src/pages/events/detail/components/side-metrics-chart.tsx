@@ -49,6 +49,7 @@ import {
   lossRate,
   memberSum,
   representativeOf,
+  SIZE_METRIC_PRIORITY,
   type MemberEntry,
 } from './side-metrics.lib'
 
@@ -213,7 +214,7 @@ function datumOf(
 }
 
 /**
- * 진영 둘 중 한쪽은 병력만, 다른 쪽은 참여 인원만 있으면 한 줄로 — 봉기 진압처럼 한편은 정규군, 다른 편은
+ * 진영 둘 중 한쪽은 병력(정규군·경찰), 다른 쪽은 참여 인원만 있으면 한 줄로 — 봉기·시위 진압처럼 한편은 병력, 다른 편은
  * 군중일 때 '얼마나 모였나'를 마주 세운다(손실률도 병력이 없으면 참여 인원으로 잰다 — lossRate와 같은 규칙).
  */
 function pairSizeRows(
@@ -222,22 +223,25 @@ function pairSizeRows(
   memberCells: SideMetricsChartProps['memberCells'],
   unitCells?: SideMetricsChartProps['unitCells'],
 ): ChartRow[] {
-  const personnel = rows.find((row) => row.key === 'military.personnel')
-  const participants = rows.find((row) => row.key === 'society.participants')
-  if (sides.length !== 2 || !personnel || !participants) return [...rows]
+  if (sides.length !== 2) return [...rows]
+  const sizeRows = SIZE_METRIC_PRIORITY.map((key) => rows.find((row) => row.key === key)).filter(
+    (row): row is ChartRow => Boolean(row),
+  )
+  if (sizeRows.length !== 2) return [...rows]
+  const [firstRow, secondRow] = sizeRows
   const has = (row: ChartRow, sideId: string) =>
     (row.cells.get(sideId)?.length ?? 0) > 0 ||
     (memberCells.get(row.key)?.get(sideId)?.length ?? 0) > 0 ||
     (unitCells?.get(row.key)?.get(sideId)?.length ?? 0) > 0
-  if (!sides.every((side) => has(personnel, side.id) !== has(participants, side.id))) return [...rows]
+  if (!sides.every((side) => has(firstRow, side.id) !== has(secondRow, side.id))) return [...rows]
   const merged: ChartRow = {
     key: PAIRED_SIZE_KEY,
-    name: `${personnel.name} · ${participants.name}`,
+    name: `${firstRow.name} · ${secondRow.name}`,
     cells: new Map(
-      sides.map((side) => [side.id, (has(personnel, side.id) ? personnel : participants).cells.get(side.id) ?? []]),
+      sides.map((side) => [side.id, (has(firstRow, side.id) ? firstRow : secondRow).cells.get(side.id) ?? []]),
     ),
   }
-  return rows.flatMap((row) => (row === personnel ? [merged] : row === participants ? [] : [row]))
+  return rows.flatMap((row) => (row === firstRow ? [merged] : row === secondRow ? [] : [row]))
 }
 
 function isComparableDatum(datum: BarDatum): datum is BarDatum & { center: number } {
@@ -354,12 +358,11 @@ export function SideMetricsChart({
   const displayRows = butterfly ? pairSizeRows(rows, sides, memberCells, unitCells) : [...rows]
   const resolveRowDatum = (row: ChartRow, side: ChartSide) => {
     if (row.key === PAIRED_SIZE_KEY) {
-      const personnelRow = rows.find((candidate) => candidate.key === 'military.personnel')
-      const participantRow = rows.find((candidate) => candidate.key === 'society.participants')
-      const personnelDatum = personnelRow ? datumOf(personnelRow, side, memberCells, unitCells) : null
-      if (personnelDatum && personnelDatum.kind !== 'empty') return personnelDatum
-      const participantDatum = participantRow ? datumOf(participantRow, side, memberCells, unitCells) : null
-      if (participantDatum && participantDatum.kind !== 'empty') return participantDatum
+      for (const sizeKey of SIZE_METRIC_PRIORITY) {
+        const candidateRow = rows.find((candidate) => candidate.key === sizeKey)
+        const candidateDatum = candidateRow ? datumOf(candidateRow, side, memberCells, unitCells) : null
+        if (candidateDatum && candidateDatum.kind !== 'empty') return candidateDatum
+      }
     }
     return datumOf(row, side, memberCells, unitCells)
   }

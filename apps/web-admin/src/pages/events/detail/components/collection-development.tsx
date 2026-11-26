@@ -551,11 +551,6 @@ export function CollectionDevelopment({
     return '날짜를 모르는 사건'
   }
 
-  const becomeSingle = () =>
-    onPatch({ kind: 'SINGLE' } as UpdateEventDto, {
-      savedLabel: `'${event.title}'을(를) 단일 사건으로 바꿈`,
-    })
-
   /* ── 끌어다 놓기 ── */
 
   const titleOf = (id: string) => (id === event.id ? event.title : (index.get(id)?.title ?? '사건'))
@@ -1753,9 +1748,9 @@ export function CollectionDevelopment({
       {directCount === 0 ? (
         <S.EmptyGuide>
           <S.EmptyGuideBody>
-            <S.EmptyGuideTitle>이 묶음 사건을 이루는 세부 사건들을 연결하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideTitle>아직 등록된 하위 사건이 없습니다</S.EmptyGuideTitle>
             <S.EmptyGuideDesc>
-              전투 · 회담 · 조약 · 정변 같은 하위 사건을 등록하거나 기존 사건을 모아 연결하면, 날짜와 국면 순서에 맞춰 전체 연표 흐름과 ‘조망’ 대시보드가 구성됩니다.
+              전투·회담·조약 같은 세부 하위 사건을 등록하거나 기존 사건을 모으면 날짜와 국면 순서에 맞춰 연표가 구성됩니다.
             </S.EmptyGuideDesc>
           </S.EmptyGuideBody>
           <S.EmptyGuideActions>
@@ -1766,9 +1761,6 @@ export function CollectionDevelopment({
             <S.EmptySecondaryAction type="button" onClick={onGatherExisting}>
               <FiLink2 aria-hidden />
               기존 사건 모으기
-            </S.EmptySecondaryAction>
-            <S.EmptySecondaryAction type="button" onClick={becomeSingle}>
-              단일 사건으로 전환
             </S.EmptySecondaryAction>
           </S.EmptyGuideActions>
         </S.EmptyGuide>

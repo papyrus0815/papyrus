@@ -289,24 +289,24 @@ export function DetailTreaties({ event, onInvalidate, openLinkSeq = 0 }: DetailT
       ) : (
         <S.EmptyGuide>
           <S.EmptyGuideBody>
-            <S.EmptyGuideTitle>이 사건과 연결된 조약 · 협정을 기록하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideTitle>아직 연결된 조약 · 협정이 없습니다</S.EmptyGuideTitle>
             <S.EmptyGuideDesc>
               {hasParticipants
-                ? '‘새 조약 만들기’를 실행하면 현재 사건의 참여국들이 서명국 초안으로 자동 반영되어 빠르게 조약을 만들 수 있습니다. 이미 등록된 조약은 검색해 연결합니다.'
-                : '이 사건에서 서명·비준·파기된 기존 조약을 검색해 연결하거나, 사건 정보를 바탕으로 새 조약을 바로 생성할 수 있습니다.'}
+                ? '기존 조약을 검색해 연결하거나, 현재 사건 참여국이 서명국 초안으로 반영된 새 조약을 만들 수 있습니다.'
+                : '이 사건에서 서명·비준·파기된 기존 조약을 검색해 연결하거나 새 조약을 생성할 수 있습니다.'}
             </S.EmptyGuideDesc>
           </S.EmptyGuideBody>
           <S.EmptyGuideActions>
-            <S.EmptyPrimaryAction
+            <S.EmptyPrimaryAction type="button" onClick={() => setLinkModalOpen(true)}>
+              <FiPlus aria-hidden />
+              기존 조약 연결
+            </S.EmptyPrimaryAction>
+            <S.EmptySecondaryAction
               type="button"
               onClick={() => void handleCreate()}
               disabled={createMutation.isPending}
             >
-              <FiPlus aria-hidden />
               {createMutation.isPending ? '만드는 중…' : '새 조약 만들기'}
-            </S.EmptyPrimaryAction>
-            <S.EmptySecondaryAction type="button" onClick={() => setLinkModalOpen(true)}>
-              기존 조약 연결
             </S.EmptySecondaryAction>
           </S.EmptyGuideActions>
         </S.EmptyGuide>

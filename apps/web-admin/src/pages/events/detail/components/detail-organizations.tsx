@@ -741,7 +741,7 @@ function DomainOrganizationSection({
           {relations.length > 0 && (
             <S.SectionSubtitle>{relations.length}곳</S.SectionSubtitle>
           )}
-          {!readOnly && (
+          {!readOnly && relations.length > 0 && (
             <S.SectionActions>
               <HeaderControlBtn
                 type="button"
@@ -794,11 +794,37 @@ function DomainOrganizationSection({
           ))}
         </Rows>
       ) : (
-        <S.HelperText>
-          {isCompanyMode
-            ? '아직 연결된 기업이 없습니다 — 우측 ‘기업 잇기’로 기존 기업을 찾거나 새로 등록해 연결하세요.'
-            : '아직 연결된 기구·조직이 없습니다 — 우측 ‘기구·조직 잇기’로 연결하세요.'}
-        </S.HelperText>
+        <S.EmptyGuide>
+          <S.EmptyGuideBody>
+            <S.EmptyGuideTitle>
+              {isCompanyMode
+                ? '아직 연결된 관련 기업이 없습니다'
+                : '아직 연결된 관련 기구 · 조직이 없습니다'}
+            </S.EmptyGuideTitle>
+            <S.EmptyGuideDesc>
+              {isCompanyMode
+                ? '창립·상장·인수합병·교역·산업 분쟁 등 사건에 관여한 기업과 역할을 기록합니다.'
+                : '유엔·동맹기구·정상회의체·민간단체의 역할을 기록하며 회원국·소속 인물을 일괄 반영할 수 있습니다.'}
+            </S.EmptyGuideDesc>
+          </S.EmptyGuideBody>
+          {!readOnly && (
+            <S.EmptyGuideActions>
+              <S.EmptyPrimaryAction
+                type="button"
+                onClick={() => {
+                  setInitialDraft(null)
+                  setLinkModalOpen(true)
+                }}
+              >
+                <FiPlus aria-hidden />
+                {isCompanyMode ? '관련 기업 연결' : '관련 기구 · 조직 연결'}
+              </S.EmptyPrimaryAction>
+              <S.EmptySecondaryAction type="button" onClick={() => setCreatingOpen(true)}>
+                {isCompanyMode ? '새 기업 등록' : '새 기구 · 조직 등록'}
+              </S.EmptySecondaryAction>
+            </S.EmptyGuideActions>
+          )}
+        </S.EmptyGuide>
       )}
 
       {modalsNode}

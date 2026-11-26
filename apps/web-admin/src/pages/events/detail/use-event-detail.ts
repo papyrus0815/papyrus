@@ -8,7 +8,7 @@ import {
   useSuspenseQuery,
 } from '@tanstack/react-query'
 
-import type { EventCountryRole } from '@/entities/event/model'
+import { type EventCountryRole, isArmedConflictType } from '@/entities/event/model'
 import { type NormalizedMilitaryEventResponse } from '@/features/event-create/lib'
 import {
   type EventSide,
@@ -372,10 +372,11 @@ export function useEventDetail(eventId: string): UseEventDetailResult {
   const hasSideForcesData = sideUnitCount > 0 || sideWeaponCount > 0 || hasSideDoctrine
   const hasMilitaryDetails = Boolean(event.militaryEvent?.militaryDetails)
   const isMilitaryDomain = event.domain === 'MILITARY'
+  const isArmedConflict = isArmedConflictType(event.type)
 
   const enabledModules = useMemo<EventDetailModuleKey[]>(() => {
     const keys: EventDetailModuleKey[] = []
-    if (observationCount > 0 || (sideCount > 0 && isMilitaryDomain)) {
+    if (observationCount > 0 || (sideCount > 0 && (isMilitaryDomain || isArmedConflict))) {
       keys.push('metrics')
     }
     if (hasSideForcesData) {
@@ -385,7 +386,7 @@ export function useEventDetail(eventId: string): UseEventDetailResult {
       keys.push('military-details')
     }
     return keys
-  }, [observationCount, sideCount, isMilitaryDomain, hasSideForcesData, hasMilitaryDetails])
+  }, [observationCount, sideCount, isMilitaryDomain, isArmedConflict, hasSideForcesData, hasMilitaryDetails])
 
   const filledModuleCount =
     (observationCount > 0 ? 1 : 0) +

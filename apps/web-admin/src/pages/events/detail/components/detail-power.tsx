@@ -286,18 +286,17 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
       {accessions.length === 0 && elections.length === 0 && (
         <S.EmptyGuide>
           <S.EmptyGuideBody>
-            <S.EmptyGuideTitle>권력 승계(취임 · 즉위)와 관련 선거를 연결하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideTitle>아직 연결된 권력 승계 · 선거 기록이 없습니다</S.EmptyGuideTitle>
             <S.EmptyGuideDesc>
-              이 사건을 계기로 교체된 국가원수·통치자의 취임·즉위 기록이나 선거 결과를 연결하면 전임→후임 승계 구도와 정당별 득표 결과가 한곳에 표시됩니다.
+              이 사건을 계기로 교체된 국가원수 취임·즉위 기록이나 선거 결과를 연결하면 승계 구도와 득표 결과가 표시됩니다.
             </S.EmptyGuideDesc>
           </S.EmptyGuideBody>
           <S.EmptyGuideActions>
             <S.EmptyPrimaryAction type="button" onClick={() => setAccessionPickerOpen(true)}>
               <FiPlus aria-hidden />
-              취임 · 즉위 기록 연결
+              취임 · 즉위 연결
             </S.EmptyPrimaryAction>
             <S.EmptySecondaryAction type="button" onClick={() => setElectionPickerOpen(true)}>
-              <FiPlus aria-hidden />
               선거 결과 연결
             </S.EmptySecondaryAction>
           </S.EmptyGuideActions>

@@ -211,9 +211,9 @@ export function ChildrenBlock({
         {childEvents.length === 0 && (
           <S.EmptyGuide>
             <S.EmptyGuideBody>
-              <S.EmptyGuideTitle>이 사건 안에 속하는 세부 하위 사건을 연결하세요</S.EmptyGuideTitle>
+              <S.EmptyGuideTitle>아직 연결된 하위 사건이 없습니다</S.EmptyGuideTitle>
               <S.EmptyGuideDesc>
-                전투 · 회담 · 협정 같은 하위 사건을 새로 등록하거나 이미 등록된 사건들을 한꺼번에 모아 이 사건의 하위로 편입할 수 있습니다.
+                전투·회담·협정 같은 하위 사건을 새로 등록하거나 이미 등록된 사건들을 모아 연결할 수 있습니다.
               </S.EmptyGuideDesc>
             </S.EmptyGuideBody>
             {(onOpenCreateChild || onOpenGather) && (

@@ -316,4 +316,25 @@ describe('lossRate — 어느 규모로 나눴는가', () => {
     expect(formatRate(derivedRate.rate)).toBe('20%')
     expect(derivedRate.derived).toBe(true)
   })
+
+  it('봉기·시위 진압처럼 human.deaths·human.wounded·security.personnel·society.participants로 기록된 진영도 규모·손실 구성·손실률을 계산한다', () => {
+    const rows = buildSideMetricRows(
+      [
+        obs('1', 'protesters', 'society.participants', '10000'),
+        obs('2', 'protesters', 'human.deaths', null, { low: '3', high: '4' }),
+        obs('3', 'protesters', 'human.wounded', '50'),
+        obs('4', 'police', 'security.personnel', '500'),
+        obs('5', 'police', 'human.wounded', '10'),
+      ],
+      ['protesters', 'police'],
+    )
+    const protesterRate = lossRate(rows, 'protesters')!
+    expect(protesterRate.lossKey).toBe('human.deaths')
+    expect(protesterRate.sizeKey).toBe('society.participants')
+    const policeSize = sideSizeOf(rows, new Map(), 'police')!
+    expect(policeSize).toMatchObject({ metricKey: 'security.personnel', value: 500 })
+    const comps = lossCompositions(rows, ['protesters', 'police'])
+    expect(comps[0]?.parts.map((part) => part.key)).toEqual(['deaths', 'wounded'])
+    expect(comps[0]?.sum).toBe(53.5)
+  })
 })

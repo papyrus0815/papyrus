@@ -193,9 +193,9 @@ export function ModuleSides({
       {sides.length === 0 ? (
         <S.EmptyGuide>
           <S.EmptyGuideBody>
-            <S.EmptyGuideTitle>대립 진영을 나누고 전투서열 · 병기를 기록하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideTitle>아직 구성된 대립 진영이 없습니다</S.EmptyGuideTitle>
             <S.EmptyGuideDesc>
-              교전 양측의 진영이 만들어지면 진영별 투입 부대(군단·사단·함대), 주요 병기·장비, 작전 목표·교리를 나란히 기록할 수 있습니다.
+              교전 양측 진영을 만들면 투입 부대(군단·사단·함대), 주요 병기·장비, 작전 교리를 나란히 기록할 수 있습니다.
             </S.EmptyGuideDesc>
           </S.EmptyGuideBody>
           <S.EmptyGuideActions>
@@ -211,7 +211,7 @@ export function ModuleSides({
             )}
             {onJumpToActors && (
               <S.EmptySecondaryAction type="button" onClick={onJumpToActors}>
-                참여 탭에서 당사국 먼저 연결
+                참여 탭에서 당사국 연결
                 <FiArrowRight size={13} aria-hidden />
               </S.EmptySecondaryAction>
             )}

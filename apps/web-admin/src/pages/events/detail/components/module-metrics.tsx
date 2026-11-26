@@ -5,13 +5,17 @@ import { Link } from 'react-router-dom'
 import {
   FiAlertTriangle,
   FiBarChart2,
+  FiBookOpen,
   FiChevronDown,
+  FiCompass,
   FiEdit2,
   FiInfo,
   FiList,
   FiMessageSquare,
   FiPlus,
+  FiShield,
   FiTrash2,
+  FiTrendingUp,
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -37,7 +41,12 @@ import {
   ledgerSubtleFill,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
-import { deleteObservation, listMetricDefinitions, type Observation } from '@/shared/api/evidence'
+import {
+  deleteObservation,
+  listMetricDefinitions,
+  type Observation,
+  type ObservationSubjectType,
+} from '@/shared/api/evidence'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { listEventSideUnits, type SideUnitView } from '@/shared/api/event-sides'
 import { pathKeys } from '@/shared/router'
@@ -51,6 +60,7 @@ import {
 import * as S from '../styles'
 import { type EventDetail, eventKeys, eventObservationsQueryOptions } from '../use-event-detail'
 import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
+import { EventTabEmptyState } from './event-tab-empty-state'
 import { MODULE_COLOR } from './module-colors'
 import { ObservationFormModal, type ObservationSubjectOption } from './observation-form-modal'
 import { SideMetricsChart } from './side-metrics-chart'
@@ -102,6 +112,12 @@ function syntheticOf(base: Observation, value: number): Observation {
 
 interface ModuleMetricsProps {
   event: EventDetail
+  readOnly?: boolean
+  isMilitaryContext?: boolean
+  /** 수치·전력 탭 전체에 아직 아무 데이터가 없을 때 — 단일 빈 상태 화면을 세운다 */
+  fullTabEmpty?: boolean
+  onStartForces?: () => void
+  onOpenModulesWorkspace?: () => void
 }
 
 const NEUTRAL = '#64748b'
@@ -124,12 +140,27 @@ function readMetricsView(): MetricsView {
  * 동원 병력과 손실이 다 있으면 손실률(계산) 줄. 아래는 진영 밖 대상(사건 전체·참여국)별 목록.
  * 출처가 검증되지 않은 값은 숨기지 않고 막대를 흐리게 그린다.
  */
-export function ModuleMetrics({ event }: ModuleMetricsProps) {
+export function ModuleMetrics({
+  event,
+  readOnly = false,
+  isMilitaryContext = false,
+  fullTabEmpty = false,
+  onStartForces,
+  onOpenModulesWorkspace,
+}: ModuleMetricsProps) {
   const queryClient = useQueryClient()
   const { data: observations = [] } = useQuery(eventObservationsQueryOptions(event.id))
   /** 편집 대상 — 기존 값, 또는 새 값(비교표 빈 칸에서 열면 그 진영·지표를 미리 고른다) */
   const [editing, setEditing] = useState<
-    Observation | { kind: 'new'; subjectId?: string; metricKey?: string } | null
+    | Observation
+    | {
+        kind: 'new'
+        subjectType?: ObservationSubjectType
+        subjectId?: string
+        metricKey?: string
+        batch?: boolean
+      }
+    | null
   >(null)
   /** 지표 이름 — 빈 비교표 및 빈 상태 추천 지표 버튼에 사용 */
   const { data: metricDefinitions = [] } = useQuery({
@@ -233,25 +264,20 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
     return orderSideMetricRows([...sideRows, ...extra])
   }, [sideRows, memberCells, unitCells])
   /**
-   * 빈 비교표 — 진영은 있는데 값이 하나도 없으면 추천 지표(형식이 권하는 앞 3개) 행 × 모든 진영 열을 빈 칸으로 세운다.
-   * 예전엔 수치 모듈 자체가 숨어 '모듈 추가 ▾'를 찾아야 했다(1차대전: 진영 2·수치 0).
+   * 빈 비교표 — 진영별 비교가 정본인 사건(전쟁·전투·봉기: metricSubject === 'side')에 진영만 있고 값이 아직 없을 때
+   * 추천 지표(앞 6개 — 사망·부상 모두 포함) 행 × 모든 진영 열을 빈 칸으로 세운다.
+   * 시위·소요·폭력 등 사건 전체 수치가 중심인 사건(metricSubject === 'event')은 진영이 있어도 빈 진영표를 강제하지 않는다.
    */
   const placeholderRows = useMemo(() => {
-    if (comparedRows.length > 0 || sides.length === 0) return []
+    if (comparedRows.length > 0 || sides.length === 0 || features.metricSubject !== 'side') {
+      return []
+    }
     return features.metricPresets
-      .slice(0, 3)
+      .slice(0, 6)
       .map((key) => metricDefinitions.find((definition) => definition.key === key))
       .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition))
       .map((definition) => ({ key: definition.key, name: definition.name, cells: new Map<string, Observation[]>() }))
-  }, [comparedRows.length, sides.length, features.metricPresets, metricDefinitions])
-  const emptyPresetMetrics = useMemo(
-    () =>
-      features.metricPresets
-        .slice(0, 5)
-        .map((presetKey) => metricDefinitions.find((definition) => definition.key === presetKey))
-        .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition)),
-    [features.metricPresets, metricDefinitions],
-  )
+  }, [comparedRows.length, sides.length, features.metricSubject, features.metricPresets, metricDefinitions])
 
   const tableRows = comparedRows.length > 0 ? comparedRows : placeholderRows
   const tableSides = useMemo(
@@ -405,8 +431,108 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
     }
   }
 
+  const hasDescendantMetrics =
+    event.kind === 'COLLECTION' &&
+    (overviewData?.descendants ?? []).some((childNode) => (childNode.metrics?.length ?? 0) > 0)
+  const showFullEmptyState = fullTabEmpty && observations.length === 0 && !hasDescendantMetrics
+
   return (
     <S.Section id="module-metrics">
+      {showFullEmptyState ? (
+        <EventTabEmptyState
+          Icon={FiBarChart2}
+          ariaLabel={isMilitaryContext ? '수치·전력 빈 상태' : '수치·지표 빈 상태'}
+          title={
+            isMilitaryContext
+              ? '아직 기록된 수치 · 전력 데이터가 없습니다'
+              : '아직 기록된 수치 · 지표가 없습니다'
+          }
+          description={
+            readOnly
+              ? '이 사건에 기록된 정량 수치나 전력 데이터가 없습니다.'
+              : '병력·사상자·피해 규모·득표율 등 사료마다 다른 수치를 출처와 함께 기록하면 비교 그래프와 손실률이 자동 생성됩니다.'
+          }
+          primaryAction={
+            !readOnly
+              ? {
+                  label: '수치 기록하기',
+                  Icon: FiPlus,
+                  onClick: () => setEditing({ kind: 'new' }),
+                }
+              : undefined
+          }
+          secondaryAction={
+            !readOnly
+              ? onStartForces
+                ? {
+                    label: '전투서열 · 병기 기록',
+                    Icon: FiShield,
+                    onClick: onStartForces,
+                  }
+                : {
+                    label: '사망·부상 등 여러 지표 한 번에',
+                    Icon: FiList,
+                    onClick: () => setEditing({ kind: 'new', batch: true }),
+                  }
+              : undefined
+          }
+          quietLinks={
+            !readOnly
+              ? [
+                  ...(onStartForces
+                    ? [
+                        {
+                          label: '여러 지표 한 번에 기록하기',
+                          onClick: () => setEditing({ kind: 'new', batch: true }),
+                        },
+                      ]
+                    : []),
+                  ...(onOpenModulesWorkspace
+                    ? [
+                        {
+                          label: isMilitaryContext
+                            ? '작전 정보 · 전체 분석 모듈 열기'
+                            : '비교표 · 추가 모듈 열기',
+                          onClick: onOpenModulesWorkspace,
+                        },
+                      ]
+                    : []),
+                ]
+              : undefined
+          }
+          features={
+            readOnly
+              ? undefined
+              : [
+                  {
+                    Icon: FiBookOpen,
+                    title: '출처 기반 정량 지표',
+                    description: '사료마다 엇갈리는 추정 범위와 출처 등급을 함께 남겨 신뢰도를 투명하게 구분합니다.',
+                  },
+                  {
+                    Icon: FiTrendingUp,
+                    title: '진영 · 국가별 비례 그래프',
+                    description: '동일 지표가 모이면 진영·참여국별 비례 막대 그래프와 손실률 요약이 자동 생성됩니다.',
+                  },
+                  ...(isMilitaryContext
+                    ? [
+                        {
+                          Icon: FiShield,
+                          title: '전투서열 · 투입 병기',
+                          description: '참전 군단·사단 편제와 주요 무기 체계를 진영별로 대조합니다.',
+                        },
+                        {
+                          Icon: FiCompass,
+                          title: '전장 지형 · 작전 정보',
+                          description: '기상·지형·전술적 전환점 등 군사 작전의 세부 맥락을 구조화해 기록합니다.',
+                        },
+                      ]
+                    : []),
+                ]
+          }
+        />
+      ) : (
+        <>
       <S.SectionHeaderGroup>
         <S.SectionHeader>
           <S.SectionTitle>{features.metricsMenuLabel}</S.SectionTitle>
@@ -433,10 +559,18 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
             >
               출처 서고
             </LibraryLink>
-            {(observations.length > 0 || placeholderRows.length > 0) && (
-              <HeaderControlBtn type="button" onClick={() => setEditing({ kind: 'new' })}>
-                <FiPlus /> 수치 추가
-              </HeaderControlBtn>
+            {!readOnly && (
+              <>
+                <HeaderControlBtn
+                  type="button"
+                  onClick={() => setEditing({ kind: 'new', batch: true })}
+                >
+                  <FiList /> 여러 지표 한 번에
+                </HeaderControlBtn>
+                <HeaderControlBtn type="button" onClick={() => setEditing({ kind: 'new' })}>
+                  <FiPlus /> 수치 추가
+                </HeaderControlBtn>
+              </>
             )}
           </S.SectionActions>
         </S.SectionHeader>
@@ -978,32 +1112,54 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
         </SubjectBlock>
       ))}
 
-      {/* 빈 비교표가 서 있지 않은 무진영 빈 상태 — 추천 지표 원클릭 시작 슬롯 */}
+      {placeholderRows.length > 0 && !readOnly && (
+        <EventLevelFallbackBar>
+          <span>
+            진영별 구분 없이 사건 전체 합계(총사망·총부상 등)만 사료에 전해진다면 사건 전체에 기록할 수 있습니다.
+          </span>
+          <HeaderControlBtn
+            type="button"
+            onClick={() =>
+              setEditing({
+                kind: 'new',
+                subjectType: 'EVENT',
+                subjectId: event.id,
+                batch: true,
+              })
+            }
+          >
+            <FiPlus /> 사건 전체 수치 기록
+          </HeaderControlBtn>
+        </EventLevelFallbackBar>
+      )}
+
+      {/* 빈 비교표가 서 있지 않은 무진영/사건단위 빈 상태 */}
       {observations.length === 0 && placeholderRows.length === 0 && (
         <S.EmptyGuide>
           <S.EmptyGuideBody>
-            <S.EmptyGuideTitle>출처 기반 정량 수치를 기록해 비교하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideTitle>아직 기록된 정량 수치가 없습니다</S.EmptyGuideTitle>
             <S.EmptyGuideDesc>
-              {features.metricsEmptyHint} 사료마다 다른 추정 범위와 출처 인용을 함께 남기면 비교 그래프와 손실률 요약이 자동으로 생성됩니다.
+              {features.metricsEmptyHint} 사료마다 다른 추정 범위(예: 3~4명)와 출처 인용을 함께 남기면 비교 그래프가 자동 생성됩니다.
             </S.EmptyGuideDesc>
           </S.EmptyGuideBody>
-          <S.EmptyGuideActions>
-            <S.EmptyPrimaryAction type="button" onClick={() => setEditing({ kind: 'new' })}>
-              <FiPlus aria-hidden />
-              수치 직접 기록하기
-            </S.EmptyPrimaryAction>
-            {emptyPresetMetrics.map((metric) => (
-              <S.EmptySecondaryAction
-                key={metric.key}
+          {!readOnly && (
+            <S.EmptyGuideActions>
+              <HeaderControlBtn
                 type="button"
-                onClick={() => setEditing({ kind: 'new', metricKey: metric.key })}
+                onClick={() => setEditing({ kind: 'new', batch: true })}
               >
+                <FiList aria-hidden />
+                여러 지표 한 번에
+              </HeaderControlBtn>
+              <S.EmptyPrimaryAction type="button" onClick={() => setEditing({ kind: 'new' })}>
                 <FiPlus aria-hidden />
-                {metric.name}
-              </S.EmptySecondaryAction>
-            ))}
-          </S.EmptyGuideActions>
+                수치 기록하기
+              </S.EmptyPrimaryAction>
+            </S.EmptyGuideActions>
+          )}
         </S.EmptyGuide>
+      )}
+        </>
       )}
 
       {editing && (
@@ -1015,10 +1171,14 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
           initial={'kind' in editing ? null : editing}
           presetSubject={
             'kind' in editing && editing.subjectId
-              ? { subjectType: 'EVENT_SIDE', subjectId: editing.subjectId }
+              ? {
+                  subjectType: editing.subjectType ?? 'EVENT_SIDE',
+                  subjectId: editing.subjectId,
+                }
               : null
           }
           presetMetricKey={'kind' in editing ? (editing.metricKey ?? null) : null}
+          initialBatchMode={'kind' in editing ? Boolean(editing.batch) : false}
           onClose={() => setEditing(null)}
           subjectLabelOf={(observation) => subjectOf(observation)?.label ?? ''}
         />
@@ -1032,6 +1192,20 @@ const ViewSwitchRow = styled.div`
   display: flex;
   align-items: center;
   margin-bottom: 12px;
+`
+
+const EventLevelFallbackBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border-radius: ${RADIUS.SM};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const LibraryLink = styled(Link)`

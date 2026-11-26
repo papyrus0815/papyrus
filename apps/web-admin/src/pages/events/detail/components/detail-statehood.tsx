@@ -15,6 +15,7 @@
 import { type DragEvent, useState } from 'react'
 
 import { useQueries } from '@tanstack/react-query'
+import { FiArrowRight, FiArrowUp } from 'react-icons/fi'
 import { MdDragIndicator } from 'react-icons/md'
 import styled from 'styled-components'
 
@@ -43,6 +44,7 @@ import { TRANSITION_EVENT_LABELS } from '@/widgets/country/country-detail/model/
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { SectionHintText } from './actors/actors.styles'
+import { scrollToAnchor } from './scroll-to-anchor'
 
 type StatehoodRole = 'FOUNDED' | 'DISSOLVED'
 
@@ -216,7 +218,7 @@ export function DetailStatehood({
             >
               <TransitionLaneHead $founded={false}>
                 <span>소멸 · 구체제</span>
-                <span>{dissolvedEntries.length}곳</span>
+                {dissolvedEntries.length > 0 && <span>{dissolvedEntries.length}곳</span>}
               </TransitionLaneHead>
               {dissolvedEntries.length > 0 ? (
                 <TransitionPillList>
@@ -269,7 +271,9 @@ export function DetailStatehood({
               )}
             </TransitionLane>
 
-            <TransitionArrow aria-hidden>──▶</TransitionArrow>
+            <TransitionArrow aria-hidden>
+              <FiArrowRight size={16} />
+            </TransitionArrow>
 
             <TransitionCenterNode>
               <TransitionCenterKicker>
@@ -278,7 +282,9 @@ export function DetailStatehood({
               <TransitionCenterTitle>{event.title}</TransitionCenterTitle>
             </TransitionCenterNode>
 
-            <TransitionArrow aria-hidden>──▶</TransitionArrow>
+            <TransitionArrow aria-hidden>
+              <FiArrowRight size={16} />
+            </TransitionArrow>
 
             <TransitionLane
               $dragOver={dragOverRole === 'FOUNDED'}
@@ -297,7 +303,7 @@ export function DetailStatehood({
             >
               <TransitionLaneHead $founded>
                 <span>성립 · 신생국</span>
-                <span>{foundedEntries.length}곳</span>
+                {foundedEntries.length > 0 && <span>{foundedEntries.length}곳</span>}
               </TransitionLaneHead>
               {foundedEntries.length > 0 ? (
                 <TransitionPillList>
@@ -401,13 +407,24 @@ export function DetailStatehood({
         </TransitionBoard>
       )}
 
-      {entries.length === 0 ? (
-        <S.HelperText>
-          이 사건으로 세워지거나 사라진 나라를 참여국 역할 ‘건국’·‘멸망’으로 지정하면, 그 나라의
-          전신·후신과 세운 쪽, 초대·마지막 통치자가 여기 이어집니다.{' '}
-          <ActorsLink href="#actors">참여국 편집으로</ActorsLink>
-        </S.HelperText>
-      ) : (
+      {entries.length === 0 && otherParticipants.length === 0 ? (
+        <S.EmptyGuide>
+          <S.EmptyGuideBody>
+            <S.EmptyGuideTitle>아직 지정된 성립 · 소멸 국가가 없습니다</S.EmptyGuideTitle>
+            <S.EmptyGuideDesc>
+              위 ‘참여 국가’ 구역에서 나라를 연결하고 역할을 ‘건국(성립)’ 또는 ‘멸망(소멸)’으로 지정하면 전신·후신 계승 관계가 연동됩니다.
+            </S.EmptyGuideDesc>
+          </S.EmptyGuideBody>
+          {onPatch && (
+            <S.EmptyGuideActions>
+              <S.EmptyPrimaryAction type="button" onClick={() => scrollToAnchor('actors')}>
+                <FiArrowUp aria-hidden />
+                위 참여 국가에서 지정
+              </S.EmptyPrimaryAction>
+            </S.EmptyGuideActions>
+          )}
+        </S.EmptyGuide>
+      ) : entries.length > 0 ? (
         <Rows>
           {entries.map((entry) => (
             <StatehoodRow
@@ -420,7 +437,7 @@ export function DetailStatehood({
             />
           ))}
         </Rows>
-      )}
+      ) : null}
     </S.Section>
   )
 }
@@ -748,13 +765,6 @@ const MismatchNote = styled.p`
   color: ${metaText};
 `
 
-const ActorsLink = styled.a`
-  font-weight: 600;
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-`
-
 const TransitionBoard = styled.div`
   display: flex;
   flex-direction: column;
@@ -780,8 +790,8 @@ const TransitionGrid = styled.div`
 const TransitionLane = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 18px 20px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   border-radius: 8px;
   border-left: 2.5px solid
@@ -868,10 +878,12 @@ const TransitionEmpty = styled.span`
 `
 
 const TransitionArrow = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   align-self: center;
-  font-size: 12px;
-  font-weight: 700;
   color: ${metaText};
+  opacity: 0.7;
 
   @media (max-width: 680px) {
     display: none;

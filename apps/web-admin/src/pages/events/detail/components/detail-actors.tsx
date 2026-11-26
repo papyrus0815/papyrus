@@ -2,14 +2,19 @@ import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import {
+  FiAward,
   FiBarChart2,
+  FiBriefcase,
   FiCheck,
+  FiFlag,
   FiGitBranch,
   FiGitMerge,
   FiList,
   FiPlus,
   FiRepeat,
   FiSliders,
+  FiUserPlus,
+  FiUsers,
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -82,6 +87,7 @@ import { SideColumnHeader } from './actors/side-column-header'
 import { useActorMutations } from './actors/use-actor-mutations'
 import { useSideManagement } from './actors/use-side-management'
 import { toAxisSpan } from './development-timeline.lib'
+import { EventTabEmptyState } from './event-tab-empty-state'
 import { groupBySide, makeSideRootOf } from './hero-countries.lib'
 import { withSideColors } from './side-colors'
 
@@ -106,6 +112,9 @@ interface DetailActorsProps {
   event: EventDetail
   departmentCount?: number
   readOnly?: boolean
+  /** 참여 탭 전체에 아직 아무 기록이 없을 때 — 하위 빈 섹션 대신 단일 빈 상태를 세운다 */
+  fullTabEmpty?: boolean
+  onOpenExtendedActors?: () => void
   onPatch: (patch: UpdateEventDto, opts?: PatchOptions) => void
   onPersonClick: (personId: string) => void
   onCountryClick: (countryId: string) => void
@@ -118,6 +127,8 @@ export function DetailActors({
   event,
   departmentCount = 0,
   readOnly = false,
+  fullTabEmpty = false,
+  onOpenExtendedActors,
   onPatch,
   onPersonClick,
   onCountryClick,
@@ -727,9 +738,78 @@ export function DetailActors({
   const showPersonSection = persons.length > 0 || !readOnly || Boolean(personSideGroups)
   const delegatedPersonCount = delegationMode ? persons.length - listedPersons.length : 0
 
+  const showFullEmptyState = fullTabEmpty && !hasAnything && allSides.length === 0
+
   return (
     <>
       <S.Section id="actors">
+        {showFullEmptyState ? (
+          <EventTabEmptyState
+            Icon={FiUsers}
+            ariaLabel="참여 주체 빈 상태"
+            title="아직 등록된 참여 국가 · 인물이 없습니다"
+            description={
+              readOnly
+                ? '이 사건에 연결된 참여 국가·인물이나 기관·영토·권력 변동 기록이 없습니다.'
+                : '이 사건에 관여한 국가와 주요 인물을 연결하면 당사국 역할 구도와 대립 진영 세력 비교가 정리됩니다.'
+            }
+            primaryAction={
+              !readOnly
+                ? {
+                    label: '참여 국가 연결',
+                    Icon: FiPlus,
+                    onClick: () => setCountryLinkTarget({ open: true }),
+                  }
+                : undefined
+            }
+            secondaryAction={
+              !readOnly
+                ? {
+                    label: '참여 인물 연결',
+                    Icon: FiUserPlus,
+                    onClick: () => setPersonLinkTarget({ open: true }),
+                  }
+                : undefined
+            }
+            quietLinks={
+              !readOnly && onOpenExtendedActors
+                ? [
+                    {
+                      label: '기관 · 정당 · 영토 · 권력 변동부터 기록하기',
+                      onClick: onOpenExtendedActors,
+                    },
+                  ]
+                : undefined
+            }
+            features={
+              readOnly
+                ? undefined
+                : [
+                    {
+                      Icon: FiFlag,
+                      title: '참여 국가 · 대립 진영',
+                      description: '교전국·당사국의 역할을 지정하고 2개국 이상이면 진영별 승패와 세력을 비교합니다.',
+                    },
+                    {
+                      Icon: FiUsers,
+                      title: '주요 인물 · 국가별 대표단',
+                      description: '국가원수·지휘관·외교 대표를 연결하면 소속 국가 아래 대표단으로 함께 묶입니다.',
+                    },
+                    {
+                      Icon: FiBriefcase,
+                      title: '기관 · 정당 · 기구 · 기업',
+                      description: '사령부·정부 부처·정당·국제기구·기업 등 조직 단위의 관여 내역을 기록합니다.',
+                    },
+                    {
+                      Icon: FiAward,
+                      title: '성립 · 영토 · 권력 변동',
+                      description: '사건의 결과로 일어난 건국·멸망, 영토 할양·반환, 즉위·취임·선거를 정리합니다.',
+                    },
+                  ]
+            }
+          />
+        ) : (
+          <>
         {hasAnything && (
           <ActorsHeader>
             <ActorsHeaderLeft>
@@ -905,9 +985,9 @@ export function DetailActors({
                     {countryRows.length === 0 && !countrySideGroups && (
                       <S.EmptyGuide>
                         <S.EmptyGuideBody>
-                          <S.EmptyGuideTitle>이 사건에 관여한 국가를 역할과 함께 연결하세요</S.EmptyGuideTitle>
+                          <S.EmptyGuideTitle>아직 연결된 참여 국가가 없습니다</S.EmptyGuideTitle>
                           <S.EmptyGuideDesc>
-                            교전국 · 조약 당사국 · 중재국 등 현대 국가와 역사 국가를 선택해 연결합니다. 2개국 이상 모이면 대립 진영을 나누어 승패 결과와 세력을 한눈에 비교할 수 있습니다.
+                            교전국·당사국·중재국 등 현대 국가와 역사 국가를 역할과 함께 연결합니다.
                           </S.EmptyGuideDesc>
                         </S.EmptyGuideBody>
                         {!readOnly && (
@@ -917,7 +997,7 @@ export function DetailActors({
                               onClick={() => setCountryLinkTarget({ open: true })}
                             >
                               <FiPlus aria-hidden />
-                              참여 국가 연결하기
+                              참여 국가 연결
                             </S.EmptyPrimaryAction>
                           </S.EmptyGuideActions>
                         )}
@@ -1189,9 +1269,9 @@ export function DetailActors({
                     {persons.length === 0 && !personSideGroups && (
                       <S.EmptyGuide>
                         <S.EmptyGuideBody>
-                          <S.EmptyGuideTitle>사건을 이끈 주요 인물과 행적을 연결하세요</S.EmptyGuideTitle>
+                          <S.EmptyGuideTitle>아직 연결된 참여 인물이 없습니다</S.EmptyGuideTitle>
                           <S.EmptyGuideDesc>
-                            국가원수 · 지휘관 · 외교 대표 · 핵심 주동자 등 사건 당시 활동한 인물을 연결합니다. 소속 국가가 지정된 인물은 위 참여 국가 행 아래 대표단으로 자동 정리됩니다.
+                            국가원수·지휘관·외교 대표 등 활동한 인물을 연결하면 소속 국가 아래 대표단으로 정리됩니다.
                           </S.EmptyGuideDesc>
                         </S.EmptyGuideBody>
                         {!readOnly && (
@@ -1201,17 +1281,8 @@ export function DetailActors({
                               onClick={() => setPersonLinkTarget({ open: true })}
                             >
                               <FiPlus aria-hidden />
-                              참여 인물 연결하기
+                              참여 인물 연결
                             </S.EmptyPrimaryAction>
-                            <S.EmptySecondaryAction
-                              type="button"
-                              onClick={() =>
-                                setPersonLinkTarget({ open: true, initialCreateMode: true })
-                              }
-                            >
-                              <FiPlus aria-hidden />
-                              새 인물 바로 등록
-                            </S.EmptySecondaryAction>
                           </S.EmptyGuideActions>
                         )}
                       </S.EmptyGuide>
@@ -1391,6 +1462,8 @@ export function DetailActors({
             </>
           )}
         </ActorsCanvas>
+          </>
+        )}
       </S.Section>
 
       <PersonLinkModal

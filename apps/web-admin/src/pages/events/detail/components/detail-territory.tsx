@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiEdit2, FiPlus, FiX } from 'react-icons/fi'
+import { FiArrowRight, FiEdit2, FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { ledgerAccent, ledgerAccentSubtle, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
@@ -272,16 +272,16 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
       ) : rows.length === 0 ? (
         <S.EmptyGuide>
           <S.EmptyGuideBody>
-            <S.EmptyGuideTitle>이 사건으로 할양 · 병합 · 반환된 영토를 기록하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideTitle>아직 기록된 영토 이전 내역이 없습니다</S.EmptyGuideTitle>
             <S.EmptyGuideDesc>
-              어느 땅이 어느 국가에서 어느 국가로 넘어갔는지 면적·인구와 함께 적으면 당사국별 득실 합계가 자동 계산되고 각 국가의 ‘영토 변천’ 연표에도 연동됩니다.
+              할양·병합·반환된 지역과 당사국, 면적·인구를 적으면 국가별 득실 합계와 영토 변천 연표가 연동됩니다.
             </S.EmptyGuideDesc>
           </S.EmptyGuideBody>
           {!readOnly && (
             <S.EmptyGuideActions>
               <S.EmptyPrimaryAction type="button" onClick={addRow}>
                 <FiPlus aria-hidden />
-                첫 영토 이전 기록하기
+                영토 이전 기록하기
               </S.EmptyPrimaryAction>
             </S.EmptyGuideActions>
           )}
@@ -309,7 +309,9 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
                   {rows.length}개 지역
                   {totalArea > 0 ? ` · ${formatArea(totalArea)}` : ''}
                 </FlowArrowBadge>
-                <FlowArrowLine>───▶</FlowArrowLine>
+                <FlowArrowLine>
+                  <FiArrowRight size={16} />
+                </FlowArrowLine>
               </FlowArrowBox>
 
               <FlowCol>

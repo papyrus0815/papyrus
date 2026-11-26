@@ -71,6 +71,8 @@ interface RelatedBlockProps {
   descendantRelationCount?: number
   /** 상위 구역 헤더의 '관련 사건 잇기' 클릭 신호 (증가할 때마다 잇기 모달 열기) */
   openPickerSeq?: number
+  /** 빈 탭 화면에서 모달만 마운트할 때 — 보드 UI 없이 잇기 모달만 렌더링한다 */
+  modalOnly?: boolean
 }
 
 type Draft = RelationDraft
@@ -151,6 +153,7 @@ export function RelatedBlock({
   onHoverEvent,
   descendantRelationCount = 0,
   openPickerSeq = 0,
+  modalOnly = false,
 }: RelatedBlockProps) {
   const queryClient = useQueryClient()
   const prefetchEvent = usePrefetchEventDetail()
@@ -520,6 +523,44 @@ export function RelatedBlock({
     </CausalFlowPill>
   )
 
+  const relatedModal = (
+    <RelatedLinkModal
+      isOpen={pickerOpen}
+      onClose={closePicker}
+      eventTitle={eventTitle}
+      self={self}
+      candidates={linkCandidates}
+      searching={!browsing}
+      loading={candidatesQuery.isLoading}
+      failed={candidatesQuery.isError}
+      onRetry={() => void candidatesQuery.refetch()}
+      onQueryChange={setSearchTerm}
+      initialDraft={initialDraft}
+      initialFilter={pickerFilter}
+      preferredDirection={preferredDirection}
+      saving={saveMutation.isPending}
+      onSave={async (next) => {
+        const saved = await saveMutation.mutateAsync(next)
+        return (saved as { id?: string } | undefined)?.id
+      }}
+      onDelete={async (relationId) => {
+        await removeMutation.mutateAsync(relationId)
+      }}
+      onCreateNew={
+        onOpenCreateRelated
+          ? () => {
+              closePicker()
+              onOpenCreateRelated()
+            }
+          : undefined
+      }
+    />
+  )
+
+  if (modalOnly) {
+    return relatedModal
+  }
+
   return (
     <NetStyles.HierBlock
       role="group"
@@ -867,37 +908,7 @@ export function RelatedBlock({
         )
       })}
 
-      <RelatedLinkModal
-        isOpen={pickerOpen}
-        onClose={closePicker}
-        eventTitle={eventTitle}
-        self={self}
-        candidates={linkCandidates}
-        searching={!browsing}
-        loading={candidatesQuery.isLoading}
-        failed={candidatesQuery.isError}
-        onRetry={() => void candidatesQuery.refetch()}
-        onQueryChange={setSearchTerm}
-        initialDraft={initialDraft}
-        initialFilter={pickerFilter}
-        preferredDirection={preferredDirection}
-        saving={saveMutation.isPending}
-        onSave={async (next) => {
-          const saved = await saveMutation.mutateAsync(next)
-          return (saved as { id?: string } | undefined)?.id
-        }}
-        onDelete={async (relationId) => {
-          await removeMutation.mutateAsync(relationId)
-        }}
-        onCreateNew={
-          onOpenCreateRelated
-            ? () => {
-                closePicker()
-                onOpenCreateRelated()
-              }
-            : undefined
-        }
-      />
+      {relatedModal}
     </NetStyles.HierBlock>
   )
 }

@@ -10,7 +10,7 @@ import {
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useBlocker } from 'react-router-dom'
-import { FiLayers, FiPlus, FiShuffle } from 'react-icons/fi'
+import { FiFileText, FiGitMerge, FiLayers, FiPlus, FiShuffle, FiTag } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { ledgerHairline } from '@/entities/event/ui/ledger-tokens'
@@ -50,6 +50,7 @@ import {
   HeaderControlBtn,
 } from './actors/actors.styles'
 import { EventRelationMindmap } from '../../mindmap/event-relation-mindmap'
+import { EventTabEmptyState } from './event-tab-empty-state'
 import { RelatedHelp } from './related-help'
 import { sectionKindOf } from './narrative-sections.lib'
 import { keywordSuggestions } from './related-suggestions.lib'
@@ -69,6 +70,10 @@ const LazyEventRegisterModal = lazy(() =>
 )
 
 interface DetailNetworkProps {
+  readOnly?: boolean
+  /** 연관 탭 전체에 아직 연결된 데이터가 없을 때 — 단일 빈 상태 화면을 세운다 */
+  fullTabEmpty?: boolean
+  onOpenLinksWorkspace?: () => void
   /** 조약이 아직 없을 때 '+ 조약' 칩 — 페이지 아래 '더 채울 수 있는 것'과 두 곳에 나뉘어 있던 추가 자리를 이 줄로 모은다 */
   onAddTreaty?: () => void
   /** 배경 맥락(지형·법령·기후·자원)이 비었을 때 하단 통합 디렉터리에서 바로 열기 */
@@ -123,6 +128,9 @@ const NETWORK_BLOCKS: ReadonlyArray<{ id: NetworkBlock; label: string; hint: str
 const structuredStart = (node: object) => node as { startEra?: string | null; startYear?: number | null }
 
 export function DetailNetwork({
+  readOnly = false,
+  fullTabEmpty = false,
+  onOpenLinksWorkspace,
   event,
   onPatch,
   onRequestSplit,
@@ -833,8 +841,104 @@ export function DetailNetwork({
     (contextLinksQuery.data?.length ?? 0) === 0 &&
     descendantContextCount === 0
 
+  const showFullEmptyState = fullTabEmpty && !mapAvailable
+
   return (
     <NetworkSection id="network">
+      {showFullEmptyState ? (
+        <>
+          <EventTabEmptyState
+            Icon={FiGitMerge}
+            ariaLabel="연관 사건·조약 빈 상태"
+            title="아직 연결된 연관 사건 · 조약이 없습니다"
+            description={
+              readOnly
+                ? '이 사건에 연결된 상위·하위·관련 사건이나 조약 기록이 없습니다.'
+                : '원인·결과로 얽힌 다른 사건이나 상위 묶음 사건, 체결된 조약을 연결하면 이 사건을 역사적 흐름 속에서 입체적으로 읽을 수 있습니다.'
+            }
+            primaryAction={
+              !readOnly
+                ? {
+                    label: '인과 · 관련 사건 연결',
+                    Icon: FiPlus,
+                    onClick: () => setRelatedPickerSeq((seq) => seq + 1),
+                  }
+                : undefined
+            }
+            secondaryAction={
+              !readOnly
+                ? isCollection
+                  ? {
+                      label: '하위 사건 모으기',
+                      Icon: FiLayers,
+                      onClick: () => setChildModalOpen(true),
+                    }
+                  : {
+                      label: '상위 사건 지정',
+                      Icon: FiLayers,
+                      onClick: () => setParentModalOpen(true),
+                    }
+                : undefined
+            }
+            quietLinks={
+              !readOnly
+                ? [
+                    ...(isCollection
+                      ? [{ label: '새 하위 사건 등록', onClick: () => setCreateChildOpen(true) }]
+                      : []),
+                    ...(onAddTreaty ? [{ label: '조약 연결 · 생성', onClick: onAddTreaty }] : []),
+                    ...(onOpenLinksWorkspace
+                      ? [{ label: '키워드 · 배경 맥락 추가', onClick: onOpenLinksWorkspace }]
+                      : []),
+                  ]
+                : undefined
+            }
+            features={
+              readOnly
+                ? undefined
+                : [
+                    {
+                      Icon: FiShuffle,
+                      title: '원인 · 결과 인과 연결',
+                      description: '이 사건을 촉발한 앞선 사건과 이 사건이 낳은 후속 사건을 방향과 사유로 잇습니다.',
+                    },
+                    {
+                      Icon: FiLayers,
+                      title: '상위 · 하위 계보 구조',
+                      description: '전쟁·혁명 같은 큰 묶음 사건과 그 안의 세부 사건을 상하 계보로 연결합니다.',
+                    },
+                    {
+                      Icon: FiFileText,
+                      title: '체결 · 비준 · 파기 조약',
+                      description: '사건의 계기나 결과로 맺어진 조약·협정을 연결해 조항과 서명국을 함께 봅니다.',
+                    },
+                    {
+                      Icon: FiTag,
+                      title: '주제 키워드 · 배경 맥락',
+                      description: '검색용 키워드와 지형·법령·기후·자원 등 구조적 배경 맥락을 함께 묶습니다.',
+                    },
+                  ]
+            }
+          />
+          <RelatedBlock
+            modalOnly
+            eventId={event.id}
+            eventTitle={event.title}
+            self={{
+              startDate: event.startDate ?? null,
+              startDatePrecision: event.startDatePrecision ?? null,
+              startEra: structuredStart(event).startEra ?? null,
+              startYear: structuredStart(event).startYear ?? null,
+              parentEventId: event.parentEventId ?? null,
+            }}
+            hierarchyIds={hierarchyIds}
+            suggestions={suggestions}
+            onOpenCreateRelated={() => setCreateRelatedOpen(true)}
+            openPickerSeq={relatedPickerSeq}
+          />
+        </>
+      ) : (
+        <>
       {(relationSummary || mapAvailable) && (
         <NetworkTopBar>
           {relationSummary ? (
@@ -1029,6 +1133,8 @@ export function DetailNetwork({
         </AdditionalLinksSection>
       )}
       </ZoneTail>
+        </>
+      )}
 
       <SelectModal
         isOpen={parentModalOpen}

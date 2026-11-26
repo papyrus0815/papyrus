@@ -10,6 +10,7 @@
  */
 import { type DragEvent, useState } from 'react'
 
+import { FiArrowRight } from 'react-icons/fi'
 import { MdDragIndicator } from 'react-icons/md'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
@@ -48,6 +49,7 @@ interface DetailWarDeclarationProps {
   expectWarDeclaration: boolean
   onCountryClick: (countryId: string) => void
   onPatch?: (patch: UpdateEventDto) => void
+  onJumpToActors?: () => void
 }
 
 const ROLE_LABEL: Record<WarDeclarationRole, string> = {
@@ -109,6 +111,7 @@ export function DetailWarDeclaration({
   expectWarDeclaration,
   onCountryClick,
   onPatch,
+  onJumpToActors,
 }: DetailWarDeclarationProps) {
   const entries = warDeclarationEntries(event)
   const initiatorEntries = entries.filter((entry) => entry.role === 'INITIATOR')
@@ -203,250 +206,265 @@ export function DetailWarDeclaration({
         </ParentWarBanner>
       )}
 
-      <DeclarationBoard role="region" aria-label="선전포고 당사국 흐름 인포그래픽">
-        <DeclarationGrid>
-          <DeclarationLane
-            $dragOver={dragOverRole === 'INITIATOR'}
-            data-declaration-lane="INITIATOR"
-            onDragOver={(dragEvent) => {
-              if (!onPatch) return
-              dragEvent.preventDefault()
-              if (dragOverRole !== 'INITIATOR') setDragOverRole('INITIATOR')
-            }}
-            onDragLeave={(dragEvent) => {
-              if (
-                !dragEvent.currentTarget.contains(
-                  dragEvent.relatedTarget as globalThis.Node | null,
-                )
-              ) {
-                setDragOverRole((current) => (current === 'INITIATOR' ? null : current))
-              }
-            }}
-            onDrop={(dragEvent) => handleDropToRole(dragEvent, 'INITIATOR')}
-          >
-            <DeclarationLaneHead $initiator>
-              <span>선포국 · 개전 주도</span>
-              <span>{initiatorEntries.length}곳</span>
-            </DeclarationLaneHead>
-            {initiatorEntries.length > 0 ? (
-              <DeclarationPillList>
-                {initiatorEntries.map((entry) => (
-                  <DeclarationPill
-                    key={entry.id}
+      {(entries.length > 0 || otherParticipants.length > 0) ? (
+        <DeclarationBoard role="region" aria-label="선전포고 당사국 흐름 인포그래픽">
+          <DeclarationGrid>
+            <DeclarationLane
+              $dragOver={dragOverRole === 'INITIATOR'}
+              data-declaration-lane="INITIATOR"
+              onDragOver={(dragEvent) => {
+                if (!onPatch) return
+                dragEvent.preventDefault()
+                if (dragOverRole !== 'INITIATOR') setDragOverRole('INITIATOR')
+              }}
+              onDragLeave={(dragEvent) => {
+                if (
+                  !dragEvent.currentTarget.contains(
+                    dragEvent.relatedTarget as globalThis.Node | null,
+                  )
+                ) {
+                  setDragOverRole((current) => (current === 'INITIATOR' ? null : current))
+                }
+              }}
+              onDrop={(dragEvent) => handleDropToRole(dragEvent, 'INITIATOR')}
+            >
+              <DeclarationLaneHead $initiator>
+                <span>선포국 · 개전 주도</span>
+                {initiatorEntries.length > 0 && <span>{initiatorEntries.length}곳</span>}
+              </DeclarationLaneHead>
+              {initiatorEntries.length > 0 ? (
+                <DeclarationPillList>
+                  {initiatorEntries.map((entry) => (
+                    <DeclarationPill
+                      key={entry.id}
+                      $initiator
+                      draggable={Boolean(onPatch)}
+                      onDragStart={(dragEvent) => {
+                        const item = { id: entry.id, historical: entry.historical }
+                        setDragCountry(item)
+                        dragEvent.dataTransfer.effectAllowed = 'move'
+                        dragEvent.dataTransfer.setData('text/plain', encodeDragPayload(item))
+                      }}
+                      onDragEnd={() => {
+                        setDragCountry(null)
+                        setDragOverRole(null)
+                      }}
+                    >
+                      <DeclarationPillName
+                        type="button"
+                        onClick={() => onCountryClick(entry.id)}
+                      >
+                        {entry.flagEmoji ? `${entry.flagEmoji} ` : ''}
+                        {entry.name}
+                      </DeclarationPillName>
+                      {onPatch && (
+                        <>
+                          <DeclarationPillFlip
+                            type="button"
+                            onClick={() => assignDeclarationRole(entry, 'TARGET')}
+                            title="대상국으로 역할 전환"
+                            aria-label={`${entry.name} 대상국으로 역할 전환`}
+                          >
+                            ⇄
+                          </DeclarationPillFlip>
+                          <DeclarationPillClear
+                            type="button"
+                            onClick={() => assignDeclarationRole(entry, 'PARTICIPANT')}
+                            title="선포국 역할 해제"
+                            aria-label={`${entry.name} 선포국 역할 해제`}
+                          >
+                            ×
+                          </DeclarationPillClear>
+                        </>
+                      )}
+                    </DeclarationPill>
+                  ))}
+                </DeclarationPillList>
+              ) : (
+                <DeclarationEmpty>
+                  {onPatch
+                    ? '아래 참여국에서 ‘+ 선포국’을 누르거나 끌어 놓으세요'
+                    : '선포국 미지정'}
+                </DeclarationEmpty>
+              )}
+            </DeclarationLane>
+
+            <DeclarationArrow aria-hidden>
+              <FiArrowRight size={16} />
+            </DeclarationArrow>
+
+            <DeclarationCenterNode>
+              <DeclarationCenterKicker>{dateLabel}</DeclarationCenterKicker>
+              <DeclarationCenterTitle>{event.title}</DeclarationCenterTitle>
+            </DeclarationCenterNode>
+
+            <DeclarationArrow aria-hidden>
+              <FiArrowRight size={16} />
+            </DeclarationArrow>
+
+            <DeclarationLane
+              $dragOver={dragOverRole === 'TARGET'}
+              data-declaration-lane="TARGET"
+              onDragOver={(dragEvent) => {
+                if (!onPatch) return
+                dragEvent.preventDefault()
+                if (dragOverRole !== 'TARGET') setDragOverRole('TARGET')
+              }}
+              onDragLeave={(dragEvent) => {
+                if (
+                  !dragEvent.currentTarget.contains(
+                    dragEvent.relatedTarget as globalThis.Node | null,
+                  )
+                ) {
+                  setDragOverRole((current) => (current === 'TARGET' ? null : current))
+                }
+              }}
+              onDrop={(dragEvent) => handleDropToRole(dragEvent, 'TARGET')}
+            >
+              <DeclarationLaneHead $initiator={false}>
+                <span>대상국 · 피선포</span>
+                {targetEntries.length > 0 && <span>{targetEntries.length}곳</span>}
+              </DeclarationLaneHead>
+              {targetEntries.length > 0 ? (
+                <DeclarationPillList>
+                  {targetEntries.map((entry) => (
+                    <DeclarationPill
+                      key={entry.id}
+                      $initiator={false}
+                      draggable={Boolean(onPatch)}
+                      onDragStart={(dragEvent) => {
+                        const item = { id: entry.id, historical: entry.historical }
+                        setDragCountry(item)
+                        dragEvent.dataTransfer.effectAllowed = 'move'
+                        dragEvent.dataTransfer.setData('text/plain', encodeDragPayload(item))
+                      }}
+                      onDragEnd={() => {
+                        setDragCountry(null)
+                        setDragOverRole(null)
+                      }}
+                    >
+                      <DeclarationPillName
+                        type="button"
+                        onClick={() => onCountryClick(entry.id)}
+                      >
+                        {entry.flagEmoji ? `${entry.flagEmoji} ` : ''}
+                        {entry.name}
+                      </DeclarationPillName>
+                      {onPatch && (
+                        <>
+                          <DeclarationPillFlip
+                            type="button"
+                            onClick={() => assignDeclarationRole(entry, 'INITIATOR')}
+                            title="선포국으로 역할 전환"
+                            aria-label={`${entry.name} 선포국으로 역할 전환`}
+                          >
+                            ⇄
+                          </DeclarationPillFlip>
+                          <DeclarationPillClear
+                            type="button"
+                            onClick={() => assignDeclarationRole(entry, 'PARTICIPANT')}
+                            title="대상국 역할 해제"
+                            aria-label={`${entry.name} 대상국 역할 해제`}
+                          >
+                            ×
+                          </DeclarationPillClear>
+                        </>
+                      )}
+                    </DeclarationPill>
+                  ))}
+                </DeclarationPillList>
+              ) : (
+                <DeclarationEmpty>
+                  {onPatch ? '아래 참여국에서 ‘+ 대상국’을 누르거나 끌어 놓으세요' : '대상국 미지정'}
+                </DeclarationEmpty>
+              )}
+            </DeclarationLane>
+          </DeclarationGrid>
+
+          {onPatch && otherParticipants.length > 0 && (
+            <QuickAssignBar aria-label="참여국 선포국·대상국 빠른 지정">
+              <QuickAssignLabel>참여국 빠른 배정</QuickAssignLabel>
+              {visibleParticipants.map((participant) => (
+                <QuickAssignChip
+                  key={`${participant.historical ? 'h' : 'c'}:${participant.id}`}
+                  draggable
+                  onDragStart={(dragEvent) => {
+                    setDragCountry(participant)
+                    dragEvent.dataTransfer.effectAllowed = 'move'
+                    dragEvent.dataTransfer.setData('text/plain', encodeDragPayload(participant))
+                  }}
+                  onDragEnd={() => {
+                    setDragCountry(null)
+                    setDragOverRole(null)
+                  }}
+                >
+                  <DragName>
+                    <MdDragIndicator aria-hidden />
+                    {participant.name}
+                  </DragName>
+                  <QuickAssignBtn
+                    type="button"
                     $initiator
-                    draggable={Boolean(onPatch)}
-                    onDragStart={(dragEvent) => {
-                      const item = { id: entry.id, historical: entry.historical }
-                      setDragCountry(item)
-                      dragEvent.dataTransfer.effectAllowed = 'move'
-                      dragEvent.dataTransfer.setData('text/plain', encodeDragPayload(item))
-                    }}
-                    onDragEnd={() => {
-                      setDragCountry(null)
-                      setDragOverRole(null)
-                    }}
+                    onClick={() => assignDeclarationRole(participant, 'INITIATOR')}
                   >
-                    <DeclarationPillName
-                      type="button"
-                      onClick={() => onCountryClick(entry.id)}
-                    >
-                      {entry.flagEmoji ? `${entry.flagEmoji} ` : ''}
-                      {entry.name}
-                    </DeclarationPillName>
-                    {onPatch && (
-                      <>
-                        <DeclarationPillFlip
-                          type="button"
-                          onClick={() => assignDeclarationRole(entry, 'TARGET')}
-                          title="대상국으로 역할 전환"
-                          aria-label={`${entry.name} 대상국으로 역할 전환`}
-                        >
-                          ⇄
-                        </DeclarationPillFlip>
-                        <DeclarationPillClear
-                          type="button"
-                          onClick={() => assignDeclarationRole(entry, 'PARTICIPANT')}
-                          title="선포국 역할 해제"
-                          aria-label={`${entry.name} 선포국 역할 해제`}
-                        >
-                          ×
-                        </DeclarationPillClear>
-                      </>
-                    )}
-                  </DeclarationPill>
-                ))}
-              </DeclarationPillList>
-            ) : (
-              <DeclarationEmpty>
-                {onPatch
-                  ? '나라를 이리로 끌어 놓으면 선포국(주도국)으로 지정'
-                  : '선포국 미지정'}
-              </DeclarationEmpty>
-            )}
-          </DeclarationLane>
-
-          <DeclarationArrow aria-hidden>──▶</DeclarationArrow>
-
-          <DeclarationCenterNode>
-            <DeclarationCenterKicker>{dateLabel}</DeclarationCenterKicker>
-            <DeclarationCenterTitle>{event.title}</DeclarationCenterTitle>
-          </DeclarationCenterNode>
-
-          <DeclarationArrow aria-hidden>──▶</DeclarationArrow>
-
-          <DeclarationLane
-            $dragOver={dragOverRole === 'TARGET'}
-            data-declaration-lane="TARGET"
-            onDragOver={(dragEvent) => {
-              if (!onPatch) return
-              dragEvent.preventDefault()
-              if (dragOverRole !== 'TARGET') setDragOverRole('TARGET')
-            }}
-            onDragLeave={(dragEvent) => {
-              if (
-                !dragEvent.currentTarget.contains(
-                  dragEvent.relatedTarget as globalThis.Node | null,
-                )
-              ) {
-                setDragOverRole((current) => (current === 'TARGET' ? null : current))
-              }
-            }}
-            onDrop={(dragEvent) => handleDropToRole(dragEvent, 'TARGET')}
-          >
-            <DeclarationLaneHead $initiator={false}>
-              <span>대상국 · 피선포</span>
-              <span>{targetEntries.length}곳</span>
-            </DeclarationLaneHead>
-            {targetEntries.length > 0 ? (
-              <DeclarationPillList>
-                {targetEntries.map((entry) => (
-                  <DeclarationPill
-                    key={entry.id}
+                    + 선포국
+                  </QuickAssignBtn>
+                  <QuickAssignBtn
+                    type="button"
                     $initiator={false}
-                    draggable={Boolean(onPatch)}
-                    onDragStart={(dragEvent) => {
-                      const item = { id: entry.id, historical: entry.historical }
-                      setDragCountry(item)
-                      dragEvent.dataTransfer.effectAllowed = 'move'
-                      dragEvent.dataTransfer.setData('text/plain', encodeDragPayload(item))
-                    }}
-                    onDragEnd={() => {
-                      setDragCountry(null)
-                      setDragOverRole(null)
-                    }}
+                    onClick={() => assignDeclarationRole(participant, 'TARGET')}
                   >
-                    <DeclarationPillName
-                      type="button"
-                      onClick={() => onCountryClick(entry.id)}
-                    >
-                      {entry.flagEmoji ? `${entry.flagEmoji} ` : ''}
-                      {entry.name}
-                    </DeclarationPillName>
-                    {onPatch && (
-                      <>
-                        <DeclarationPillFlip
-                          type="button"
-                          onClick={() => assignDeclarationRole(entry, 'INITIATOR')}
-                          title="선포국으로 역할 전환"
-                          aria-label={`${entry.name} 선포국으로 역할 전환`}
-                        >
-                          ⇄
-                        </DeclarationPillFlip>
-                        <DeclarationPillClear
-                          type="button"
-                          onClick={() => assignDeclarationRole(entry, 'PARTICIPANT')}
-                          title="대상국 역할 해제"
-                          aria-label={`${entry.name} 대상국 역할 해제`}
-                        >
-                          ×
-                        </DeclarationPillClear>
-                      </>
-                    )}
-                  </DeclarationPill>
-                ))}
-              </DeclarationPillList>
-            ) : (
-              <DeclarationEmpty>
-                {onPatch ? '나라를 이리로 끌어 놓으면 대상국으로 지정' : '대상국 미지정'}
-              </DeclarationEmpty>
-            )}
-          </DeclarationLane>
-        </DeclarationGrid>
-
-        {onPatch && otherParticipants.length > 0 && (
-          <QuickAssignBar aria-label="참여국 선포국·대상국 빠른 지정">
-            <QuickAssignLabel>참여국 빠른 배정</QuickAssignLabel>
-            {visibleParticipants.map((participant) => (
-              <QuickAssignChip
-                key={`${participant.historical ? 'h' : 'c'}:${participant.id}`}
-                draggable
-                onDragStart={(dragEvent) => {
-                  setDragCountry(participant)
-                  dragEvent.dataTransfer.effectAllowed = 'move'
-                  dragEvent.dataTransfer.setData('text/plain', encodeDragPayload(participant))
-                }}
-                onDragEnd={() => {
-                  setDragCountry(null)
-                  setDragOverRole(null)
-                }}
-              >
-                <DragName>
-                  <MdDragIndicator aria-hidden />
-                  {participant.name}
-                </DragName>
-                <QuickAssignBtn
+                    + 대상국
+                  </QuickAssignBtn>
+                </QuickAssignChip>
+              ))}
+              {otherParticipants.length > QUICK_ASSIGN_CAP && (
+                <QuickAssignMoreBtn
                   type="button"
-                  $initiator
-                  onClick={() => assignDeclarationRole(participant, 'INITIATOR')}
+                  onClick={() => setShowAllParticipants((previous) => !previous)}
                 >
-                  + 선포국
-                </QuickAssignBtn>
-                <QuickAssignBtn
-                  type="button"
-                  $initiator={false}
-                  onClick={() => assignDeclarationRole(participant, 'TARGET')}
-                >
-                  + 대상국
-                </QuickAssignBtn>
-              </QuickAssignChip>
-            ))}
-            {otherParticipants.length > QUICK_ASSIGN_CAP && (
-              <QuickAssignMoreBtn
-                type="button"
-                onClick={() => setShowAllParticipants((previous) => !previous)}
-              >
-                {showAllParticipants ? '접기' : `+${hiddenParticipantCount}개국 더 보기`}
-              </QuickAssignMoreBtn>
-            )}
-          </QuickAssignBar>
-        )}
-      </DeclarationBoard>
-
-      {entries.length === 0 ? (
-        <S.HelperText>
-          전쟁을 선포한 나라를 참여국 역할 ‘주도국(선포국)’으로, 선포를 받은 상대 나라를
-          ‘대상국’으로 지정하면 선전포고 방향과 국가별 선전포고 이력이 자동으로 연결됩니다.{' '}
-          <ActorsLink href="#actors">참여국 편집으로</ActorsLink>
-        </S.HelperText>
+                  {showAllParticipants ? '접기' : `+${hiddenParticipantCount}개국 더 보기`}
+                </QuickAssignMoreBtn>
+              )}
+            </QuickAssignBar>
+          )}
+        </DeclarationBoard>
       ) : (
-        entriesWithContext.length > 0 && (
-          <Rows>
-            {entriesWithContext.map((entry) => (
-              <Row key={`${entry.role}:${entry.id}`}>
-                <Head>
-                  <RoleTag $initiator={entry.role === 'INITIATOR'}>
-                    {ROLE_LABEL[entry.role]}
-                  </RoleTag>
-                  <CountryButton type="button" onClick={() => onCountryClick(entry.id)}>
-                    {entry.name}
-                  </CountryButton>
-                </Head>
-                {entry.roleDescription && <ContextText>{entry.roleDescription}</ContextText>}
-                {entry.note && <NoteText>{entry.note}</NoteText>}
-              </Row>
-            ))}
-          </Rows>
-        )
+        <S.EmptyGuide>
+          <S.EmptyGuideBody>
+            <S.EmptyGuideTitle>아직 지정된 선전포고 당사국이 없습니다</S.EmptyGuideTitle>
+            <S.EmptyGuideDesc>
+              ‘참여’ 탭에서 당사국을 연결하고 역할을 ‘선포국(주도)’과 ‘대상국’으로 지정하면 선전포고 보드가 자동으로 구성됩니다.
+            </S.EmptyGuideDesc>
+          </S.EmptyGuideBody>
+          {onJumpToActors && onPatch && (
+            <S.EmptyGuideActions>
+              <S.EmptyPrimaryAction type="button" onClick={onJumpToActors}>
+                참여 탭에서 당사국 연결
+                <FiArrowRight aria-hidden />
+              </S.EmptyPrimaryAction>
+            </S.EmptyGuideActions>
+          )}
+        </S.EmptyGuide>
+      )}
+
+      {entriesWithContext.length > 0 && (
+        <Rows>
+          {entriesWithContext.map((entry) => (
+            <Row key={`${entry.role}:${entry.id}`}>
+              <Head>
+                <RoleTag $initiator={entry.role === 'INITIATOR'}>
+                  {ROLE_LABEL[entry.role]}
+                </RoleTag>
+                <CountryButton type="button" onClick={() => onCountryClick(entry.id)}>
+                  {entry.name}
+                </CountryButton>
+              </Head>
+              {entry.roleDescription && <ContextText>{entry.roleDescription}</ContextText>}
+              {entry.note && <NoteText>{entry.note}</NoteText>}
+            </Row>
+          ))}
+        </Rows>
       )}
     </S.Section>
   )
@@ -530,8 +548,8 @@ const DeclarationGrid = styled.div`
 const DeclarationLane = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 18px 20px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   border-radius: 8px;
   border-left: 2.5px solid
@@ -618,10 +636,12 @@ const DeclarationEmpty = styled.span`
 `
 
 const DeclarationArrow = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   align-self: center;
-  font-size: 12px;
-  font-weight: 700;
   color: ${metaText};
+  opacity: 0.7;
 
   @media (max-width: 680px) {
     display: none;
@@ -736,13 +756,6 @@ const QuickAssignMoreBtn = styled.button`
     color: ${({ theme }) => theme.colors.text.primary};
     border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
-`
-
-const ActorsLink = styled.a`
-  font-weight: 600;
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 `
 
 const Rows = styled.ul`

@@ -27,8 +27,6 @@ import {
   plainTextLength,
   readProseHtml,
   sectionKindOf,
-  shouldCollapseBackground,
-  shouldCollapseLongSection,
   type SectionKind,
   type SectionRow,
   syncRowsWithServer,
@@ -281,36 +279,21 @@ export function DetailNarrative({
   }, [autoStartTarget, developmentSlot, narrativeRows.length, nextKey])
 
   /**
-   * 긴 본문 줄여 보기(배경·전개·여파) — 요약 몇 줄 + 단락 제목만. 처음 상태는 **연 순간 한 번** 정한다.
-   * 배경: 길고(1,200자↑) 뒤에 읽을 본문이 있을 때(판정 shouldCollapseBackground).
-   * 전개: 5,000자↑ / 여파: 2,500자↑(shouldCollapseLongSection). 1,200자를 넘으면 버튼은 늘 있다.
+   * 긴 본문 줄여 보기(배경·전개·여파) — 이제 주제별 가로 탭으로 지면이 분리되었으므로
+   * 첫 진입 시 본문을 멋대로 접어 가리지 않고 기본 펼침(false)으로 둔다.
+   * 단락이 여럿이거나 본문이 길 때는 헤더 우측 토글 버튼으로 사용자가 원할 때 요약 목차처럼 접어 볼 수 있다.
    */
   const backgroundChars = backgroundLength(event.background, backgroundRows)
   const narrativeChars = backgroundLength(null, narrativeRows)
   const aftermathChars = backgroundLength(event.aftermath, aftermathRows)
-  const backgroundFold = useSectionCollapse(
-    'background',
-    shouldCollapseBackground({
-      length: backgroundLength(event.background, serverBackground),
-      hasFollowingContent:
-        developmentSlot != null ||
-        serverNarrative.some((section) => plainTextLength(section.content) > 0) ||
-        plainTextLength(event.aftermath) > 0 ||
-        serverAftermath.some((section) => plainTextLength(section.content) > 0),
-    }),
-    backgroundChars,
-  )
+  const backgroundFold = useSectionCollapse('background', false, backgroundChars)
   const narrativeFold = useSectionCollapse(
     'narrative',
-    serverNarrative.length >= 2 || shouldCollapseLongSection('narrative', backgroundLength(null, serverNarrative)),
+    false,
     narrativeChars,
     narrativeRows.length >= 2,
   )
-  const aftermathFold = useSectionCollapse(
-    'aftermath',
-    shouldCollapseLongSection('aftermath', backgroundLength(event.aftermath, serverAftermath)),
-    aftermathChars,
-  )
+  const aftermathFold = useSectionCollapse('aftermath', false, aftermathChars)
 
   /**
    * 단락을 다른 섹션으로 — 빼서 그 섹션 끝에 붙이고 종류(sectionType)만 바꾼다. 세 묶음을 한 번에 저장하므로
@@ -510,15 +493,15 @@ export function DetailNarrative({
           {narrativeRows.length === 0 ? (
             <S.EmptyGuide>
               <S.EmptyGuideBody>
-                <S.EmptyGuideTitle>사건의 경과를 시간순 단락으로 기록하세요</S.EmptyGuideTitle>
+                <S.EmptyGuideTitle>아직 작성된 전개 단락이 없습니다</S.EmptyGuideTitle>
                 <S.EmptyGuideDesc>
-                  발단 · 전환점 · 결말 순으로 단락을 나누어 적으면 우측 목차와 타임라인이 자동으로 생성됩니다. 단락 제목 앞에 시기(예: ‘1914. 7 — 7월 위기’)를 적으면 시기 표지도 함께 표시됩니다.
+                  발단·전환점·결말 순으로 단락을 나누어 적으면 우측 목차와 타임라인이 자동으로 생성됩니다.
                 </S.EmptyGuideDesc>
               </S.EmptyGuideBody>
               <S.EmptyGuideActions>
                 <S.EmptyPrimaryAction type="button" onClick={narrative.add}>
                   <FiPlus aria-hidden />
-                  첫 전개 단락 작성하기
+                  첫 전개 단락 작성
                 </S.EmptyPrimaryAction>
               </S.EmptyGuideActions>
             </S.EmptyGuide>
