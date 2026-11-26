@@ -18,7 +18,7 @@ import {
 } from '@/features/government-info/model/government-content-tab'
 import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
 import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
-import { GovSectionSwitcher } from '@/features/government-info/ui/gov-section-switcher'
+import { GovSectionTitle } from '@/features/government-info/ui/gov-section-title'
 import {
   GovLedgerPage,
 } from '@/features/government-info/ui/government-ledger.styles'
@@ -112,7 +112,12 @@ export function GovernmentInfoSection({
     if (departmentIdQuery) return
     const fromUrl: GovernmentContentTab | null =
       validSubQuery ?? (rawSubQuery === '' && !initialContentTab ? 'cabinets' : null)
-    if (fromUrl && fromUrl !== contentTab) setContentTab(fromUrl)
+    if (fromUrl && fromUrl !== contentTab) {
+      /* 머리 메뉴로 고른 것도 손으로 고른 것 — 빈 구역 자동 넘김이 되돌리지 않게, 부처 필터 맥락은 비운다 */
+      userManuallyPickedTabRef.current = true
+      setPositionFilterContext(null)
+      setContentTab(fromUrl)
+    }
     // contentTab은 일부러 빼둔다 — 지면 안 전환(switchSubTab)이 URL보다 먼저 state를 바꾸는 순간 되돌리지 않게
   }, [rawSubQuery, validSubQuery, departmentIdQuery, initialContentTab])
 
@@ -345,23 +350,15 @@ export function GovernmentInfoSection({
   return (
     <>
       <GovLedgerPage>
-        {/* 구역 제목 겸 전환 메뉴 — 예전 알약 하위 탭 줄이 국가 탭 아래 또 한 겹 띠를 깔아 지면이 좁아 보였다 */}
-        <GovSectionSwitcher<GovernmentContentTab>
-          ariaLabel="정부·행정 구역 바꾸기"
-          items={GOVERNMENT_TAB_ORDER.map((tabKey) => ({
-            key: tabKey,
-            label: GOV_TAB_META[tabKey].label,
-            hint: GOV_TAB_META[tabKey].hint,
-            count:
-              typeof tabCountByKey[tabKey] === 'number' && (tabCountByKey[tabKey] ?? 0) > 0
-                ? tabCountByKey[tabKey]
-                : null,
-          }))}
-          activeKey={contentTab}
-          onChange={(tabKey) => {
-            setPositionFilterContext(null)
-            switchSubTab(tabKey)
-          }}
+        {/* 구역 제목 — 구역 고르기는 머리 탭 '정부·행정'의 2차 메뉴가 맡는다 */}
+        <GovSectionTitle
+          label={GOV_TAB_META[contentTab].label}
+          hint={GOV_TAB_META[contentTab].hint}
+          count={
+            typeof tabCountByKey[contentTab] === 'number' && (tabCountByKey[contentTab] ?? 0) > 0
+              ? tabCountByKey[contentTab]
+              : null
+          }
           actions={
             <>
             {/* 행정부 상세에선 바로 아래 줄에 그 행정부의 ⋯가 있어 ⋯ 두 개가 34px 간격으로 겹쳐 보였다 — 상세 동안 숨김 */}
