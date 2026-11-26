@@ -27,6 +27,7 @@ import {
 import {
   DIGIT_DISPLAY,
   ledgerAccent,
+  ledgerAccentBorder,
   ledgerAccentSubtle,
   ledgerBackground,
   ledgerHairline,
@@ -73,11 +74,16 @@ import {
   PopoverMenuItem,
   PopoverMenuSectionLabel,
 } from '@/shared/ui/popover-menu'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import {
   SearchableSelect,
   type SearchableSelectOption,
 } from '@/shared/ui/searchable-select'
-import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+import {
+  UnderlineTabBadge,
+  UnderlineTabButton,
+  UnderlineTabNav,
+} from '@/shared/ui/underline-tabs'
 import {
   LedgerFilterChip,
   LedgerSearchBox,
@@ -733,16 +739,90 @@ export function MilitaryCatalogPage() {
 
   return (
     <PageCanvas>
-      <SectionTabHeader
-        variant="plain"
-        title="군사 사령부 · 편제 총람"
-        description="시대·국가별 최고통수기구, 야전 사령부, 함대·비행단, 전술 제대의 지휘 계통과 참전 전투서열(ORBAT) 원장"
-        rightSlot={
-          <AddButton type="button" onClick={() => setUnitFormOpen(true)}>
-            <FiPlus size={14} /> 사령부·부대 등록
-          </AddButton>
-        }
-      />
+      <TopChromeBar>
+        <TopHeadlineGroup>
+          <HeadlineAccentBar aria-hidden="true" />
+          <HeadlineTextStack>
+            <PageTitle>군사 사령부 · 편제 총람</PageTitle>
+            <HeadlineSummaryLine>
+              <span>
+                전체 편제{' '}
+                <b>{kpiMetrics.totalUnits.toLocaleString('ko-KR')}</b>
+              </span>
+              <span className="sep">·</span>
+              <span className="accent">
+                현역{' '}
+                <b>
+                  {echelonAndStatusStats.activeCount.toLocaleString('ko-KR')}
+                </b>
+              </span>
+              <span className="sep">·</span>
+              <span>
+                상급·전략사령부{' '}
+                <b>
+                  {kpiMetrics.highAndStrategicCount.toLocaleString('ko-KR')}
+                </b>
+              </span>
+              {kpiMetrics.polityCount > 0 ? (
+                <>
+                  <span className="sep">·</span>
+                  <span>
+                    국가·정체{' '}
+                    <b>{kpiMetrics.polityCount.toLocaleString('ko-KR')}</b>
+                  </span>
+                </>
+              ) : null}
+              {kpiMetrics.deploymentLinkCount > 0 ? (
+                <>
+                  <span className="sep">·</span>
+                  <span>
+                    참전·지령{' '}
+                    <b>
+                      {kpiMetrics.deploymentLinkCount.toLocaleString('ko-KR')}
+                    </b>
+                  </span>
+                </>
+              ) : null}
+            </HeadlineSummaryLine>
+          </HeadlineTextStack>
+        </TopHeadlineGroup>
+
+        <TopChromeActions>
+          <UtilityToggleBtn
+            type="button"
+            $active={showInfographic}
+            onClick={() => setShowInfographic((prev) => !prev)}
+            title="군종·제대 구성 요약 인포그래픽 열기"
+          >
+            <FiBarChart2 size={13} />
+            <span>통계 요약</span>
+          </UtilityToggleBtn>
+
+          {eraStripData.buckets.length > 0 ? (
+            <UtilityToggleBtn
+              type="button"
+              $active={
+                showEraStrip ||
+                Boolean(activeCenturyKey) ||
+                activeDecadeStart !== null
+              }
+              onClick={() => setShowEraStrip((prev) => !prev)}
+              title="세기·연대별 편제 분포 탐색 막대 열기"
+            >
+              <FiCalendar size={13} />
+              <span>시대 막대</span>
+            </UtilityToggleBtn>
+          ) : null}
+
+          <PrimaryActionButton
+            $size="md"
+            icon={<FiPlus size={14} />}
+            onClick={() => setUnitFormOpen(true)}
+          >
+            사령부·부대 등록
+          </PrimaryActionButton>
+        </TopChromeActions>
+      </TopChromeBar>
 
       {showInfographic ? (
         <EditorialSummaryGrid aria-label="군사 총람 인포그래픽 요약">
@@ -868,217 +948,204 @@ export function MilitaryCatalogPage() {
         />
       ) : null}
 
-      <ToolbarRow>
-        <CatalogBranchRow role="group" aria-label="군종 필터">
-          {BRANCH_TABS.filter(
-            (tab) =>
-              tab.key === 'ALL' ||
-              branchCounts[tab.key] > 0 ||
-              branchTab === tab.key,
-          ).map((tab) => (
-            <CatalogBranchBtn
-              key={tab.key}
-              type="button"
-              $active={branchTab === tab.key}
-              onClick={() => setBranchTab(tab.key)}
-            >
-              <span>{tab.label}</span>
-              <small>{branchCounts[tab.key].toLocaleString('ko-KR')}</small>
-            </CatalogBranchBtn>
-          ))}
-        </CatalogBranchRow>
-
-        <ToolbarRightGroup>
-          <CountryPickerWrap>
-            <SearchableSelect
-              size="sm"
-              ariaLabel="국가 및 정치체 필터"
-              clearable
-              value={countryFilter}
-              onChange={(nextVal) => setCountryFilter(nextVal)}
-              placeholder={`전체 국가 · 정체 (${countryOptions.length})`}
-              searchPlaceholder="국가 · 시대 정치체 검색…"
-              options={countryOptions.map<SearchableSelectOption>((opt) => ({
-                value: opt.label,
-                label: opt.label,
-                meta: `${opt.count}개`,
-              }))}
-            />
-          </CountryPickerWrap>
-
-          <LedgerSearchBox style={{ maxWidth: 268 }}>
-            <FiSearch />
-            <LedgerSearchInput
-              type="search"
-              placeholder="사령부·부대, 지휘관, 주둔지 검색…"
-              value={searchInput}
-              onChange={(evt) => setSearchInput(evt.target.value)}
-            />
-            {searchInput ? (
-              <ClearIconBtn
-                type="button"
-                aria-label="검색어 지우기"
-                onClick={() => setSearchInput('')}
-              >
-                <FiX size={13} />
-              </ClearIconBtn>
-            ) : null}
-          </LedgerSearchBox>
-
-          <LedgerViewSwitch role="group" aria-label="보기 방식 전환">
-            <LedgerViewSwitchItem
-              type="button"
-              $active={viewMode === 'ledger'}
-              onClick={() => setViewMode('ledger')}
-            >
-              <FiList size={13} />
-              원장 표
-            </LedgerViewSwitchItem>
-            <LedgerViewSwitchItem
-              type="button"
-              $active={viewMode === 'tree'}
-              onClick={() => setViewMode('tree')}
-            >
-              <FiGitBranch size={13} />
-              국가별 트리
-            </LedgerViewSwitchItem>
-          </LedgerViewSwitch>
-
-          <PopoverMenu
-            ariaLabel="화면 보기 및 상세 필터 설정"
-            title="상세 필터 · 통계 요약 · 시대 막대 설정"
-            minWidth={260}
-            active={
-              showInfographic ||
-              showEraStrip ||
-              echelonTier !== 'ALL' ||
-              parsedSnapshotYear !== null ||
-              currentOnly
-            }
-          >
-            {(closeMenu) => (
-              <>
-                <PopoverMenuSectionLabel>보조 패널 표시</PopoverMenuSectionLabel>
-                <PopoverMenuItem
+      <LedgerWorkspace>
+        <TopTabBarRow>
+          <UnderlineTabNav as="nav" aria-label="군종 탭">
+            {BRANCH_TABS.filter(
+              (tab) =>
+                tab.key === 'ALL' ||
+                branchCounts[tab.key] > 0 ||
+                branchTab === tab.key,
+            ).map((tab) => {
+              const isActive = branchTab === tab.key
+              return (
+                <UnderlineTabButton
+                  key={tab.key}
                   type="button"
-                  onClick={() => setShowInfographic((prev) => !prev)}
+                  $active={isActive}
+                  onClick={() => setBranchTab(tab.key)}
                 >
-                  <FiBarChart2 size={13} />
-                  <span>통계 요약 인포그래픽 보기</span>
-                  {showInfographic ? (
-                    <FiCheck size={13} style={{ marginLeft: 'auto' }} />
-                  ) : null}
-                </PopoverMenuItem>
-                {eraStripData.buckets.length > 0 ? (
+                  <span>{tab.label}</span>
+                  <UnderlineTabBadge $active={isActive}>
+                    {branchCounts[tab.key].toLocaleString('ko-KR')}
+                  </UnderlineTabBadge>
+                </UnderlineTabButton>
+              )
+            })}
+          </UnderlineTabNav>
+
+          <TabRightViewSlot>
+            <LedgerViewSwitch role="group" aria-label="보기 방식 전환">
+              <LedgerViewSwitchItem
+                type="button"
+                $active={viewMode === 'ledger'}
+                onClick={() => setViewMode('ledger')}
+              >
+                <FiList size={13} />
+                원장 표
+              </LedgerViewSwitchItem>
+              <LedgerViewSwitchItem
+                type="button"
+                $active={viewMode === 'tree'}
+                onClick={() => setViewMode('tree')}
+              >
+                <FiGitBranch size={13} />
+                국가별 계통
+              </LedgerViewSwitchItem>
+            </LedgerViewSwitch>
+          </TabRightViewSlot>
+        </TopTabBarRow>
+
+        <CatalogControlRow>
+          <ControlZoneLeft>
+            <LedgerSearchBox style={{ width: 'clamp(220px, 26vw, 310px)' }}>
+              <FiSearch />
+              <LedgerSearchInput
+                type="search"
+                placeholder="사령부·부대, 지휘관, 주둔지 검색…"
+                value={searchInput}
+                onChange={(evt) => setSearchInput(evt.target.value)}
+              />
+              {searchInput ? (
+                <ClearIconBtn
+                  type="button"
+                  aria-label="검색어 지우기"
+                  onClick={() => setSearchInput('')}
+                >
+                  <FiX size={13} />
+                </ClearIconBtn>
+              ) : null}
+            </LedgerSearchBox>
+
+            <CountryPickerWrap>
+              <SearchableSelect
+                size="sm"
+                ariaLabel="국가 및 정치체 필터"
+                clearable
+                value={countryFilter}
+                onChange={(nextVal) => setCountryFilter(nextVal)}
+                placeholder={`전체 국가 · 정체 (${countryOptions.length})`}
+                searchPlaceholder="국가 · 시대 정치체 검색…"
+                options={countryOptions.map<SearchableSelectOption>((opt) => ({
+                  value: opt.label,
+                  label: opt.label,
+                  meta: `${opt.count}개`,
+                }))}
+              />
+            </CountryPickerWrap>
+
+            <EchelonQuickRow role="group" aria-label="제대 규모 필터">
+              {ECHELON_TIER_OPTIONS.map((opt) => (
+                <EchelonQuickChip
+                  key={opt.value}
+                  type="button"
+                  $active={echelonTier === opt.value}
+                  onClick={() => setEchelonTier(opt.value)}
+                >
+                  {opt.value === 'ALL' ? '전체 제대' : opt.label}
+                </EchelonQuickChip>
+              ))}
+            </EchelonQuickRow>
+          </ControlZoneLeft>
+
+          <ControlZoneRight>
+            <ResultCountMeta>
+              {filteredUnits.length === allUnits.length ? (
+                <>
+                  전체 <strong>{allUnits.length.toLocaleString('ko-KR')}</strong>개
+                </>
+              ) : (
+                <>
+                  표시{' '}
+                  <strong>{filteredUnits.length.toLocaleString('ko-KR')}</strong>{' '}
+                  / {allUnits.length.toLocaleString('ko-KR')}개
+                </>
+              )}
+            </ResultCountMeta>
+
+            {viewMode === 'tree' && countryTreeGroups.length > 1 ? (
+              <UtilityToggleBtn
+                type="button"
+                onClick={toggleAllTreeGroups}
+                title={
+                  allTreeGroupsCollapsed
+                    ? '국가 그룹 모두 펼치기'
+                    : '국가 그룹 모두 접기'
+                }
+              >
+                <FiGitBranch size={12} />
+                <span>
+                  {allTreeGroupsCollapsed ? '국가 모두 펼치기' : '국가 모두 접기'}
+                </span>
+              </UtilityToggleBtn>
+            ) : null}
+
+            <PopoverMenu
+              ariaLabel="상세 시점 및 상태 필터 설정"
+              title="기준 연도 스냅샷 · 현존 편제 필터"
+              minWidth={248}
+              active={parsedSnapshotYear !== null || currentOnly}
+            >
+              {(closeMenu) => (
+                <>
+                  <PopoverMenuSectionLabel>
+                    기준 연도 스냅샷
+                  </PopoverMenuSectionLabel>
+                  <SnapshotInputWrap
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                    title="특정 연도에 존속했던 편제만 단면 조회 (예: 1941, BC 218)"
+                  >
+                    <SnapshotPrefix>시점</SnapshotPrefix>
+                    <SnapshotInput
+                      type="text"
+                      placeholder="연도 (예: 1941, BC 218)"
+                      value={activeYearInput}
+                      onChange={(evt) => setActiveYearInput(evt.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                    {activeYearInput ? (
+                      <ClearIconBtn
+                        type="button"
+                        aria-label="시점 연도 초기화"
+                        onClick={() => setActiveYearInput('')}
+                      >
+                        <FiX size={12} />
+                      </ClearIconBtn>
+                    ) : null}
+                  </SnapshotInputWrap>
+
+                  <PopoverMenuDivider />
                   <PopoverMenuItem
                     type="button"
-                    onClick={() => setShowEraStrip((prev) => !prev)}
+                    onClick={() => setCurrentOnly((prev) => !prev)}
                   >
-                    <FiCalendar size={13} />
-                    <span>시대 · 세기 탐색 막대 보기</span>
-                    {showEraStrip ? (
+                    <FiShield size={13} />
+                    <span>현존 편제만 보기</span>
+                    {currentOnly ? (
                       <FiCheck size={13} style={{ marginLeft: 'auto' }} />
                     ) : null}
                   </PopoverMenuItem>
-                ) : null}
 
-                {viewMode === 'tree' && countryTreeGroups.length > 1 ? (
-                  <>
-                    <PopoverMenuDivider />
-                    <PopoverMenuItem
-                      type="button"
-                      onClick={() => {
-                        toggleAllTreeGroups()
-                        closeMenu()
-                      }}
-                    >
-                      <FiGitBranch size={13} />
-                      <span>
-                        {allTreeGroupsCollapsed
-                          ? '국가 그룹 모두 펼치기'
-                          : '국가 그룹 모두 접기'}
-                      </span>
-                    </PopoverMenuItem>
-                  </>
-                ) : null}
-
-                <PopoverMenuDivider />
-                <PopoverMenuSectionLabel>제대 규모 필터</PopoverMenuSectionLabel>
-                {ECHELON_TIER_OPTIONS.map((opt) => {
-                  const isActiveTier = echelonTier === opt.value
-                  return (
-                    <PopoverMenuItem
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        setEchelonTier(opt.value)
-                        closeMenu()
-                      }}
-                    >
-                      <span>{opt.label}</span>
-                      {isActiveTier ? (
-                        <FiCheck size={13} style={{ marginLeft: 'auto' }} />
-                      ) : null}
-                    </PopoverMenuItem>
-                  )
-                })}
-
-                <PopoverMenuDivider />
-                <PopoverMenuSectionLabel>기준 연도 스냅샷</PopoverMenuSectionLabel>
-                <SnapshotInputWrap
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                  title="특정 연도에 존속했던 편제만 단면 조회 (예: 1941, BC 218)"
-                >
-                  <SnapshotPrefix>시점</SnapshotPrefix>
-                  <SnapshotInput
-                    type="text"
-                    placeholder="연도 (예: 1941, BC 218)"
-                    value={activeYearInput}
-                    onChange={(evt) => setActiveYearInput(evt.target.value)}
-                    style={{ width: '100%' }}
-                  />
-                  {activeYearInput ? (
-                    <ClearIconBtn
-                      type="button"
-                      aria-label="시점 연도 초기화"
-                      onClick={() => setActiveYearInput('')}
-                    >
-                      <FiX size={12} />
-                    </ClearIconBtn>
+                  {hasActiveFilters ? (
+                    <>
+                      <PopoverMenuDivider />
+                      <PopoverMenuItem
+                        type="button"
+                        onClick={() => {
+                          handleResetFilters()
+                          closeMenu()
+                        }}
+                      >
+                        <FiRotateCcw size={13} />
+                        <span>모든 필터 초기화</span>
+                      </PopoverMenuItem>
+                    </>
                   ) : null}
-                </SnapshotInputWrap>
-
-                <PopoverMenuItem
-                  type="button"
-                  onClick={() => setCurrentOnly((prev) => !prev)}
-                >
-                  <FiShield size={13} />
-                  <span>현존 편제만 보기</span>
-                  {currentOnly ? (
-                    <FiCheck size={13} style={{ marginLeft: 'auto' }} />
-                  ) : null}
-                </PopoverMenuItem>
-
-                {hasActiveFilters ? (
-                  <>
-                    <PopoverMenuDivider />
-                    <PopoverMenuItem
-                      type="button"
-                      onClick={() => {
-                        handleResetFilters()
-                        closeMenu()
-                      }}
-                    >
-                      <FiRotateCcw size={13} />
-                      <span>모든 필터 초기화</span>
-                    </PopoverMenuItem>
-                  </>
-                ) : null}
-              </>
-            )}
-          </PopoverMenu>
-        </ToolbarRightGroup>
-      </ToolbarRow>
+                </>
+              )}
+            </PopoverMenu>
+          </ControlZoneRight>
+        </CatalogControlRow>
 
       {hasActiveFilters ? (
         <ActiveFilterBar>
@@ -1467,6 +1534,7 @@ export function MilitaryCatalogPage() {
           </CountryTreeContainer>
         )}
       </LedgerSurfacePanel>
+      </LedgerWorkspace>
 
       <MilitaryUnitFormModal
         isOpen={unitFormOpen}
@@ -1580,48 +1648,187 @@ const EditorialSummaryTitle = styled.h2`
   }
 `
 
-const ToolbarRow = styled.div`
+const TopChromeBar = styled.header`
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  flex-wrap: wrap;
+  gap: 12px 20px;
 `
 
-const CatalogBranchRow = styled.div`
+const TopHeadlineGroup = styled.div`
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 12px;
   min-width: 0;
 `
 
-const CatalogBranchBtn = styled.button<{ $active: boolean }>`
+const HeadlineAccentBar = styled.span`
+  width: 3.5px;
+  height: 36px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  flex-shrink: 0;
+`
+
+const HeadlineTextStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+`
+
+const PageTitle = styled.h1`
+  margin: 0;
+  font-size: clamp(20px, 1.9vw, 23px);
+  font-weight: 850;
+  letter-spacing: -0.028em;
+  line-height: 1.2;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const HeadlineSummaryLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+
+  b {
+    font-weight: 750;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  .accent b {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  .sep {
+    opacity: 0.55;
+  }
+`
+
+const TopChromeActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+`
+
+const UtilityToggleBtn = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 30px;
-  padding: 0 10px;
-  border: none;
+  height: 32px;
+  padding: 0 11px;
   border-radius: 7px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
   background: ${({ theme, $active }) =>
     $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   color: ${({ theme, $active }) =>
     $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+
+  &:hover {
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+`
+
+const LedgerWorkspace = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+`
+
+const TopTabBarRow = styled.div`
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+
+  ${UnderlineTabNav} {
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-bottom: 0;
+    border-bottom: none;
+  }
+`
+
+const TabRightViewSlot = styled.div`
+  display: inline-flex;
+  align-items: center;
+  padding-bottom: 7px;
+  margin-left: auto;
+`
+
+const CatalogControlRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 11px 0;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const ControlZoneLeft = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 340px;
+`
+
+const CountryPickerWrap = styled.div`
+  width: 210px;
+  min-width: 170px;
+`
+
+const EchelonQuickRow = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding-left: 2px;
+`
+
+const EchelonQuickChip = styled.button<{ $active: boolean }>`
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
   font-weight: ${({ $active }) => ($active ? 700 : 500)};
   cursor: pointer;
+  white-space: nowrap;
   transition: background ${MOTION.fast} ease, color ${MOTION.fast} ease;
-
-  small {
-    font-size: 11.5px;
-    font-weight: 600;
-    ${DIGIT_DISPLAY}
-    opacity: ${({ $active }) => ($active ? 0.95 : 0.65)};
-  }
 
   &:hover {
     background: ${({ theme, $active }) =>
@@ -1631,17 +1838,24 @@ const CatalogBranchBtn = styled.button<{ $active: boolean }>`
   }
 `
 
-const CountryPickerWrap = styled.div`
-  width: 210px;
-  min-width: 170px;
-`
-
-const ToolbarRightGroup = styled.div`
+const ControlZoneRight = styled.div`
   display: inline-flex;
-  flex-wrap: wrap;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-left: auto;
+`
+
+const ResultCountMeta = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+  white-space: nowrap;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const ActiveFilterBar = styled.div`
@@ -1649,6 +1863,8 @@ const ActiveFilterBar = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const SnapshotInputWrap = styled.label`

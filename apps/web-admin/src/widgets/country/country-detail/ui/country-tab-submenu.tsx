@@ -26,7 +26,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
-import { FiAward, FiCheck, FiChevronDown, FiGlobe, FiGrid } from 'react-icons/fi'
+import { FiAward, FiCheck, FiChevronDown, FiGlobe, FiGrid, FiShield } from 'react-icons/fi'
 import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -105,6 +105,14 @@ const COUNTRY_TAB_SUBMENUS: Partial<Record<OverviewSubTab, SubmenuSpec>> = {
     items: [
       { value: null, label: '편제 · 사령부', hint: '최고사령부·참모본부·야전군·사단·함대 등 지휘 계통' },
       { value: 'wars', label: '전쟁 · 참전사', hint: '이 나라가 치른 전쟁과 참전 기록' },
+    ],
+    tools: [
+      {
+        key: 'global-military-catalog',
+        label: '전 국가 군사 사령부·편제 총람 ↗',
+        icon: <FiShield size={13} />,
+        buildUrl: () => pathKeys.military(),
+      },
     ],
   },
   elections: {

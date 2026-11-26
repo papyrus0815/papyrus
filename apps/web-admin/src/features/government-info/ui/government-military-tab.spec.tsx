@@ -99,7 +99,7 @@ describe('GovernmentMilitaryTab (편제 · 사령부) — 원장 디자인 및 �
     mockNavigate.mockClear()
   })
 
-  it('제대 요약 스트립·군종 칩·주둔지·대표 지휘관을 표시하고, 부대 클릭 시 사이드바 대신 상세 페이지로 이동한다', async () => {
+  it('최상단에 군종 탭 메뉴와 편제 계통 전환 버튼을 배치하고, 부대 클릭 시 단독 상세 페이지로 이동한다', async () => {
     renderTab()
 
     await screen.findByText('합동참모본부')
@@ -107,7 +107,13 @@ describe('GovernmentMilitaryTab (편제 · 사령부) — 원장 디자인 및 �
     expect(screen.getByText('경기도 이천시')).toBeInTheDocument()
     expect(screen.getByText('대장 김명수')).toBeInTheDocument()
     expect(
-      screen.getByRole('region', { name: '제대별 편제 요약' }),
+      screen.getByRole('navigation', { name: '군종 탭' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /편제 계통/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /모두 접기/ }),
     ).toBeInTheDocument()
 
     // 접기 버튼 클릭 시 상세 이동이 발생하지 않고 하위 편제만 접혀야 함
@@ -140,7 +146,9 @@ describe('GovernmentMilitaryTab (편제 · 사령부) — 원장 디자인 및 �
     fireEvent.click(screen.getByRole('button', { name: /원장 표/ }))
 
     await waitFor(() =>
-      expect(screen.getByText(/원장 목록/)).toBeInTheDocument(),
+      expect(
+        screen.getByRole('columnheader', { name: /사령부 · 부대/ }),
+      ).toBeInTheDocument(),
     )
     fireEvent.click(screen.getByText('합동참모본부'))
 

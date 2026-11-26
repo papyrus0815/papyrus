@@ -1,11 +1,5 @@
 import { type MouseEvent, useMemo, useState } from 'react'
-import {
-  FiArrowDown,
-  FiArrowUp,
-  FiArrowUpRight,
-  FiEdit2,
-  FiPlus,
-} from 'react-icons/fi'
+import { FiArrowDown, FiArrowUp, FiArrowUpRight } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
@@ -21,13 +15,13 @@ import type {
   MilitaryUnitDatePartsDto,
   MilitaryUnitEventLinkDto,
   MilitaryUnitLineageDto,
+  MilitaryUnitObservationDto,
   MilitaryUnitTenureItem,
   MilitaryUnitType,
 } from '@/shared/api/military-unit'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
-import { PopoverMenu } from '@/shared/ui/popover-menu'
 
 export interface LedgerMilitaryUnitItem {
   id: string
@@ -72,6 +66,7 @@ export interface LedgerMilitaryUnitItem {
   predecessors?: MilitaryUnitLineageDto[]
   successors?: MilitaryUnitLineageDto[]
   eventRelations?: MilitaryUnitEventLinkDto[]
+  unitObservations?: MilitaryUnitObservationDto[]
   branch?: string | null
   nickname?: string | null
   motto?: string | null
@@ -182,9 +177,10 @@ function getUnitEstablishedSortKey(unitItem: LedgerMilitaryUnitItem): number {
   return parsed.signedYear * 10000 + parsed.month * 100 + parsed.day
 }
 
-function resolveLeadCommanderLabel(
-  unitItem: LedgerMilitaryUnitItem,
-): string | null {
+function resolveLeadCommanderMeta(unitItem: LedgerMilitaryUnitItem): {
+  label: string
+  portraitUrl: string | null
+} | null {
   const firstTenure = unitItem.tenures?.[0]
   if (firstTenure?.person) {
     const nameStr =
@@ -195,9 +191,14 @@ function resolveLeadCommanderLabel(
         country: firstTenure.person.country ?? undefined,
       }) || firstTenure.person.name
     if (nameStr) {
-      return firstTenure.rankTitle
-        ? `${firstTenure.rankTitle} ${nameStr}`
-        : nameStr
+      return {
+        label: firstTenure.rankTitle
+          ? `${firstTenure.rankTitle} ${nameStr}`
+          : nameStr,
+        portraitUrl: firstTenure.person.profileImageUrl
+          ? getUploadImageUrl(firstTenure.person.profileImageUrl)
+          : null,
+      }
     }
   }
   const leadCmd = unitItem.commanders?.[0]
@@ -208,7 +209,41 @@ function resolveLeadCommanderLabel(
         surname: leadCmd.person.surname ?? undefined,
       }) || leadCmd.person.name
     if (nameStr) {
-      return leadCmd.rank ? `${leadCmd.rank} ${nameStr}` : nameStr
+      return {
+        label: leadCmd.rank ? `${leadCmd.rank} ${nameStr}` : nameStr,
+        portraitUrl: leadCmd.person.profileImageUrl
+          ? getUploadImageUrl(leadCmd.person.profileImageUrl)
+          : null,
+      }
+    }
+  }
+  return null
+}
+
+function resolveHeadlinePersonnelLabel(
+  unitItem: LedgerMilitaryUnitItem,
+): string | null {
+  const obsList = unitItem.unitObservations ?? []
+  const totalObs = obsList.find((obs) =>
+    [
+      'military.unit.authorized_wartime',
+      'military.unit.actual_strength',
+      'military.unit.authorized_peacetime',
+      'military.personnel',
+    ].includes(obs.metricKey),
+  )
+  if (totalObs) {
+    const prefix = totalObs.approx ? '약 ' : ''
+    if (totalObs.value != null && Number.isFinite(Number(totalObs.value))) {
+      return `병력 ${prefix}${Number(totalObs.value).toLocaleString('ko-KR')}명`
+    }
+    if (
+      totalObs.low != null &&
+      totalObs.high != null &&
+      Number.isFinite(Number(totalObs.low)) &&
+      Number.isFinite(Number(totalObs.high))
+    ) {
+      return `병력 ${prefix}${Number(totalObs.low).toLocaleString('ko-KR')}~${Number(totalObs.high).toLocaleString('ko-KR')}명`
     }
   }
   return null
@@ -228,11 +263,7 @@ export function MilitaryUnitsLedgerView({
   echelonOrder,
   resolveEffectiveDepartment,
   onSelectUnit,
-  onEditUnit,
-  onCreateSubUnit,
-  onAddRoot,
 }: MilitaryUnitsLedgerViewProps) {
-  const hasRowActions = Boolean(onEditUnit || onCreateSubUnit)
   const [sortField, setSortField] = useState<SortField>('echelon')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
@@ -284,58 +315,12 @@ export function MilitaryUnitsLedgerView({
   }
 
   return (
-    <LedgerContainer>
-      <LedgerHeaderBar>
-        <LedgerMetaText>
-          원장 목록 <strong>{sortedUnits.length}</strong>개 편제
-        </LedgerMetaText>
-        <LedgerHeaderActions>
-          <PopoverMenu
-            size="sm"
-            ariaLabel="원장 정렬 및 작업 메뉴"
-            title="정렬 기준 변경 · 부대 등록"
-            minWidth={184}
-            items={[
-              { type: 'section', id: 'sec-sort', label: '정렬 기준' },
-              {
-                id: 'sort-echelon',
-                label: '위계순',
-                checked: sortField === 'echelon',
-                onSelect: () => toggleSort('echelon'),
-              },
-              {
-                id: 'sort-established',
-                label: '창설연도순',
-                checked: sortField === 'established',
-                onSelect: () => toggleSort('established'),
-              },
-              {
-                id: 'sort-name',
-                label: '이름순',
-                checked: sortField === 'name',
-                onSelect: () => toggleSort('name'),
-              },
-              ...(onAddRoot
-                ? [
-                    { type: 'divider' as const, id: 'div-add' },
-                    {
-                      id: 'add-root',
-                      label: '새 사령부·부대 등록',
-                      icon: <FiPlus size={12.5} />,
-                      onSelect: onAddRoot,
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        </LedgerHeaderActions>
-      </LedgerHeaderBar>
-
+    <LedgerContainer aria-label="군사 편제 원장 표">
       <TableScrollArea>
         <LedgerTable>
           <thead>
             <tr>
-              <Th style={{ width: compact ? 116 : 138 }}>
+              <Th style={{ width: compact ? 114 : 136 }}>
                 <SortableThBtn
                   type="button"
                   $active={sortField === 'established'}
@@ -368,9 +353,9 @@ export function MilitaryUnitsLedgerView({
                 </SortableThBtn>
               </Th>
               {showCountryColumn ? (
-                <Th style={{ width: compact ? 118 : 148 }}>국가 · 정체</Th>
+                <Th style={{ width: compact ? 124 : 158 }}>국가 · 정체</Th>
               ) : null}
-              <Th style={{ width: compact ? 124 : 162 }}>
+              <Th style={{ width: compact ? 126 : 158 }}>
                 <SortableThBtn
                   type="button"
                   $active={sortField === 'echelon'}
@@ -387,18 +372,12 @@ export function MilitaryUnitsLedgerView({
                 </SortableThBtn>
               </Th>
               {!compact ? (
-                <Th style={{ width: 176 }}>상급 편제 · 소관</Th>
+                <Th style={{ width: 184 }}>상급 편제 · 소관</Th>
               ) : null}
               {!compact ? (
-                <Th style={{ width: 190, textAlign: 'right' }}>
-                  대표 지휘관 · 기록
+                <Th style={{ width: 212, textAlign: 'right' }}>
+                  대표 지휘관 · 전력
                 </Th>
-              ) : null}
-              {hasRowActions ? (
-                <Th
-                  style={{ width: 40, textAlign: 'right' }}
-                  aria-label="관리"
-                />
               ) : null}
             </tr>
           </thead>
@@ -414,12 +393,15 @@ export function MilitaryUnitsLedgerView({
               )
               const isDisbanded =
                 unitRow.isActive === false || Boolean(disLabel)
+              const hasPeriod = Boolean(
+                estLabel || disLabel || unitRow.isActive === false,
+              )
               const periodText =
                 estLabel || disLabel
-                  ? `${estLabel ?? '?'} – ${disLabel ?? (unitRow.isActive === false ? '해체' : '현재')}`
+                  ? `${estLabel ?? '?'} – ${disLabel ?? (unitRow.isActive === false ? '해체' : '현역')}`
                   : unitRow.isActive === false
                     ? '해체'
-                    : '연도 미상'
+                    : '—'
               const echelonText = unitRow.unitType
                 ? (unitTypeLabels[unitRow.unitType] ?? unitRow.unitType)
                 : '편제'
@@ -432,9 +414,7 @@ export function MilitaryUnitsLedgerView({
                   null)
                 : null
               const effDept = resolveEffectiveDepartment(unitRow)
-              const predCount = (unitRow.predecessors ?? []).length
-              const succCount = (unitRow.successors ?? []).length
-              const lineageTotal = predCount + succCount
+              const subCount = (unitRow.subUnits ?? []).length
               const battleCount =
                 (unitRow.sideDeployedUnits ?? []).length +
                 (unitRow.eventRelations ?? []).length
@@ -443,7 +423,8 @@ export function MilitaryUnitsLedgerView({
                 unitRow.navalVessels ??
                 []
               ).length
-              const commanderText = resolveLeadCommanderLabel(unitRow)
+              const commanderMeta = resolveLeadCommanderMeta(unitRow)
+              const personnelText = resolveHeadlinePersonnelLabel(unitRow)
               const garrisonText = unitRow.garrison?.trim() || null
               const nicknameText = unitRow.nickname?.trim() || null
               const isSelected = selectedUnitId === unitRow.id
@@ -456,6 +437,9 @@ export function MilitaryUnitsLedgerView({
                 unitRow.historicalCountry?.name ??
                 unitRow.country?.name ??
                 '미지정'
+              const countryFlag = !unitRow.historicalCountry
+                ? unitRow.country?.flagEmoji?.trim() || null
+                : null
               const countryJumpId =
                 unitRow.historicalCountry?.id ?? unitRow.country?.id ?? null
               const showConstituentPolityBadge =
@@ -479,8 +463,9 @@ export function MilitaryUnitsLedgerView({
               }
 
               const recordParts: string[] = []
+              if (personnelText) recordParts.push(personnelText)
+              if (subCount > 0) recordParts.push(`예하 ${subCount}`)
               if (vesselCount > 0) recordParts.push(`함정 ${vesselCount}`)
-              if (lineageTotal > 0) recordParts.push(`개편 ${lineageTotal}`)
               if (battleCount > 0) recordParts.push(`참전 ${battleCount}`)
 
               return (
@@ -491,7 +476,9 @@ export function MilitaryUnitsLedgerView({
                 >
                   <Td>
                     <PeriodStack>
-                      <StatusDot $disbanded={isDisbanded} />
+                      {hasPeriod ? (
+                        <StatusDot $disbanded={isDisbanded} />
+                      ) : null}
                       <PeriodText $muted={!estLabel && !disLabel}>
                         {periodText}
                       </PeriodText>
@@ -536,8 +523,11 @@ export function MilitaryUnitsLedgerView({
                             evt.stopPropagation()
                             onCountryClick(countryJumpId)
                           }}
-                          title={`${countryLabel} 상세로 이동`}
+                          title={`${countryLabel} 요약 보기`}
                         >
+                          {countryFlag ? (
+                            <span aria-hidden>{countryFlag} </span>
+                          ) : null}
                           {countryLabel}
                         </CountryCellBtn>
                       ) : (
@@ -547,22 +537,35 @@ export function MilitaryUnitsLedgerView({
                             !unitRow.country?.name
                           }
                         >
+                          {countryFlag ? `${countryFlag} ` : ''}
                           {countryLabel}
                         </CountryCellText>
                       )}
                     </Td>
                   ) : null}
                   <Td>
-                    <ClassCellText $highCommand={isHighCommand}>
-                      {[echelonText, branchText].filter(Boolean).join(' · ')}
-                    </ClassCellText>
+                    <ClassCellWrap>
+                      <EchelonPrimary $highCommand={isHighCommand}>
+                        {echelonText}
+                      </EchelonPrimary>
+                      {branchText ? (
+                        <BranchSecondary> · {branchText}</BranchSecondary>
+                      ) : null}
+                    </ClassCellWrap>
                   </Td>
                   {!compact ? (
                     <Td>
                       {parentRef ? (
-                        <ParentCellText title={parentRef.name}>
-                          ↳ {parentRef.name}
-                        </ParentCellText>
+                        <HierarchyStack>
+                          <ParentCellText title={parentRef.name}>
+                            ↳ {parentRef.name}
+                          </ParentCellText>
+                          {effDept ? (
+                            <DeptSubText title={effDept.name}>
+                              {effDept.name}
+                            </DeptSubText>
+                          ) : null}
+                        </HierarchyStack>
                       ) : effDept ? (
                         <DeptCellText title={effDept.name}>
                           {effDept.name}
@@ -574,12 +577,25 @@ export function MilitaryUnitsLedgerView({
                   ) : null}
                   {!compact ? (
                     <Td style={{ textAlign: 'right' }}>
-                      {commanderText || recordParts.length > 0 ? (
+                      {commanderMeta || recordParts.length > 0 ? (
                         <RightMetaStack>
-                          {commanderText ? (
-                            <CommanderLabel title={`대표 지휘관: ${commanderText}`}>
-                              {commanderText}
-                            </CommanderLabel>
+                          {commanderMeta ? (
+                            <CommanderInlineRow
+                              title={`대표 지휘관: ${commanderMeta.label}`}
+                            >
+                              {commanderMeta.portraitUrl ? (
+                                <CommanderAvatarImg
+                                  src={commanderMeta.portraitUrl}
+                                  alt=""
+                                  onError={(imgEvt) => {
+                                    imgEvt.currentTarget.style.display = 'none'
+                                  }}
+                                />
+                              ) : null}
+                              <CommanderLabel>
+                                {commanderMeta.label}
+                              </CommanderLabel>
+                            </CommanderInlineRow>
                           ) : null}
                           {recordParts.length > 0 ? (
                             <RecordCountsText $accent={battleCount > 0}>
@@ -590,47 +606,6 @@ export function MilitaryUnitsLedgerView({
                       ) : (
                         <DashText>—</DashText>
                       )}
-                    </Td>
-                  ) : null}
-                  {hasRowActions ? (
-                    <Td
-                      style={{ textAlign: 'right' }}
-                      onClick={(evt) => evt.stopPropagation()}
-                    >
-                      <PopoverMenu
-                        size="sm"
-                        ariaLabel={`${unitRow.name} 관리 메뉴`}
-                        title="상세 보기 · 수정 · 예하 추가"
-                        minWidth={168}
-                        items={[
-                          {
-                            id: 'open-detail',
-                            label: '상세 페이지 열기',
-                            icon: <FiArrowUpRight size={12.5} />,
-                            onSelect: () => onSelectUnit(unitRow),
-                          },
-                          ...(onEditUnit
-                            ? [
-                                {
-                                  id: 'edit-unit',
-                                  label: '사령부·부대 수정',
-                                  icon: <FiEdit2 size={12.5} />,
-                                  onSelect: () => onEditUnit(unitRow.id),
-                                },
-                              ]
-                            : []),
-                          ...(onCreateSubUnit
-                            ? [
-                                {
-                                  id: 'add-sub-unit',
-                                  label: '예하 부대 추가',
-                                  icon: <FiPlus size={12.5} />,
-                                  onSelect: () => onCreateSubUnit(unitRow),
-                                },
-                              ]
-                            : []),
-                        ]}
-                      />
                     </Td>
                   ) : null}
                 </Tr>
@@ -650,31 +625,6 @@ const LedgerContainer = styled.div`
   flex: 1;
 `
 
-const LedgerHeaderBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 2px 8px;
-`
-
-const LedgerMetaText = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  ${DIGIT_DISPLAY}
-
-  strong {
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const LedgerHeaderActions = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-`
-
 const TableScrollArea = styled.div`
   overflow: auto;
   flex: 1;
@@ -690,12 +640,11 @@ const Th = styled.th`
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 8px 10px;
+  padding: 9px 10px;
   font-size: 11.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: ${({ theme }) => ledgerBackground(theme.mode)};
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   white-space: nowrap;
 
@@ -768,7 +717,7 @@ const StatusDot = styled.span<{ $disbanded: boolean }>`
   border-radius: 999px;
   flex-shrink: 0;
   background: ${({ $disbanded }) => ($disbanded ? '#94a3b8' : '#10b981')};
-  opacity: ${({ $disbanded }) => ($disbanded ? 0.5 : 0.85)};
+  opacity: ${({ $disbanded }) => ($disbanded ? 0.55 : 0.85)};
 `
 
 const PeriodText = styled.span<{ $muted: boolean }>`
@@ -863,7 +812,7 @@ const CountryCellBtn = styled.button`
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  max-width: 140px;
+  max-width: 148px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -882,16 +831,48 @@ const CountryCellText = styled.span<{ $muted?: boolean }>`
     $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
 `
 
-const ClassCellText = styled.span<{ $highCommand?: boolean }>`
+const ClassCellWrap = styled.div`
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  line-height: 1.4;
+`
+
+const EchelonPrimary = styled.span<{ $highCommand?: boolean }>`
   font-size: 12.5px;
-  font-weight: ${({ $highCommand }) => ($highCommand ? 680 : 550)};
+  font-weight: ${({ $highCommand }) => ($highCommand ? 720 : 620)};
   color: ${({ theme, $highCommand }) =>
-    $highCommand ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+    $highCommand ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+`
+
+const BranchSecondary = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HierarchyStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.5px;
+  min-width: 0;
 `
 
 const ParentCellText = styled.span`
   font-size: 12.5px;
+  font-weight: 550;
   color: ${({ theme }) => theme.colors.text.secondary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const DeptSubText = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
 const DeptCellText = styled.span`
@@ -909,11 +890,25 @@ const RightMetaStack = styled.div`
   display: inline-flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: 2.5px;
+`
+
+const CommanderInlineRow = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 196px;
+`
+
+const CommanderAvatarImg = styled.img`
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 `
 
 const CommanderLabel = styled.span`
-  max-width: 168px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

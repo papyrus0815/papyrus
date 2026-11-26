@@ -1892,23 +1892,12 @@ export const MilitaryUnitDetailContent = forwardRef<
                 <S.EditorialSection $compactEmpty={sortedSubUnits.length === 0}>
                   <S.SectionHeader>
                     <S.SectionHeadLeft>
-                      <S.SectionTitle>
-                        {subViewMode === 'tree' && hasGrandchildren
-                          ? '하위 편제 계통'
-                          : '직속 예하 편제'}
-                      </S.SectionTitle>
-                      {sortedSubUnits.length > 0 ? (
-                        <S.SectionCount>
-                          {subViewMode === 'tree' && hasGrandchildren
-                            ? totalDescendantCount
-                            : sortedSubUnits.length}
-                        </S.SectionCount>
-                      ) : (
+                      <S.SectionTitle>예하 편제</S.SectionTitle>
+                      {sortedSubUnits.length === 0 ? (
                         <S.SectionEmptyInline>없음</S.SectionEmptyInline>
-                      )}
-                    </S.SectionHeadLeft>
-
-                    <S.RowActions>
+                      ) : !hasGrandchildren ? (
+                        <S.SectionCount>{sortedSubUnits.length}</S.SectionCount>
+                      ) : null}
                       {hasGrandchildren ? (
                         <S.SubViewSegment
                           role="group"
@@ -1919,26 +1908,29 @@ export const MilitaryUnitDetailContent = forwardRef<
                             $active={subViewMode === 'cards'}
                             onClick={() => setSubViewMode('cards')}
                           >
-                            <FiGrid size={11.5} /> 직속
+                            <FiGrid size={11.5} /> 직속 {sortedSubUnits.length}
                           </S.SubViewSegBtn>
                           <S.SubViewSegBtn
                             type="button"
                             $active={subViewMode === 'tree'}
                             onClick={() => setSubViewMode('tree')}
                           >
-                            <FiList size={11.5} /> 계통 ({totalDescendantCount})
+                            <FiList size={11.5} /> 전체 계통 {totalDescendantCount}
                           </S.SubViewSegBtn>
                         </S.SubViewSegment>
                       ) : null}
-                      {onCreateSubUnit ? (
+                    </S.SectionHeadLeft>
+
+                    {onCreateSubUnit ? (
+                      <S.RowActions>
                         <LedgerCompactAction
                           type="button"
                           onClick={handleOpenSubUnitCreate}
                         >
                           <FiPlus size={12} /> 예하 추가
                         </LedgerCompactAction>
-                      ) : null}
-                    </S.RowActions>
+                      </S.RowActions>
+                    ) : null}
                   </S.SectionHeader>
 
                   {sortedSubUnits.length > 0 ? (
