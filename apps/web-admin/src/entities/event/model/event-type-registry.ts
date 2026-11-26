@@ -159,19 +159,19 @@ const WAR_METRICS: EventTypeMetrics = {
   subject: 'side',
 }
 
-/** 봉기·혁명·정변 — 봉기 측(참여 인원·사상·체포) 대 진압 측(동원 병력·사상) 비교 */
+/** 봉기·혁명·정변 — 봉기 측(참여 인원·사상·체포) 대 진압 측(동원·치안 병력·사상) 비교 */
 const UPRISING_METRICS: EventTypeMetrics = {
   menuLabel: '수치 (참여 인원·병력·사상자·체포)',
-  emptyHint: '참여 인원·진압 병력·사망·처형·체포 같은 숫자를 출처와 함께 기록하면 진영별·사건별 비교가 여기 모입니다.',
+  emptyHint: '참여 인원·진압 병력·사망·부상·처형·체포 같은 숫자를 출처와 함께 기록하면 진영별·사건별 비교가 여기 모입니다.',
   presets: [
     'society.participants',
     'military.personnel',
-    'human.deaths_total',
-    'military.killed_in_action',
+    'security.personnel',
+    'human.deaths',
+    'human.wounded',
     'human.executed',
-    'civilian.killed',
-    'civilian.wounded',
     'society.arrested',
+    'human.deaths_total',
   ],
   subject: 'side',
 }
@@ -185,15 +185,16 @@ const MILITARY_DOMAIN_METRICS: EventTypeMetrics = {
 }
 
 const SOCIETY_METRICS: EventTypeMetrics = {
-  menuLabel: '수치 (참여 인원·피해 규모)',
-  emptyHint: '참여 인원이나 사망·부상·체포 같은 피해 규모를 출처와 함께 기록하면 여기 모입니다.',
+  menuLabel: '수치 (사망·부상·참여 인원)',
+  emptyHint: '사망·부상·체포 같은 피해 규모나 참여·진압 인원을 출처와 함께 기록하면 여기 모입니다.',
   presets: [
+    'human.deaths',
+    'human.wounded',
     'society.participants',
-    'human.deaths_total',
-    'human.executed',
-    'civilian.killed',
-    'civilian.wounded',
     'society.arrested',
+    'security.personnel',
+    'human.executed',
+    'human.casualties',
   ],
   subject: 'event',
 }
@@ -201,8 +202,8 @@ const SOCIETY_METRICS: EventTypeMetrics = {
 /** 재판·체포·구금 — 사람 수(피고·체포·처형)가 수치의 중심 */
 const DETENTION_METRICS: EventTypeMetrics = {
   menuLabel: '수치 (체포·구금·처형 인원)',
-  emptyHint: '체포·구금된 사람 수나 처형된 사람 수 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
-  presets: ['society.arrested', 'human.executed'],
+  emptyHint: '체포·구금된 사람 수나 처형·사망한 사람 수 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
+  presets: ['society.arrested', 'human.executed', 'human.deaths'],
   subject: 'event',
 }
 
@@ -210,7 +211,7 @@ const DETENTION_METRICS: EventTypeMetrics = {
 const CRIME_METRICS: EventTypeMetrics = {
   menuLabel: '수치 (피해·검거)',
   emptyHint: '사망·부상·피해액·검거 인원 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
-  presets: ['human.deaths_total', 'civilian.killed', 'civilian.wounded', 'economy.loss', 'society.arrested'],
+  presets: ['human.deaths', 'human.wounded', 'economy.loss', 'society.arrested'],
   subject: 'event',
 }
 
@@ -230,14 +231,16 @@ const ECONOMY_METRICS: EventTypeMetrics = {
 
 const DISASTER_METRICS: EventTypeMetrics = {
   menuLabel: '수치 (피해 규모)',
-  emptyHint: '사망·부상·이재민·재산 피해 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
+  emptyHint: '사망·부상·실종·이재민·재산 피해 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
   presets: [
-    'human.deaths_total',
-    'civilian.wounded',
+    'human.deaths',
+    'human.wounded',
+    'human.missing',
     'civilian.displaced',
     'disaster.magnitude',
     'disaster.buildings_destroyed',
     'economy.loss',
+    'human.deaths_total',
   ],
   subject: 'event',
 }
@@ -400,7 +403,7 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
     metrics: {
       menuLabel: '수치 (숙청·처형·체포)',
       emptyHint: '숙청·처형·체포된 사람 수 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
-      presets: ['human.executed', 'society.arrested', 'human.deaths_total'],
+      presets: ['human.executed', 'society.arrested', 'human.deaths', 'human.deaths_total'],
       subject: 'event',
     },
   },
@@ -673,6 +676,21 @@ export function facetWeight(
 /** 무력 충돌인가 — 교전선(수장 지도)·진영 초안의 판정 */
 export const isArmedConflictType = (type?: string | null): boolean =>
   type === 'WAR' || type === 'BATTLE' || type === 'UPRISING'
+
+/**
+ * 군사 전력·전투서열(ORBAT)·작전 정보 맥락인가.
+ * 시위·집회·소요(PROTEST_VIOLENCE), 폭력·테러(POLITICAL_VIOLENCE), 내분(POWER_STRUGGLE), 외교 위기(CRISIS)는
+ * 대립 진영(sides)을 가질 수 있어도 군단·사단 편제나 전장 작전 정보의 대상이 아니므로 제외한다.
+ */
+export const isMilitaryOperationsContext = (
+  type?: string | null,
+  domain?: string | null,
+): boolean =>
+  domain === 'MILITARY' ||
+  type === 'WAR' ||
+  type === 'BATTLE' ||
+  type === 'MOBILIZATION' ||
+  type === 'MILITARY_FORMATION'
 
 /** 상세 '모듈 추가'로 켜는 모듈 — 기록 중 모듈로 붙는 것 */
 export type TypeModuleKey = 'sides' | 'metrics' | 'military-details'

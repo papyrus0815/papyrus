@@ -11,6 +11,7 @@ import {
   formatDomainPath,
   groupSubtypes,
   isArmedConflictType,
+  isMilitaryOperationsContext,
   metricsFor,
   readRecentClassifications,
   recordRecentClassification,
@@ -127,14 +128,33 @@ describe('기록 — 세부가 정하고 분야가 얹는다', () => {
 })
 
 describe('수치 성격 — 세부가 정하면 세부, 아니면 분야', () => {
-  it('교전·봉기·조약·재해는 세부가 정한다(분야와 무관)', () => {
+  it('교전·봉기·시위·조약·재해는 세부가 정한다(분야와 무관)', () => {
     expect(metricsFor('BATTLE', 'POLITICS').subject).toBe('side')
     expect(metricsFor('UPRISING', 'POLITICS').subject).toBe('side')
     expect(metricsFor('UPRISING', 'POLITICS').presets).toEqual(
-      expect.arrayContaining(['society.participants', 'human.deaths_total', 'human.executed', 'society.arrested']),
+      expect.arrayContaining(['society.participants', 'human.deaths', 'human.wounded', 'human.deaths_total', 'human.executed', 'society.arrested']),
+    )
+    expect(metricsFor('PROTEST_VIOLENCE', 'SOCIETY').presets.slice(0, 2)).toEqual([
+      'human.deaths',
+      'human.wounded',
+    ])
+    expect(metricsFor('POLITICAL_VIOLENCE', 'POLITICS').presets).toEqual(
+      expect.arrayContaining(['human.deaths', 'human.wounded', 'security.personnel']),
     )
     expect(metricsFor('TREATY', 'ECONOMY').presets).toContain('economy.indemnity')
-    expect(metricsFor('DISASTER', null).presets).toContain('human.deaths_total')
+    expect(metricsFor('DISASTER', null).presets).toEqual(
+      expect.arrayContaining(['human.deaths', 'human.wounded', 'human.missing', 'human.deaths_total']),
+    )
+  })
+
+  it('군사 전력·전투서열 맥락 판정 — 시위·폭력·내분·위기는 진영(sides)이 있어도 군사 전력 탭으로 오판하지 않는다', () => {
+    expect(isMilitaryOperationsContext('PROTEST_VIOLENCE', 'SOCIETY')).toBe(false)
+    expect(isMilitaryOperationsContext('POLITICAL_VIOLENCE', 'POLITICS')).toBe(false)
+    expect(isMilitaryOperationsContext('POWER_STRUGGLE', 'POLITICS')).toBe(false)
+    expect(isMilitaryOperationsContext('CRISIS', 'DIPLOMACY')).toBe(false)
+    expect(isMilitaryOperationsContext('WAR', 'POLITICS')).toBe(true)
+    expect(isMilitaryOperationsContext('BATTLE', 'SOCIETY')).toBe(true)
+    expect(isMilitaryOperationsContext('LAW_POLICY', 'MILITARY')).toBe(true)
   })
 
   it('법령·건설은 분야를 따른다 — 함대법은 병력·예산, 경제 법령은 경제 지표', () => {

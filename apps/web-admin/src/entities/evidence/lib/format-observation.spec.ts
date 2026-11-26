@@ -7,6 +7,7 @@ import {
   isUnverified,
   observationExtent,
 } from './format-observation'
+import { parseQuickObservationInput } from './parse-quick-observation'
 
 const metric = (overrides: Partial<Observation['metric']> = {}): Observation['metric'] => ({
   key: 'military.wounded',
@@ -121,5 +122,27 @@ describe('isUnverified', () => {
   it('미검증 출처뿐이면 true', () => {
     expect(isUnverified(observation({ citations: [source('LEGACY_UNVERIFIED')] }))).toBe(true)
     expect(isUnverified(observation({ citations: [source('LEGACY_UNVERIFIED'), source('BOOK')] }))).toBe(false)
+  })
+})
+
+describe('parseQuickObservationInput', () => {
+  it('단일 값 · 범위(3~4) · 근사(50여 명) · 하한(1,000+)을 파싱한다', () => {
+    expect(parseQuickObservationInput('3~4')).toEqual({
+      ok: true,
+      data: { value: null, low: '3', high: '4', approx: false, atLeast: false },
+    })
+    expect(parseQuickObservationInput('50여 명')).toEqual({
+      ok: true,
+      data: { value: '50', low: null, high: null, approx: true, atLeast: false },
+    })
+    expect(parseQuickObservationInput('약 18,000~20,000명')).toEqual({
+      ok: true,
+      data: { value: null, low: '18000', high: '20000', approx: true, atLeast: false },
+    })
+    expect(parseQuickObservationInput('1,000+')).toEqual({
+      ok: true,
+      data: { value: null, low: '1000', high: null, approx: false, atLeast: true },
+    })
+    expect(parseQuickObservationInput('4~3').ok).toBe(false)
   })
 })

@@ -82,6 +82,7 @@ export {
   groupSubtypes,
   isArmedConflictType,
   isEventTypeKey,
+  isMilitaryOperationsContext,
   metricsFor,
   readRecentClassifications,
   recordRecentClassification,
