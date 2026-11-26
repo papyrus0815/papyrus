@@ -82,11 +82,13 @@ import {
 import { pathKeys } from '@/shared/router'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { InstitutionAppointmentModal } from '@/shared/ui/institution-appointment-modal'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
+import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
+import { PersonRegisterModalFormScroll } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import {
   SearchableSelect,
   type SearchableSelectOption,
 } from '@/shared/ui/searchable-select'
-import { SidePanel } from '@/shared/ui/side-panel'
 import { notify } from '@/shared/ui/toast'
 import {
   CabinetFormModal,
@@ -284,6 +286,7 @@ export function GovernmentCatalogPage() {
   const [yearInputDraft, setYearInputDraft] = useState<string>(rawYearParam)
 
   const [positionDictOpen, setPositionDictOpen] = useState<boolean>(false)
+  const [filterPopoverOpen, setFilterPopoverOpen] = useState<boolean>(false)
   const [displayPopoverOpen, setDisplayPopoverOpen] = useState<boolean>(false)
   const [collapsedChapters, setCollapsedChapters] = useState<
     ReadonlySet<string>
@@ -309,6 +312,20 @@ export function GovernmentCatalogPage() {
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const ledgerScrollRef = useRef<HTMLDivElement>(null)
+  const filterMenuWrapRef = useRef<HTMLDivElement>(null)
+  const filterTriggerRef = useRef<HTMLButtonElement>(null)
+  const filterPopoverRef = useRef<HTMLDivElement>(null)
+  const filterPopoverPos = useAnchoredPosition(
+    filterTriggerRef,
+    filterPopoverOpen,
+    { gap: 6, maxWidth: 320 },
+  )
+  const closeFilterPopover = useCallback(
+    () => setFilterPopoverOpen(false),
+    [],
+  )
+  useOverlayEscape(filterPopoverOpen, closeFilterPopover)
+
   const displayMenuWrapRef = useRef<HTMLDivElement>(null)
   const displayTriggerRef = useRef<HTMLButtonElement>(null)
   const displayPopoverRef = useRef<HTMLDivElement>(null)
@@ -405,7 +422,20 @@ export function GovernmentCatalogPage() {
     updateParams({ [SEARCH_QUERY_PARAM]: trimmed || null })
   }, [debouncedSearch, urlQueryText, updateParams])
 
-  // Close display popover on outside click (handles portal + trigger)
+  // Close filter & display popovers on outside click (handles portal + trigger)
+  useEffect(() => {
+    if (!filterPopoverOpen) return
+    const handleOutsideFilterMouseDown = (mouseEvent: MouseEvent) => {
+      const targetNode = mouseEvent.target as Node
+      if (filterMenuWrapRef.current?.contains(targetNode)) return
+      if (filterPopoverRef.current?.contains(targetNode)) return
+      setFilterPopoverOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutsideFilterMouseDown)
+    return () =>
+      document.removeEventListener('mousedown', handleOutsideFilterMouseDown)
+  }, [filterPopoverOpen])
+
   useEffect(() => {
     if (!displayPopoverOpen) return
     const handleOutsideMouseDown = (mouseEvent: MouseEvent) => {
@@ -1486,7 +1516,7 @@ export function GovernmentCatalogPage() {
       const scrollerTop = scroller.getBoundingClientRect().top + 48
       let currentKey: string | null =
         sections[0]?.getAttribute('data-century-chapter') ?? null
-      for (const sectionEl of sections) {
+      for (const sectionEl of Array.from(sections)) {
         const rect = sectionEl.getBoundingClientRect()
         if (rect.top <= scrollerTop) {
           currentKey = sectionEl.getAttribute('data-century-chapter')
@@ -1660,6 +1690,55 @@ export function GovernmentCatalogPage() {
   ])
 
   const hasAnyActiveFilter = activeFilterChips.length > 0
+
+  const ongoingCabinetCount = useMemo(
+    () =>
+      allCabinets.filter(
+        (cabinetItem) => resolveCabinetEffectiveDates(cabinetItem).isOngoing,
+      ).length,
+    [allCabinets],
+  )
+
+  const recordedPolityCount = polityCounts.size
+
+  const secondaryFilterCount = useMemo(() => {
+    let count = 0
+    if (selectedContinentId) count += 1
+    if (activeTab === 'cabinets') {
+      if (cabinetCatFilter) count += 1
+      if (linkedOnly) count += 1
+    } else {
+      if (deptKindFilter) count += 1
+      if (deptCategoryFilter) count += 1
+      if (deptStatusFilter !== 'all') count += 1
+    }
+    return count
+  }, [
+    selectedContinentId,
+    activeTab,
+    cabinetCatFilter,
+    linkedOnly,
+    deptKindFilter,
+    deptCategoryFilter,
+    deptStatusFilter,
+  ])
+
+  const clearSecondaryFilters = useCallback(() => {
+    if (activeTab === 'cabinets') {
+      updateParams({
+        continent: null,
+        cabCat: null,
+        linked: null,
+      })
+    } else {
+      updateParams({
+        continent: null,
+        kind: null,
+        categoryId: null,
+        status: null,
+      })
+    }
+  }, [activeTab, updateParams])
 
   const clearAllFilters = useCallback(() => {
     const prevParamsSnapshot = new URLSearchParams(searchParams)
@@ -2605,16 +2684,88 @@ export function GovernmentCatalogPage() {
 
   return (
     <PageScene>
-      <VisuallyHiddenPageTitle>
-        전 국가 정부 · 내각 카탈로그
-      </VisuallyHiddenPageTitle>
-
       <DrawerAnnouncer role="status" aria-live="polite">
         {selectedId ? '상세 패널 열림' : ''}
       </DrawerAnnouncer>
 
       <PageWrapper>
-        {/* ─── Top 1-Line 3-Zone Toolbar (Events Catalog Pattern) ─── */}
+        {/* ─── Tier 1: Editorial Page Identity & Cross-Domain Chrome ─── */}
+        <TopChrome>
+          <TopHeadlineGroup>
+            <AccentBar aria-hidden="true" />
+            <div>
+              <PageTitle>정부 · 행정 카탈로그</PageTitle>
+              <SummaryLine>
+                <span>
+                  행정부·내각 <b>{allCabinets.length.toLocaleString()}</b>
+                </span>
+                <span className="sep">·</span>
+                <span className="accent">
+                  현직 <b>{ongoingCabinetCount.toLocaleString()}</b>
+                </span>
+                <span className="sep">·</span>
+                <span>
+                  중앙부처·기관 <b>{allDepartments.length.toLocaleString()}</b>
+                </span>
+                <span className="sep">·</span>
+                <span>
+                  현존 기관 <b>{deptStatusCounts.active.toLocaleString()}</b>
+                </span>
+                {recordedPolityCount > 0 ? (
+                  <>
+                    <span className="sep">·</span>
+                    <span>
+                      국가·체제 <b>{recordedPolityCount.toLocaleString()}</b>
+                    </span>
+                  </>
+                ) : null}
+              </SummaryLine>
+            </div>
+          </TopHeadlineGroup>
+
+          <HeaderActions>
+            <CrossDomainNav aria-label="연관 도메인 바로가기">
+              <CrossDomainLink to="/political-parties">
+                <span>정당 · 정치 세력</span>
+                <FiArrowUpRight size={12} aria-hidden="true" />
+              </CrossDomainLink>
+              <CrossDomainLink to="/treaties">
+                <span>조약 · 협정</span>
+                <FiArrowUpRight size={12} aria-hidden="true" />
+              </CrossDomainLink>
+            </CrossDomainNav>
+
+            <UtilityBtn
+              type="button"
+              $active={positionDictOpen}
+              onClick={() => setPositionDictOpen(true)}
+              title="전 국가 표준 관직 사전 열기"
+            >
+              <FiBookOpen size={13} />
+              <span className="btn-label">관직 사전</span>
+            </UtilityBtn>
+
+            <DesktopRegisterWrap>
+              <PrimaryActionButton
+                $size="md"
+                icon={<FiPlus size={14} />}
+                onClick={() => {
+                  if (activeTab === 'cabinets') {
+                    setEditingCabinetRecord(null)
+                    setCabinetModalOpen(true)
+                  } else {
+                    setEditingDepartmentRecord(null)
+                    setDeptModalOpen(true)
+                  }
+                }}
+              >
+                {activeTab === 'cabinets' ? '새 내각 등록' : '새 기관 등록'}
+              </PrimaryActionButton>
+            </DesktopRegisterWrap>
+          </HeaderActions>
+        </TopChrome>
+
+        {/* ─── Tier 2: Decluttered Primary Filter Bar + Detail Filter Popover ─── */}
         <TopToolbarCard>
           <TopFilterRow>
             <ToolbarZoneLeft>
@@ -2663,8 +2814,8 @@ export function GovernmentCatalogPage() {
                   }
                   placeholder={
                     activeTab === 'cabinets'
-                      ? '수반, 내각명, 국가, 연계 사건 검색 (/)'
-                      : '기관명, 원어·약칭, 임무, 국가 검색 (/)'
+                      ? '수반, 내각명, 여당, 국가, 연계 사건 검색 (/)'
+                      : '기관명, 원어·약칭, 핵심 임무, 국가 검색 (/)'
                   }
                   aria-label="정부 카탈로그 검색"
                 />
@@ -2686,29 +2837,7 @@ export function GovernmentCatalogPage() {
               </PromSearchBox>
             </ToolbarZoneLeft>
 
-            <ToolbarZoneCenter>
-              <FilterSelect
-                value={selectedContinentId}
-                onChange={(changeEvent) =>
-                  updateParams({
-                    continent: changeEvent.target.value || null,
-                    polity: null,
-                  })
-                }
-                aria-label="대륙 필터"
-              >
-                <option value="">전체 대륙</option>
-                {sortedContinents.map((contItem) => {
-                  const contCount = continentCounts.get(contItem.id) ?? 0
-                  return (
-                    <option key={contItem.id} value={contItem.id}>
-                      {contItem.name}
-                      {contCount > 0 ? ` (${contCount})` : ''}
-                    </option>
-                  )
-                })}
-              </FilterSelect>
-
+            <ToolbarZoneRight>
               <PolitySelectWrap>
                 <SearchableSelect
                   options={polityOptions}
@@ -2721,192 +2850,327 @@ export function GovernmentCatalogPage() {
                 />
               </PolitySelectWrap>
 
-              {activeTab === 'cabinets' ? (
-                <>
-                  <FilterSelect
-                    value={cabinetCatFilter}
-                    onChange={(changeEvent) =>
-                      updateParams({
-                        cabCat: changeEvent.target.value || null,
-                      })
+              <YearStepperGroup $active={activeAtYear != null}>
+                <MiniIconBtn
+                  type="button"
+                  onClick={() => stepActiveYear(-1)}
+                  title="이전 연도"
+                  aria-label="이전 연도"
+                >
+                  <FiChevronLeft size={13} />
+                </MiniIconBtn>
+                <YearNumberInput
+                  value={yearInputDraft}
+                  onChange={(changeEvent) =>
+                    setYearInputDraft(changeEvent.target.value)
+                  }
+                  onKeyDown={(keyEvent) => {
+                    if (keyEvent.key === 'Enter') {
+                      commitYearFilter(yearInputDraft)
                     }
-                    aria-label="정부 체제 분류"
-                  >
-                    <option value="">전체 체제</option>
-                    {(
-                      [
-                        'PRESIDENT',
-                        'PM',
-                        'MONARCH',
-                        'POPE',
-                        'OTHER',
-                      ] as PositionCategory[]
-                    ).map((catKey) => {
-                      const catCount = cabinetCategoryCounts.get(catKey) ?? 0
-                      return (
-                        <option key={catKey} value={catKey}>
-                          {GLOBAL_CABINET_CATEGORY_LABELS[catKey]} ({catCount})
-                        </option>
-                      )
-                    })}
-                  </FilterSelect>
-
-                  <YearStepperGroup>
-                    <MiniIconBtn
-                      type="button"
-                      onClick={() => stepActiveYear(-1)}
-                      title="이전 연도"
-                      aria-label="이전 연도"
-                    >
-                      <FiChevronLeft size={13} />
-                    </MiniIconBtn>
-                    <YearNumberInput
-                      value={yearInputDraft}
-                      onChange={(changeEvent) =>
-                        setYearInputDraft(changeEvent.target.value)
-                      }
-                      onKeyDown={(keyEvent) => {
-                        if (keyEvent.key === 'Enter') {
-                          commitYearFilter(yearInputDraft)
-                        }
-                      }}
-                      onBlur={() => {
-                        if (yearInputDraft.trim() !== rawYearParam.trim()) {
-                          commitYearFilter(yearInputDraft)
-                        }
-                      }}
-                      placeholder="시점 연도"
-                      aria-label="동시대 시점 연도"
-                    />
-                    <MiniIconBtn
-                      type="button"
-                      onClick={() => stepActiveYear(1)}
-                      title="다음 연도"
-                      aria-label="다음 연도"
-                    >
-                      <FiChevronRight size={13} />
-                    </MiniIconBtn>
-                  </YearStepperGroup>
-
-                  <FilterToggleChip
+                  }}
+                  onBlur={() => {
+                    if (yearInputDraft.trim() !== rawYearParam.trim()) {
+                      commitYearFilter(yearInputDraft)
+                    }
+                  }}
+                  placeholder={
+                    activeTab === 'cabinets' ? '시점 연도' : '존속 연도'
+                  }
+                  aria-label={
+                    activeTab === 'cabinets'
+                      ? '동시대 시점 연도'
+                      : '기관 존속 연도'
+                  }
+                />
+                {rawYearParam ? (
+                  <MiniIconBtn
                     type="button"
-                    $active={linkedOnly}
-                    onClick={() =>
-                      updateParams({ linked: linkedOnly ? null : '1' })
-                    }
+                    onClick={() => {
+                      setYearInputDraft('')
+                      updateParams({ year: null })
+                    }}
+                    title="연도 단면 해제"
+                    aria-label="연도 단면 해제"
                   >
-                    <FiLink2 size={12} />
-                    <span className="btn-label">다국 연계</span>
-                  </FilterToggleChip>
-                </>
+                    <FiX size={12} />
+                  </MiniIconBtn>
+                ) : null}
+                <MiniIconBtn
+                  type="button"
+                  onClick={() => stepActiveYear(1)}
+                  title="다음 연도"
+                  aria-label="다음 연도"
+                >
+                  <FiChevronRight size={13} />
+                </MiniIconBtn>
+              </YearStepperGroup>
+
+              {activeTab === 'cabinets' ? (
+                <FilterToggleChip
+                  type="button"
+                  $active={currentOnly}
+                  onClick={() => {
+                    if (currentOnly) {
+                      updateParams({ current: null })
+                    } else {
+                      setYearInputDraft('')
+                      updateParams({ current: '1', year: null })
+                    }
+                  }}
+                >
+                  <span className="btn-label">현직만</span>
+                </FilterToggleChip>
               ) : (
-                <>
-                  <FilterSelect
-                    value={deptKindFilter}
-                    onChange={(changeEvent) =>
-                      updateParams({ kind: changeEvent.target.value || null })
-                    }
-                    aria-label="기관 종류 필터"
-                  >
-                    <option value="">전체 종류</option>
-                    {DEPARTMENT_KIND_OPTIONS.map((kindOpt) => {
-                      const kCount = deptKindCounts.get(kindOpt.value) ?? 0
-                      return (
-                        <option key={kindOpt.value} value={kindOpt.value}>
-                          {kindOpt.label} ({kCount})
-                        </option>
-                      )
-                    })}
-                  </FilterSelect>
-
-                  <FilterSelect
-                    value={deptCategoryFilter}
-                    onChange={(changeEvent) =>
-                      updateParams({
-                        categoryId: changeEvent.target.value || null,
-                      })
-                    }
-                    aria-label="기관 분야 필터"
-                  >
-                    <option value="">전체 분야</option>
-                    {(deptCategoriesQuery.data ?? []).map((catItem) => {
-                      const cCount = deptCategoryCounts.get(catItem.id) ?? 0
-                      return (
-                        <option key={catItem.id} value={catItem.id}>
-                          {catItem.name}
-                          {cCount > 0 ? ` (${cCount})` : ''}
-                        </option>
-                      )
-                    })}
-                  </FilterSelect>
-
-                  <FilterSelect
-                    value={deptStatusFilter}
-                    onChange={(changeEvent) =>
-                      updateParams({
-                        status:
-                          changeEvent.target.value === 'all'
-                            ? null
-                            : changeEvent.target.value,
-                      })
-                    }
-                    aria-label="존속 상태 필터"
-                  >
-                    <option value="all">전체 상태</option>
-                    <option value="active">
-                      현존 기관 ({deptStatusCounts.active})
-                    </option>
-                    <option value="superseded">
-                      개편·이관 ({deptStatusCounts.superseded})
-                    </option>
-                    <option value="historical">
-                      역사 기관 ({deptStatusCounts.historical})
-                    </option>
-                    <option value="abolished">
-                      폐지·해체 ({deptStatusCounts.abolished})
-                    </option>
-                  </FilterSelect>
-
-                  <YearStepperGroup>
-                    <YearNumberInput
-                      value={yearInputDraft}
-                      onChange={(changeEvent) =>
-                        setYearInputDraft(changeEvent.target.value)
-                      }
-                      onKeyDown={(keyEvent) => {
-                        if (keyEvent.key === 'Enter') {
-                          commitYearFilter(yearInputDraft)
-                        }
-                      }}
-                      onBlur={() => {
-                        if (yearInputDraft.trim() !== rawYearParam.trim()) {
-                          commitYearFilter(yearInputDraft)
-                        }
-                      }}
-                      placeholder="존속 연도"
-                      aria-label="기관 존속 연도"
-                    />
-                  </YearStepperGroup>
-                </>
+                <FilterToggleChip
+                  type="button"
+                  $active={deptStatusFilter === 'active'}
+                  onClick={() =>
+                    updateParams({
+                      status: deptStatusFilter === 'active' ? null : 'active',
+                    })
+                  }
+                >
+                  <span className="btn-label">현존만</span>
+                </FilterToggleChip>
               )}
-            </ToolbarZoneCenter>
 
-            <ToolbarZoneRight>
-              <UtilityBtn
-                type="button"
-                onClick={() => setPositionDictOpen(true)}
-                title="전 국가 표준 관직 사전 열기"
-              >
-                <FiBookOpen size={13} />
-                <span className="btn-label">관직 사전</span>
-              </UtilityBtn>
+              {/* ─── Detailed Secondary Filter Popover ─── */}
+              <PopoverAnchor ref={filterMenuWrapRef}>
+                <UtilityBtn
+                  ref={filterTriggerRef}
+                  type="button"
+                  $active={filterPopoverOpen || secondaryFilterCount > 0}
+                  onClick={() => {
+                    setDisplayPopoverOpen(false)
+                    setFilterPopoverOpen((prevOpen) => !prevOpen)
+                  }}
+                  aria-expanded={filterPopoverOpen}
+                  title="대륙 · 체제 · 기관 종류 · 분야 · 상태 세부 필터"
+                >
+                  <FiSliders size={13} />
+                  <span className="btn-label">필터</span>
+                  {secondaryFilterCount > 0 ? (
+                    <FilterCountBadge>{secondaryFilterCount}</FilterCountBadge>
+                  ) : null}
+                </UtilityBtn>
+
+                {filterPopoverOpen &&
+                filterPopoverPos &&
+                typeof document !== 'undefined'
+                  ? createPortal(
+                      <FilterPopover
+                        ref={filterPopoverRef}
+                        role="dialog"
+                        aria-label="세부 필터 설정"
+                        style={{
+                          top: filterPopoverPos.top,
+                          left: filterPopoverPos.left,
+                        }}
+                      >
+                        <PopoverField>
+                          <PopoverLabel>대륙 권역</PopoverLabel>
+                          <PopoverSelect
+                            value={selectedContinentId}
+                            onChange={(changeEvent) =>
+                              updateParams({
+                                continent: changeEvent.target.value || null,
+                                polity: null,
+                              })
+                            }
+                            aria-label="대륙 필터"
+                          >
+                            <option value="">전체 대륙</option>
+                            {sortedContinents.map((contItem) => {
+                              const contCount =
+                                continentCounts.get(contItem.id) ?? 0
+                              return (
+                                <option key={contItem.id} value={contItem.id}>
+                                  {contItem.name}
+                                  {contCount > 0 ? ` (${contCount})` : ''}
+                                </option>
+                              )
+                            })}
+                          </PopoverSelect>
+                        </PopoverField>
+
+                        {activeTab === 'cabinets' ? (
+                          <>
+                            <PopoverField>
+                              <PopoverLabel>정부 체제 분류</PopoverLabel>
+                              <PopoverSelect
+                                value={cabinetCatFilter}
+                                onChange={(changeEvent) =>
+                                  updateParams({
+                                    cabCat: changeEvent.target.value || null,
+                                  })
+                                }
+                                aria-label="정부 체제 분류"
+                              >
+                                <option value="">전체 체제</option>
+                                {(
+                                  [
+                                    'PRESIDENT',
+                                    'PM',
+                                    'MONARCH',
+                                    'POPE',
+                                    'OTHER',
+                                  ] as PositionCategory[]
+                                ).map((catKey) => {
+                                  const catCount =
+                                    cabinetCategoryCounts.get(catKey) ?? 0
+                                  return (
+                                    <option key={catKey} value={catKey}>
+                                      {GLOBAL_CABINET_CATEGORY_LABELS[catKey]} (
+                                      {catCount})
+                                    </option>
+                                  )
+                                })}
+                              </PopoverSelect>
+                            </PopoverField>
+
+                            <PopoverField>
+                              <PopoverLabel>다국 연계 조건</PopoverLabel>
+                              <ColumnCheckBtn
+                                type="button"
+                                role="checkbox"
+                                aria-checked={linkedOnly}
+                                $checked={linkedOnly}
+                                onClick={() =>
+                                  updateParams({
+                                    linked: linkedOnly ? null : '1',
+                                  })
+                                }
+                              >
+                                <ColumnCheckBox $checked={linkedOnly}>
+                                  {linkedOnly ? <FiCheck size={10} /> : null}
+                                </ColumnCheckBox>
+                                <span>다국 연계 행정부·내각만 보기</span>
+                              </ColumnCheckBtn>
+                            </PopoverField>
+                          </>
+                        ) : (
+                          <>
+                            <PopoverField>
+                              <PopoverLabel>기관 종류</PopoverLabel>
+                              <PopoverSelect
+                                value={deptKindFilter}
+                                onChange={(changeEvent) =>
+                                  updateParams({
+                                    kind: changeEvent.target.value || null,
+                                  })
+                                }
+                                aria-label="기관 종류 필터"
+                              >
+                                <option value="">전체 종류</option>
+                                {DEPARTMENT_KIND_OPTIONS.map((kindOpt) => {
+                                  const kindCount =
+                                    deptKindCounts.get(kindOpt.value) ?? 0
+                                  return (
+                                    <option
+                                      key={kindOpt.value}
+                                      value={kindOpt.value}
+                                    >
+                                      {kindOpt.label} ({kindCount})
+                                    </option>
+                                  )
+                                })}
+                              </PopoverSelect>
+                            </PopoverField>
+
+                            <PopoverField>
+                              <PopoverLabel>관장 분야</PopoverLabel>
+                              <PopoverSelect
+                                value={deptCategoryFilter}
+                                onChange={(changeEvent) =>
+                                  updateParams({
+                                    categoryId:
+                                      changeEvent.target.value || null,
+                                  })
+                                }
+                                aria-label="기관 분야 필터"
+                              >
+                                <option value="">전체 분야</option>
+                                {(deptCategoriesQuery.data ?? []).map(
+                                  (catItem) => {
+                                    const catCount =
+                                      deptCategoryCounts.get(catItem.id) ?? 0
+                                    return (
+                                      <option
+                                        key={catItem.id}
+                                        value={catItem.id}
+                                      >
+                                        {catItem.name}
+                                        {catCount > 0 ? ` (${catCount})` : ''}
+                                      </option>
+                                    )
+                                  },
+                                )}
+                              </PopoverSelect>
+                            </PopoverField>
+
+                            <PopoverField>
+                              <PopoverLabel>존속 상태</PopoverLabel>
+                              <PopoverSelect
+                                value={deptStatusFilter}
+                                onChange={(changeEvent) =>
+                                  updateParams({
+                                    status:
+                                      changeEvent.target.value === 'all'
+                                        ? null
+                                        : changeEvent.target.value,
+                                  })
+                                }
+                                aria-label="존속 상태 필터"
+                              >
+                                <option value="all">전체 상태</option>
+                                <option value="active">
+                                  현존 기관 ({deptStatusCounts.active})
+                                </option>
+                                <option value="superseded">
+                                  개편·이관 ({deptStatusCounts.superseded})
+                                </option>
+                                <option value="historical">
+                                  역사 기관 ({deptStatusCounts.historical})
+                                </option>
+                                <option value="abolished">
+                                  폐지·해체 ({deptStatusCounts.abolished})
+                                </option>
+                              </PopoverSelect>
+                            </PopoverField>
+                          </>
+                        )}
+
+                        <PopoverFooterRow>
+                          <PopoverSubMeta>
+                            {secondaryFilterCount > 0
+                              ? `세부 조건 ${secondaryFilterCount}개 적용 중`
+                              : '세부 조건 미적용'}
+                          </PopoverSubMeta>
+                          {secondaryFilterCount > 0 ? (
+                            <PopoverTextBtn
+                              type="button"
+                              onClick={clearSecondaryFilters}
+                            >
+                              세부 필터 초기화
+                            </PopoverTextBtn>
+                          ) : null}
+                        </PopoverFooterRow>
+                      </FilterPopover>,
+                      document.body,
+                    )
+                  : null}
+              </PopoverAnchor>
 
               <PopoverAnchor ref={displayMenuWrapRef}>
                 <UtilityBtn
                   ref={displayTriggerRef}
                   type="button"
                   $active={displayPopoverOpen}
-                  onClick={() => setDisplayPopoverOpen((prevOpen) => !prevOpen)}
+                  onClick={() => {
+                    setFilterPopoverOpen(false)
+                    setDisplayPopoverOpen((prevOpen) => !prevOpen)
+                  }}
                   aria-expanded={displayPopoverOpen}
                   title="표시 방식 · 밀도 · 정렬 · 표시 열 설정"
                 >
@@ -3117,24 +3381,6 @@ export function GovernmentCatalogPage() {
                     )
                   : null}
               </PopoverAnchor>
-
-              <PrimaryRegisterBtn
-                type="button"
-                onClick={() => {
-                  if (activeTab === 'cabinets') {
-                    setEditingCabinetRecord(null)
-                    setCabinetModalOpen(true)
-                  } else {
-                    setEditingDepartmentRecord(null)
-                    setDeptModalOpen(true)
-                  }
-                }}
-              >
-                <FiPlus size={14} />
-                <span className="btn-label">
-                  {activeTab === 'cabinets' ? '새 내각 등록' : '새 기관 등록'}
-                </span>
-              </PrimaryRegisterBtn>
             </ToolbarZoneRight>
           </TopFilterRow>
 
@@ -3371,15 +3617,63 @@ export function GovernmentCatalogPage() {
               )}
 
               {isCatalogLoading ? (
-                <EmptyStateBox>
-                  <EmptyTitle>
+                <LedgerSkeletonList role="status" aria-live="polite">
+                  <VisuallyHiddenText>
                     {activeTab === 'cabinets'
                       ? '전 국가 행정부·내각 원장을 불러오는 중입니다…'
                       : '전 국가 중앙부처·국가기관 원장을 불러오는 중입니다…'}
-                  </EmptyTitle>
-                </EmptyStateBox>
+                  </VisuallyHiddenText>
+                  {Array.from({ length: 8 }, (_unused, skeletonIndex) => (
+                    <LedgerSkeletonRow key={skeletonIndex} aria-hidden="true">
+                      <SkeletonBar $width="58px" $height="12px" />
+                      <SkeletonBar $width="42px" $height="12px" data-col="end" />
+                      <SkeletonBar $width="78%" $height="20px" $pill />
+                      <SkeletonIdentityCell>
+                        <SkeletonCircle $square={activeTab === 'departments'} />
+                        <SkeletonLines>
+                          <SkeletonBar
+                            $width={skeletonIndex % 2 === 0 ? '68%' : '54%'}
+                            $height="13px"
+                          />
+                          <SkeletonBar $width="42%" $height="10px" />
+                        </SkeletonLines>
+                      </SkeletonIdentityCell>
+                      <SkeletonBar
+                        $width="68px"
+                        $height="18px"
+                        data-col="regime"
+                      />
+                      <SkeletonBar
+                        $width="75%"
+                        $height="18px"
+                        $pill
+                        data-col="party"
+                      />
+                      <SkeletonBar
+                        $width="88%"
+                        $height="8px"
+                        $pill
+                        data-col="dur"
+                      />
+                      <SkeletonBar
+                        $width="64%"
+                        $height="18px"
+                        $pill
+                        data-col="members"
+                      />
+                      <SkeletonBar $width="40px" $height="20px" />
+                    </LedgerSkeletonRow>
+                  ))}
+                </LedgerSkeletonList>
               ) : matchedCount === 0 ? (
                 <EmptyStateBox>
+                  <EmptyIconCircle aria-hidden="true">
+                    {activeTab === 'cabinets' ? (
+                      <FiUsers size={18} />
+                    ) : (
+                      <FiColumns size={18} />
+                    )}
+                  </EmptyIconCircle>
                   <EmptyTitle>
                     조건에 일치하는{' '}
                     {activeTab === 'cabinets' ? '행정부·내각이' : '부처·기관이'}{' '}
@@ -3415,8 +3709,9 @@ export function GovernmentCatalogPage() {
                         <span>전체 필터 초기화</span>
                       </SecondaryResetBtn>
                     ) : null}
-                    <PrimaryRegisterBtn
-                      type="button"
+                    <PrimaryActionButton
+                      $size="md"
+                      icon={<FiPlus size={14} />}
                       onClick={() => {
                         if (activeTab === 'cabinets') {
                           setEditingCabinetRecord(null)
@@ -3427,13 +3722,10 @@ export function GovernmentCatalogPage() {
                         }
                       }}
                     >
-                      <FiPlus size={14} />
-                      <span>
-                        {activeTab === 'cabinets'
-                          ? '새 내각 바로 등록'
-                          : '새 기관 바로 등록'}
-                      </span>
-                    </PrimaryRegisterBtn>
+                      {activeTab === 'cabinets'
+                        ? '새 내각 바로 등록'
+                        : '새 기관 바로 등록'}
+                    </PrimaryActionButton>
                   </EmptyActionsRow>
                 </EmptyStateBox>
               ) : activeTab === 'cabinets' ? (
@@ -3869,14 +4161,24 @@ export function GovernmentCatalogPage() {
         onSwitch={(nextTarget) => setCountryModalTarget(nextTarget)}
       />
 
-      <SidePanel
+      <RegisterModal
         isOpen={positionDictOpen}
         onClose={() => setPositionDictOpen(false)}
         title="전 국가 표준 관직 사전"
-        width="760px"
+        maxWidth="min(1040px, 95vw)"
+        height="86vh"
+        fullBleedOnMobile
       >
-        <PositionDefinitionsSection />
-      </SidePanel>
+        <PersonRegisterModalFormScroll>
+          <PositionDefinitionsSection
+            embeddedInModal
+            onOpenDepartmentDetail={(targetDeptId) => {
+              setPositionDictOpen(false)
+              updateParams({ tab: 'departments', selected: targetDeptId })
+            }}
+          />
+        </PersonRegisterModalFormScroll>
+      </RegisterModal>
     </PageScene>
   )
 }
@@ -3891,6 +4193,15 @@ const spinKeyframes = keyframes`
   }
 `
 
+const skeletonPulse = keyframes`
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.92;
+  }
+`
+
 const PageScene = styled.div`
   position: fixed;
   top: var(--header-height, 64px);
@@ -3898,7 +4209,7 @@ const PageScene = styled.div`
   right: 0;
   bottom: 0;
   height: calc(100vh - var(--header-height, 64px));
-  padding-top: 10px;
+  padding-top: 8px;
   padding-bottom: max(14px, env(safe-area-inset-bottom));
   overflow: hidden;
   display: flex;
@@ -3910,7 +4221,7 @@ const PageScene = styled.div`
   }
 `
 
-const VisuallyHiddenPageTitle = styled.h1`
+const VisuallyHiddenText = styled.span`
   position: absolute;
   width: 1px;
   height: 1px;
@@ -3945,7 +4256,115 @@ const PageWrapper = styled.div`
   overflow: hidden;
 `
 
-const TopToolbarCard = styled.header`
+const TopChrome = styled.header`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  flex-shrink: 0;
+`
+
+const TopHeadlineGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+`
+
+const AccentBar = styled.span`
+  width: 3px;
+  height: 30px;
+  border-radius: 2px;
+  background: ${({ theme }) => theme.colors.primary};
+  flex-shrink: 0;
+`
+
+const PageTitle = styled.h1`
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const SummaryLine = styled.div`
+  ${DIGIT_DISPLAY}
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  b {
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-weight: 700;
+  }
+
+  .sep {
+    opacity: 0.45;
+  }
+
+  .accent {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+
+    b {
+      color: ${({ theme }) => ledgerAccent(theme.mode)};
+    }
+  }
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+`
+
+const CrossDomainNav = styled.nav`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 4px;
+
+  @media (max-width: 1100px) {
+    display: none;
+  }
+`
+
+const CrossDomainLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  text-decoration: none;
+  transition: color 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    text-decoration: underline;
+  }
+`
+
+const DesktopRegisterWrap = styled.div`
+  display: inline-flex;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+const TopToolbarCard = styled.div`
   container-type: inline-size;
   container-name: govtoolbar;
   display: flex;
@@ -3959,7 +4378,7 @@ const TopFilterRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 2px 0 4px;
+  padding: 2px 0;
   flex-wrap: wrap;
 `
 
@@ -3967,16 +4386,8 @@ const ToolbarZoneLeft = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex: 1 1 420px;
   min-width: 0;
-`
-
-const ToolbarZoneCenter = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 240px;
   flex-wrap: wrap;
 `
 
@@ -3985,8 +4396,9 @@ const ToolbarZoneRight = styled.div`
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 
-  @container govtoolbar (max-width: 980px) {
+  @container govtoolbar (max-width: 860px) {
     .btn-label {
       display: none;
     }
@@ -4056,7 +4468,8 @@ const PromSearchBox = styled.div<{ $active?: boolean }>`
   align-items: center;
   gap: 6px;
   height: 34px;
-  width: clamp(210px, 19vw, 310px);
+  flex: 1 1 240px;
+  max-width: 390px;
   padding: 0 10px;
   border-radius: ${RADIUS.SM};
   border: 1px solid
@@ -4132,36 +4545,24 @@ const ClearInputBtn = styled.button`
   }
 `
 
-const FilterSelect = styled.select`
-  height: 34px;
-  max-width: 170px;
-  padding: 0 8px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-
-  @media (pointer: coarse) {
-    height: 40px;
-  }
-`
-
 const PolitySelectWrap = styled.div`
-  width: clamp(185px, 15vw, 245px);
+  width: clamp(190px, 16vw, 250px);
 `
 
-const YearStepperGroup = styled.div`
+const YearStepperGroup = styled.div<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   height: 34px;
   border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $active }) =>
+    $active
+      ? ledgerAccentSubtle(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.03)'
+        : '#ffffff'};
   overflow: hidden;
 
   @media (pointer: coarse) {
@@ -4271,32 +4672,19 @@ const UtilityBtn = styled.button<{ $active?: boolean }>`
   }
 `
 
-const PrimaryRegisterBtn = styled.button`
+const FilterCountBadge = styled.span`
+  ${DIGIT_DISPLAY}
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 34px;
-  padding: 0 13px;
-  border-radius: ${RADIUS.SM};
-  border: none;
-  background: #4f46e5;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  background: ${({ theme }) => theme.colors.primary};
   color: #ffffff;
-  font-size: 12.5px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-
-  &:hover {
-    background: #4338ca;
-  }
-
-  @media (max-width: 640px) {
-    display: none;
-  }
-
-  @media (pointer: coarse) {
-    height: 40px;
-  }
 `
 
 const CreateGovFab = styled.button`
@@ -4313,16 +4701,42 @@ const CreateGovFab = styled.button`
     height: 48px;
     border-radius: 50%;
     border: none;
-    background: #4f46e5;
+    background: ${({ theme }) => theme.colors.primary};
     color: #ffffff;
-    box-shadow: 0 8px 24px rgba(79, 70, 229, 0.38);
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.38);
     cursor: pointer;
     z-index: ${Z_INDEX.ACTION_MENU};
+
+    &:hover {
+      background: ${({ theme }) => theme.colors.button.hover};
+    }
   }
 `
 
 const PopoverAnchor = styled.div`
   position: relative;
+`
+
+const FilterPopover = styled.div`
+  position: fixed;
+  width: 304px;
+  padding: 14px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#18181b' : '#ffffff'};
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.24);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: ${Z_INDEX.DROPDOWN};
+`
+
+const PopoverSubMeta = styled.span`
+  ${DIGIT_DISPLAY}
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const DisplayPopover = styled.div`
@@ -4576,13 +4990,13 @@ const LEDGER_GRID_TEMPLATE = css`
   grid-template-columns:
     84px
     64px
-    136px
-    minmax(210px, 1fr)
-    98px
-    144px
-    108px
-    158px
-    58px;
+    minmax(136px, 0.72fr)
+    minmax(220px, 1.55fr)
+    100px
+    minmax(144px, 0.92fr)
+    112px
+    162px
+    60px;
   align-items: center;
   gap: 10px;
 
@@ -4774,6 +5188,10 @@ const ChapterStack = styled.div`
 const ChapterSection = styled.section`
   display: flex;
   flex-direction: column;
+
+  & + & {
+    border-top: 1px solid ${({ theme }) => ROW_HAIRLINE[theme.mode]};
+  }
 `
 
 const CenturyDivider = styled.button`
@@ -4782,11 +5200,12 @@ const CenturyDivider = styled.button`
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 12px 16px 8px 34px;
+  padding: 11px 16px 8px 34px;
   border: none;
   background: ${({ theme }) => GROUP_BAND[theme.mode].century};
   cursor: pointer;
   text-align: left;
+  transition: background 0.14s ease;
 
   &::after {
     content: '';
@@ -4809,7 +5228,7 @@ const CenturyRailDot = styled.span`
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => theme.colors.primary};
   box-shadow: 0 0 0 3px ${({ theme }) => ledgerAccentSubtle(theme.mode)};
 `
 
@@ -5477,13 +5896,10 @@ const CardFooterRow = styled.div`
   border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
-const DrawerHostColumn = styled.aside`
+const DrawerHostColumn = styled.div`
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSurface(theme.mode)};
   overflow: hidden;
 
   @media (max-width: 1200px) {
@@ -5492,7 +5908,6 @@ const DrawerHostColumn = styled.aside`
     right: 0;
     bottom: 0;
     width: min(440px, 94vw);
-    border-radius: 0;
     z-index: ${Z_INDEX.DRAWER_CONTENT};
     box-shadow: -12px 0 32px rgba(15, 23, 42, 0.24);
   }
@@ -5513,6 +5928,66 @@ const MobileDrawerBackdrop = styled.div`
     backdrop-filter: blur(2px);
     z-index: ${Z_INDEX.DRAWER_OVERLAY};
   }
+`
+
+const LedgerSkeletonList = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const LedgerSkeletonRow = styled.div`
+  ${LEDGER_GRID_TEMPLATE}
+  padding: 10px 16px;
+  border-bottom: 1px solid ${({ theme }) => ROW_HAIRLINE[theme.mode]};
+`
+
+const SkeletonIdentityCell = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+`
+
+const SkeletonCircle = styled.span<{ $square?: boolean }>`
+  width: 28px;
+  height: 28px;
+  border-radius: ${({ $square }) => ($square ? RADIUS.XS : '50%')};
+  background: ${({ theme }) => ledgerChipFill(theme.mode)};
+  flex-shrink: 0;
+  animation: ${skeletonPulse} 1.4s ease-in-out infinite;
+`
+
+const SkeletonLines = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+`
+
+const SkeletonBar = styled.span<{
+  $width?: string
+  $height?: string
+  $pill?: boolean
+}>`
+  display: block;
+  width: ${({ $width }) => $width ?? '100%'};
+  height: ${({ $height }) => $height ?? '12px'};
+  border-radius: ${({ $pill }) => ($pill ? '999px' : RADIUS.XS)};
+  background: ${({ theme }) => ledgerChipFill(theme.mode)};
+  animation: ${skeletonPulse} 1.4s ease-in-out infinite;
+`
+
+const EmptyIconCircle = styled.span`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  margin-bottom: 2px;
 `
 
 const EmptyStateBox = styled.div`

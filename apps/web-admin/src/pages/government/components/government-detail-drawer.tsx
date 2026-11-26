@@ -24,7 +24,7 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { keyframes } from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
@@ -38,6 +38,7 @@ import {
   ledgerSurface,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
+import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import {
   administrationDepartmentApi,
   type AdministrationDepartment,
@@ -426,7 +427,19 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
       <DrawerScroll>
         {isCabinetMode ? (
           cabinetQuery.isLoading ? (
-            <DrawerLoading>내각 상세 정보를 불러오는 중…</DrawerLoading>
+            <DrawerSkeletonStack role="status" aria-live="polite">
+              <VisuallyHiddenText>내각 상세 정보를 불러오는 중…</VisuallyHiddenText>
+              <DrawerSkeletonHero>
+                <DrawerSkeletonAvatar />
+                <DrawerSkeletonLines>
+                  <DrawerSkeletonBar $width="68%" $height="16px" />
+                  <DrawerSkeletonBar $width="44%" $height="12px" />
+                </DrawerSkeletonLines>
+              </DrawerSkeletonHero>
+              <DrawerSkeletonBar $width="100%" $height="32px" />
+              <DrawerSkeletonBar $width="100%" $height="84px" />
+              <DrawerSkeletonBar $width="100%" $height="96px" />
+            </DrawerSkeletonStack>
           ) : !cabinetQuery.data ? (
             <DrawerLoading>내각 정보를 찾을 수 없습니다.</DrawerLoading>
           ) : (
@@ -543,13 +556,13 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                     ) : null}
 
                     <QuickActionRow>
-                      <PrimaryActionBtn
-                        type="button"
+                      <PrimaryActionButton
+                        $size="sm"
+                        icon={<FiPlus size={13} />}
                         onClick={() => onAppointCabinetMinister(cabinet)}
                       >
-                        <FiPlus size={13} />
-                        <span>각료 임명</span>
-                      </PrimaryActionBtn>
+                        각료 임명
+                      </PrimaryActionButton>
                       <SecondaryActionBtn
                         type="button"
                         onClick={() => onEditCabinet(cabinet)}
@@ -832,7 +845,19 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
             })()
           )
         ) : deptQuery.isLoading ? (
-          <DrawerLoading>기관 상세 정보를 불러오는 중…</DrawerLoading>
+          <DrawerSkeletonStack role="status" aria-live="polite">
+            <VisuallyHiddenText>기관 상세 정보를 불러오는 중…</VisuallyHiddenText>
+            <DrawerSkeletonHero>
+              <DrawerSkeletonAvatar $square />
+              <DrawerSkeletonLines>
+                <DrawerSkeletonBar $width="64%" $height="16px" />
+                <DrawerSkeletonBar $width="48%" $height="12px" />
+              </DrawerSkeletonLines>
+            </DrawerSkeletonHero>
+            <DrawerSkeletonBar $width="100%" $height="32px" />
+            <DrawerSkeletonBar $width="100%" $height="112px" />
+            <DrawerSkeletonBar $width="100%" $height="84px" />
+          </DrawerSkeletonStack>
         ) : !deptQuery.data ? (
           <DrawerLoading>기관 정보를 찾을 수 없습니다.</DrawerLoading>
         ) : (
@@ -962,13 +987,13 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                   ) : null}
 
                   <QuickActionRow>
-                    <PrimaryActionBtn
-                      type="button"
+                    <PrimaryActionButton
+                      $size="sm"
+                      icon={<FiPlus size={13} />}
                       onClick={() => onAppointDepartmentMember(dept)}
                     >
-                      <FiPlus size={13} />
-                      <span>수장·인사 임명</span>
-                    </PrimaryActionBtn>
+                      수장·인사 임명
+                    </PrimaryActionButton>
                     <SecondaryActionBtn
                       type="button"
                       onClick={() => onEditDepartment(dept)}
@@ -1177,11 +1202,19 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
   )
 }
 
+const drawerPulse = keyframes`
+  0%, 100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.95;
+  }
+`
+
 const DrawerShell = styled.aside`
-  position: sticky;
-  top: 0;
-  height: calc(100vh - var(--app-header-height, 64px) - 86px);
-  min-height: 480px;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-radius: ${RADIUS.MD};
@@ -1189,21 +1222,11 @@ const DrawerShell = styled.aside`
   background: ${({ theme }) => ledgerSurface(theme.mode)};
   overflow: hidden;
 
-  @media (max-width: 1024px) {
-    position: fixed;
-    top: var(--app-header-height, 64px);
-    right: 0;
-    bottom: 0;
-    width: min(440px, 100vw);
-    height: auto;
+  @media (max-width: 1200px) {
     border-radius: 0;
-    z-index: 60;
-    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.24);
-  }
-
-  @media (max-width: 640px) {
-    width: 100dvw;
-    border-left: none;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
   }
 `
 
@@ -1334,6 +1357,59 @@ const DrawerScroll = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
+`
+
+const VisuallyHiddenText = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+`
+
+const DrawerSkeletonStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+`
+
+const DrawerSkeletonHero = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const DrawerSkeletonAvatar = styled.span<{ $square?: boolean }>`
+  width: 44px;
+  height: 44px;
+  border-radius: ${({ $square }) => ($square ? RADIUS.SM : '50%')};
+  background: ${({ theme }) => ledgerChipFill(theme.mode)};
+  flex-shrink: 0;
+  animation: ${drawerPulse} 1.4s ease-in-out infinite;
+`
+
+const DrawerSkeletonLines = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+`
+
+const DrawerSkeletonBar = styled.span<{ $width?: string; $height?: string }>`
+  display: block;
+  width: ${({ $width }) => $width ?? '100%'};
+  height: ${({ $height }) => $height ?? '14px'};
+  border-radius: ${RADIUS.SM};
+  background: ${({ theme }) => ledgerChipFill(theme.mode)};
+  animation: ${drawerPulse} 1.4s ease-in-out infinite;
 `
 
 const DrawerLoading = styled.div`
@@ -1512,35 +1588,24 @@ const QuickActionRow = styled.div`
   margin-top: 2px;
 `
 
-const PrimaryActionBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 11px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-`
-
 const SecondaryActionBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 10px;
+  height: 32px;
+  padding: 0 11px;
   border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
 
   &:hover {
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
   }
 `
 

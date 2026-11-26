@@ -169,7 +169,7 @@ export const GovernmentEraStrip: React.FC<GovernmentEraStripProps> = ({
       const rowElements = document.querySelectorAll<HTMLElement>(
         '[data-gov-row-year]',
       )
-      for (const element of rowElements) {
+      for (const element of Array.from(rowElements)) {
         const year = Number(element.dataset.govRowYear)
         if (!Number.isFinite(year)) continue
         const rect = element.getBoundingClientRect()
