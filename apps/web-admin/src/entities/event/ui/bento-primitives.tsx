@@ -365,10 +365,12 @@ export function StackedSegmentBar({
   slices,
   height = 10,
   showPercent = false,
+  showLegend = true,
 }: {
   slices: SegmentSlice[]
   height?: number
   showPercent?: boolean
+  showLegend?: boolean
 }) {
   const validSlices = slices.filter((sliceItem) => sliceItem.value > 0)
   const totalValue = validSlices.reduce(
@@ -391,23 +393,25 @@ export function StackedSegmentBar({
           />
         ))}
       </SegmentTrack>
-      <SegmentLegend>
-        {validSlices.map((sliceItem) => {
-          const pct = Math.round((sliceItem.value / totalValue) * 100)
-          return (
-            <LegendItem key={sliceItem.key}>
-              <LegendSwatch style={{ background: sliceItem.color }} />
-              <LegendLabel>{sliceItem.label}</LegendLabel>
-              <LegendVal>
-                {sliceItem.meta ??
-                  (showPercent
-                    ? `${pct}%`
-                    : sliceItem.value.toLocaleString('ko-KR'))}
-              </LegendVal>
-            </LegendItem>
-          )
-        })}
-      </SegmentLegend>
+      {showLegend ? (
+        <SegmentLegend>
+          {validSlices.map((sliceItem) => {
+            const pct = Math.round((sliceItem.value / totalValue) * 100)
+            return (
+              <LegendItem key={sliceItem.key}>
+                <LegendSwatch style={{ background: sliceItem.color }} />
+                <LegendLabel>{sliceItem.label}</LegendLabel>
+                <LegendVal>
+                  {sliceItem.meta ??
+                    (showPercent
+                      ? `${pct}%`
+                      : sliceItem.value.toLocaleString('ko-KR'))}
+                </LegendVal>
+              </LegendItem>
+            )
+          })}
+        </SegmentLegend>
+      ) : null}
     </SegmentWrap>
   )
 }
@@ -724,8 +728,8 @@ export function SemiCircleGauge({
   const theme = useTheme()
   const clamped = Math.max(0, Math.min(100, percent))
   const stroke = color ?? ledgerAccent(theme.mode)
-  const r = 34
-  const halfCirc = Math.PI * r
+  const radius = 34
+  const halfCirc = Math.PI * radius
   const dashOffset = halfCirc * (1 - clamped / 100)
 
   return (
@@ -807,27 +811,27 @@ export function MiniDonutRing({
   centerLabel?: string
 }) {
   const theme = useTheme()
-  const valid = slices.filter((s) => s.value > 0)
-  const total = valid.reduce((acc, s) => acc + s.value, 0)
-  const r = (size - strokeWidth) / 2 - 1
-  const circ = 2 * Math.PI * r
+  const valid = slices.filter((slice) => slice.value > 0)
+  const total = valid.reduce((acc, slice) => acc + slice.value, 0)
+  const radius = (size - strokeWidth) / 2 - 1
+  const circ = 2 * Math.PI * radius
   const cx = size / 2
   const cy = size / 2
 
   let cumulative = 0
   const arcs =
     total > 0
-      ? valid.map((s) => {
-          const frac = s.value / total
+      ? valid.map((slice) => {
+          const frac = slice.value / total
           const len = Math.max(0, frac * circ - (valid.length > 1 ? 1.2 : 0))
           const offset = -cumulative * circ
           cumulative += frac
           return {
-            key: s.key,
-            color: s.color,
+            key: slice.key,
+            color: slice.color,
             dashArray: `${len} ${Math.max(0, circ - len)}`,
             dashOffset: offset,
-            title: `${s.label}: ${s.meta ?? s.value}`,
+            title: `${slice.label}: ${slice.meta ?? slice.value}`,
           }
         })
       : []
@@ -838,7 +842,7 @@ export function MiniDonutRing({
         <circle
           cx={cx}
           cy={cy}
-          r={r}
+          r={radius}
           fill="none"
           stroke={
             theme.mode === 'dark'
@@ -853,7 +857,7 @@ export function MiniDonutRing({
               key={arc.key}
               cx={cx}
               cy={cy}
-              r={r}
+              r={radius}
               fill="none"
               stroke={arc.color}
               strokeWidth={strokeWidth}

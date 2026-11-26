@@ -18,14 +18,14 @@ import { subSectionSeam } from './sub-section-seam'
 export const BioMentionModalOverlay = styled(motion.div)`
   position: fixed;
   inset: 0;
-  background: ${OVERLAY_STYLES.BACKGROUND};
+  background: rgba(15, 23, 42, 0.45);
   backdrop-filter: ${OVERLAY_STYLES.BACKDROP_FILTER};
   -webkit-backdrop-filter: ${OVERLAY_STYLES.BACKDROP_FILTER};
   z-index: ${Z_INDEX.MODAL_OVERLAY};
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 24px;
+  padding: 24px;
   box-sizing: border-box;
 `
 

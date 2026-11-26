@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
+import { createPortal } from 'react-dom'
 import { FiArrowLeft, FiArrowUpRight, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -59,7 +60,7 @@ export function PersonInlineModal({
   }, [personId])
 
   const activeId = stack[stack.length - 1] ?? personId
-  const pop = useCallback(() => setStack((s) => s.slice(0, -1)), [])
+  const pop = useCallback(() => setStack((prev) => prev.slice(0, -1)), [])
   const panelRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
@@ -94,7 +95,9 @@ export function PersonInlineModal({
   useBodyScrollLock(open)
   useFocusTrap(panelRef, open)
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <AnimatePresence>
       {personId && activeId && (
         <Overlay
@@ -116,7 +119,7 @@ export function PersonInlineModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(evt) => evt.stopPropagation()}
           >
             <ModalHeader>
               <HeaderTitleRow>
@@ -164,35 +167,36 @@ export function PersonInlineModal({
                 onEdit={onEdit ?? (() => onClose())}
                 hideHeaderActions
                 embedInModal
-                onLinkedPersonClick={(id) => setStack((s) => [...s, id])}
+                onLinkedPersonClick={(id) => setStack((prev) => [...prev, id])}
               />
             </Body>
           </Box>
         </Overlay>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }
 
 const Overlay = styled(motion.div)`
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 32px 16px;
+  padding: 24px;
+  box-sizing: border-box;
   overflow-y: auto;
 
-  /* blur는 콘텐츠 조상이 아닌 별도 레이어(::before)로 분리.
-     Overlay 자체에 backdrop-filter를 걸면 내부 비포털 fixed 요소
-     (용어 툴팁·중첩 오버레이)의 containing block이 Overlay로 바뀌어
-     작은 뷰포트에서 스크롤 시 좌표가 어긋난다. */
+  /* 사건·인물 등록 모달(PersonRegisterModalOverlay)과 동일한 배경·블러 토큰 사용.
+     blur는 콘텐츠 조상이 아닌 별도 레이어(::before)로 분리해 내부 비포털 fixed 요소
+     (용어 툴팁·중첩 오버레이)의 containing block 변형을 막는다. */
   &::before {
     content: '';
     position: fixed;
     inset: 0;
+    background: rgba(15, 23, 42, 0.45);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
     pointer-events: none;
@@ -203,7 +207,9 @@ const Box = styled(motion.div)`
   ${({ theme }) => glassCardMixin(theme)}
   max-width: 900px;
   width: 100%;
-  max-height: 88vh;
+  max-height: calc(100dvh - 48px);
+  margin: auto;
+  box-sizing: border-box;
   border-radius: 16px;
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;

@@ -12,6 +12,7 @@ import { useRef } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
+import { createPortal } from 'react-dom'
 import { FiArrowRight, FiCalendar, FiChevronLeft, FiChevronRight, FiMapPin, FiUsers, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -95,7 +96,9 @@ export function EventInlineModal({
     : ''
   const relatedPersonCount = event?.relatedPersons?.length ?? 0
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <AnimatePresence>
       {eventId && (
         <Overlay
@@ -244,7 +247,8 @@ export function EventInlineModal({
           </Box>
         </Overlay>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }
 
@@ -265,25 +269,28 @@ function formatRange(
   startPrecision?: string | null,
   endPrecision?: string | null,
 ): string {
-  const s = formatWithPrecision(start, startPrecision)
-  const e = formatWithPrecision(end, endPrecision)
-  if (!s && !e) return ''
-  if (s && !e) return s
-  if (!s && e) return `~ ${e}`
-  if (s === e) return s
-  return `${s} ~ ${e}`
+  const startText = formatWithPrecision(start, startPrecision)
+  const endText = formatWithPrecision(end, endPrecision)
+  if (!startText && !endText) return ''
+  if (startText && !endText) return startText
+  if (!startText && endText) return `~ ${endText}`
+  if (startText === endText) return startText
+  return `${startText} ~ ${endText}`
 }
 
 // ─── styled ──────────────────────────────────────────────────────────
 const Overlay = styled(motion.div)`
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 32px 16px;
+  padding: 24px;
+  box-sizing: border-box;
   overflow-y: auto;
 `
 

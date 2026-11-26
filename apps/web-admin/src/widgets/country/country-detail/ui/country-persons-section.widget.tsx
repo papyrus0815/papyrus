@@ -31,13 +31,6 @@ import styled, { useTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import {
-  BentoCard,
-  BentoCardBadge,
-  BentoCardBody,
-  BentoCardHeader,
-  BentoCardTitle,
-  BentoCardTitleGroup,
-  BentoGrid3Col,
   MiniDonutRing,
   type SegmentSlice,
   StackedSegmentBar,
@@ -69,8 +62,15 @@ import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-i
 
 import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+} from './dashboard-infographic/bento-primitives'
+import {
   LedgerFilterChip,
-  LedgerToolbarButton,
   LedgerViewSwitch,
   LedgerViewSwitchItem,
 } from './country-ledger-primitives'
@@ -151,27 +151,66 @@ function hasPersonTenure(person: Person): boolean {
   )
 }
 
+function scoreTenureImportance(
+  tenure: NonNullable<ExtendedPerson['governmentTenures']>[number],
+): number {
+  const rawRole = (
+    tenure.title ??
+    tenure.positionDefinition?.title ??
+    tenure.positionDefinition?.name ??
+    ''
+  ).trim()
+  if (
+    /황제|천황|국왕|여왕|군주|대통령|총통|총리|수상|주석|영의정|승상|재상|술탄|칸|파라오/.test(
+      rawRole,
+    ) &&
+    !/부총리|부통령/.test(rawRole)
+  ) {
+    return 100
+  }
+  if (/부통령|부총리|좌의정|우의정|섭정/.test(rawRole)) {
+    return 85
+  }
+  if (/장관|대신|국무비서|상서|판서|처장|청장|총재|의장/.test(rawRole)) {
+    return 70
+  }
+  if (/원수|대장|상급대장|사령관|참모총장|제독|도독/.test(rawRole)) {
+    return 60
+  }
+  if (tenure.administrationDepartment || tenure.militaryUnit) {
+    return 40
+  }
+  return 20
+}
+
 function getPrimaryRoleLabel(person: Person): string | null {
   const extended = person as ExtendedPerson
-  const firstTenure = extended.governmentTenures?.[0]
-  if (firstTenure) {
+  const tenures = extended.governmentTenures ?? []
+  const bestTenure =
+    tenures.length > 0
+      ? [...tenures].sort(
+          (left, right) =>
+            scoreTenureImportance(right) - scoreTenureImportance(left),
+        )[0]
+      : undefined
+  if (bestTenure) {
     const rawRole =
-      firstTenure.title?.trim() ||
-      firstTenure.positionDefinition?.title?.trim() ||
-      firstTenure.positionDefinition?.name?.trim() ||
+      bestTenure.title?.trim() ||
+      bestTenure.positionDefinition?.title?.trim() ||
+      bestTenure.positionDefinition?.name?.trim() ||
       ''
     const institutionLabel =
-      firstTenure.militaryUnit?.abbreviation?.trim() ||
-      firstTenure.militaryUnit?.name?.trim() ||
-      firstTenure.administrationDepartment?.abbreviation?.trim() ||
-      firstTenure.administrationDepartment?.name?.trim() ||
+      bestTenure.militaryUnit?.abbreviation?.trim() ||
+      bestTenure.militaryUnit?.name?.trim() ||
+      bestTenure.administrationDepartment?.abbreviation?.trim() ||
+      bestTenure.administrationDepartment?.name?.trim() ||
       ''
     const withInst =
       institutionLabel && rawRole && !rawRole.includes(institutionLabel)
         ? `${institutionLabel} ${rawRole}`
         : rawRole || institutionLabel
-    const rankSuffix = firstTenure.rankTitle?.trim()
-      ? ` · ${firstTenure.rankTitle.trim()}`
+    const rankSuffix = bestTenure.rankTitle?.trim()
+      ? ` · ${bestTenure.rankTitle.trim()}`
       : ''
     if (withInst) return `${withInst}${rankSuffix}`
   }
@@ -417,7 +456,6 @@ function sortPersons(persons: Person[], sortBy: PersonSortKey): Person[] {
 
 export function CountryPersonsSection({
   country,
-  onGoToGovernment,
 }: CountryPersonsSectionProps) {
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
@@ -607,7 +645,7 @@ export function CountryPersonsSection({
         color: isDark ? '#34d399' : '#059669',
         meta: `${ageBands.o80}명`,
       },
-    ].filter((s) => s.value > 0)
+    ].filter((slice) => slice.value > 0)
 
     // 2. 세기별 활동 인물 히스토그램
     const centuryCountMap = new Map<number, number>()
@@ -662,8 +700,9 @@ export function CountryPersonsSection({
       )
 
     const nonEmptyHistGroupCount = historicalGroups.filter(
-      (g) => g.persons.length > 0,
+      (grp) => grp.persons.length > 0,
     ).length
+    const classifiedCount = totalCount - (roleCounts.get('미분류') ?? 0)
 
     return {
       totalCount,
@@ -671,6 +710,7 @@ export function CountryPersonsSection({
       historicalCount: historicalUniqueIds.size,
       historicalGroupCount: nonEmptyHistGroupCount,
       tenuredCount,
+      classifiedCount,
       politySlices,
       ageKnownCount,
       avgAge,
@@ -859,8 +899,8 @@ export function CountryPersonsSection({
 
     const visibleRows = datedItems.slice(0, TIMELINE_MAX_ROWS)
     const truncatedCount = Math.max(0, datedItems.length - visibleRows.length)
-    const minYear = Math.min(...visibleRows.map((r) => r.span.start))
-    const maxYear = Math.max(...visibleRows.map((r) => r.span.end), minYear + 10)
+    const minYear = Math.min(...visibleRows.map((row) => row.span.start))
+    const maxYear = Math.max(...visibleRows.map((row) => row.span.end), minYear + 10)
     const range = Math.max(10, maxYear - minYear)
 
     const tickCount = 5
@@ -911,14 +951,6 @@ export function CountryPersonsSection({
       return next
     })
 
-  const handleGoGovernment = () => {
-    if (onGoToGovernment) {
-      onGoToGovernment()
-      return
-    }
-    navigate(pathKeys.countryGovernment(country.id))
-  }
-
   const invalidateAllPersonQueries = () => {
     void queryClient.invalidateQueries({
       queryKey: ['persons', 'by-country-grouped', country.id],
@@ -938,7 +970,7 @@ export function CountryPersonsSection({
     if (polityFilter === '__modern__') return `${country.name} (현대)`
     return (
       normalizedData.historical.find(
-        (g) => g.historicalCountryId === polityFilter,
+        (grp) => grp.historicalCountryId === polityFilter,
       )?.historicalCountryName ?? null
     )
   }, [polityFilter, country.name, normalizedData.historical])
@@ -946,7 +978,7 @@ export function CountryPersonsSection({
   return (
     <DashboardStyles.DashboardRoot>
       <SectionWrap>
-        {/* 제목은 위 탭('인물')이 맡는다 — 여기는 수치 한 줄과 할 일만 */}
+        {/* 제목은 위 탭('인물')이 맡는다 — 우측에는 인물 등록 주 액션 하나만 배치 */}
         <SectionSubNav
           summary={
             <span>
@@ -958,48 +990,30 @@ export function CountryPersonsSection({
             </span>
           }
           actions={
-            <>
-              <LedgerToolbarButton type="button" onClick={handleGoGovernment}>
-                <span>정부·행정</span>
-                <FiArrowUpRight size={13} />
-              </LedgerToolbarButton>
-              <LedgerToolbarButton
-                type="button"
-                onClick={() =>
-                  navigate(
-                    `${pathKeys.personsTimeline()}?countries=${encodeURIComponent(country.name)}`,
-                  )
-                }
+            isLoading || !hasAny ? null : (
+              <PrimaryActionButton
+                onClick={() => {
+                  setEditPersonId(null)
+                  setRegisterModalOpen(true)
+                }}
               >
-                <span>인물 타임라인</span>
-                <FiArrowUpRight size={13} />
-              </LedgerToolbarButton>
-              {/* 비어 있으면 등록은 빈 화면의 버튼 하나만 */}
-              {isLoading || !hasAny ? null : (
-                <PrimaryActionButton
-                  onClick={() => {
-                    setEditPersonId(null)
-                    setRegisterModalOpen(true)
-                  }}
-                >
-                  <FiPlus size={14} />
-                  <span>인물 등록</span>
-                </PrimaryActionButton>
-              )}
-            </>
+                <FiPlus size={14} />
+                <span>인물 등록</span>
+              </PrimaryActionButton>
+            )
           }
         />
 
         {hasAny && (
           <PersonsBentoWrap aria-label="소속 인물 인포그래픽 요약">
-            <BentoGrid3Col>
-              {/* Card 1: 현대 국가 → 정치체·시대 비중(클릭 필터) / 역사 국가 → 수명 구간 및 생애 요약 */}
+            <EditorialSummaryGrid>
+              {/* Column 1: 현대 국가 → 정치체·시대 비중(클릭 필터) / 역사 국가 → 수명 구간 및 생애 요약 */}
               <BentoCard>
-                <BentoCardHeader>
+                <BentoCardHeader style={{ paddingBottom: 14 }}>
                   <BentoCardTitleGroup>
-                    <BentoCardTitle>
+                    <BentoCardTitle style={{ fontSize: 16 }}>
                       {isHistoricalCountry
-                        ? '인물 규모 · 향년(수명) 분포'
+                        ? '인물 규모 · 수명 분포'
                         : '소속 정치체 · 시대 비중'}
                     </BentoCardTitle>
                     <BentoCardBadge>
@@ -1015,7 +1029,7 @@ export function CountryPersonsSection({
                     </InlineCardResetBtn>
                   )}
                 </BentoCardHeader>
-                <BentoCardBody>
+                <BentoCardBody style={{ gap: 14 }}>
                   {isHistoricalCountry ? (
                     <>
                       <PolityHeroRow>
@@ -1031,22 +1045,11 @@ export function CountryPersonsSection({
                       </PolityHeroRow>
 
                       {summaryStats.lifespanSlices.length > 0 ? (
-                        <>
-                          <StackedSegmentBar
-                            slices={summaryStats.lifespanSlices}
-                            height={10}
-                            showPercent
-                          />
-                          <PolityLegendList>
-                            {summaryStats.lifespanSlices.map((slice) => (
-                              <PolityLegendStatic key={slice.key}>
-                                <PolityLegendDot $color={slice.color} />
-                                <PolityLegendName>{slice.label}</PolityLegendName>
-                                <PolityLegendCount>{slice.meta}</PolityLegendCount>
-                              </PolityLegendStatic>
-                            ))}
-                          </PolityLegendList>
-                        </>
+                        <StackedSegmentBar
+                          slices={summaryStats.lifespanSlices}
+                          height={9}
+                          showPercent
+                        />
                       ) : (
                         <HistFooterNote>
                           생몰년이 등록되면 향년 구간 인포그래픽이 자동 집계됩니다.
@@ -1075,12 +1078,13 @@ export function CountryPersonsSection({
 
                       <StackedSegmentBar
                         slices={summaryStats.politySlices}
-                        height={10}
+                        height={9}
                         showPercent
+                        showLegend={false}
                       />
 
                       <PolityLegendList>
-                        {summaryStats.politySlices.slice(0, 5).map((slice) => {
+                        {summaryStats.politySlices.slice(0, 6).map((slice) => {
                           const isSelected =
                             slice.filterKey != null &&
                             polityFilter === slice.filterKey
@@ -1117,11 +1121,13 @@ export function CountryPersonsSection({
                 </BentoCardBody>
               </BentoCard>
 
-              {/* Card 2: 세기별 활동 인물 분포 히스토그램 (클릭 시 세기 필터) */}
+              {/* Column 2: 세기별 활동 인물 분포 히스토그램 (클릭 시 세기 필터) */}
               <BentoCard>
-                <BentoCardHeader>
+                <BentoCardHeader style={{ paddingBottom: 14 }}>
                   <BentoCardTitleGroup>
-                    <BentoCardTitle>세기별 활동 분포</BentoCardTitle>
+                    <BentoCardTitle style={{ fontSize: 16 }}>
+                      세기별 활동 분포
+                    </BentoCardTitle>
                     <BentoCardBadge>
                       {summaryStats.datedCount > 0
                         ? `연대 확인 ${summaryStats.datedCount}명`
@@ -1137,23 +1143,24 @@ export function CountryPersonsSection({
                     </InlineCardResetBtn>
                   )}
                 </BentoCardHeader>
-                <BentoCardBody>
+                <BentoCardBody style={{ gap: 12 }}>
                   {summaryStats.centuryBuckets.length > 0 ? (
                     <>
                       <CenturyHistBars
                         role="group"
+                        $compact={summaryStats.centuryBuckets.length <= 5}
                         aria-label="세기별 활동 인물 분포 (클릭하여 세기 필터)"
                       >
                         {summaryStats.centuryBuckets.map((bucket) => {
                           const heightPct =
                             summaryStats.maxCenturyCount > 0
                               ? Math.max(
-                                  10,
+                                  12,
                                   (bucket.count /
                                     summaryStats.maxCenturyCount) *
                                     100,
                                 )
-                              : 10
+                              : 12
                           const isSelected = centuryFilter === bucket.century
                           const isPeak =
                             centuryFilter == null &&
@@ -1196,7 +1203,7 @@ export function CountryPersonsSection({
                         {summaryStats.peakCentury
                           ? `최다 집중: ${summaryStats.peakCentury.label} (${summaryStats.peakCentury.count}명)`
                           : ''}
-                        {' · 막대 클릭 시 해당 세기 필터'}
+                        {' · 막대 클릭 시 세기 필터'}
                       </HistFooterNote>
                     </>
                   ) : (
@@ -1207,13 +1214,15 @@ export function CountryPersonsSection({
                 </BentoCardBody>
               </BentoCard>
 
-              {/* Card 3: 주요 직역 · 역할 분포 (클릭 시 직역 필터) */}
+              {/* Column 3: 주요 직역 · 역할 분포 (클릭 시 직역 필터) */}
               <BentoCard>
-                <BentoCardHeader>
+                <BentoCardHeader style={{ paddingBottom: 14 }}>
                   <BentoCardTitleGroup>
-                    <BentoCardTitle>주요 직역 · 역할 구성</BentoCardTitle>
+                    <BentoCardTitle style={{ fontSize: 16 }}>
+                      주요 직역 · 역할 구성
+                    </BentoCardTitle>
                     <BentoCardBadge>
-                      관직·재임 {summaryStats.tenuredCount}명
+                      직역 분류 {summaryStats.classifiedCount}명
                     </BentoCardBadge>
                   </BentoCardTitleGroup>
                   {roleFilter !== 'all' && (
@@ -1229,19 +1238,19 @@ export function CountryPersonsSection({
                   <RoleDonutLayout>
                     <MiniDonutRing
                       slices={summaryStats.roleSlices}
-                      size={76}
-                      strokeWidth={10}
+                      size={82}
+                      strokeWidth={10.5}
                       centerValue={
                         roleFilter !== 'all'
                           ? String(
                               summaryStats.roleSlices.find(
-                                (s) => s.roleKey === roleFilter,
+                                (slice) => slice.roleKey === roleFilter,
                               )?.value ?? 0,
                             )
-                          : String(summaryStats.tenuredCount)
+                          : String(summaryStats.classifiedCount)
                       }
                       centerLabel={
-                        roleFilter !== 'all' ? '선택 직역' : '직역·재임'
+                        roleFilter !== 'all' ? '선택 직역' : '분류 직역'
                       }
                     />
                     <RoleLegendList>
@@ -1279,7 +1288,7 @@ export function CountryPersonsSection({
                   </RoleDonutLayout>
                 </BentoCardBody>
               </BentoCard>
-            </BentoGrid3Col>
+            </EditorialSummaryGrid>
           </PersonsBentoWrap>
         )}
 
@@ -1307,11 +1316,6 @@ export function CountryPersonsSection({
               setEditPersonId(null)
               setRegisterModalOpen(true)
             }}
-            secondaryAction={{
-              label: '정부·행정에서 재임 기록',
-              Icon: FiArrowUpRight,
-              onClick: handleGoGovernment,
-            }}
             features={[
               { Icon: FiFlag, title: '소속 정치체 · 시대', description: '현대 국가와 과거 국가별로 나눠 비중을 봄' },
               { Icon: FiBarChart2, title: '세기별 활동', description: '어느 세기에 인물이 몰렸는지 막대로' },
@@ -1321,6 +1325,94 @@ export function CountryPersonsSection({
         ) : (
           <>
             <FilterToolbar>
+              <ToolbarTopRow>
+                <ToolbarSearchCluster>
+                  <SearchInputWrap>
+                    <FiSearch size={14} />
+                    <input
+                      type="search"
+                      value={query}
+                      onChange={(changeEvent) =>
+                        setQuery(changeEvent.target.value)
+                      }
+                      placeholder="이름 · 시호 · 직책 · 기관 검색…"
+                      aria-label="인물 검색"
+                    />
+                  </SearchInputWrap>
+
+                  {activePolityLabel && (
+                    <ActiveFilterTag
+                      type="button"
+                      onClick={() => setPolityFilter(null)}
+                    >
+                      <span>정치체: {activePolityLabel}</span>
+                      <FiX size={11} />
+                    </ActiveFilterTag>
+                  )}
+                  {centuryFilter != null && (
+                    <ActiveFilterTag
+                      type="button"
+                      onClick={() => setCenturyFilter(null)}
+                    >
+                      <span>{formatCenturyFromIndex(centuryFilter)}</span>
+                      <FiX size={11} />
+                    </ActiveFilterTag>
+                  )}
+                  {isFilterActive && (
+                    <FilterStatusWrap>
+                      <FilterResultText>
+                        {filteredUniqueCount.toLocaleString('ko-KR')}명 검색됨
+                      </FilterResultText>
+                      <FilterResetBtn type="button" onClick={resetAllFilters}>
+                        필터 초기화
+                      </FilterResetBtn>
+                    </FilterStatusWrap>
+                  )}
+                </ToolbarSearchCluster>
+
+                <ToolbarRight>
+                  <SortSelect
+                    value={sortBy}
+                    onChange={(evt) =>
+                      setSortBy(evt.target.value as PersonSortKey)
+                    }
+                    aria-label="인물 정렬 기준"
+                  >
+                    <option value="yearAsc">시대순 (오래된순)</option>
+                    <option value="yearDesc">시대순 (최신순)</option>
+                    <option value="influenceDesc">영향력·관직순</option>
+                    <option value="nameAsc">이름 가나다순</option>
+                  </SortSelect>
+
+                  <LedgerViewSwitch role="group" aria-label="인물 보기 방식">
+                    <LedgerViewSwitchItem
+                      type="button"
+                      $active={viewMode === 'ledger'}
+                      onClick={() => setViewMode('ledger')}
+                    >
+                      <FiList size={13} />
+                      <span>2열 원장</span>
+                    </LedgerViewSwitchItem>
+                    <LedgerViewSwitchItem
+                      type="button"
+                      $active={viewMode === 'cards'}
+                      onClick={() => setViewMode('cards')}
+                    >
+                      <FiGrid size={13} />
+                      <span>초상 카드</span>
+                    </LedgerViewSwitchItem>
+                    <LedgerViewSwitchItem
+                      type="button"
+                      $active={viewMode === 'timeline'}
+                      onClick={() => setViewMode('timeline')}
+                    >
+                      <FiAlignLeft size={13} />
+                      <span>생애 연대기</span>
+                    </LedgerViewSwitchItem>
+                  </LedgerViewSwitch>
+                </ToolbarRight>
+              </ToolbarTopRow>
+
               <FilterChipGroup role="tablist" aria-label="인물 범위 및 직역 필터">
                 <FilterChip
                   type="button"
@@ -1386,7 +1478,7 @@ export function CountryPersonsSection({
                 )}
 
                 {summaryStats.roleSlices
-                  .filter((s) => s.roleKey !== '미분류')
+                  .filter((slice) => slice.roleKey !== '미분류')
                   .map((slice) => {
                     const active = roleFilter === slice.roleKey
                     return (
@@ -1409,88 +1501,6 @@ export function CountryPersonsSection({
                     )
                   })}
               </FilterChipGroup>
-
-              <ToolbarRight>
-                {activePolityLabel && (
-                  <ActiveFilterTag
-                    type="button"
-                    onClick={() => setPolityFilter(null)}
-                  >
-                    <span>정치체: {activePolityLabel}</span>
-                    <FiX size={11} />
-                  </ActiveFilterTag>
-                )}
-                {centuryFilter != null && (
-                  <ActiveFilterTag
-                    type="button"
-                    onClick={() => setCenturyFilter(null)}
-                  >
-                    <span>{formatCenturyFromIndex(centuryFilter)}</span>
-                    <FiX size={11} />
-                  </ActiveFilterTag>
-                )}
-                {isFilterActive && (
-                  <FilterStatusWrap>
-                    <FilterResultText>
-                      {filteredUniqueCount.toLocaleString('ko-KR')}명
-                    </FilterResultText>
-                    <FilterResetBtn type="button" onClick={resetAllFilters}>
-                      초기화
-                    </FilterResetBtn>
-                  </FilterStatusWrap>
-                )}
-
-                <SearchInputWrap>
-                  <FiSearch size={13} />
-                  <input
-                    type="search"
-                    value={query}
-                    onChange={(changeEvent) =>
-                      setQuery(changeEvent.target.value)
-                    }
-                    placeholder="이름 · 시호 · 직책 · 기관 검색…"
-                    aria-label="인물 검색"
-                  />
-                </SearchInputWrap>
-
-                <SortSelect
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as PersonSortKey)}
-                  aria-label="인물 정렬 기준"
-                >
-                  <option value="yearAsc">시대순 (오래된순)</option>
-                  <option value="yearDesc">시대순 (최신순)</option>
-                  <option value="influenceDesc">영향력·관직순</option>
-                  <option value="nameAsc">이름 가나다순</option>
-                </SortSelect>
-
-                <LedgerViewSwitch role="group" aria-label="인물 보기 방식">
-                  <LedgerViewSwitchItem
-                    type="button"
-                    $active={viewMode === 'ledger'}
-                    onClick={() => setViewMode('ledger')}
-                  >
-                    <FiList size={13} />
-                    <span>2열 원장</span>
-                  </LedgerViewSwitchItem>
-                  <LedgerViewSwitchItem
-                    type="button"
-                    $active={viewMode === 'cards'}
-                    onClick={() => setViewMode('cards')}
-                  >
-                    <FiGrid size={13} />
-                    <span>초상 카드</span>
-                  </LedgerViewSwitchItem>
-                  <LedgerViewSwitchItem
-                    type="button"
-                    $active={viewMode === 'timeline'}
-                    onClick={() => setViewMode('timeline')}
-                  >
-                    <FiAlignLeft size={13} />
-                    <span>생애 연대기</span>
-                  </LedgerViewSwitchItem>
-                </LedgerViewSwitch>
-              </ToolbarRight>
             </FilterToolbar>
 
             {groups.length === 0 ? (
@@ -1551,23 +1561,35 @@ export function CountryPersonsSection({
                             ((row.span.end - row.span.start) / totalSpan) * 100,
                           ),
                         )
-                        return (
-                          <TimelinePersonRow
-                            key={row.person.id}
-                            type="button"
-                            onClick={() => setPreviewPersonId(row.person.id)}
-                          >
-                            <TimelinePersonLead>
-                              <PolityLegendDot $color={row.color} />
-                              <TimelinePersonName title={row.displayName}>
-                                {row.displayName}
-                              </TimelinePersonName>
-                              {row.roleLabel && (
-                                <TimelineRolePill title={row.roleLabel}>
-                                  {row.roleLabel}
-                                </TimelineRolePill>
-                              )}
-                            </TimelinePersonLead>
+                          return (
+                            <TimelinePersonRow
+                              key={row.person.id}
+                              type="button"
+                              onClick={() => setPreviewPersonId(row.person.id)}
+                            >
+                              <TimelinePersonLead>
+                                <TimelineMiniAvatar $accent={row.color}>
+                                  {row.person.profileImageUrl ? (
+                                    <img
+                                      src={getUploadImageUrl(
+                                        row.person.profileImageUrl,
+                                      )}
+                                      alt=""
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <span>{row.displayName.slice(0, 1)}</span>
+                                  )}
+                                </TimelineMiniAvatar>
+                                <TimelinePersonName title={row.displayName}>
+                                  {row.displayName}
+                                </TimelinePersonName>
+                                {row.roleLabel && (
+                                  <TimelineRolePill title={row.roleLabel}>
+                                    {row.roleLabel}
+                                  </TimelineRolePill>
+                                )}
+                              </TimelinePersonLead>
 
                             <TimelineBarLane>
                               <TimelineSpanBar
@@ -1709,20 +1731,22 @@ export function CountryPersonsSection({
                                           influence={influence}
                                           variant="inline"
                                         />
-                                        {roleLabel && (
-                                          <PersonRoleBadge>
-                                            {roleLabel}
-                                          </PersonRoleBadge>
-                                        )}
                                         {tenureCount > 1 && (
                                           <ExtraTenureBadge>
                                             +{tenureCount - 1}직
                                           </ExtraTenureBadge>
                                         )}
                                       </PersonNameRow>
-                                      <PersonLifespanText>
-                                        {lifespanLabel}
-                                      </PersonLifespanText>
+                                      <PersonSubInfoRow>
+                                        {roleLabel && (
+                                          <PersonRoleBadge title={roleLabel}>
+                                            {roleLabel}
+                                          </PersonRoleBadge>
+                                        )}
+                                        <PersonLifespanText>
+                                          {lifespanLabel}
+                                        </PersonLifespanText>
+                                      </PersonSubInfoRow>
                                     </PersonMetaCol>
                                   </PersonLedgerMainBtn>
 
@@ -1846,19 +1870,33 @@ const InlineCardResetBtn = styled.button`
 
 const FilterToolbar = styled.div`
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 10px 0;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 0 16px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
-const FilterChipGroup = styled.div`
-  display: inline-flex;
+const ToolbarTopRow = styled.div`
+  display: flex;
   align-items: center;
-  gap: 5px;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+`
+
+const ToolbarSearchCluster = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 240px;
+`
+
+const FilterChipGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-wrap: wrap;
 `
 
@@ -1937,17 +1975,21 @@ const FilterResetBtn = styled.button`
 const SearchInputWrap = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: ${RADIUS.SM};
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   color: ${({ theme }) => theme.colors.text.tertiary};
-  width: min(210px, 100%);
+  width: min(280px, 100%);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 
   &:focus-within {
     border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: transparent;
   }
 
   input {
@@ -1955,21 +1997,21 @@ const SearchInputWrap = styled.div`
     background: transparent;
     font-family: inherit;
     color: ${({ theme }) => theme.colors.text.primary};
-    font-size: 12px;
+    font-size: 12.5px;
     width: 100%;
     outline: none;
   }
 `
 
 const SortSelect = styled.select`
-  height: 32px;
-  padding: 0 8px;
-  border-radius: ${RADIUS.SM};
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   outline: none;
@@ -1982,7 +2024,7 @@ const SortSelect = styled.select`
 const Group = styled.section`
   display: flex;
   flex-direction: column;
-  padding-top: 6px;
+  padding-top: 18px;
 `
 
 const GroupHeadRow = styled.div`
@@ -1990,6 +2032,7 @@ const GroupHeadRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding-bottom: 4px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
@@ -2086,12 +2129,13 @@ const PersonLedgerCell = styled.div`
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   @media (min-width: 760px) {
-    &:nth-child(even) {
-      border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+    &:nth-child(odd) {
+      padding-right: 10px;
     }
 
-    &:last-child:nth-child(odd) {
-      grid-column: 1 / -1;
+    &:nth-child(even) {
+      padding-left: 10px;
+      border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
     }
   }
 `
@@ -2099,15 +2143,17 @@ const PersonLedgerCell = styled.div`
 const PersonLedgerMainBtn = styled.button`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex: 1;
   min-width: 0;
-  padding: 9px 10px;
+  padding: 12px 10px;
   border: none;
+  border-radius: 10px;
   background: transparent;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background 0.14s ease;
 
   &:hover {
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
@@ -2115,19 +2161,22 @@ const PersonLedgerMainBtn = styled.button`
 `
 
 const PersonAvatar = styled.div<{ $accent: string }>`
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
   color: ${({ $accent }) => $accent};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ $accent, theme }) =>
+    theme.mode === 'dark' ? `${$accent}22` : `${$accent}14`};
+  border: 1.5px solid
+    ${({ $accent, theme }) =>
+      theme.mode === 'dark' ? `${$accent}55` : `${$accent}38`};
 
   img {
     width: 100%;
@@ -2139,7 +2188,7 @@ const PersonAvatar = styled.div<{ $accent: string }>`
 const PersonMetaCol = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 `
 
@@ -2147,24 +2196,36 @@ const PersonNameRow = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   min-width: 0;
 `
 
 const PersonNameText = styled.span`
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
   color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const PersonSubInfoRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
 `
 
 const PersonRoleBadge = styled.span`
   padding: 1px 6px;
-  border-radius: ${RADIUS.XS};
-  font-size: 10.5px;
-  font-weight: 600;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 650;
   color: ${({ theme }) => ledgerAccent(theme.mode)};
   background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  max-width: 220px;
+  max-width: 240px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2206,9 +2267,9 @@ const PersonDetailBtn = styled.button`
 
 const CardGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
-  gap: 10px;
-  padding-top: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(256px, 1fr));
+  gap: 12px;
+  padding-top: 14px;
 `
 
 const ShowMoreRow = styled.div`
@@ -2239,27 +2300,25 @@ const ShowMoreBtn = styled.button`
 const TimelineCohortPanel = styled.section`
   display: flex;
   flex-direction: column;
-  margin-top: 8px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
-  overflow: hidden;
+  margin-top: 12px;
+  border: none;
+  background: transparent;
 `
 
 const TimelineAxisHeader = styled.div`
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 150px;
+  grid-template-columns: 240px minmax(0, 1fr) 150px;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  gap: 14px;
+  padding: 10px 8px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  background: transparent;
   font-size: 11px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 
   @media (max-width: 780px) {
-    grid-template-columns: 150px minmax(0, 1fr);
+    grid-template-columns: 160px minmax(0, 1fr);
   }
 `
 
@@ -2292,10 +2351,10 @@ const TimelineRowsWrap = styled.div`
 
 const TimelinePersonRow = styled.button`
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 150px;
+  grid-template-columns: 240px minmax(0, 1fr) 150px;
   align-items: center;
-  gap: 12px;
-  padding: 7px 12px;
+  gap: 14px;
+  padding: 9px 8px;
   border: none;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: transparent;
@@ -2303,24 +2362,45 @@ const TimelinePersonRow = styled.button`
   text-align: left;
   cursor: pointer;
 
-  &:last-child {
-    border-bottom: none;
-  }
-
   &:hover {
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 
   @media (max-width: 780px) {
-    grid-template-columns: 150px minmax(0, 1fr);
+    grid-template-columns: 160px minmax(0, 1fr);
   }
 `
 
 const TimelinePersonLead = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+`
+
+const TimelineMiniAvatar = styled.span<{ $accent: string }>`
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: ${({ $accent }) => $accent};
+  background: ${({ $accent, theme }) =>
+    theme.mode === 'dark' ? `${$accent}24` : `${$accent}14`};
+  border: 1px solid
+    ${({ $accent, theme }) =>
+      theme.mode === 'dark' ? `${$accent}50` : `${$accent}38`};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 `
 
 const TimelinePersonName = styled.span`
@@ -2425,7 +2505,49 @@ const RetryButton = styled.button`
 `
 
 const PersonsBentoWrap = styled.div`
-  padding-bottom: 14px;
+  padding: 24px 0 28px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  margin-top: 10px;
+`
+
+const EditorialSummaryGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  align-items: start;
+
+  > *:first-child {
+    padding-right: 28px;
+  }
+
+  > *:nth-child(2) {
+    padding: 0 28px;
+    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+    border-right: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+
+  > *:nth-child(3) {
+    padding-left: 28px;
+  }
+
+  @media (max-width: 1120px) {
+    grid-template-columns: 1fr;
+    gap: 24px;
+
+    > *:first-child,
+    > *:nth-child(2),
+    > *:nth-child(3) {
+      padding: 0;
+      border-left: none;
+      border-right: none;
+    }
+
+    > * + * {
+      padding-top: 24px;
+      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+    }
+  }
 `
 
 const PolityHeroRow = styled.div`
@@ -2519,14 +2641,17 @@ const PolityLegendCount = styled.span`
   ${DIGIT_DISPLAY}
 `
 
-const CenturyHistBars = styled.div`
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  align-items: end;
-  gap: 4px;
-  height: 80px;
+const CenturyHistBars = styled.div<{ $compact?: boolean }>`
+  display: flex;
+  align-items: flex-end;
+  justify-content: ${({ $compact }) => ($compact ? 'flex-start' : 'space-between')};
+  gap: ${({ $compact }) => ($compact ? '14px' : '4px')};
+  height: 86px;
   padding-top: 4px;
+
+  > button {
+    flex: ${({ $compact }) => ($compact ? '0 0 42px' : '1 1 0')};
+  }
 `
 
 const CenturyBarColBtn = styled.button<{
@@ -2583,10 +2708,10 @@ const CenturyBarFill = styled.div<{ $highlight?: boolean }>`
   border-radius: ${RADIUS.XS} ${RADIUS.XS} 0 0;
   background: ${({ theme, $highlight }) =>
     $highlight
-      ? ledgerAccent(theme.mode)
+      ? 'linear-gradient(180deg, #6366f1 0%, #0ea5e9 100%)'
       : theme.mode === 'dark'
-        ? 'rgba(165, 180, 252, 0.44)'
-        : 'rgba(79, 70, 229, 0.38)'};
+        ? 'linear-gradient(180deg, rgba(165, 180, 252, 0.52) 0%, rgba(56, 189, 248, 0.36) 100%)'
+        : 'linear-gradient(180deg, rgba(99, 102, 241, 0.44) 0%, rgba(14, 165, 233, 0.3) 100%)'};
 `
 
 const CenturyBarAxis = styled.span<{ $active?: boolean }>`

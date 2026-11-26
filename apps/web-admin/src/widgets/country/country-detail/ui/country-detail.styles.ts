@@ -46,7 +46,7 @@ export const CountrySwapMotion = styled(motion.div)`
 export const TabSwapMotion = styled.div`
   display: flex;
   flex-direction: column;
-  animation: tabPanelIn 180ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: tabPanelIn 180ms cubic-bezier(0.25, 0.1, 0.25, 1);
 
   @keyframes tabPanelIn {
     from {

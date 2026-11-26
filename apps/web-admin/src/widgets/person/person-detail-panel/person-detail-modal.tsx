@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 
 import { useQuery } from '@tanstack/react-query'
@@ -58,8 +59,8 @@ export function PersonDetailModal({
 
   const topId = stack[stack.length - 1] ?? personId
 
-  const push = useCallback((id: string) => setStack((s) => [...s, id]), [])
-  const pop = useCallback(() => setStack((s) => s.slice(0, -1)), [])
+  const push = useCallback((id: string) => setStack((prev) => [...prev, id]), [])
+  const pop = useCallback(() => setStack((prev) => prev.slice(0, -1)), [])
   const depth = stack.length // 0이면 루트 인물
 
   const panelRef = useRef<HTMLDivElement>(null)
@@ -105,7 +106,9 @@ export function PersonDetailModal({
   useBodyScrollLock(open)
   useFocusTrap(panelRef, open)
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <AnimatePresence>
       {personId && topId && (
         <BioMentionModalOverlay
@@ -180,6 +183,7 @@ export function PersonDetailModal({
           </BioMentionModalPanel>
         </BioMentionModalOverlay>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }

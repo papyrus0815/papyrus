@@ -45,7 +45,7 @@ export function CountryPersonGroupsBlock({
 
   if (isLoading || groups.length === 0) return null
 
-  const maxMembers = Math.max(...groups.map((g) => g.memberCount || 0), 1)
+  const maxMembers = Math.max(...groups.map((grp) => grp.memberCount || 0), 1)
 
   return (
     <Wrap aria-label="소속 인물 집단 및 계파">
@@ -63,22 +63,22 @@ export function CountryPersonGroupsBlock({
         </AllLink>
       </Head>
       <Chips>
-        {groups.slice(0, 12).map((g) => {
-          const meta = PERSON_GROUP_TYPE_META[g.type]
+        {groups.slice(0, 12).map((grp) => {
+          const meta = PERSON_GROUP_TYPE_META[grp.type]
           const barPct =
-            g.memberCount > 0
-              ? Math.max(12, Math.round((g.memberCount / maxMembers) * 100))
+            grp.memberCount > 0
+              ? Math.max(12, Math.round((grp.memberCount / maxMembers) * 100))
               : 0
           return (
-            <GroupChip key={g.id} to={pathKeys.personGroupDetail(g.id)}>
+            <GroupChip key={grp.id} to={pathKeys.personGroupDetail(grp.id)}>
               <ChipTop>
                 <Dot $tone={meta.tone} />
                 <ChipTypeBadge $tone={meta.tone}>{meta.label}</ChipTypeBadge>
-                <ChipName>{g.name}</ChipName>
-                {g.type === 'GENERATION' && g.generationOrder != null && (
-                  <ChipOrd>{g.generationOrder}세대</ChipOrd>
+                <ChipName>{grp.name}</ChipName>
+                {grp.type === 'GENERATION' && grp.generationOrder != null && (
+                  <ChipOrd>{grp.generationOrder}세대</ChipOrd>
                 )}
-                <ChipCount>{g.memberCount}명</ChipCount>
+                <ChipCount>{grp.memberCount}명</ChipCount>
               </ChipTop>
               {barPct > 0 && (
                 <MiniMemberBar>
@@ -94,11 +94,12 @@ export function CountryPersonGroupsBlock({
 }
 
 const Wrap = styled.div`
-  margin-bottom: 14px;
-  padding: 12px 15px;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  margin-bottom: 18px;
+  padding: 18px 0 22px;
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 `
 
@@ -107,15 +108,16 @@ const Head = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 `
 
 const Title = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  font-weight: 700;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 780;
+  letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
   svg {
     color: ${({ theme }) => ledgerAccent(theme.mode)};
@@ -123,13 +125,11 @@ const Title = styled.div`
 `
 
 const Count = styled.span`
-  padding: 1px 7px;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: ${RADIUS.XS};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  color: ${({ theme }) => theme.colors.text.secondary};
+  padding: 0;
+  font-size: 12px;
+  font-weight: 650;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   ${DIGIT_DISPLAY}
 `
 
@@ -148,22 +148,22 @@ const AllLink = styled(Link)`
 
 const Chips = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 7px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
 `
 
 const GroupChip = styled(Link)`
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 7px 10px;
-  border-radius: ${RADIUS.SM};
+  gap: 6px;
+  padding: 9px 12px;
+  border-radius: 10px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: transparent;
   text-decoration: none;
   transition:
-    border-color 0.13s ease,
-    background 0.13s ease;
+    border-color 0.14s ease,
+    background 0.14s ease;
   &:hover {
     border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};

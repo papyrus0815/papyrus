@@ -179,17 +179,17 @@ export function PersonCard({
 
 const CardShell = styled.div`
   position: relative;
-  border-radius: ${RADIUS.MD};
+  border-radius: 14px;
   overflow: hidden;
   display: flex;
   align-items: stretch;
-  min-height: 100px;
+  min-height: 98px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  background: transparent;
   box-shadow: none;
   transition:
-    border-color 0.14s ease,
-    background 0.14s ease;
+    border-color 0.16s ease,
+    background 0.16s ease;
 
   &:hover {
     border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
@@ -200,10 +200,11 @@ const CardShell = styled.div`
 const CardMainBtn = styled.button`
   display: flex;
   flex-direction: row;
-  align-items: stretch;
+  align-items: center;
+  gap: 13px;
   flex: 1;
   min-width: 0;
-  padding: 0;
+  padding: 11px 13px;
   margin: 0;
   border: none;
   background: transparent;
@@ -220,32 +221,43 @@ const CardMainBtn = styled.button`
 
 const CornerDetailBtn = styled.button`
   position: absolute;
-  top: 7px;
-  right: 7px;
+  top: 8px;
+  right: 8px;
   width: 24px;
   height: 24px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border-radius: 6px;
+  border: none;
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
+  opacity: 0.65;
+  transition:
+    opacity 0.14s ease,
+    color 0.14s ease,
+    background 0.14s ease;
+
+  ${CardShell}:hover & {
+    opacity: 1;
+  }
 
   &:hover {
     color: ${({ theme }) => ledgerAccent(theme.mode)};
-    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   }
 `
 
 const ImageSide = styled.div`
-  width: 84px;
+  width: 62px;
+  height: 74px;
+  border-radius: 10px;
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
-  border-right: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `
 
@@ -264,7 +276,9 @@ const ImgPlaceholder = styled.div<{ $color: string }>`
   align-items: center;
   justify-content: center;
   background: ${({ $color, theme }) =>
-    theme.mode === 'dark' ? `${$color}1c` : `${$color}12`};
+    theme.mode === 'dark'
+      ? `linear-gradient(145deg, ${$color}26, rgba(15, 23, 42, 0.65))`
+      : `linear-gradient(145deg, ${$color}16, rgba(248, 250, 252, 0.9))`};
   color: ${({ $color }) => $color};
   font-size: 18px;
   font-weight: 800;
@@ -273,8 +287,7 @@ const ImgPlaceholder = styled.div<{ $color: string }>`
 const Content = styled.div`
   flex: 1;
   min-width: 0;
-  padding: 11px 13px;
-  padding-right: 30px;
+  padding: 2px 22px 2px 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
