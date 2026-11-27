@@ -202,6 +202,13 @@ import {
 import { TenureHistoryHorizTimeline } from './tenure-history-horiz-timeline'
 import { TreatyLinkModal } from './treaty-link-modal'
 import { CabinetEventsSection } from './cabinet-events-section.widget'
+import {
+  buildReignRowCabinets,
+  cabinetHeadDisplayName,
+  isMonarchicalHead,
+  isReignRowId,
+  reignTenureIdOfRow,
+} from './cabinet-reign-rows'
 
 type CabinetCategoryFilterKey = PositionCategory | 'COLLECTIVE'
 
@@ -228,7 +235,11 @@ function cabinetHeadCategory(
   head:
     | {
         positionType?: string | null
-        positionDefinition?: { positionType?: string | null; title?: string | null } | null
+        positionDefinition?: {
+          positionType?: string | null
+          title?: string | null
+          isMonarchical?: boolean | null
+        } | null
         title?: string | null
         appointmentMethod?: string | null
         isMonarchical?: boolean | null
@@ -238,7 +249,8 @@ function cabinetHeadCategory(
 ): CabinetCategoryFilterKey {
   if (!head) return 'COLLECTIVE'
   return categorizePosition({
-    isMonarchical: head?.isMonarchical,
+    // 내각 응답의 수반은 군주 여부가 직위 정의 쪽에 실린다(재임 피드는 행 자체)
+    isMonarchical: isMonarchicalHead(head) || head?.isMonarchical,
     positionType: head?.positionType ?? head?.positionDefinition?.positionType,
     positionTitle: head?.title ?? head?.positionDefinition?.title,
     appointmentMethod: head?.appointmentMethod,
@@ -841,9 +853,18 @@ export function CabinetsSection({
     enabled: !!countryId || !!historicalCountryId,
   })
 
+  /**
+   * 군주 행 — 내각이 없는 재위를 가상 내각 행으로(`cabinet-reign-rows`). 재위는 내각 행을 만들지 않아
+   * 군주가 총리 내각 사이 표지로만 비쳤다(차르국은 통째 빈 화면). 원수 축이므로 늘 보인다.
+   */
+  const reignRowCabinets = useMemo(
+    () => buildReignRowCabinets(cabinets, countryTenures as unknown[]),
+    [cabinets, countryTenures],
+  )
+
   /** 행정부 리스트: 내각 고유 출범일 우선(없으면 수반 취임일) 기준 시간순(과거→현재, BC 안전) 정렬 */
   const sortedCabinets = useMemo(() => {
-    const list = [...cabinets]
+    const list = [...cabinets, ...reignRowCabinets]
     return list.sort((left, right) => {
       const leftStart = resolveCabinetEffectiveDates(left).startDate
       const rightStart = resolveCabinetEffectiveDates(right).startDate
@@ -851,13 +872,53 @@ export function CabinetsSection({
       const keyRight = getSignedDateChronologyKey(rightStart) ?? 0
       return keyLeft - keyRight
     })
-  }, [cabinets])
+  }, [cabinets, reignRowCabinets])
+
+  /**
+   * 행 열기 — 실제 내각이면 상세로. 군주(가상) 행이면 그 재위를 수반으로 둔 실제 내각을 만든 뒤 연다:
+   * 대신·사건·조약은 내각에 묶이므로, 재위 아래 그런 기록을 두려면 내각 행이 있어야 한다. 묻고 만든다.
+   */
+  const openCabinetOrReignRow = useCallback(
+    async (targetCabinetId: string) => {
+      if (!isReignRowId(targetCabinetId)) {
+        selectCabinetWithUrl(targetCabinetId)
+        return
+      }
+      const reignRow = reignRowCabinets.find((rowItem) => rowItem.id === targetCabinetId)
+      if (!reignRow?.headTenure) return
+      const monarchName = cabinetHeadDisplayName(reignRow.headTenure) ?? '이 군주'
+      if (
+        !(await confirm({
+          title: '재위를 행정부로 열기',
+          message: `${monarchName}의 재위를 행정부 기록으로 엽니다. 이 재위 아래 대신·사건·조약을 연결할 수 있게 됩니다(재위 기록은 그대로).`,
+          confirmLabel: '행정부로 열기',
+        }))
+      ) {
+        return
+      }
+      try {
+        const createdCabinet = (await personCareerApi.createCabinet({
+          headTenureId: reignTenureIdOfRow(targetCabinetId),
+          countryId: reignRow.countryId ?? null,
+          historicalCountryId: reignRow.historicalCountryId ?? null,
+        })) as { id?: string } | null
+        await queryClient.invalidateQueries({ queryKey: ['cabinets-by-country'] })
+        void queryClient.invalidateQueries({ queryKey: ['cabinets'] })
+        if (createdCabinet?.id) selectCabinetWithUrl(createdCabinet.id)
+      } catch (error) {
+        notify.error(error instanceof Error ? error.message : '행정부를 만들지 못했습니다.')
+      }
+    },
+    [reignRowCabinets, selectCabinetWithUrl, queryClient],
+  )
 
   /** 내각 목록 — 총리 내각이 있는 국가는 의례적 원수 중복 행을 기본 숨기되, 전근대 왕조(군주만 존재)나 토글 ON 시 함께 표시 */
   const nonCeremonialCabinets = useMemo(
     () =>
       sortedCabinets.filter(
         (cabinetItem) =>
+          // 군주(재위) 행은 원수 축 — 직함 정규식(황제·차르…)으로 숨기지 않는다
+          isMonarchicalHead(cabinetItem.headTenure) ||
           !shouldHideCabinetFromExecutiveTimeline(
             cabinetItem.headTenure,
             cabinetItem,
@@ -1041,6 +1102,7 @@ export function CabinetsSection({
         monarchPersonRaw !== '—' ? monarchPersonRaw : ''
       return [
         personName,
+        head?.regnalName ?? '',
         posTitle,
         start,
         end,
@@ -1066,7 +1128,7 @@ export function CabinetsSection({
     cabinetTimelineCountryScope,
   ])
 
-  /** 타임라인·범례: 내각(행정부)만 — 군주는 칸으로 넣지 않음 */
+  /** 타임라인·원장 행 — 내각 + 내각 없는 재위(군주 행, `cabinet-reign-rows`) */
   const timelineCabinetsMerged = useMemo(() => {
     const dir = cabinetSortOrder === 'asc' ? 1 : -1
     return [...filteredCabinets].sort((left, right) => {
@@ -1253,6 +1315,13 @@ export function CabinetsSection({
         entryItem.label,
       ]),
     )
+    /* 군주가 제 행으로 보이면 그 아래 내각 앞의 '군주 교체' 표지는 같은 말의 반복이다 */
+    const monarchIdsWithOwnRow = new Set(
+      timelineCabinetsMerged
+        .filter((cabinetItem) => isMonarchicalHead(cabinetItem.headTenure))
+        .map((cabinetItem) => cabinetItem.headTenure?.id)
+        .filter((tenureId): tenureId is string => Boolean(tenureId)),
+    )
     return buildCabinetListMarkers(
       timelineCabinetsMerged.map((cabinetItem) => {
         const head = cabinetItem.headTenure
@@ -1275,9 +1344,12 @@ export function CabinetsSection({
         const monarchVisual = cabinetTimelineMonarchVisuals.byCabinetId.get(
           cabinetItem.id,
         )
-        const reignLabel = monarchVisual
-          ? (monarchLabelById.get(monarchVisual.monarchId) ?? null)
-          : null
+        const reignLabel =
+          monarchVisual &&
+          !isMonarchicalHead(head) &&
+          !monarchIdsWithOwnRow.has(monarchVisual.monarchId)
+            ? (monarchLabelById.get(monarchVisual.monarchId) ?? null)
+            : null
         return {
           id: String(cabinetItem.id),
           polityKey: polityLabel,
@@ -2910,7 +2982,7 @@ export function CabinetsSection({
                         reignEraLineByCabinetId={reignEraLineByCabinetId}
                         hidePositionTitle={Boolean(uniformHeadTitle)}
                         deletingCabinetId={deletingCabinetId}
-                        onSelectCabinet={selectCabinetWithUrl}
+                        onSelectCabinet={openCabinetOrReignRow}
                         onInspectPerson={setMentionPersonId}
                       />
                     ) : (
@@ -2933,7 +3005,7 @@ export function CabinetsSection({
                               )
                             : null
                           const personName = head?.person
-                            ? getPersonName(head.person)
+                            ? (cabinetHeadDisplayName(head) ?? getPersonName(head.person))
                             : item.name?.trim() || '집단지도 · 과도정부'
                           const posTitle = head
                             ? (head.positionDefinition?.title ?? head.title ?? '—')
@@ -3029,7 +3101,7 @@ export function CabinetsSection({
                         },
                       )}
                       hidePosTitle={Boolean(uniformHeadTitle)}
-                      onSelect={(cabinetId) => selectCabinetWithUrl(cabinetId)}
+                      onSelect={(cabinetId) => openCabinetOrReignRow(cabinetId)}
                     />
                     )}
                   </CabS.CabTimelineSummaryOuter>
@@ -3083,7 +3155,7 @@ export function CabinetsSection({
                     cabinetContinuityNav.cabinetPositionBadge
                   }
                   siblingCabinets={cabinetContinuityNav.siblingCabinets}
-                  onNavigateCabinet={selectCabinetWithUrl}
+                  onNavigateCabinet={openCabinetOrReignRow}
                   heroCarriesIdentity={
                     !selectedHeadHistoryId && !selectedMinisterId
                   }
@@ -3923,7 +3995,7 @@ export function CabinetsSection({
                                     disabled={!cabinetContinuityNav.prevCabinet}
                                     onClick={() =>
                                       cabinetContinuityNav.prevCabinet &&
-                                      selectCabinetWithUrl(
+                                      openCabinetOrReignRow(
                                         cabinetContinuityNav.prevCabinet.id,
                                       )
                                     }
@@ -3945,7 +4017,7 @@ export function CabinetsSection({
                                     disabled={!cabinetContinuityNav.nextCabinet}
                                     onClick={() =>
                                       cabinetContinuityNav.nextCabinet &&
-                                      selectCabinetWithUrl(
+                                      openCabinetOrReignRow(
                                         cabinetContinuityNav.nextCabinet.id,
                                       )
                                     }

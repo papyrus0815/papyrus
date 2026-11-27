@@ -250,6 +250,34 @@ export function GovernmentInfoSection({
     return nonCeremonialLen > 0 ? nonCeremonialLen : totalLen
   }, [cabinetsCountQuery.data])
 
+  /*
+   * 군주 재위 수 — 행정부·내각은 내각 없는 재위도 군주 행으로 그린다. 내각 0건이어도 군주가 있으면
+   * 이 지면이 비어 있지 않다(러시아 차르국). 행정부 구역과 같은 키라 한 번만 받는다.
+   */
+  const countryTenuresQuery = useQuery({
+    queryKey: [
+      'tenures-by-country-for-cabinet',
+      isHistorical ? undefined : effectiveCountryId,
+      isHistorical ? effectiveCountryId : undefined,
+      isHistorical ? 'with-constituents' : 'direct',
+    ],
+    queryFn: () =>
+      personCareerApi.getTenuresByCountry({
+        countryId: isHistorical ? undefined : effectiveCountryId,
+        historicalCountryId: isHistorical ? effectiveCountryId : undefined,
+        includeConstituents: isHistorical || undefined,
+      }),
+    enabled: Boolean(effectiveCountryId),
+    staleTime: 60_000,
+  })
+  const hasMonarchReigns = useMemo(
+    () =>
+      (countryTenuresQuery.data as Array<{ isMonarchical?: boolean }> | undefined)?.some(
+        (tenure) => tenure.isMonarchical === true,
+      ) ?? false,
+    [countryTenuresQuery.data],
+  )
+
   // URL에 서브탭이 명시되지 않았고 「행정부·내각」이 비어 있는 국가는 데이터가 있는 탭(중앙부처 → 정체·헌정)으로 스마트 폴백
   useEffect(() => {
     if (!effectiveCountryId) return
@@ -268,12 +296,13 @@ export function GovernmentInfoSection({
     if (
       !politicalSystemsQuery.isFetched ||
       !cabinetsCountQuery.isFetched ||
-      !departmentsQuery.isFetched
+      !departmentsQuery.isFetched ||
+      !countryTenuresQuery.isFetched
     ) {
       return
     }
     autoFallbackScopeRef.current = effectiveCountryId
-    if ((visibleCabinetCount ?? 0) > 0) return
+    if ((visibleCabinetCount ?? 0) > 0 || hasMonarchReigns) return
     if ((departmentsQuery.data?.length ?? 0) > 0) {
       setContentTab('ministries')
     } else if ((politicalSystemsQuery.data?.length ?? 0) > 0) {
@@ -292,6 +321,8 @@ export function GovernmentInfoSection({
     visibleCabinetCount,
     departmentsQuery.isFetched,
     departmentsQuery.data,
+    countryTenuresQuery.isFetched,
+    hasMonarchReigns,
   ])
 
   useEffect(() => {

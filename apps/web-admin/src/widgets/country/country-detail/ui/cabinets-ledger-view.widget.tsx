@@ -50,6 +50,7 @@ import {
   getPersonName,
   resolveCabinetEffectiveDates,
 } from './cabinets-section.helpers'
+import { cabinetHeadDisplayName, isMonarchicalHead } from './cabinet-reign-rows'
 import {
   approxDaysBetween,
   formatTenureDuration,
@@ -266,9 +267,14 @@ export function CabinetsLedgerView({
               )
             : null
 
-          const personDisplayName = headTenure?.person
-            ? getPersonName(headTenure.person)
-            : cabinetItem.name?.trim() || '집단지도 · 과도정부'
+          /* 군주 행은 왕명이 주어(차르국 11명 중 '이반'·'표도르'가 셋씩), 본명은 부제로 */
+          const personDisplayName =
+            cabinetHeadDisplayName(headTenure) ??
+            (cabinetItem.name?.trim() || '집단지도 · 과도정부')
+          const monarchBirthName =
+            isMonarchicalHead(headTenure) && headTenure?.person
+              ? getPersonName(headTenure.person)
+              : null
 
           const positionTitle = headTenure
             ? (headTenure.positionDefinition?.title ??
@@ -441,6 +447,8 @@ export function CabinetsLedgerView({
                         {explicitCabinetName &&
                         explicitCabinetName !== personDisplayName ? (
                           <CabinetSubName>{explicitCabinetName}</CabinetSubName>
+                        ) : monarchBirthName && monarchBirthName !== personDisplayName ? (
+                          <CabinetSubName>{monarchBirthName}</CabinetSubName>
                         ) : null}
                       </>
                     )}
