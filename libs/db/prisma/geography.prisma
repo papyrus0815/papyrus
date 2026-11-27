@@ -193,3 +193,180 @@ enum InfrastructureType {
   airport
   port
 }
+
+// ========================
+// Place (범용 역사·지리 장소 정본 카탈로그 — Historical Gazetteer)
+// ========================
+/// 도시만이 아니라 촌락·궁궐·성곽·생가터·왕릉·묘소·전장·섬·역사 권역까지 포괄하는
+/// 플랫폼 단일 지리 지점 정본(Place). 기존 City(5행)를 SETTLEMENT로 단계적 흡수한다.
+
+enum PlaceKind {
+  /// 도시·읍·면·촌락 (정주지 — 기존 City 포괄)
+  SETTLEMENT
+  /// 구·동·가·번지 (세부 구획)
+  DISTRICT
+  /// 궁궐·성곽·생가·저택·관청·사찰·병원 등 특정 건물/터
+  SITE
+  /// 왕릉·묘소·현충원·기념관·사당
+  TOMB
+  /// 전장·해협·고지
+  BATTLEFIELD
+  /// 섬·유배지
+  ISLAND
+  /// 역사 권역·지방 (예: 가스코뉴, 실롱스크, 프랑켄)
+  REGION
+  /// 기타
+  OTHER
+}
+
+enum PlaceCoordinatePrecision {
+  /// 건물·생가터·능묘 정밀 핀
+  EXACT
+  /// 거리·동 단위
+  STREET
+  /// 도시·읍·촌 중심점
+  SETTLEMENT
+  /// 행정구역·권역 중심점
+  REGION
+  /// 대략 추정 위치
+  APPROXIMATE
+}
+
+enum PlaceNameKind {
+  /// 현대 표준 명칭
+  MODERN
+  /// 당대 역사 지명 (한성부, 에도, 티플리스, 엑스라샤펠)
+  HISTORICAL
+  /// 현지어 원문 (Mouilleron-en-Pareds, 和歌山城)
+  LOCAL
+  /// 로마자·영문 표기
+  ROMANIZED
+  /// 기타 이칭·별칭
+  ALIAS
+}
+
+model Place {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 장소 스케일·성격
+  kind PlaceKind @default(SETTLEMENT)
+
+  /// 표준 대표명 (한국어 우선, 예: "와카야마성", "파리", "아헨")
+  name String @db.VarChar(200)
+
+  /// 현지어·영문 대표명 (예: "Wakayama Castle", "Aachen")
+  localName String? @map("local_name") @db.VarChar(200)
+
+  /// 현대 행정 주소·위치 설명 (예: "일본 와카야마현 와카야마시 이치반초 3")
+  modernAddress String? @map("modern_address") @db.VarChar(500)
+
+  /// 장소 해설·맥락 메모
+  description String? @db.Text
+
+  /// WGS84 위도
+  latitude Decimal? @db.Decimal(10, 7)
+
+  /// WGS84 경도
+  longitude Decimal? @db.Decimal(10, 7)
+
+  /// 좌표 정밀도
+  coordinatePrecision PlaceCoordinatePrecision? @map("coordinate_precision")
+
+  /// Google Places API 정본 ID (ChIJ... — 동일 장소 중복 생성 원천 차단)
+  googlePlaceId String? @unique @map("google_place_id") @db.VarChar(255)
+
+  /// OpenStreetMap / Nominatim 식별 키 (예: "relation:7444", "node:12345" — 무키 폴백 환경 중복 방지)
+  externalKey String? @unique @map("external_key") @db.VarChar(120)
+
+  /// 스케일별 권장 지도 기본 배율 (건물 16, 동네 14, 도시 12, 권역 8)
+  defaultZoom Int? @map("default_zoom") @db.SmallInt
+
+  /// 인구 (SETTLEMENT — City 통합용)
+  population BigInt?
+
+  /// 면적 km² (SETTLEMENT — City 통합용)
+  areaSqKm Decimal? @map("area_sq_km") @db.Decimal(15, 2)
+
+  /// 상위 장소 FK (예: 리베이라 궁 -> 리스본, 튈르리 궁 -> 파리)
+  parentPlaceId String? @map("parent_place_id") @db.Char(36)
+
+  /// 현대 소속 국가 FK (공해·국경 분쟁지 등 예외 대비 nullable)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 직접 연결 (선택)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 소속 행정구역 FK (선택)
+  administrativeDivisionId String? @map("administrative_division_id") @db.Char(36)
+
+  /// 기존 City 테이블 흡수용 1:1 브리지 키
+  legacyCityId String? @unique @map("legacy_city_id") @db.Char(36)
+
+  //--- 관계 필드
+  parentPlace            Place?                  @relation("PlaceHierarchy", fields: [parentPlaceId], references: [id], onDelete: SetNull)
+  childPlaces            Place[]                 @relation("PlaceHierarchy")
+  country                Country?                @relation("CountryPlaces", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry      HistoricalCountry?      @relation("HistoricalCountryPlaces", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  administrativeDivision AdministrativeDivision? @relation("AdminDivPlaces", fields: [administrativeDivisionId], references: [id], onDelete: SetNull)
+  names                  PlaceName[]
+  personPlaces           PersonPlace[]           @relation("PlaceToPersonPlaces")
+  personsBornHere        Person[]                @relation("PersonBirthPlace")
+  personsDiedHere        Person[]                @relation("PersonDeathPlace")
+  personsBuriedHere      Person[]                @relation("PersonBurialPlace")
+  personLifeEvents       PersonLifeEvent[]       @relation("PersonLifeEventPlace")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([name], name: "idx_place_name")
+  @@index([kind], name: "idx_place_kind")
+  @@index([countryId], name: "idx_place_countryId")
+  @@index([historicalCountryId], name: "idx_place_historicalCountryId")
+  @@index([administrativeDivisionId], name: "idx_place_adminDivId")
+  @@index([parentPlaceId], name: "idx_place_parentPlaceId")
+  @@map("place")
+}
+
+// ========================
+// PlaceName (장소의 시대별·언어별 지명 이력)
+// ========================
+model PlaceName {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 Place FK
+  placeId String @map("place_id") @db.Char(36)
+  place   Place  @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  /// 지명 표기 (예: "티플리스", "한성부", "엑스라샤펠", "Mouilleron-en-Pareds")
+  name String @db.VarChar(250)
+
+  /// 언어 코드 (예: ko, en, fr, ja, zh-Hant)
+  languageCode String? @map("language_code") @db.VarChar(16)
+
+  /// 표기 종류
+  kind PlaceNameKind @default(HISTORICAL)
+
+  /// 이 지명이 쓰인 역사 국가 (선택)
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation("HistoricalCountryPlaceNames", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
+  /// 사용 기간 (구조화 연도 — BC 수용)
+  startEra  Era? @map("start_era")
+  startYear Int? @map("start_year")
+  endEra    Era? @map("end_era")
+  endYear   Int? @map("end_year")
+
+  /// 비고
+  note String? @db.VarChar(300)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([placeId], name: "idx_place_name_placeId")
+  @@index([name], name: "idx_place_name_text")
+  @@index([historicalCountryId], name: "idx_place_name_histCountryId")
+  @@map("place_name")
+}

@@ -11,6 +11,11 @@ import { act, fireEvent, screen } from '@testing-library/react'
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 import { PersonPoliticsSection } from '@/widgets/person/person-politics-section/person-politics-section'
 
+jest.mock('@/shared/api/client', () => ({
+  apiConnection: { host: 'http://localhost:8000' },
+  getApiConnection: () => ({ host: 'http://localhost:8000' }),
+}))
+
 jest.mock('@/shared/ui/rich-text-read-view', () => ({
   RichTextReadView: () => null,
   RichTextProseWithEntityClicks: () => null,
@@ -206,6 +211,88 @@ describe('BirthDeathCards', () => {
     expect(screen.getByText('독일 제국')).toBeInTheDocument()
     expect(screen.getByText('사망국')).toBeInTheDocument()
     expect(screen.getByText('미국')).toBeInTheDocument()
+  })
+
+  it('정본 Place·일설(ALTERNATIVE)·묘소(BURIAL)를 분리 표시하고 클릭 시 Google 지도 뷰포트를 연다', () => {
+    renderWithTheme(
+      <BirthDeathCards
+        person={{
+          ...basePerson,
+          places: [
+            {
+              id: 'pp-birth-1',
+              role: 'BIRTH',
+              historicalLabel: '기이국 와카야마성(和歌山城)',
+              estimateRole: 'PREFERRED',
+              certainty: 'CERTAIN',
+              place: {
+                id: 'pl-wakayama',
+                kind: 'SITE',
+                name: '와카야마성',
+                modernAddress: '일본 와카야마현 와카야마시 이치반초 3',
+                latitude: 34.225556,
+                longitude: 135.1715,
+              },
+            },
+            {
+              id: 'pp-birth-alt',
+              role: 'BIRTH',
+              historicalLabel: '에도 기이번 저택',
+              estimateRole: 'ALTERNATIVE',
+              certainty: 'PROBABLE',
+              place: null,
+            },
+            {
+              id: 'pp-death-1',
+              role: 'DEATH',
+              historicalLabel: '셋쓰국 오사카성(大坂城)',
+              estimateRole: 'PREFERRED',
+              certainty: 'CERTAIN',
+              place: {
+                id: 'pl-osaka',
+                kind: 'SITE',
+                name: '오사카성',
+                latitude: 34.687315,
+                longitude: 135.526201,
+              },
+            },
+            {
+              id: 'pp-burial-1',
+              role: 'BURIAL',
+              historicalLabel: '시바 조조지(増上寺)',
+              estimateRole: 'PREFERRED',
+              certainty: 'CERTAIN',
+              place: {
+                id: 'pl-zojoji',
+                kind: 'TOMB',
+                name: '조조지',
+                latitude: 35.6574,
+                longitude: 139.7482,
+              },
+            },
+          ],
+        }}
+        birthDateStr="1846년 7월 17일"
+        deathDateStr="1866년 8월 29일"
+        ageAtDeath={20}
+      />,
+    )
+
+    expect(screen.getByText('기이국 와카야마성(和歌山城)')).toBeInTheDocument()
+    expect(screen.getByText('현대 위치: 와카야마성')).toBeInTheDocument()
+    expect(screen.getByText('일설')).toBeInTheDocument()
+    expect(screen.getByText('에도 기이번 저택')).toBeInTheDocument()
+    expect(screen.getByLabelText('묘소 및 안장 정보')).toBeInTheDocument()
+    expect(screen.getByText('시바 조조지(増上寺)')).toBeInTheDocument()
+
+    // 출생지 '구글 지도' 버튼 클릭 -> 통합 Google 지도 iframe 오픈
+    const mapBtns = screen.getAllByRole('button', { name: /구글 지도/ })
+    fireEvent.click(mapBtns[0])
+
+    const iframe = document.querySelector('iframe')
+    expect(iframe).not.toBeNull()
+    expect(iframe?.getAttribute('src')).toContain('maps.google.com/maps')
+    expect(iframe?.getAttribute('src')).toContain('34.225556%2C135.1715')
   })
 })
 

@@ -135,6 +135,10 @@ enum CitationTargetType {
   PARTY_TRANSITION
   /// 군사 사령부·부대 본체
   MILITARY_UNIT
+  /// 범용 장소 정본 (Place)
+  PLACE
+  /// 인물 장소 주장 한 줄 (출생지·사망지·묘소·거처 학설별 사료 각주)
+  PERSON_PLACE
 }
 
 /// 지표 값의 성격 — 화면이 숫자를 어떻게 읽고 합칠지 정한다

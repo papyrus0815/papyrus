@@ -81,6 +81,8 @@ enum PersonRelationshipTag {
 enum PersonCountryAffiliationType {
   /// 출생지
   BIRTH_PLACE
+  /// 사망지
+  DEATH_PLACE
   /// 시민권/국적
   CITIZENSHIP
   /// 주요 활동 지역
@@ -91,6 +93,32 @@ enum PersonCountryAffiliationType {
   EXILE
   /// 기타
   OTHER
+}
+
+/// 인물 공간 기록(PersonPlace)의 역할
+enum PersonPlaceRole {
+  /// 출생지
+  BIRTH
+  /// 사망지
+  DEATH
+  /// 묘소·왕릉·안장지·화장/산골지 (이장 이력 포함)
+  BURIAL
+  /// 주요 거처·활동지
+  RESIDENCE
+  /// 유배지·망명지
+  EXILE
+  /// 본관·출신 가문 영지
+  ANCESTRAL_HOME
+}
+
+/// 인물 장소 사실의 확실성 층위
+enum PersonPlaceCertainty {
+  /// 확실
+  CERTAIN
+  /// 추정 (사료상 유력)
+  PROBABLE
+  /// 지명 미상 (국가·광역만 전해짐)
+  UNKNOWN
 }
 
 /// 인물 묶음(그룹) 유형 — N항 집합의 성격
@@ -262,10 +290,25 @@ model Person {
   birthAdminDivisionId String? @map("birth_admin_division_id") @db.Char(36)
   /// 사망지 행정구역 (도시 없이 행정구역만 선택할 때)
   deathAdminDivisionId String? @map("death_admin_division_id") @db.Char(36)
-  /// 출생지 직접 입력 텍스트 (역사적 지명 등)
+  /// 출생지 직접 입력 텍스트 (레거시/표시 호환 캐시)
   birthPlaceText String? @map("birth_place_text") @db.VarChar(255)
-  /// 사망지 직접 입력 텍스트 (역사적 지명 등)
+  /// 사망지 직접 입력 텍스트 (레거시/표시 호환 캐시)
   deathPlaceText String? @map("death_place_text") @db.VarChar(255)
+
+  /// 출생지 정본 Place FK (PersonPlace[BIRTH, PREFERRED] 대표 캐시)
+  birthPlaceId               String? @map("birth_place_id") @db.Char(36)
+  /// 사망지 정본 Place FK (PersonPlace[DEATH, PREFERRED] 대표 캐시)
+  deathPlaceId               String? @map("death_place_id") @db.Char(36)
+  /// 묘소·안장지 정본 Place FK (PersonPlace[BURIAL, PREFERRED] 대표 캐시)
+  burialPlaceId              String? @map("burial_place_id") @db.Char(36)
+  /// 출생지 당대 표기 캐시 (예: "무사시국 에도성", "한성부 건천동")
+  birthPlaceHistoricalLabel  String? @map("birth_place_historical_label") @db.VarChar(255)
+  /// 사망지 당대 표기 캐시
+  deathPlaceHistoricalLabel  String? @map("death_place_historical_label") @db.VarChar(255)
+  /// 묘소·안장지 당대 표기 캐시 (예: "헌릉", "앵발리드")
+  burialPlaceHistoricalLabel String? @map("burial_place_historical_label") @db.VarChar(255)
+  /// 묘소·안장 관련 메모 (이장 경위, 화장 여부 등)
+  burialNote                 String? @map("burial_note") @db.Text
 
   //--- 관계 필드
   dynasty                 Dynasty?                @relation(fields: [dynastyId], references: [id], onDelete: SetNull)
@@ -278,6 +321,10 @@ model Person {
   deathCity               City?                   @relation("PersonDeathCity", fields: [deathCityId], references: [id], onDelete: SetNull)
   birthAdminDivision      AdministrativeDivision? @relation("PersonBirthAdminDivision", fields: [birthAdminDivisionId], references: [id], onDelete: SetNull)
   deathAdminDivision      AdministrativeDivision? @relation("PersonDeathAdminDivision", fields: [deathAdminDivisionId], references: [id], onDelete: SetNull)
+  birthPlace              Place?                  @relation("PersonBirthPlace", fields: [birthPlaceId], references: [id], onDelete: SetNull)
+  deathPlace              Place?                  @relation("PersonDeathPlace", fields: [deathPlaceId], references: [id], onDelete: SetNull)
+  burialPlace             Place?                  @relation("PersonBurialPlace", fields: [burialPlaceId], references: [id], onDelete: SetNull)
+  places                  PersonPlace[]           @relation("PersonPlaces")
   father                  Person?                 @relation("ParentChildFather", fields: [fatherId], references: [id], onDelete: SetNull)
   mother                  Person?                 @relation("ParentChildMother", fields: [motherId], references: [id], onDelete: SetNull)
   childrenFromFather      Person[]                @relation("ParentChildFather")
@@ -378,6 +425,9 @@ model Person {
   @@index([historicalCountryId], name: "idx_person_historicalCountryId")
   @@index([birthCityId], name: "idx_person_birthCityId")
   @@index([deathCityId], name: "idx_person_deathCityId")
+  @@index([birthPlaceId], name: "idx_person_birthPlaceId")
+  @@index([deathPlaceId], name: "idx_person_deathPlaceId")
+  @@index([burialPlaceId], name: "idx_person_burialPlaceId")
   @@index([parentMarriageId], name: "idx_person_parentMarriageId")
   @@map("person")
 }
@@ -474,14 +524,80 @@ model PersonLifeEvent {
   eventId String? @map("event_id") @db.Char(36)
   event   Event?  @relation("PersonLifeEventEvent", fields: [eventId], references: [id], onDelete: SetNull)
 
+  /// 발생 장소 정본 Place FK (생애 여정 지도 직결용)
+  placeId              String? @map("place_id") @db.Char(36)
+  place                Place?  @relation("PersonLifeEventPlace", fields: [placeId], references: [id], onDelete: SetNull)
+  /// 연보 발생 당시 지명 표기 (예: "세인트헬레나 롱우드 하우스", "한성부")
+  placeHistoricalLabel String? @map("place_historical_label") @db.VarChar(255)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([personId], name: "idx_person_life_event_personId")
   @@index([eventId], name: "idx_person_life_event_eventId")
+  @@index([placeId], name: "idx_person_life_event_placeId")
   @@index([accountId], name: "idx_person_life_event_accountId")
   @@index([startDate], name: "idx_person_life_event_startDate")
   @@map("person_life_event")
+}
+
+// ========================
+// PersonPlace (인물 생애 공간 기록 — 출생·사망·묘소·거처·본관, 복수 학설 및 출처 지원)
+// ========================
+/// 당대 표기(historicalLabel)와 현대 좌표 정본(Place)을 분리하고,
+/// 통설(PREFERRED)과 일설(ALTERNATIVE)·논쟁(DISPUTED) 및 사료 인용(Citation[PERSON_PLACE])을 수용한다.
+model PersonPlace {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 FK
+  personId String @map("person_id") @db.Char(36)
+  person   Person @relation("PersonPlaces", fields: [personId], references: [id], onDelete: Cascade)
+
+  /// 장소 역할 (출생·사망·묘소·거처·유배·본관)
+  role PersonPlaceRole
+
+  /// 현대 지리·좌표·Google Place ID 정본 FK (지명 미상인 경우에만 null)
+  placeId String? @map("place_id") @db.Char(36)
+  place   Place?  @relation("PlaceToPersonPlaces", fields: [placeId], references: [id], onDelete: SetNull)
+
+  /// 그 인물 당대의 지명 표기 (예: "기이국 와카야마성(和歌山城)", "프랑크 왕국 엑스라샤펠")
+  historicalLabel String? @map("historical_label") @db.VarChar(255)
+
+  /// 당시 소속 현대 국가 FK (선택)
+  countryId String?  @map("country_id") @db.Char(36)
+  country   Country? @relation("PersonPlaceCountry", fields: [countryId], references: [id], onDelete: SetNull)
+
+  /// 당시 소속 역사 국가 FK (선택 — 예: 에도 막부, 프랑크 왕국)
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation("PersonPlaceHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
+  /// 학설 위상 (PREFERRED: 채택 정본, ALTERNATIVE: 일설, DISPUTED: 논쟁)
+  estimateRole EstimateRole @default(PREFERRED) @map("estimate_role")
+
+  /// 사실 확실성 층위 (CERTAIN / PROBABLE / UNKNOWN)
+  certainty PersonPlaceCertainty @default(CERTAIN)
+
+  /// 기간 (이장 이력·거처·유배 기간 표현용, BC 수용)
+  startEra  Era? @map("start_era")
+  startYear Int? @map("start_year")
+  endEra    Era? @map("end_era")
+  endYear   Int? @map("end_year")
+
+  /// 세부 맥락·사료 비고 (예: "체틴스카 거리의 흙벽돌 소가옥", "1840년 세인트헬레나에서 이장")
+  note String? @db.Text
+
+  /// 동일 역할 내 정렬 순서 (낮을수록 우선)
+  sortOrder Int @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId, role, estimateRole], name: "idx_person_place_person_role_est")
+  @@index([placeId], name: "idx_person_place_placeId")
+  @@index([countryId], name: "idx_person_place_countryId")
+  @@index([historicalCountryId], name: "idx_person_place_histCountryId")
+  @@map("person_place")
 }
 
 // ========================

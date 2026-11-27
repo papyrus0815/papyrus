@@ -291,6 +291,11 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   deathCityId: string
   birthPlace: PlaceResult | null
   deathPlace: PlaceResult | null
+  burialPlace?: PlaceResult | null
+  birthHistoricalLabel?: string
+  deathHistoricalLabel?: string
+  burialHistoricalLabel?: string
+  burialNote?: string
   dynastyId: string
   religionId: string
   fatherId: string

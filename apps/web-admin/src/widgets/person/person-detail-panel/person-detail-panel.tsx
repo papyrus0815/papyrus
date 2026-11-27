@@ -111,6 +111,10 @@ import { ConnectionsPanel } from '@/shared/ui/entity-graph'
 import { BioClamp } from './bio-clamp'
 import { BirthDeathCards } from './birth-death-cards'
 import {
+  PersonLifeTrajectoryMap,
+  derivePersonLifeTrajectoryStops,
+} from './person-life-trajectory-map'
+import {
   CollapsibleSection,
   expandCollapsibleSection,
   expandCollapsibleSectionForRecordKey,
@@ -525,6 +529,8 @@ export function PersonDetailPanel({
   const [editingEducation, setEditingEducation] = useState<any | null>(null)
   /** 연보의 사건 카드 클릭 시 띄울 사건 인라인 모달 — null이면 닫힘 */
   const [viewingEventId, setViewingEventId] = useState<string | null>(null)
+  /** 사건·연보 탭 상단 생애 여정 Google 지도 펼침 여부 */
+  const [showLifeTrajectoryMap, setShowLifeTrajectoryMap] = useState(false)
   /** 저장 직후 하이라이트·스크롤 대상 id (타임라인 인포그래픽에 전달). 0.8초 뒤 자동 해제 */
   const [highlightedLifeEventId, setHighlightedLifeEventId] = useState<string | null>(null)
 
@@ -5638,46 +5644,82 @@ export function PersonDetailPanel({
                 transition={{ duration: 0.2 }}
               >
                 <section aria-label="연보">
-                  <SectionLabelRow>
-                    <SectionLabel>연보 · 통합 타임라인</SectionLabel>
-                    {!embedInModal && (
-                      <UnifiedActionRow>
-                        {/* 기록 비교 뷰 딥링크 — ?view=records&recordPersonIds=<id> */}
-                        <TenureAddButton
-                          type="button"
-                          onClick={() => {
-                            playClickSound()
-                            navigate(pathKeys.personsTimelineRecords([personId]))
-                          }}
-                        >
-                          <FiUsers size={14} />
-                          다른 인물과 비교
-                        </TenureAddButton>
-                        {/* 사건 목록의 사건에 이 인물을 바로 잇는다 — 연보에 같은 일을 또 적지 않게 */}
-                        <TenureAddButton
-                          type="button"
-                          onClick={() => {
-                            playClickSound()
-                            setEventLinkModalOpen(true)
-                          }}
-                        >
-                          <FiLink size={14} />
-                          사건 연결
-                        </TenureAddButton>
-                        <TenureAddButton
-                          type="button"
-                          onClick={() => {
-                            playClickSound()
-                            setEditingLifeEvent(null)
-                            setLifeEventModalOpen(true)
-                          }}
-                        >
-                          <FiPlus size={14} />
-                          연보 추가
-                        </TenureAddButton>
-                      </UnifiedActionRow>
-                    )}
-                  </SectionLabelRow>
+                  {(() => {
+                    const trajectoryStops = derivePersonLifeTrajectoryStops({
+                      person: p,
+                      birthDateStr,
+                      deathDateStr,
+                      lifeEvents,
+                    })
+                    return (
+                      <>
+                        <SectionLabelRow>
+                          <SectionLabel>연보 · 통합 타임라인</SectionLabel>
+                          <UnifiedActionRow>
+                            {trajectoryStops.length > 0 && (
+                              <TenureAddButton
+                                type="button"
+                                onClick={() => {
+                                  playClickSound()
+                                  setShowLifeTrajectoryMap((prev) => !prev)
+                                }}
+                              >
+                                <FiMapPin size={14} />
+                                {showLifeTrajectoryMap
+                                  ? '생애 여정 지도 닫기'
+                                  : `생애 여정 지도 (${trajectoryStops.length}곳)`}
+                              </TenureAddButton>
+                            )}
+                            {!embedInModal && (
+                              <>
+                                {/* 기록 비교 뷰 딥링크 — ?view=records&recordPersonIds=<id> */}
+                                <TenureAddButton
+                                  type="button"
+                                  onClick={() => {
+                                    playClickSound()
+                                    navigate(pathKeys.personsTimelineRecords([personId]))
+                                  }}
+                                >
+                                  <FiUsers size={14} />
+                                  다른 인물과 비교
+                                </TenureAddButton>
+                                {/* 사건 목록의 사건에 이 인물을 바로 잇는다 — 연보에 같은 일을 또 적지 않게 */}
+                                <TenureAddButton
+                                  type="button"
+                                  onClick={() => {
+                                    playClickSound()
+                                    setEventLinkModalOpen(true)
+                                  }}
+                                >
+                                  <FiLink size={14} />
+                                  사건 연결
+                                </TenureAddButton>
+                                <TenureAddButton
+                                  type="button"
+                                  onClick={() => {
+                                    playClickSound()
+                                    setEditingLifeEvent(null)
+                                    setLifeEventModalOpen(true)
+                                  }}
+                                >
+                                  <FiPlus size={14} />
+                                  연보 추가
+                                </TenureAddButton>
+                              </>
+                            )}
+                          </UnifiedActionRow>
+                        </SectionLabelRow>
+
+                        {showLifeTrajectoryMap && trajectoryStops.length > 0 && (
+                          <PersonLifeTrajectoryMap
+                            personName={displayName}
+                            stops={trajectoryStops}
+                            onEventClick={(eventId) => setViewingEventId(eventId)}
+                          />
+                        )}
+                      </>
+                    )
+                  })()}
                   {lifeEventsError && (
                     <LifeEventsErrorNote role="alert">
                       연보를 불러오지 못했습니다. 아래 타임라인이 불완전할 수 있어요.

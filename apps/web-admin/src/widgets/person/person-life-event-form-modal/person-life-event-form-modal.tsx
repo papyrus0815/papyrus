@@ -44,6 +44,10 @@ import { createRichTextImageUploader } from '@/shared/api/upload'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import {
+  PlaceSelect,
+  type PlaceResult,
+} from '@/shared/ui/place-autocomplete/place-autocomplete'
+import {
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -303,6 +307,7 @@ export function PersonLifeEventFormModal({
   /** 관련 사건 — 이 연보 항목이 사건 목록의 어느 사건인지 */
   const [linkedEvent, setLinkedEvent] = useState<LinkedEventChoice | null>(null)
   const [eventPickerOpen, setEventPickerOpen] = useState(false)
+  const [placeValue, setPlaceValue] = useState<PlaceResult | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false)
@@ -409,6 +414,24 @@ export function PersonLifeEventFormModal({
       setStartPrecision(baseStartPrec)
       setEndPrecision(baseEndPrec)
       setSortOrder(baseSort as number | '')
+      if (lifeEvent?.place?.id) {
+        setPlaceValue({
+          placeId: lifeEvent.place.id,
+          displayName: lifeEvent.place.name,
+          shortName: lifeEvent.placeHistoricalLabel || lifeEvent.place.name,
+          latitude: lifeEvent.place.latitude,
+          longitude: lifeEvent.place.longitude,
+          isManual: false,
+        })
+      } else if (lifeEvent?.placeHistoricalLabel) {
+        setPlaceValue({
+          displayName: lifeEvent.placeHistoricalLabel,
+          shortName: lifeEvent.placeHistoricalLabel,
+          isManual: true,
+        })
+      } else {
+        setPlaceValue(null)
+      }
     }
     setTitleTouched(false)
     setShowAdvanced(false)
@@ -731,6 +754,8 @@ export function PersonLifeEventFormModal({
           endDatePrecision: endDate ? endPrecision : null,
           sortOrder: sortForSave,
           eventId: linkedEvent?.id ?? null,
+          placeId: placeValue?.placeId ?? null,
+          placeHistoricalLabel: placeValue?.shortName ?? null,
         })
         savedId = updated?.id ?? lifeEventId
         notify.success('연보가 수정되었습니다.')
@@ -748,6 +773,8 @@ export function PersonLifeEventFormModal({
           endDatePrecision: endDate ? endPrecision : undefined,
           sortOrder: sortForSave ?? undefined,
           eventId: linkedEvent?.id,
+          placeId: placeValue?.placeId ?? null,
+          placeHistoricalLabel: placeValue?.shortName ?? null,
         })
         savedId = created?.id
         notify.success('연보가 등록되었습니다.')
@@ -1044,6 +1071,16 @@ export function PersonLifeEventFormModal({
                 autoFocus
               />
               {titleError && <FieldError>제목을 입력하세요.</FieldError>}
+            </Field>
+
+            {/* 발생 장소 (생애 여정 지도 직결) */}
+            <Field>
+              <Label>장소</Label>
+              <PlaceSelect
+                value={placeValue}
+                onChange={setPlaceValue}
+                placeholder="발생 장소 검색 또는 Google 지도 URL 붙여넣기 (선택)"
+              />
             </Field>
 
             {/* 기간 */}

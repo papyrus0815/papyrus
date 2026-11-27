@@ -310,6 +310,13 @@ export function PersonRegisterView({
   const [deathCityId, setDeathCityId] = useState('')
   const [birthPlace, setBirthPlace] = useState<PlaceResult | null>(null)
   const [deathPlace, setDeathPlace] = useState<PlaceResult | null>(null)
+  const [burialPlace, setBurialPlace] = useState<PlaceResult | null>(null)
+  const [birthHistoricalLabel, setBirthHistoricalLabel] = useState('')
+  const [deathHistoricalLabel, setDeathHistoricalLabel] = useState('')
+  const [burialHistoricalLabel, setBurialHistoricalLabel] = useState('')
+  const [burialNote, setBurialNote] = useState('')
+  /** 편집 로드 시 존재하던 일설(ALTERNATIVE)·거처(RESIDENCE) 등 비기본 PersonPlace 행 보존용 */
+  const [preservedExtraPlaces, setPreservedExtraPlaces] = useState<any[]>([])
   const [dynastyId, setDynastyId] = useState('')
   const [religionId, setReligionId] = useState('')
   // 가족
@@ -764,6 +771,11 @@ export function PersonRegisterView({
     makeFormField('deathCityId', () => deathCityId, setDeathCityId, ''),
     makeFormField('birthPlace', () => birthPlace, setBirthPlace, null),
     makeFormField('deathPlace', () => deathPlace, setDeathPlace, null),
+    makeFormField('burialPlace', () => burialPlace, setBurialPlace, null),
+    makeFormField('birthHistoricalLabel', () => birthHistoricalLabel, setBirthHistoricalLabel, ''),
+    makeFormField('deathHistoricalLabel', () => deathHistoricalLabel, setDeathHistoricalLabel, ''),
+    makeFormField('burialHistoricalLabel', () => burialHistoricalLabel, setBurialHistoricalLabel, ''),
+    makeFormField('burialNote', () => burialNote, setBurialNote, ''),
     makeFormField('dynastyId', () => dynastyId, setDynastyId, ''),
     makeFormField('religionId', () => religionId, setReligionId, ''),
     makeFormField('fatherId', () => fatherId, setFatherId, ''),
@@ -912,7 +924,32 @@ export function PersonRegisterView({
         )
         setBirthCityId(p.birthCityId ?? '')
         setDeathCityId(p.deathCityId ?? '')
-        if ((p as any).birthCity?.name) {
+        setBirthHistoricalLabel((p as any).birthPlaceHistoricalLabel ?? '')
+        setDeathHistoricalLabel((p as any).deathPlaceHistoricalLabel ?? '')
+        setBurialHistoricalLabel((p as any).burialPlaceHistoricalLabel ?? '')
+        setBurialNote((p as any).burialNote ?? '')
+        const loadedPlaces = (((p as any).places ?? []) as any[]).filter(
+          (row) =>
+            !(
+              (row.role === 'BIRTH' || row.role === 'DEATH' || row.role === 'BURIAL') &&
+              (row.estimateRole ?? 'PREFERRED') === 'PREFERRED'
+            ),
+        )
+        setPreservedExtraPlaces(loadedPlaces)
+
+        if ((p as any).birthPlace?.id) {
+          const bp = (p as any).birthPlace
+          setBirthPlace({
+            placeId: bp.id,
+            displayName: bp.modernAddress ? `${bp.name} (${bp.modernAddress})` : bp.name,
+            shortName: bp.name,
+            latitude: bp.latitude ?? null,
+            longitude: bp.longitude ?? null,
+            modernAddress: bp.modernAddress ?? null,
+            googlePlaceId: bp.googlePlaceId ?? null,
+            isManual: false,
+          })
+        } else if ((p as any).birthCity?.name) {
           setBirthPlace({
             cityId: p.birthCityId ?? undefined,
             adminDivisionId: (p as any).birthAdminDivisionId ?? undefined,
@@ -933,12 +970,22 @@ export function PersonRegisterView({
             isManual: true,
           })
         } else {
-          // 응답에 출생지 정보가 전무하면 명시적으로 비운다 — else 부재 시 페이지 모드
-          // 편집→편집 이동에서 이전 인물의 출생지가 잔류해(birthCityId는 ''로 초기화돼 불일치)
-          // 저장 시 엉뚱한 출생지가 기록되는 오염을 차단(birthCityId 무조건 초기화와 대칭).
           setBirthPlace(null)
         }
-        if ((p as any).deathCity?.name) {
+
+        if ((p as any).deathPlace?.id) {
+          const dp = (p as any).deathPlace
+          setDeathPlace({
+            placeId: dp.id,
+            displayName: dp.modernAddress ? `${dp.name} (${dp.modernAddress})` : dp.name,
+            shortName: dp.name,
+            latitude: dp.latitude ?? null,
+            longitude: dp.longitude ?? null,
+            modernAddress: dp.modernAddress ?? null,
+            googlePlaceId: dp.googlePlaceId ?? null,
+            isManual: false,
+          })
+        } else if ((p as any).deathCity?.name) {
           setDeathPlace({
             cityId: p.deathCityId ?? undefined,
             adminDivisionId: (p as any).deathAdminDivisionId ?? undefined,
@@ -959,8 +1006,23 @@ export function PersonRegisterView({
             isManual: true,
           })
         } else {
-          // 출생지와 동일 — 응답에 사망지 정보가 없으면 명시적으로 비워 잔류 오염을 막는다.
           setDeathPlace(null)
+        }
+
+        if ((p as any).burialPlace?.id) {
+          const brp = (p as any).burialPlace
+          setBurialPlace({
+            placeId: brp.id,
+            displayName: brp.modernAddress ? `${brp.name} (${brp.modernAddress})` : brp.name,
+            shortName: brp.name,
+            latitude: brp.latitude ?? null,
+            longitude: brp.longitude ?? null,
+            modernAddress: brp.modernAddress ?? null,
+            googlePlaceId: brp.googlePlaceId ?? null,
+            isManual: false,
+          })
+        } else {
+          setBurialPlace(null)
         }
         setDynastyId(p.dynastyId ?? p.dynasty?.id ?? '')
         setReligionId(p.religionId ?? '')
@@ -2491,8 +2553,83 @@ export function PersonRegisterView({
       deathCityId: deathCityId || undefined,
       birthAdminDivisionId: birthPlace?.adminDivisionId || undefined,
       deathAdminDivisionId: deathPlace?.adminDivisionId || undefined,
-      birthPlaceText: birthPlace?.isManual ? birthPlace.shortName : null,
-      deathPlaceText: deathPlace?.isManual ? deathPlace.shortName : null,
+      birthPlaceId: birthPlace?.placeId || null,
+      deathPlaceId: deathPlace?.placeId || null,
+      burialPlaceId: burialPlace?.placeId || null,
+      birthPlaceHistoricalLabel:
+        birthHistoricalLabel.trim() ||
+        (birthPlace?.isManual ? birthPlace.shortName : null),
+      deathPlaceHistoricalLabel:
+        deathHistoricalLabel.trim() ||
+        (deathPlace?.isManual ? deathPlace.shortName : null),
+      burialPlaceHistoricalLabel:
+        burialHistoricalLabel.trim() ||
+        (burialPlace?.isManual ? burialPlace.shortName : null),
+      burialNote: burialNote.trim() || null,
+      birthPlaceText:
+        birthHistoricalLabel.trim() ||
+        birthPlace?.shortName ||
+        null,
+      deathPlaceText:
+        deathHistoricalLabel.trim() ||
+        deathPlace?.shortName ||
+        null,
+      personPlaces: (() => {
+        const rows: any[] = []
+        if (birthPlace?.placeId || birthPlace?.shortName || birthHistoricalLabel.trim()) {
+          rows.push({
+            role: 'BIRTH',
+            placeId: birthPlace?.placeId ?? null,
+            historicalLabel:
+              birthHistoricalLabel.trim() ||
+              birthPlace?.shortName ||
+              null,
+            estimateRole: 'PREFERRED',
+            certainty: 'CERTAIN',
+            sortOrder: 0,
+          })
+        }
+        if (deathPlace?.placeId || deathPlace?.shortName || deathHistoricalLabel.trim()) {
+          rows.push({
+            role: 'DEATH',
+            placeId: deathPlace?.placeId ?? null,
+            historicalLabel:
+              deathHistoricalLabel.trim() ||
+              deathPlace?.shortName ||
+              null,
+            estimateRole: 'PREFERRED',
+            certainty: 'CERTAIN',
+            sortOrder: 0,
+          })
+        }
+        if (burialPlace?.placeId || burialPlace?.shortName || burialHistoricalLabel.trim()) {
+          rows.push({
+            role: 'BURIAL',
+            placeId: burialPlace?.placeId ?? null,
+            historicalLabel:
+              burialHistoricalLabel.trim() ||
+              burialPlace?.shortName ||
+              null,
+            estimateRole: 'PREFERRED',
+            certainty: 'CERTAIN',
+            sortOrder: 0,
+          })
+        }
+        for (const extra of preservedExtraPlaces) {
+          rows.push({
+            role: extra.role,
+            placeId: extra.placeId ?? null,
+            historicalLabel: extra.historicalLabel ?? null,
+            countryId: extra.countryId ?? null,
+            historicalCountryId: extra.historicalCountryId ?? null,
+            estimateRole: extra.estimateRole ?? 'ALTERNATIVE',
+            certainty: extra.certainty ?? 'CERTAIN',
+            note: extra.note ?? null,
+            sortOrder: extra.sortOrder ?? 1,
+          })
+        }
+        return rows
+      })(),
       dynastyId: dynastyId || undefined,
       religionId: religionId || undefined,
       fatherId: fatherId || undefined,
@@ -2693,6 +2830,14 @@ export function PersonRegisterView({
           // 행정구역도 명시 null로 — cityId만 null 처리하면 장소를 비워도 기존 adminDivisionId가 서버에 잔존한다.
           birthAdminDivisionId: birthPlace?.adminDivisionId || null,
           deathAdminDivisionId: deathPlace?.adminDivisionId || null,
+          birthPlaceId: birthPlace?.placeId || null,
+          deathPlaceId: deathPlace?.placeId || null,
+          burialPlaceId: burialPlace?.placeId || null,
+          birthPlaceHistoricalLabel: payload.birthPlaceHistoricalLabel ?? null,
+          deathPlaceHistoricalLabel: payload.deathPlaceHistoricalLabel ?? null,
+          burialPlaceHistoricalLabel: payload.burialPlaceHistoricalLabel ?? null,
+          burialNote: payload.burialNote ?? null,
+          personPlaces: payload.personPlaces,
           // 날짜가 비워졌으면(미상·생존 전환 포함) null = 해제.
           // isAlive·isDeathDateUnknown 플래그 수신 시 서버도 함께 클리어(이중 안전장치).
           birth: payload.birth ?? null,
@@ -3320,8 +3465,18 @@ export function PersonRegisterView({
         countryId={primaryCountryId}
         birthPlace={birthPlace}
         deathPlace={deathPlace}
+        burialPlace={burialPlace}
+        birthHistoricalLabel={birthHistoricalLabel}
+        deathHistoricalLabel={deathHistoricalLabel}
+        burialHistoricalLabel={burialHistoricalLabel}
+        burialNote={burialNote}
         setBirthPlace={setBirthPlace}
         setDeathPlace={setDeathPlace}
+        setBurialPlace={setBurialPlace}
+        setBirthHistoricalLabel={setBirthHistoricalLabel}
+        setDeathHistoricalLabel={setDeathHistoricalLabel}
+        setBurialHistoricalLabel={setBurialHistoricalLabel}
+        setBurialNote={setBurialNote}
         setBirthCityId={setBirthCityId}
         setDeathCityId={setDeathCityId}
         onCopyBirthToDeathPlace={handleCopyBirthToDeathPlace}

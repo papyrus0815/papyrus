@@ -565,10 +565,21 @@ export class PersonController {
     deathAdminDivisionId: string | null
     birthPlaceText: string | null
     deathPlaceText: string | null
-    birthCity: { id: string; name: string } | null
-    deathCity: { id: string; name: string } | null
-    birthAdminDivision: { id: string; name: string } | null
-    deathAdminDivision: { id: string; name: string } | null
+    birthPlaceId: string | null
+    deathPlaceId: string | null
+    burialPlaceId: string | null
+    birthPlaceHistoricalLabel: string | null
+    deathPlaceHistoricalLabel: string | null
+    burialPlaceHistoricalLabel: string | null
+    burialNote: string | null
+    birthCity: { id: string; name: string; latitude?: number | null; longitude?: number | null } | null
+    deathCity: { id: string; name: string; latitude?: number | null; longitude?: number | null } | null
+    birthAdminDivision: { id: string; name: string; centerLat?: number | null; centerLng?: number | null } | null
+    deathAdminDivision: { id: string; name: string; centerLat?: number | null; centerLng?: number | null } | null
+    birthPlace: any | null
+    deathPlace: any | null
+    burialPlace: any | null
+    places: any[]
     father: any
     mother: any
     adoptiveFather: any
@@ -1039,10 +1050,101 @@ export class PersonController {
       deathAdminDivisionId: person.deathAdminDivisionId ?? null,
       birthPlaceText: person.birthPlaceText ?? null,
       deathPlaceText: person.deathPlaceText ?? null,
-      birthCity: person.birthCity ? { id: person.birthCity.id, name: person.birthCity.name } : null,
-      deathCity: person.deathCity ? { id: person.deathCity.id, name: person.deathCity.name } : null,
-      birthAdminDivision: person.birthAdminDivision ? { id: person.birthAdminDivision.id, name: person.birthAdminDivision.name } : null,
-      deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
+      birthPlaceId: (person as any).birthPlaceId ?? null,
+      deathPlaceId: (person as any).deathPlaceId ?? null,
+      burialPlaceId: (person as any).burialPlaceId ?? null,
+      birthPlaceHistoricalLabel: (person as any).birthPlaceHistoricalLabel ?? null,
+      deathPlaceHistoricalLabel: (person as any).deathPlaceHistoricalLabel ?? null,
+      burialPlaceHistoricalLabel: (person as any).burialPlaceHistoricalLabel ?? null,
+      burialNote: (person as any).burialNote ?? null,
+      birthCity: person.birthCity
+        ? {
+            id: person.birthCity.id,
+            name: person.birthCity.name,
+            latitude: person.birthCity.latitude != null ? Number(person.birthCity.latitude) : null,
+            longitude: person.birthCity.longitude != null ? Number(person.birthCity.longitude) : null,
+          }
+        : null,
+      deathCity: person.deathCity
+        ? {
+            id: person.deathCity.id,
+            name: person.deathCity.name,
+            latitude: person.deathCity.latitude != null ? Number(person.deathCity.latitude) : null,
+            longitude: person.deathCity.longitude != null ? Number(person.deathCity.longitude) : null,
+          }
+        : null,
+      birthAdminDivision: person.birthAdminDivision
+        ? {
+            id: person.birthAdminDivision.id,
+            name: person.birthAdminDivision.name,
+            centerLat: person.birthAdminDivision.centerLat != null ? Number(person.birthAdminDivision.centerLat) : null,
+            centerLng: person.birthAdminDivision.centerLng != null ? Number(person.birthAdminDivision.centerLng) : null,
+          }
+        : null,
+      deathAdminDivision: person.deathAdminDivision
+        ? {
+            id: person.deathAdminDivision.id,
+            name: person.deathAdminDivision.name,
+            centerLat: person.deathAdminDivision.centerLat != null ? Number(person.deathAdminDivision.centerLat) : null,
+            centerLng: person.deathAdminDivision.centerLng != null ? Number(person.deathAdminDivision.centerLng) : null,
+          }
+        : null,
+      birthPlace: (() => {
+        const bp = (person as any).birthPlace
+        if (!bp) return null
+        return {
+          ...bp,
+          latitude: bp.latitude != null ? Number(bp.latitude) : null,
+          longitude: bp.longitude != null ? Number(bp.longitude) : null,
+          countryName: bp.country?.name ?? null,
+          countryIsoCode: bp.country?.isoCode ?? null,
+        }
+      })(),
+      deathPlace: (() => {
+        const dp = (person as any).deathPlace
+        if (!dp) return null
+        return {
+          ...dp,
+          latitude: dp.latitude != null ? Number(dp.latitude) : null,
+          longitude: dp.longitude != null ? Number(dp.longitude) : null,
+          countryName: dp.country?.name ?? null,
+          countryIsoCode: dp.country?.isoCode ?? null,
+        }
+      })(),
+      burialPlace: (() => {
+        const brp = (person as any).burialPlace
+        if (!brp) return null
+        return {
+          ...brp,
+          latitude: brp.latitude != null ? Number(brp.latitude) : null,
+          longitude: brp.longitude != null ? Number(brp.longitude) : null,
+          countryName: brp.country?.name ?? null,
+          countryIsoCode: brp.country?.isoCode ?? null,
+        }
+      })(),
+      places: (((person as any).places ?? []) as any[]).map((pp) => ({
+        id: pp.id,
+        role: pp.role,
+        placeId: pp.placeId ?? null,
+        historicalLabel: pp.historicalLabel ?? null,
+        countryId: pp.countryId ?? null,
+        historicalCountryId: pp.historicalCountryId ?? null,
+        estimateRole: pp.estimateRole,
+        certainty: pp.certainty,
+        note: pp.note ?? null,
+        sortOrder: pp.sortOrder ?? 0,
+        country: pp.country ?? null,
+        historicalCountry: pp.historicalCountry ?? null,
+        place: pp.place
+          ? {
+              ...pp.place,
+              latitude: pp.place.latitude != null ? Number(pp.place.latitude) : null,
+              longitude: pp.place.longitude != null ? Number(pp.place.longitude) : null,
+              countryName: pp.place.country?.name ?? null,
+              countryIsoCode: pp.place.country?.isoCode ?? null,
+            }
+          : null,
+      })),
       dynastyId: person.dynastyId ?? null,
       ...(() => {
         // effective 주 국적 도출 — first-class FK 우선(역사>현대), 없으면 CITIZENSHIP priority=0 슬롯 폴백(F6).
@@ -1156,7 +1258,20 @@ export class PersonController {
           event: dep.side?.event ?? null,
         })),
       ),
-      events: serializeBigInt(person.PersonEvent || []),
+      events: serializeBigInt(
+        ((person.PersonEvent || []) as any[]).map((pe) => ({
+          ...pe,
+          event: pe.event
+            ? {
+                ...pe.event,
+                locationLatitude:
+                  pe.event.locationLatitude != null ? Number(pe.event.locationLatitude) : null,
+                locationLongitude:
+                  pe.event.locationLongitude != null ? Number(pe.event.locationLongitude) : null,
+              }
+            : null,
+        })),
+      ),
       governmentPositions: serializeBigInt(person.GovernmentTenures ?? []),
       ...(() => {
         const mapRel = (rel: any, spousePerson: any) => ({
@@ -1466,6 +1581,14 @@ export class PersonController {
       deathAdminDivisionId: dto.deathAdminDivisionId,
       birthPlaceText: dto.birthPlaceText,
       deathPlaceText: dto.deathPlaceText,
+      birthPlaceId: dto.birthPlaceId,
+      deathPlaceId: dto.deathPlaceId,
+      burialPlaceId: dto.burialPlaceId,
+      birthPlaceHistoricalLabel: dto.birthPlaceHistoricalLabel,
+      deathPlaceHistoricalLabel: dto.deathPlaceHistoricalLabel,
+      burialPlaceHistoricalLabel: dto.burialPlaceHistoricalLabel,
+      burialNote: dto.burialNote,
+      personPlaces: dto.personPlaces,
       spouseRelations: dto.spouseRelations?.map((s) => {
         // 구조화 값 우선, 레거시 ISO는 문자열 직접 파싱 — 행 단위 full-replace라 값 없음 = null 클리어
         const start = mapSpouseDateInput(s.marriageStart, s.marriageStartDate)
@@ -1624,6 +1747,14 @@ export class PersonController {
       deathAdminDivisionId: dto.deathAdminDivisionId,
       birthPlaceText: dto.birthPlaceText,
       deathPlaceText: dto.deathPlaceText,
+      birthPlaceId: dto.birthPlaceId,
+      deathPlaceId: dto.deathPlaceId,
+      burialPlaceId: dto.burialPlaceId,
+      birthPlaceHistoricalLabel: dto.birthPlaceHistoricalLabel,
+      deathPlaceHistoricalLabel: dto.deathPlaceHistoricalLabel,
+      burialPlaceHistoricalLabel: dto.burialPlaceHistoricalLabel,
+      burialNote: dto.burialNote,
+      personPlaces: dto.personPlaces,
       spouseRelations: dto.spouseRelations?.map((s) => {
         // 구조화 값 우선, 레거시 ISO는 문자열 직접 파싱 — 행 단위 full-replace라 값 없음 = null 클리어
         const start = mapSpouseDateInput(s.marriageStart, s.marriageStartDate)

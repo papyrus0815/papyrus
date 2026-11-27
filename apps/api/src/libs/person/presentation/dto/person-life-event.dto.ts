@@ -8,6 +8,7 @@ import {
   IsIn,
   IsInt,
   MaxLength,
+  ValidateIf,
 } from 'class-validator'
 
 /**
@@ -107,6 +108,19 @@ export class CreatePersonLifeEventDto {
   @IsOptional()
   @IsUUID()
   eventId?: string
+
+  @ApiProperty({ description: '발생 장소 정본 Place ID(선택)', required: false })
+  @IsOptional()
+  @ValidateIf((_o: unknown, v: unknown) => v != null)
+  @IsUUID()
+  placeId?: string | null
+
+  @ApiProperty({ description: '연보 발생 당시 지명 표기(선택)', required: false })
+  @IsOptional()
+  @ValidateIf((_o: unknown, v: unknown) => v != null)
+  @IsString()
+  @MaxLength(255)
+  placeHistoricalLabel?: string | null
 }
 
 /**
@@ -173,6 +187,19 @@ export class UpdatePersonLifeEventDto {
   @IsOptional()
   @IsUUID()
   eventId?: string | null
+
+  @ApiProperty({ description: '발생 장소 정본 Place ID — null이면 연결 해제', required: false })
+  @IsOptional()
+  @ValidateIf((_o: unknown, v: unknown) => v != null)
+  @IsUUID()
+  placeId?: string | null
+
+  @ApiProperty({ description: '연보 발생 당시 지명 표기', required: false })
+  @IsOptional()
+  @ValidateIf((_o: unknown, v: unknown) => v != null)
+  @IsString()
+  @MaxLength(255)
+  placeHistoricalLabel?: string | null
 }
 
 export interface PersonLifeEventResponseDto {
@@ -191,6 +218,12 @@ export interface PersonLifeEventResponseDto {
   eventId?: string | null
   /** 관련 사건 요약 — 연보 항목에서 사건으로 바로 가기용 */
   event?: PersonLifeEventLinkedEventDto | null
+  /** 발생 장소 정본 Place ID */
+  placeId?: string | null
+  /** 발생 당시 지명 표기 */
+  placeHistoricalLabel?: string | null
+  /** 발생 장소 정본 요약 */
+  place?: any | null
   createdAt: string
   updatedAt: string
 }
@@ -202,5 +235,8 @@ export interface PersonLifeEventLinkedEventDto {
   startEra?: string | null
   startYear?: number | null
   startDate?: string | null
+  location?: string | null
+  locationLatitude?: number | null
+  locationLongitude?: number | null
 }
 

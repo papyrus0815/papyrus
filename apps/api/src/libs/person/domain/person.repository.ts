@@ -103,6 +103,24 @@ export interface CreatePersonData {
   birthPlaceText?: string | null
   /** 사망지 직접 입력 텍스트 (역사 지명 등) */
   deathPlaceText?: string | null
+  birthPlaceId?: string | null
+  deathPlaceId?: string | null
+  burialPlaceId?: string | null
+  birthPlaceHistoricalLabel?: string | null
+  deathPlaceHistoricalLabel?: string | null
+  burialPlaceHistoricalLabel?: string | null
+  burialNote?: string | null
+  personPlaces?: Array<{
+    role: 'BIRTH' | 'DEATH' | 'BURIAL' | 'RESIDENCE' | 'EXILE' | 'ANCESTRAL_HOME'
+    placeId?: string | null
+    historicalLabel?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+    estimateRole?: 'PREFERRED' | 'ALTERNATIVE' | 'DISPUTED'
+    certainty?: 'CERTAIN' | 'PROBABLE' | 'UNKNOWN'
+    note?: string | null
+    sortOrder?: number
+  }>
   /** 배우자 관계 목록 (선택) */
   spouseRelations?: Array<{
     spouseId: string
@@ -218,6 +236,24 @@ export interface UpdatePersonData {
   birthPlaceText?: string | null
   /** 사망지 직접 입력 텍스트 (역사 지명 등) */
   deathPlaceText?: string | null
+  birthPlaceId?: string | null
+  deathPlaceId?: string | null
+  burialPlaceId?: string | null
+  birthPlaceHistoricalLabel?: string | null
+  deathPlaceHistoricalLabel?: string | null
+  burialPlaceHistoricalLabel?: string | null
+  burialNote?: string | null
+  personPlaces?: Array<{
+    role: 'BIRTH' | 'DEATH' | 'BURIAL' | 'RESIDENCE' | 'EXILE' | 'ANCESTRAL_HOME'
+    placeId?: string | null
+    historicalLabel?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+    estimateRole?: 'PREFERRED' | 'ALTERNATIVE' | 'DISPUTED'
+    certainty?: 'CERTAIN' | 'PROBABLE' | 'UNKNOWN'
+    note?: string | null
+    sortOrder?: number
+  }>
   /** 배우자 관계 목록 (선택, 있으면 기존 삭제 후 일괄 반영) */
   spouseRelations?: Array<{
     spouseId: string
@@ -450,6 +486,7 @@ export interface IPersonRepository {
       description?: string | null
       countryId?: string | null
       historicalCountryId?: string | null
+      politicalSystemId?: string | null
       startDateInfo?: any
       endDateInfo?: any
       allowReshuffle?: boolean
@@ -466,6 +503,7 @@ export interface IPersonRepository {
       headTenureId?: string | null
       countryId?: string | null
       historicalCountryId?: string | null
+      politicalSystemId?: string | null
       startDateInfo?: any
       endDateInfo?: any
     },

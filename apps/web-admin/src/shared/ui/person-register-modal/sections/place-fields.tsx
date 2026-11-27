@@ -1,17 +1,19 @@
 /**
- * 인물 등록/수정 폼의 출생지·사망지 입력 (생애 상세 영역).
- *
- * 원래 '소속·가문' 섹션에 있던 장소 입력을 생애 상세로 이관 — 출생 정보(날짜)와
- * 한 흐름에 두어 "출생은 날짜밖에 못 넣는다"는 발견성 비대칭을 해소한다.
- * (Wikipedia infobox처럼 출생=날짜+장소가 한 몸.)
- * PlaceAutocomplete는 비동기 검색 컴포넌트라 코어(essentials)로 올리지 않고
- * details 영역에 둔다 — 점진 노출 canon 준수.
+ * 인물 등록/수정 폼의 출생지 · 사망지 · 묘소/안장지 입력 (생애 상세 영역).
+ * - 범용 장소 정본(Place) 검색 + Google 지도 URL·좌표 붙여넣기 + 핀 피커 모달(HeadquartersPinPickerModal) 지원
+ * - 당대 지명 표기(historicalLabel)와 현대 정본 위치(Place)를 분리 기록
+ * - 인라인 Google 지도(일반/위성) 미리보기 지원
  */
-import React from 'react'
+import React, { useState } from 'react'
 
-import { FiCopy } from 'react-icons/fi'
+import { FiCopy, FiMapPin } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { placeApi } from '@/shared/api/place'
+import {
+  HeadquartersMapPreview,
+  HeadquartersPinPickerModal,
+} from '@/shared/ui/headquarters-location-field'
 import {
   PlaceSelect as PlaceAutocomplete,
   type PlaceHistoryEntry,
@@ -27,29 +29,48 @@ import {
 import { FONT, RADIUS } from '../_form-primitives'
 
 export interface PlaceFieldsProps {
-  /** 출생지/사망지 자동완성의 국가 스코프 (국적 선택은 코어에서 처리) */
+  /** 출생지/사망지 자동완성의 국가 스코프 */
   countryId: string
   birthPlace: PlaceResult | null
   deathPlace: PlaceResult | null
+  burialPlace?: PlaceResult | null
+  birthHistoricalLabel?: string
+  deathHistoricalLabel?: string
+  burialHistoricalLabel?: string
+  burialNote?: string
   setBirthPlace: (p: PlaceResult | null) => void
   setDeathPlace: (p: PlaceResult | null) => void
+  setBurialPlace?: (p: PlaceResult | null) => void
+  setBirthHistoricalLabel?: (v: string) => void
+  setDeathHistoricalLabel?: (v: string) => void
+  setBurialHistoricalLabel?: (v: string) => void
+  setBurialNote?: (v: string) => void
   setBirthCityId: (id: string) => void
   setDeathCityId: (id: string) => void
-  /** 출생지를 사망지로 복사하는 핸들러 — 부모가 토스트까지 처리 */
   onCopyBirthToDeathPlace: () => void
   markDirty: () => void
-  /** 다른 인물들이 적은 출생지·사망지 — 드롭다운 후보(같은 국적 인물 것이 앞) */
   placeHistory?: ReadonlyArray<PlaceHistoryEntry>
-  /** 장소 목록을 처음 열 때 — 부모가 인물 풀을 늦게 불러온다 */
   onPlaceListOpen?: () => void
 }
+
+type ActivePickerRole = 'birth' | 'death' | 'burial' | null
 
 export function PlaceFields({
   countryId,
   birthPlace,
   deathPlace,
+  burialPlace = null,
+  birthHistoricalLabel = '',
+  deathHistoricalLabel = '',
+  burialHistoricalLabel = '',
+  burialNote = '',
   setBirthPlace,
   setDeathPlace,
+  setBurialPlace,
+  setBirthHistoricalLabel,
+  setDeathHistoricalLabel,
+  setBurialHistoricalLabel,
+  setBurialNote,
   setBirthCityId,
   setDeathCityId,
   onCopyBirthToDeathPlace,
@@ -57,31 +78,157 @@ export function PlaceFields({
   placeHistory,
   onPlaceListOpen,
 }: PlaceFieldsProps) {
+  const [pickerRole, setPickerRole] = useState<ActivePickerRole>(null)
+
+  const getRoleState = (role: Exclude<ActivePickerRole, null>) => {
+    if (role === 'birth') {
+      return {
+        place: birthPlace,
+        setPlace: setBirthPlace,
+        setCityId: setBirthCityId,
+        histLabel: birthHistoricalLabel,
+        title: '출생지',
+      }
+    }
+    if (role === 'death') {
+      return {
+        place: deathPlace,
+        setPlace: setDeathPlace,
+        setCityId: setDeathCityId,
+        histLabel: deathHistoricalLabel,
+        title: '사망지',
+      }
+    }
+    return {
+      place: burialPlace,
+      setPlace: setBurialPlace ?? (() => {}),
+      setCityId: () => {},
+      histLabel: burialHistoricalLabel,
+      title: '묘소·안장지',
+    }
+  }
+
+  const handleSavePinnedPlace = async (
+    role: Exclude<ActivePickerRole, null>,
+    saved: {
+      headquarters: string
+      headquartersLatitude: number | null
+      headquartersLongitude: number | null
+    },
+  ) => {
+    const target = getRoleState(role)
+    const labelName =
+      saved.headquarters.trim() ||
+      target.place?.shortName ||
+      target.histLabel.trim() ||
+      '지정 위치'
+
+    const nextLocal: PlaceResult = {
+      displayName: labelName,
+      shortName: labelName,
+      placeId: target.place?.placeId,
+      latitude: saved.headquartersLatitude,
+      longitude: saved.headquartersLongitude,
+      isManual: saved.headquartersLatitude == null,
+    }
+    target.setPlace(nextLocal)
+    target.setCityId('')
+    markDirty()
+
+    if (
+      saved.headquartersLatitude != null &&
+      saved.headquartersLongitude != null
+    ) {
+      try {
+        const canonical = await placeApi.resolve({
+          id: target.place?.placeId ?? null,
+          name: labelName,
+          latitude: saved.headquartersLatitude,
+          longitude: saved.headquartersLongitude,
+          countryId: countryId || null,
+          aliases: target.histLabel.trim()
+            ? [{ name: target.histLabel.trim(), kind: 'HISTORICAL' }]
+            : undefined,
+        })
+        target.setPlace({
+          ...nextLocal,
+          placeId: canonical.id,
+          latitude: canonical.latitude,
+          longitude: canonical.longitude,
+          modernAddress: canonical.modernAddress,
+          isManual: false,
+        })
+      } catch {
+        // 오프라인 시 로컬 좌표 유지
+      }
+    }
+  }
+
+  const activePickerState = pickerRole ? getRoleState(pickerRole) : null
+
   return (
     <FormRows>
-      {/* 출생지·사망지 2열 — 병렬 개념이라 나란히 두어 세로 길이를 줄인다(≤640px 1열). */}
       <PlaceGrid>
+        {/* 1. 출생지 */}
         <FieldRow>
           <FieldLabel>출생지</FieldLabel>
           <FieldControl>
-            <PlaceAutocompleteWrap>
-              <PlaceAutocomplete
-                value={birthPlace}
-                onChange={(place) => {
-                  setBirthPlace(place)
-                  setBirthCityId(place?.cityId ?? '')
-                  markDirty()
-                }}
-                countryId={countryId || undefined}
-                history={placeHistory}
-                onOpen={onPlaceListOpen}
-              />
-            </PlaceAutocompleteWrap>
+            <PlaceControlStack>
+              <PlaceRowMain>
+                <PlaceAutocompleteWrap>
+                  <PlaceAutocomplete
+                    value={birthPlace}
+                    onChange={(place) => {
+                      setBirthPlace(place)
+                      setBirthCityId(place?.cityId ?? '')
+                      markDirty()
+                    }}
+                    placeholder="현대 위치·지명 검색 또는 Google 지도 URL 붙여넣기"
+                    countryId={countryId || undefined}
+                    history={placeHistory}
+                    onOpen={onPlaceListOpen}
+                  />
+                </PlaceAutocompleteWrap>
+                <PinButton
+                  type="button"
+                  onClick={() => setPickerRole('birth')}
+                  title="지도에서 출생지 핀 지정 / 위성 확인"
+                >
+                  <FiMapPin size={12.5} />
+                  <span>지도 핀</span>
+                </PinButton>
+              </PlaceRowMain>
+
+              {setBirthHistoricalLabel && (
+                <SubInput
+                  type="text"
+                  value={birthHistoricalLabel}
+                  onChange={(e) => {
+                    setBirthHistoricalLabel(e.target.value)
+                    markDirty()
+                  }}
+                  placeholder="당대 지명 표기 (선택 — 예: 한성부 건천동, 프랑크 왕국 엑스라샤펠)"
+                />
+              )}
+
+              {(birthPlace?.shortName || birthHistoricalLabel.trim()) && (
+                <HeadquartersMapPreview
+                  headquarters={
+                    birthPlace?.modernAddress ||
+                    birthPlace?.shortName ||
+                    birthHistoricalLabel
+                  }
+                  latitude={birthPlace?.latitude ?? null}
+                  longitude={birthPlace?.longitude ?? null}
+                  mapHeight={210}
+                />
+              )}
+            </PlaceControlStack>
           </FieldControl>
         </FieldRow>
+
+        {/* 2. 사망지 */}
         <FieldRow>
-          {/* 복사 버튼을 라벨 행 우측에 둬, birthPlace 유무로 autocomplete 위치가
-              흔들리는(raggedness) 문제를 없앤다. */}
           <DeathLabelRow>
             <FieldLabel>사망지</FieldLabel>
             {birthPlace && (
@@ -96,47 +243,231 @@ export function PlaceFields({
             )}
           </DeathLabelRow>
           <FieldControl>
-            <PlaceAutocompleteWrap>
-              <PlaceAutocomplete
-                value={deathPlace}
-                onChange={(place) => {
-                  setDeathPlace(place)
-                  setDeathCityId(place?.cityId ?? '')
-                  markDirty()
-                }}
-                countryId={countryId || undefined}
-                history={placeHistory}
-                onOpen={onPlaceListOpen}
-              />
-            </PlaceAutocompleteWrap>
+            <PlaceControlStack>
+              <PlaceRowMain>
+                <PlaceAutocompleteWrap>
+                  <PlaceAutocomplete
+                    value={deathPlace}
+                    onChange={(place) => {
+                      setDeathPlace(place)
+                      setDeathCityId(place?.cityId ?? '')
+                      markDirty()
+                    }}
+                    placeholder="현대 위치·지명 검색 또는 Google 지도 URL 붙여넣기"
+                    countryId={countryId || undefined}
+                    history={placeHistory}
+                    onOpen={onPlaceListOpen}
+                  />
+                </PlaceAutocompleteWrap>
+                <PinButton
+                  type="button"
+                  onClick={() => setPickerRole('death')}
+                  title="지도에서 사망지 핀 지정 / 위성 확인"
+                >
+                  <FiMapPin size={12.5} />
+                  <span>지도 핀</span>
+                </PinButton>
+              </PlaceRowMain>
+
+              {setDeathHistoricalLabel && (
+                <SubInput
+                  type="text"
+                  value={deathHistoricalLabel}
+                  onChange={(e) => {
+                    setDeathHistoricalLabel(e.target.value)
+                    markDirty()
+                  }}
+                  placeholder="당대 지명 표기 (선택 — 예: 셋쓰국 오사카성, 교황령 로마)"
+                />
+              )}
+
+              {(deathPlace?.shortName || deathHistoricalLabel.trim()) && (
+                <HeadquartersMapPreview
+                  headquarters={
+                    deathPlace?.modernAddress ||
+                    deathPlace?.shortName ||
+                    deathHistoricalLabel
+                  }
+                  latitude={deathPlace?.latitude ?? null}
+                  longitude={deathPlace?.longitude ?? null}
+                  mapHeight={210}
+                />
+              )}
+            </PlaceControlStack>
           </FieldControl>
         </FieldRow>
+
+        {/* 3. 묘소 · 안장지 */}
+        {setBurialPlace && (
+          <FieldRow>
+            <FieldLabel>묘소·안장지</FieldLabel>
+            <FieldControl>
+              <PlaceControlStack>
+                <PlaceRowMain>
+                  <PlaceAutocompleteWrap>
+                    <PlaceAutocomplete
+                      value={burialPlace}
+                      onChange={(place) => {
+                        setBurialPlace(place)
+                        markDirty()
+                      }}
+                      placeholder="왕릉·묘소·현충원 검색 또는 Google 지도 URL 붙여넣기"
+                      countryId={countryId || undefined}
+                      history={placeHistory}
+                      onOpen={onPlaceListOpen}
+                    />
+                  </PlaceAutocompleteWrap>
+                  <PinButton
+                    type="button"
+                    onClick={() => setPickerRole('burial')}
+                    title="지도에서 묘소·안장지 핀 지정 / 위성 확인"
+                  >
+                    <FiMapPin size={12.5} />
+                    <span>지도 핀</span>
+                  </PinButton>
+                </PlaceRowMain>
+
+                {setBurialHistoricalLabel && (
+                  <SubInput
+                    type="text"
+                    value={burialHistoricalLabel}
+                    onChange={(e) => {
+                      setBurialHistoricalLabel(e.target.value)
+                      markDirty()
+                    }}
+                    placeholder="묘호·능호·당대 표기 (선택 — 예: 헌릉, 파리 앵발리드)"
+                  />
+                )}
+
+                {setBurialNote && (
+                  <SubInput
+                    type="text"
+                    value={burialNote}
+                    onChange={(e) => {
+                      setBurialNote(e.target.value)
+                      markDirty()
+                    }}
+                    placeholder="안장·이장 비고 (선택 — 예: 1840년 세인트헬레나에서 파리로 이장)"
+                  />
+                )}
+
+                {(burialPlace?.shortName || burialHistoricalLabel.trim()) && (
+                  <HeadquartersMapPreview
+                    headquarters={
+                      burialPlace?.modernAddress ||
+                      burialPlace?.shortName ||
+                      burialHistoricalLabel
+                    }
+                    latitude={burialPlace?.latitude ?? null}
+                    longitude={burialPlace?.longitude ?? null}
+                    mapHeight={210}
+                  />
+                )}
+              </PlaceControlStack>
+            </FieldControl>
+          </FieldRow>
+        )}
       </PlaceGrid>
+
+      {pickerRole && activePickerState && (
+        <HeadquartersPinPickerModal
+          isOpen
+          onClose={() => setPickerRole(null)}
+          initialHeadquarters={
+            activePickerState.place?.shortName ??
+            activePickerState.histLabel ??
+            ''
+          }
+          initialLatitude={activePickerState.place?.latitude ?? null}
+          initialLongitude={activePickerState.place?.longitude ?? null}
+          departmentName={activePickerState.title}
+          onSave={(saved) => {
+            void handleSavePinnedPlace(pickerRole, saved)
+            setPickerRole(null)
+          }}
+        />
+      )}
     </FormRows>
   )
 }
 
-// ─── Styled ──────────────────────────────────────────────────────────────────
-
-/**
- * 출생지·사망지 묶음 — 옆 라벨 행 문법(PersonFormLayoutWrap)에선 두 칸이 **각자 한 행**이라
- * 묶음 상자를 지운다(display: contents). 예전 2열 그리드는 위 라벨 시절 배치.
- */
 const PlaceGrid = styled.div`
   display: contents;
 `
 
-/*
- * 사망지 머리 줄 — 라벨 열(200px) 안에서 '사망지' 아래에 '출생지와 동일' 글 버튼을 둔다.
- * 레이아웃(세로 스택)은 PersonFormLayoutWrap의 `FieldRow > :has(> FieldLabel)` 규칙이 정한다.
- */
 const DeathLabelRow = styled.div``
 
-const PlaceAutocompleteWrap = styled.div`
+const PlaceControlStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   width: 100%;
 `
 
-/** '출생지와 동일' — 테 없는 글 버튼(폼의 '+ 추가' 버튼과 같은 언어), 라벨 줄 높이 안에 든다 */
+const PlaceRowMain = styled.div`
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+`
+
+const PlaceAutocompleteWrap = styled.div`
+  flex: 1;
+  min-width: 0;
+`
+
+const PinButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.control};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.14)'
+        : 'rgba(15, 23, 42, 0.14)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const SubInput = styled.input`
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.control};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(15, 23, 42, 0.1)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.025)' : '#f8fafc'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 12.5px;
+
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
 const InlineActionBtn = styled.button`
   display: inline-flex;
   align-items: center;
@@ -157,9 +488,5 @@ const InlineActionBtn = styled.button`
   &:focus-visible {
     outline: none;
     box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
-  }
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
   }
 `

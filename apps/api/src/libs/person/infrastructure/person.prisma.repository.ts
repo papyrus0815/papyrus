@@ -129,7 +129,45 @@ const PERSON_LIFE_EVENT_LINKED_EVENT_SELECT = {
   startDay: true,
   startDatePrecision: true,
   startDate: true,
+  location: true,
+  locationLatitude: true,
+  locationLongitude: true,
 } as const
+
+/** 인물 응답에 실어 보내는 범용 장소(Place) 정본 요약 필드 */
+const PERSON_PLACE_SUMMARY_SELECT = {
+  id: true,
+  kind: true,
+  name: true,
+  localName: true,
+  modernAddress: true,
+  latitude: true,
+  longitude: true,
+  coordinatePrecision: true,
+  googlePlaceId: true,
+  defaultZoom: true,
+  countryId: true,
+  country: { select: { id: true, name: true, isoCode: true } },
+} as const
+
+function serializePersonPlaceSummary(place: any) {
+  if (!place) return null
+  return {
+    id: place.id,
+    kind: place.kind,
+    name: place.name,
+    localName: place.localName ?? null,
+    modernAddress: place.modernAddress ?? null,
+    latitude: place.latitude != null ? Number(place.latitude) : null,
+    longitude: place.longitude != null ? Number(place.longitude) : null,
+    coordinatePrecision: place.coordinatePrecision ?? null,
+    googlePlaceId: place.googlePlaceId ?? null,
+    defaultZoom: place.defaultZoom ?? null,
+    countryId: place.countryId ?? null,
+    countryName: place.country?.name ?? null,
+    countryIsoCode: place.country?.isoCode ?? null,
+  }
+}
 import {
   CreateMilitaryCareerDto,
   CreateBusinessCareerDto,
@@ -274,10 +312,13 @@ const PERSON_CARD_INCLUDE = {
   ...PERSON_HISTORICAL_COUNTRY_FOR_NAME,
   dynasty: { select: { id: true, name: true } },
   job: { select: { id: true, title: true } },
-  birthCity: { select: { id: true, name: true } },
-  deathCity: { select: { id: true, name: true } },
-  birthAdminDivision: { select: { id: true, name: true } },
-  deathAdminDivision: { select: { id: true, name: true } },
+  birthCity: { select: { id: true, name: true, latitude: true, longitude: true } },
+  deathCity: { select: { id: true, name: true, latitude: true, longitude: true } },
+  birthAdminDivision: { select: { id: true, name: true, centerLat: true, centerLng: true } },
+  deathAdminDivision: { select: { id: true, name: true, centerLat: true, centerLng: true } },
+  birthPlace: { select: PERSON_PLACE_SUMMARY_SELECT },
+  deathPlace: { select: PERSON_PLACE_SUMMARY_SELECT },
+  burialPlace: { select: PERSON_PLACE_SUMMARY_SELECT },
   // 재위·재임이 한 테이블 — 한 번에 읽고 매퍼(splitOfficeHoldings)가 군주직 여부로 가른다.
   // Prisma는 같은 관계를 두 번 include할 수 없어 where로 나눠 읽을 수 없다.
   GovernmentTenures: {
@@ -564,6 +605,167 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 빈 문자열('')·undefined인 FK는 객체에서 제거해 Prisma에 전달하지 않음 → country_id 등 FK 위반 방지.
    * null은 '명시적 해제'이므로 그대로 통과시켜 Prisma가 NULL로 지우게 한다 (undefined = 변경 없음).
    */
+  /**
+   * PersonPlace 컬렉션과 Person 본체의 대표 장소 캐시(birthPlaceId / deathPlaceId / burialPlaceId /
+   * *HistoricalLabel / *PlaceText)를 단일 트랜잭션 내에서 원자적으로 동기화한다.
+   */
+  private async syncPersonPlacesInTx(
+    tx: Prisma.TransactionClient,
+    personId: string,
+    personPlaces: CreatePersonData['personPlaces'],
+    scalarInput: Record<string, unknown>,
+  ): Promise<void> {
+    if (personPlaces !== undefined) {
+      await tx.personPlace.deleteMany({ where: { personId } })
+      const validRows = personPlaces
+        .filter((item) => item.placeId || item.historicalLabel?.trim() || item.note?.trim())
+        .map((item, idx) => ({
+          personId,
+          role: item.role as any,
+          placeId: item.placeId || null,
+          historicalLabel: item.historicalLabel?.trim() || null,
+          countryId: item.countryId || null,
+          historicalCountryId: item.historicalCountryId || null,
+          estimateRole: (item.estimateRole ?? 'PREFERRED') as any,
+          certainty: (item.certainty ?? 'CERTAIN') as any,
+          note: item.note?.trim() || null,
+          sortOrder: item.sortOrder ?? idx,
+        }))
+
+      if (validRows.length > 0) {
+        await tx.personPlace.createMany({ data: validRows })
+      }
+
+      const pickPreferred = (role: 'BIRTH' | 'DEATH' | 'BURIAL') =>
+        validRows.find((r) => r.role === role && r.estimateRole === 'PREFERRED') ??
+        validRows.find((r) => r.role === role) ??
+        null
+
+      const prefBirth = pickPreferred('BIRTH')
+      const prefDeath = pickPreferred('DEATH')
+      const prefBurial = pickPreferred('BURIAL')
+
+      const placeIds = [prefBirth?.placeId, prefDeath?.placeId, prefBurial?.placeId].filter(
+        Boolean,
+      ) as string[]
+      const placeNameById = new Map<string, string>()
+      if (placeIds.length > 0) {
+        const placeRows = await tx.place.findMany({
+          where: { id: { in: placeIds } },
+          select: { id: true, name: true },
+        })
+        for (const p of placeRows) placeNameById.set(p.id, p.name)
+      }
+
+      const birthTextFallback =
+        prefBirth?.historicalLabel ??
+        (prefBirth?.placeId ? placeNameById.get(prefBirth.placeId) ?? null : null)
+      const deathTextFallback =
+        prefDeath?.historicalLabel ??
+        (prefDeath?.placeId ? placeNameById.get(prefDeath.placeId) ?? null : null)
+
+      await tx.person.update({
+        where: { id: personId },
+        data: {
+          birthPlaceId: prefBirth?.placeId ?? null,
+          birthPlaceHistoricalLabel: prefBirth?.historicalLabel ?? null,
+          birthPlaceText: birthTextFallback,
+          deathPlaceId: prefDeath?.placeId ?? null,
+          deathPlaceHistoricalLabel: prefDeath?.historicalLabel ?? null,
+          deathPlaceText: deathTextFallback,
+          burialPlaceId: prefBurial?.placeId ?? null,
+          burialPlaceHistoricalLabel: prefBurial?.historicalLabel ?? null,
+        },
+      })
+      return
+    }
+
+    // 스칼라 캐시 필드만 단독 전송된 경우(하위 호환·부분 수정) 대응하는 PREFERRED 행도 함께 맞춰준다.
+    const roleSpecs: Array<{
+      role: 'BIRTH' | 'DEATH' | 'BURIAL'
+      placeIdKey: string
+      labelKey: string
+      legacyTextKey?: string
+    }> = [
+      {
+        role: 'BIRTH',
+        placeIdKey: 'birthPlaceId',
+        labelKey: 'birthPlaceHistoricalLabel',
+        legacyTextKey: 'birthPlaceText',
+      },
+      {
+        role: 'DEATH',
+        placeIdKey: 'deathPlaceId',
+        labelKey: 'deathPlaceHistoricalLabel',
+        legacyTextKey: 'deathPlaceText',
+      },
+      {
+        role: 'BURIAL',
+        placeIdKey: 'burialPlaceId',
+        labelKey: 'burialPlaceHistoricalLabel',
+      },
+    ]
+
+    for (const spec of roleSpecs) {
+      const touched =
+        spec.placeIdKey in scalarInput ||
+        spec.labelKey in scalarInput ||
+        (spec.legacyTextKey ? spec.legacyTextKey in scalarInput : false)
+      if (!touched) continue
+
+      const currentPerson = await tx.person.findUnique({
+        where: { id: personId },
+        select: {
+          birthPlaceId: true,
+          birthPlaceHistoricalLabel: true,
+          birthPlaceText: true,
+          deathPlaceId: true,
+          deathPlaceHistoricalLabel: true,
+          deathPlaceText: true,
+          burialPlaceId: true,
+          burialPlaceHistoricalLabel: true,
+        },
+      })
+      if (!currentPerson) continue
+
+      const effPlaceId = (currentPerson as any)[spec.placeIdKey] as string | null
+      const effLabel =
+        ((currentPerson as any)[spec.labelKey] as string | null) ??
+        (spec.legacyTextKey ? ((currentPerson as any)[spec.legacyTextKey] as string | null) : null)
+
+      const existingPref = await tx.personPlace.findFirst({
+        where: { personId, role: spec.role as any, estimateRole: 'PREFERRED' as any },
+        select: { id: true },
+      })
+
+      if (!effPlaceId && !effLabel) {
+        if (existingPref) {
+          await tx.personPlace.delete({ where: { id: existingPref.id } })
+        }
+      } else if (existingPref) {
+        await tx.personPlace.update({
+          where: { id: existingPref.id },
+          data: {
+            placeId: effPlaceId,
+            historicalLabel: effLabel,
+          },
+        })
+      } else {
+        await tx.personPlace.create({
+          data: {
+            personId,
+            role: spec.role as any,
+            placeId: effPlaceId,
+            historicalLabel: effLabel,
+            estimateRole: 'PREFERRED' as any,
+            certainty: 'CERTAIN' as any,
+            sortOrder: 0,
+          },
+        })
+      }
+    }
+  }
+
   private sanitizePersonFkFields<T extends CreatePersonData | UpdatePersonData>(data: T): T {
     const fkKeys = [
       'countryId',
@@ -572,6 +774,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       'deathCityId',
       'birthAdminDivisionId',
       'deathAdminDivisionId',
+      'birthPlaceId',
+      'deathPlaceId',
+      'burialPlaceId',
       'dynastyId',
       'religionId',
       'denominationId',
@@ -757,10 +962,65 @@ export class PersonPrismaRepository implements IPersonRepository {
       deathAdminDivisionId: person.deathAdminDivisionId ?? null,
       birthPlaceText: person.birthPlaceText ?? null,
       deathPlaceText: person.deathPlaceText ?? null,
-      birthCity: person.birthCity ? { id: person.birthCity.id, name: person.birthCity.name } : null,
-      deathCity: person.deathCity ? { id: person.deathCity.id, name: person.deathCity.name } : null,
-      birthAdminDivision: person.birthAdminDivision ? { id: person.birthAdminDivision.id, name: person.birthAdminDivision.name } : null,
-      deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
+      birthPlaceId: (person as any).birthPlaceId ?? null,
+      deathPlaceId: (person as any).deathPlaceId ?? null,
+      burialPlaceId: (person as any).burialPlaceId ?? null,
+      birthPlaceHistoricalLabel: (person as any).birthPlaceHistoricalLabel ?? null,
+      deathPlaceHistoricalLabel: (person as any).deathPlaceHistoricalLabel ?? null,
+      burialPlaceHistoricalLabel: (person as any).burialPlaceHistoricalLabel ?? null,
+      burialNote: (person as any).burialNote ?? null,
+      birthCity: person.birthCity
+        ? {
+            id: person.birthCity.id,
+            name: person.birthCity.name,
+            latitude: person.birthCity.latitude != null ? Number(person.birthCity.latitude) : null,
+            longitude: person.birthCity.longitude != null ? Number(person.birthCity.longitude) : null,
+          }
+        : null,
+      deathCity: person.deathCity
+        ? {
+            id: person.deathCity.id,
+            name: person.deathCity.name,
+            latitude: person.deathCity.latitude != null ? Number(person.deathCity.latitude) : null,
+            longitude: person.deathCity.longitude != null ? Number(person.deathCity.longitude) : null,
+          }
+        : null,
+      birthAdminDivision: person.birthAdminDivision
+        ? {
+            id: person.birthAdminDivision.id,
+            name: person.birthAdminDivision.name,
+            centerLat: person.birthAdminDivision.centerLat != null ? Number(person.birthAdminDivision.centerLat) : null,
+            centerLng: person.birthAdminDivision.centerLng != null ? Number(person.birthAdminDivision.centerLng) : null,
+          }
+        : null,
+      deathAdminDivision: person.deathAdminDivision
+        ? {
+            id: person.deathAdminDivision.id,
+            name: person.deathAdminDivision.name,
+            centerLat: person.deathAdminDivision.centerLat != null ? Number(person.deathAdminDivision.centerLat) : null,
+            centerLng: person.deathAdminDivision.centerLng != null ? Number(person.deathAdminDivision.centerLng) : null,
+          }
+        : null,
+      birthPlace: serializePersonPlaceSummary((person as any).birthPlace),
+      deathPlace: serializePersonPlaceSummary((person as any).deathPlace),
+      burialPlace: serializePersonPlaceSummary((person as any).burialPlace),
+      places: Array.isArray((person as any).places)
+        ? (person as any).places.map((pp: any) => ({
+            id: pp.id,
+            role: pp.role,
+            placeId: pp.placeId ?? null,
+            historicalLabel: pp.historicalLabel ?? null,
+            countryId: pp.countryId ?? null,
+            historicalCountryId: pp.historicalCountryId ?? null,
+            estimateRole: pp.estimateRole,
+            certainty: pp.certainty,
+            note: pp.note ?? null,
+            sortOrder: pp.sortOrder ?? 0,
+            place: serializePersonPlaceSummary(pp.place),
+            country: pp.country ?? null,
+            historicalCountry: pp.historicalCountry ?? null,
+          }))
+        : undefined,
       showLifespanOnEventList: person.showLifespanOnEventList,
       isBirthDateUnknown: person.isBirthDateUnknown ?? false,
       isBirthDateApproximate: (person as any).isBirthDateApproximate ?? false,
@@ -1836,10 +2096,21 @@ export class PersonPrismaRepository implements IPersonRepository {
           orderBy: [{ priority: Prisma.SortOrder.asc }],
           take: 1,
         },
-        birthCity: { select: { id: true, name: true } },
-        deathCity: { select: { id: true, name: true } },
-        birthAdminDivision: { select: { id: true, name: true } },
-        deathAdminDivision: { select: { id: true, name: true } },
+        birthCity: { select: { id: true, name: true, latitude: true, longitude: true } },
+        deathCity: { select: { id: true, name: true, latitude: true, longitude: true } },
+        birthAdminDivision: { select: { id: true, name: true, centerLat: true, centerLng: true } },
+        deathAdminDivision: { select: { id: true, name: true, centerLat: true, centerLng: true } },
+        birthPlace: { select: PERSON_PLACE_SUMMARY_SELECT },
+        deathPlace: { select: PERSON_PLACE_SUMMARY_SELECT },
+        burialPlace: { select: PERSON_PLACE_SUMMARY_SELECT },
+        places: {
+          include: {
+            place: { select: PERSON_PLACE_SUMMARY_SELECT },
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+          orderBy: [{ sortOrder: Prisma.SortOrder.asc }, { createdAt: Prisma.SortOrder.asc }],
+        },
         foundedCompanies: {
           // 명칭·설립일·설명은 정본 Organization이 보유(Company↔Organization 통합, 방향 B).
           // 응답은 컨트롤러에서 { name, foundedAt, description } 평면화로 프론트 계약 유지.
@@ -2028,6 +2299,9 @@ export class PersonPrismaRepository implements IPersonRepository {
                 endDay: true,
                 description: true,
                 domain: true,
+                location: true,
+                locationLatitude: true,
+                locationLongitude: true,
                 countryRelations: {
                   select: {
                     id: true,
@@ -2135,6 +2409,9 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true,
                 election: { select: { id: true, name: true, pollDate: true } },
               },
+            },
+            chamber: {
+              select: { id: true, name: true, localName: true, role: true },
             },
             // 같은 행정부 동료 표시용: 각료면 cabinet/cabinetMemberships(소속), 수반이면 headedCabinets(수장)
             cabinetId: true,
@@ -2659,6 +2936,8 @@ export class PersonPrismaRepository implements IPersonRepository {
     delete (sanitized as Record<string, unknown>).nicknames
     const sections = (sanitized as CreatePersonData).sections
     delete (sanitized as Record<string, unknown>).sections
+    const personPlaces = (sanitized as CreatePersonData).personPlaces
+    delete (sanitized as Record<string, unknown>).personPlaces
 
     // 본체 생성과 하위 컬렉션(전기 섹션·배우자·별칭·국가 소속)을 단일 트랜잭션으로 묶어
     // 하위 FK 오류 시 불완전한 고아 Person 행이 남는 현상을 차단한다.
@@ -2776,6 +3055,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         })
       }
 
+      await this.syncPersonPlacesInTx(tx, createdPerson.id, personPlaces, sanitized)
+
       return createdPerson
     })
 
@@ -2848,6 +3129,8 @@ export class PersonPrismaRepository implements IPersonRepository {
     delete (sanitized as Record<string, unknown>).sections
     const nicknames = (sanitized as UpdatePersonData).nicknames
     delete (sanitized as Record<string, unknown>).nicknames
+    const personPlaces = (sanitized as UpdatePersonData).personPlaces
+    delete (sanitized as Record<string, unknown>).personPlaces
     // 낙관적 동시성 토큰(CC1) — 스칼라 아니므로 person.update 데이터에서 분리.
     const expectedUpdatedAt = (sanitized as UpdatePersonData).expectedUpdatedAt
     delete (sanitized as Record<string, unknown>).expectedUpdatedAt
@@ -3167,6 +3450,8 @@ export class PersonPrismaRepository implements IPersonRepository {
           })
         }
       }
+
+      await this.syncPersonPlacesInTx(tx, id, personPlaces, updateData as Record<string, unknown>)
     })
 
     // 응답에 effective countryId(역사적 국가 포함)를 넣기 위해 countryAffiliations 포함해 재조회
@@ -8385,10 +8670,27 @@ export class PersonPrismaRepository implements IPersonRepository {
         endDatePrecision: dto.endDate ? (dto.endDatePrecision ?? 'day') : null,
         sortOrder: dto.sortOrder ?? 0,
         eventId: dto.eventId ?? null,
+        placeId: dto.placeId ?? null,
+        placeHistoricalLabel: dto.placeHistoricalLabel?.trim() || null,
         accountId,
       },
-      include: { event: { select: PERSON_LIFE_EVENT_LINKED_EVENT_SELECT } },
-    }).then(withSignedDates)
+      include: {
+        event: { select: PERSON_LIFE_EVENT_LINKED_EVENT_SELECT },
+        place: { select: PERSON_PLACE_SUMMARY_SELECT },
+      },
+    }).then((row) => ({
+      ...withSignedDates(row),
+      place: serializePersonPlaceSummary((row as any).place),
+      event: row.event
+        ? {
+            ...row.event,
+            locationLatitude:
+              row.event.locationLatitude != null ? Number(row.event.locationLatitude) : null,
+            locationLongitude:
+              row.event.locationLongitude != null ? Number(row.event.locationLongitude) : null,
+          }
+        : null,
+    }))
   }
 
   async updatePersonLifeEvent(
@@ -8461,13 +8763,36 @@ export class PersonPrismaRepository implements IPersonRepository {
         ? { connect: { id: dto.eventId } }
         : { disconnect: true }
     }
+    if (dto.placeId !== undefined) {
+      data.place = dto.placeId
+        ? { connect: { id: dto.placeId } }
+        : { disconnect: true }
+    }
+    if (dto.placeHistoricalLabel !== undefined) {
+      data.placeHistoricalLabel = dto.placeHistoricalLabel?.trim() || null
+    }
     return this.prisma.personLifeEvent
       .update({
         where: { id },
         data,
-        include: { event: { select: PERSON_LIFE_EVENT_LINKED_EVENT_SELECT } },
+        include: {
+          event: { select: PERSON_LIFE_EVENT_LINKED_EVENT_SELECT },
+          place: { select: PERSON_PLACE_SUMMARY_SELECT },
+        },
       })
-      .then(withSignedDates)
+      .then((row) => ({
+        ...withSignedDates(row),
+        place: serializePersonPlaceSummary((row as any).place),
+        event: row.event
+          ? {
+              ...row.event,
+              locationLatitude:
+                row.event.locationLatitude != null ? Number(row.event.locationLatitude) : null,
+              locationLongitude:
+                row.event.locationLongitude != null ? Number(row.event.locationLongitude) : null,
+            }
+          : null,
+      }))
   }
 
   async deletePersonLifeEvent(id: string): Promise<void> {
@@ -8484,6 +8809,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       // 관련 사건 요약 — 소프트삭제된 사건은 연결이 없는 것처럼 보여야 한다(아래 매핑에서 null로)
       include: {
         event: { select: { ...PERSON_LIFE_EVENT_LINKED_EVENT_SELECT, deletedAt: true } },
+        place: { select: PERSON_PLACE_SUMMARY_SELECT },
       },
       orderBy: [
         { startDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
@@ -8506,8 +8832,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       if (leftKey !== rightKey) return leftKey - rightKey
       return (left.sortOrder ?? 0) - (right.sortOrder ?? 0)
     })
-    return rows.map(({ event, ...row }) => ({
+    return rows.map(({ event, place, ...row }) => ({
       ...withSignedDates(row),
+      place: serializePersonPlaceSummary(place),
       event: event && !event.deletedAt
         ? {
             id: event.id,
@@ -8515,6 +8842,11 @@ export class PersonPrismaRepository implements IPersonRepository {
             startEra: event.startEra,
             startYear: event.startYear,
             startDatePrecision: (event as any).startDatePrecision ?? null,
+            location: event.location ?? null,
+            locationLatitude:
+              event.locationLatitude != null ? Number(event.locationLatitude) : null,
+            locationLongitude:
+              event.locationLongitude != null ? Number(event.locationLongitude) : null,
             startDate:
               event.startYear != null && (event.startEra === 'BC' || event.startDate == null)
                 ? toSignedDateString(
@@ -8667,10 +8999,21 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         dynasty: { select: { id: true, name: true } },
         job: { select: { id: true, title: true } },
-        birthCity: { select: { id: true, name: true } },
-        deathCity: { select: { id: true, name: true } },
-        birthAdminDivision: { select: { id: true, name: true } },
-        deathAdminDivision: { select: { id: true, name: true } },
+        birthCity: { select: { id: true, name: true, latitude: true, longitude: true } },
+        deathCity: { select: { id: true, name: true, latitude: true, longitude: true } },
+        birthAdminDivision: { select: { id: true, name: true, centerLat: true, centerLng: true } },
+        deathAdminDivision: { select: { id: true, name: true, centerLat: true, centerLng: true } },
+        birthPlace: { select: PERSON_PLACE_SUMMARY_SELECT },
+        deathPlace: { select: PERSON_PLACE_SUMMARY_SELECT },
+        burialPlace: { select: PERSON_PLACE_SUMMARY_SELECT },
+        places: {
+          include: {
+            place: { select: PERSON_PLACE_SUMMARY_SELECT },
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+          orderBy: [{ sortOrder: Prisma.SortOrder.asc }, { createdAt: Prisma.SortOrder.asc }],
+        },
         // 재위·재임 한 테이블 — 한 번에 읽고 매퍼(splitOfficeHoldings)가 군주직으로 가른다
         GovernmentTenures: {
           select: {

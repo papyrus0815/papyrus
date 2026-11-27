@@ -275,8 +275,11 @@ model HistoricalCountry {
   groundVehicles            GroundVehicle[]               @relation("GroundVehicleHistoricalCountry")
   aircraft                  Aircraft[]                    @relation("AircraftHistoricalCountry")
   navalVessels              NavalVessel[]                 @relation("NavalVesselHistoricalCountry")
-  /// 이 역사적 국가 소속 도시
+  /// 이 역사적 국가 소속 도시 · 범용 장소(Place) · 시대별 지명(PlaceName) · 인물 장소 기록
   cities                    City[]                        @relation("HistoricalCountryCities")
+  places                    Place[]                       @relation("HistoricalCountryPlaces")
+  placeNames                PlaceName[]                   @relation("HistoricalCountryPlaceNames")
+  personPlaces              PersonPlace[]                 @relation("PersonPlaceHistoricalCountry")
   /// 이 역사적 국가의 연도별 경제·인구·발전·국채 지표
   economicIndicators        CountryEconomicIndicator[]    @relation("HistoricalCountryEconomicIndicators")
   demographicIndicators     CountryDemographicIndicator[] @relation("HistoricalCountryDemographicIndicators")

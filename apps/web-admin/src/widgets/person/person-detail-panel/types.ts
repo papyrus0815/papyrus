@@ -343,12 +343,23 @@ export interface PersonDetailData {
       deathDate?: string | Date | null
     }) | null
   }> | null
-  birthCity?: { id: string; name: string } | null
-  deathCity?: { id: string; name: string } | null
-  birthAdminDivision?: { id: string; name: string } | null
-  deathAdminDivision?: { id: string; name: string } | null
+  birthCity?: { id: string; name: string; latitude?: number | null; longitude?: number | null } | null
+  deathCity?: { id: string; name: string; latitude?: number | null; longitude?: number | null } | null
+  birthAdminDivision?: { id: string; name: string; centerLat?: number | null; centerLng?: number | null } | null
+  deathAdminDivision?: { id: string; name: string; centerLat?: number | null; centerLng?: number | null } | null
   birthPlaceText?: string | null
   deathPlaceText?: string | null
+  birthPlaceId?: string | null
+  deathPlaceId?: string | null
+  burialPlaceId?: string | null
+  birthPlaceHistoricalLabel?: string | null
+  deathPlaceHistoricalLabel?: string | null
+  burialPlaceHistoricalLabel?: string | null
+  burialNote?: string | null
+  birthPlace?: import('@/shared/api/place').PlaceSummary | null
+  deathPlace?: import('@/shared/api/place').PlaceSummary | null
+  burialPlace?: import('@/shared/api/place').PlaceSummary | null
+  places?: import('@/shared/api/place').PersonPlaceRecord[] | null
   /**
    * 재임 기록. detail 엔드포인트는 `governmentPositions`, 그 외(목록·DTO)는
    * `governmentTenures` 로 같은 데이터를 다른 이름으로 내려준다. 읽을 땐

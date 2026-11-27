@@ -79,6 +79,12 @@ export interface PersonLifeEvent {
   eventId?: string | null
   /** 관련 사건 요약 — 사건이 지워졌으면 null */
   event?: PersonLifeEventLinkedEvent | null
+  /** 발생 장소 정본 Place ID */
+  placeId?: string | null
+  /** 연보 발생 당시 지명 표기 */
+  placeHistoricalLabel?: string | null
+  /** 발생 장소 정본 요약 */
+  place?: import('./place').PlaceSummary | null
   createdAt: string
   updatedAt: string
 }
@@ -90,6 +96,9 @@ export interface PersonLifeEventLinkedEvent {
   startEra?: 'BC' | 'AD' | null
   startYear?: number | null
   startDate?: string | null
+  location?: string | null
+  locationLatitude?: number | null
+  locationLongitude?: number | null
 }
 
 export interface CreatePersonLifeEventBody {
@@ -104,6 +113,8 @@ export interface CreatePersonLifeEventBody {
   sortOrder?: number
   /** 관련 사건 ID(선택) */
   eventId?: string
+  placeId?: string | null
+  placeHistoricalLabel?: string | null
 }
 
 export interface UpdatePersonLifeEventBody {
@@ -117,6 +128,8 @@ export interface UpdatePersonLifeEventBody {
   sortOrder?: number | null
   /** 관련 사건 ID — null이면 연결 해제 */
   eventId?: string | null
+  placeId?: string | null
+  placeHistoricalLabel?: string | null
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

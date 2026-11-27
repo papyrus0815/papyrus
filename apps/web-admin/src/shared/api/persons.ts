@@ -134,6 +134,17 @@ interface RelaxedPersonInputFields {
     order?: number
     sectionType?: string | null
   }>
+  personPlaces?: Array<{
+    role: 'BIRTH' | 'DEATH' | 'BURIAL' | 'RESIDENCE' | 'EXILE' | 'ANCESTRAL_HOME'
+    placeId?: string | null
+    historicalLabel?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+    estimateRole?: 'PREFERRED' | 'ALTERNATIVE' | 'DISPUTED'
+    certainty?: 'CERTAIN' | 'PROBABLE' | 'UNKNOWN'
+    note?: string | null
+    sortOrder?: number
+  }>
 }
 
 /**

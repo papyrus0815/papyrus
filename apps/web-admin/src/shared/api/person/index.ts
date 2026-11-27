@@ -89,10 +89,21 @@ export type Person = {
   } | null
   /** 가문 (목록/재임 응답에서 포함될 수 있음) */
   dynasty?: { id: string; name: string } | null
-  birthCity?: { id: string; name: string; countryId: string } | null
-  deathCity?: { id: string; name: string; countryId: string } | null
-  birthAdminDivision?: { id: string; name: string } | null
-  deathAdminDivision?: { id: string; name: string } | null
+  birthCity?: { id: string; name: string; countryId: string; latitude?: number | null; longitude?: number | null } | null
+  deathCity?: { id: string; name: string; countryId: string; latitude?: number | null; longitude?: number | null } | null
+  birthAdminDivision?: { id: string; name: string; centerLat?: number | null; centerLng?: number | null } | null
+  deathAdminDivision?: { id: string; name: string; centerLat?: number | null; centerLng?: number | null } | null
+  birthPlaceId?: string | null
+  deathPlaceId?: string | null
+  burialPlaceId?: string | null
+  birthPlaceHistoricalLabel?: string | null
+  deathPlaceHistoricalLabel?: string | null
+  burialPlaceHistoricalLabel?: string | null
+  burialNote?: string | null
+  birthPlace?: import('../place').PlaceSummary | null
+  deathPlace?: import('../place').PlaceSummary | null
+  burialPlace?: import('../place').PlaceSummary | null
+  places?: import('../place').PersonPlaceRecord[]
 }
 
 export type DateInfo = {
@@ -142,6 +153,14 @@ export type CreatePersonInput = {
   birthPlaceText?: string | null
   /** 사망지 직접 입력 텍스트 */
   deathPlaceText?: string | null
+  birthPlaceId?: string | null
+  deathPlaceId?: string | null
+  burialPlaceId?: string | null
+  birthPlaceHistoricalLabel?: string | null
+  deathPlaceHistoricalLabel?: string | null
+  burialPlaceHistoricalLabel?: string | null
+  burialNote?: string | null
+  personPlaces?: import('../place').PersonPlaceInput[]
   /** 사망 유형 */
   deathType?: DeathType | null
   /** 사망 원인 상세 */

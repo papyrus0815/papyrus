@@ -1,6 +1,6 @@
 import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn, ValidateIf, IsArray, IsInt, Min, Max, MaxLength } from 'class-validator'
 import { Type } from 'class-transformer'
-import { Era, DeathType, DateInfoDto, SpouseRelationDto, BiographySectionDto, CountryAffiliationDto, NicknameDto } from './create-person.dto'
+import { Era, DeathType, DateInfoDto, SpouseRelationDto, BiographySectionDto, CountryAffiliationDto, NicknameDto, PersonPlaceInputDto } from './create-person.dto'
 
 /**
  * 인물 수정 DTO
@@ -396,6 +396,50 @@ export class UpdatePersonDto {
   @IsString()
   @MaxLength(255) // DB death_place_text VarChar(255)
   deathPlaceText?: string | null
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  birthPlaceId?: string | null
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  deathPlaceId?: string | null
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  burialPlaceId?: string | null
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MaxLength(255)
+  birthPlaceHistoricalLabel?: string | null
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MaxLength(255)
+  deathPlaceHistoricalLabel?: string | null
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MaxLength(255)
+  burialPlaceHistoricalLabel?: string | null
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  burialNote?: string | null
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PersonPlaceInputDto)
+  personPlaces?: PersonPlaceInputDto[]
 
   /**
    * 배우자 관계 목록 (선택, 있으면 기존 삭제 후 일괄 반영)

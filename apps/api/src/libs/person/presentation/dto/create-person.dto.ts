@@ -307,6 +307,52 @@ export class ProfileImageDto {
 }
 
 /**
+ * 인물 공간 주장(PersonPlace) 입력 DTO — 출생지·사망지·묘소·거처·본관 및 복수 학설(일설) 지원
+ */
+export class PersonPlaceInputDto {
+  @IsIn(['BIRTH', 'DEATH', 'BURIAL', 'RESIDENCE', 'EXILE', 'ANCESTRAL_HOME'])
+  role!: 'BIRTH' | 'DEATH' | 'BURIAL' | 'RESIDENCE' | 'EXILE' | 'ANCESTRAL_HOME'
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  placeId?: string | null
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MaxLength(255)
+  historicalLabel?: string | null
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  countryId?: string | null
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  historicalCountryId?: string | null
+
+  @IsOptional()
+  @IsIn(['PREFERRED', 'ALTERNATIVE', 'DISPUTED'])
+  estimateRole?: 'PREFERRED' | 'ALTERNATIVE' | 'DISPUTED'
+
+  @IsOptional()
+  @IsIn(['CERTAIN', 'PROBABLE', 'UNKNOWN'])
+  certainty?: 'CERTAIN' | 'PROBABLE' | 'UNKNOWN'
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  note?: string | null
+
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number
+}
+
+/**
  * 인물 생성 DTO
  */
 export class CreatePersonDto {
@@ -708,6 +754,58 @@ export class CreatePersonDto {
   @IsString()
   @MaxLength(255) // DB death_place_text VarChar(255)
   deathPlaceText?: string | null
+
+  /** 출생지 정본 Place ID */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  birthPlaceId?: string | null
+
+  /** 사망지 정본 Place ID */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  deathPlaceId?: string | null
+
+  /** 묘소·안장지 정본 Place ID */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  burialPlaceId?: string | null
+
+  /** 출생지 당대 표기 */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MaxLength(255)
+  birthPlaceHistoricalLabel?: string | null
+
+  /** 사망지 당대 표기 */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MaxLength(255)
+  deathPlaceHistoricalLabel?: string | null
+
+  /** 묘소·안장지 당대 표기 */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MaxLength(255)
+  burialPlaceHistoricalLabel?: string | null
+
+  /** 묘소·안장 관련 메모 */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  burialNote?: string | null
+
+  /** 인물 생애 공간 기록 전체 (출생·사망·묘소·거처·본관 및 복수 일설) */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PersonPlaceInputDto)
+  personPlaces?: PersonPlaceInputDto[]
 
   /**
    * 배우자 관계 목록 (선택)

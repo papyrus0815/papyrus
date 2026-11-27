@@ -27,6 +27,8 @@ import {
   cityApi,
 } from '@/shared/api/city'
 import { type Country, countryApi } from '@/shared/api/country'
+import { type PlaceSuggestion, placeApi } from '@/shared/api/place'
+import { parseHeadquartersMapInput } from '@/shared/ui/headquarters-location-field/headquarters-google-map.lib'
 import {
   DropdownEmpty,
   DropdownFoot,
@@ -47,12 +49,19 @@ import { HighlightedText } from '@/shared/ui/highlighted-text'
 export interface PlaceResult {
   displayName: string
   shortName: string
+  /** 범용 정본 Place.id */
+  placeId?: string
   /** DB City.id */
   cityId?: string
   /** DB AdministrativeDivision.id */
   adminDivisionId?: string
   region?: string
   countryName?: string
+  latitude?: number | null
+  longitude?: number | null
+  modernAddress?: string | null
+  googlePlaceId?: string | null
+  externalKey?: string | null
   /** 직접 입력 여부 */
   isManual?: boolean
 }
@@ -81,13 +90,14 @@ export interface PlaceHistoryEntry {
   count: number
 }
 
-/** 제안 한 줄 — DB 도시 또는 행정구역 */
+/** 제안 한 줄 — 정본 Place · 외부 지도(Google/OSM) · DB 도시 · 행정구역 */
 interface Suggestion {
   key: string
   place: PlaceResult
-  /** 보조 줄(상위 행정구역 · 국가) */
+  /** 보조 줄(현대 주소 / 상위 행정구역 · 국가) */
   context: string
-  kind: '도시' | string
+  kind: string
+  group: string
   inScope: boolean
 }
 
@@ -130,7 +140,59 @@ function toCitySuggestion(
     },
     context: [region, countryName].filter(Boolean).join(' · '),
     kind: '도시',
+    group: '등록 지역',
     inScope: !!scopeCountryId && city.countryId === scopeCountryId,
+  }
+}
+
+function toPlaceCatalogSuggestion(
+  hit: PlaceSuggestion,
+  scopeCountryId?: string,
+): Suggestion {
+  const kindLabel =
+    hit.kind === 'SITE'
+      ? '장소·터'
+      : hit.kind === 'TOMB'
+        ? '묘소·능'
+        : hit.kind === 'DISTRICT'
+          ? '구역'
+          : hit.kind === 'ISLAND'
+            ? '섬'
+            : hit.kind === 'BATTLEFIELD'
+              ? '전장'
+              : hit.kind === 'REGION'
+                ? '권역'
+                : '도시·지명'
+  return {
+    key: hit.placeId
+      ? `place:${hit.placeId}`
+      : `ext:${hit.googlePlaceId ?? hit.externalKey ?? `${hit.name}:${hit.latitude}`}`,
+    place: {
+      placeId: hit.placeId ?? undefined,
+      displayName: hit.modernAddress
+        ? `${hit.name} (${hit.modernAddress})`
+        : [hit.name, hit.countryName].filter(Boolean).join(', '),
+      shortName: hit.name,
+      countryName: hit.countryName ?? undefined,
+      latitude: hit.latitude,
+      longitude: hit.longitude,
+      modernAddress: hit.modernAddress,
+      googlePlaceId: hit.googlePlaceId,
+      externalKey: hit.externalKey,
+      isManual: false,
+    },
+    context:
+      [
+        hit.matchedAlias && hit.matchedAlias !== hit.name
+          ? `옛 지명: ${hit.matchedAlias}`
+          : null,
+        hit.modernAddress ?? hit.countryName,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    kind: hit.latitude != null ? `${kindLabel} · 핀` : kindLabel,
+    group: hit.isRegistered ? '정본 장소 (Place)' : '세계 지도 검색 (Google·OSM)',
+    inScope: !!scopeCountryId && hit.countryId === scopeCountryId,
   }
 }
 
@@ -156,6 +218,7 @@ function toDivisionSuggestion(
     },
     context: [...hit.parentPath, countryName].filter(Boolean).join(' · '),
     kind: hit.divisionLabel || '행정구역',
+    group: '등록 지역',
     inScope: !!scopeCountryId && hit.countryId === scopeCountryId,
   }
 }
@@ -207,7 +270,7 @@ export function PlaceSelect({
     setText((current) => (current.trim() === next ? current : next))
   }, [value?.shortName])
 
-  // 제안 검색 — 도시·행정구역을 함께, 지정 국가 것을 앞에.
+  // 제안 검색 — 정본 Place(DB + Google Places/OSM) + 도시·행정구역을 함께, 지정 국가 것을 앞에.
   useEffect(() => {
     if (!open || !query) {
       setSuggestions([])
@@ -217,7 +280,8 @@ export function PlaceSelect({
     const seq = ++searchSeqRef.current
     setLoading(true)
     const timer = window.setTimeout(async () => {
-      const [cities, divisions, countries] = await Promise.all([
+      const [placeHits, cities, divisions, countries] = await Promise.all([
+        placeApi.suggest(query, undefined, MAX_SUGGESTIONS),
         cityApi.searchCities(query),
         // owner '' = 국가 필터 없음(서버가 빈 countryId를 무시) — 해외 출생지도 제안
         cityApi.searchAdministrativeDivisions(query, '', MAX_SUGGESTIONS),
@@ -228,14 +292,15 @@ export function PlaceSelect({
         countries.map((country) => [country.id, country.name]),
       )
       const merged = [
+        ...placeHits.map((hit) => toPlaceCatalogSuggestion(hit, countryId)),
         ...cities.map((city) => toCitySuggestion(city, countryNameById, countryId)),
         ...divisions.map((hit) =>
           toDivisionSuggestion(hit, countryNameById, countryId),
         ),
       ]
-        // 안정 정렬 — 지정 국가 것이 앞, 그 안에선 도시 → 행정구역 순 유지
+        // 안정 정렬 — 지정 국가 것이 앞, 그 안에선 정본 Place → 외부 지도 → 도시 → 행정구역 순 유지
         .sort((left, right) => Number(right.inScope) - Number(left.inScope))
-        .slice(0, MAX_SUGGESTIONS)
+        .slice(0, 12)
       setSuggestions(merged)
       setLoading(false)
     }, SEARCH_DEBOUNCE_MS)
@@ -262,7 +327,7 @@ export function PlaceSelect({
       for (const suggestion of suggestions) {
         list.push({
           key: suggestion.key,
-          group: '등록 지역',
+          group: suggestion.group || '등록 지역',
           place: suggestion.place,
           label: suggestion.place.shortName,
           sub: suggestion.context || undefined,
@@ -309,6 +374,87 @@ export function PlaceSelect({
     setText(entry.place.shortName)
     setOpen(false)
     setActiveIndex(-1)
+
+    // 외부 검색(Google Places / Nominatim) 후보 선택 시 DB Place 정본으로 자동 Upsert 후 placeId 바인딩
+    if (
+      !entry.place.isManual &&
+      !entry.place.placeId &&
+      entry.place.latitude != null &&
+      entry.place.longitude != null
+    ) {
+      void placeApi
+        .resolve({
+          name: entry.place.shortName,
+          modernAddress: entry.place.modernAddress ?? null,
+          latitude: entry.place.latitude,
+          longitude: entry.place.longitude,
+          googlePlaceId: entry.place.googlePlaceId ?? null,
+          externalKey: entry.place.externalKey ?? null,
+          countryId: countryId || null,
+        })
+        .then((saved) => {
+          onChange({
+            ...entry.place,
+            placeId: saved.id,
+            latitude: saved.latitude,
+            longitude: saved.longitude,
+            modernAddress: saved.modernAddress,
+            isManual: false,
+          })
+        })
+        .catch(() => {
+          // 오프라인/미인증 시 선택값 그대로 유지
+        })
+    }
+  }
+
+  const handlePaste = (pasteEvent: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = pasteEvent.clipboardData?.getData('text') ?? ''
+    const parsed = parseHeadquartersMapInput(pasted)
+    if (!parsed.isMapUrlOrCoord || (!parsed.point && !parsed.extractedLabel)) {
+      return
+    }
+    pasteEvent.preventDefault()
+    const resolvedLabel =
+      parsed.extractedLabel ||
+      text.trim() ||
+      (parsed.point
+        ? `${parsed.point.lat.toFixed(5)}, ${parsed.point.lng.toFixed(5)}`
+        : '')
+    setText(resolvedLabel)
+    setOpen(false)
+
+    if (parsed.point) {
+      const immediate: PlaceResult = {
+        displayName: resolvedLabel,
+        shortName: resolvedLabel,
+        latitude: parsed.point.lat,
+        longitude: parsed.point.lng,
+        isManual: false,
+      }
+      onChange(immediate)
+      void placeApi
+        .resolve({
+          name: resolvedLabel,
+          latitude: parsed.point.lat,
+          longitude: parsed.point.lng,
+          countryId: countryId || null,
+        })
+        .then((saved) => {
+          onChange({
+            ...immediate,
+            placeId: saved.id,
+            modernAddress: saved.modernAddress,
+          })
+        })
+        .catch(() => {})
+    } else if (resolvedLabel) {
+      onChange({
+        displayName: resolvedLabel,
+        shortName: resolvedLabel,
+        isManual: true,
+      })
+    }
   }
 
   const clear = () => {
@@ -361,11 +507,13 @@ export function PlaceSelect({
 
   const isSelected = (entry: ListEntry) =>
     !!value &&
-    (entry.place.cityId
-      ? entry.place.cityId === value.cityId
-      : entry.place.adminDivisionId
-        ? entry.place.adminDivisionId === value.adminDivisionId && !value.cityId
-        : !!value.isManual && entry.place.shortName === value.shortName)
+    (entry.place.placeId
+      ? entry.place.placeId === value.placeId
+      : entry.place.cityId
+        ? entry.place.cityId === value.cityId
+        : entry.place.adminDivisionId
+          ? entry.place.adminDivisionId === value.adminDivisionId && !value.cityId
+          : !!value.isManual && entry.place.shortName === value.shortName)
 
   return (
     <Wrap>
@@ -386,6 +534,7 @@ export function PlaceSelect({
           disabled={disabled}
           autoComplete="off"
           onChange={(event) => handleType(event.target.value)}
+          onPaste={handlePaste}
           onFocus={openList}
           onClick={openList}
           onBlur={() => setOpen(false)}

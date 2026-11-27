@@ -148,13 +148,35 @@ export interface PersonResponseDto {
   /** 사망지 직접 입력 텍스트 */
   deathPlaceText?: string | null
   /** 출생지 도시 정보 */
-  birthCity?: { id: string; name: string } | null
+  birthCity?: { id: string; name: string; latitude?: number | null; longitude?: number | null } | null
   /** 사망지 도시 정보 */
-  deathCity?: { id: string; name: string } | null
+  deathCity?: { id: string; name: string; latitude?: number | null; longitude?: number | null } | null
   /** 출생지 행정구역 정보 */
-  birthAdminDivision?: { id: string; name: string } | null
+  birthAdminDivision?: { id: string; name: string; centerLat?: number | null; centerLng?: number | null } | null
   /** 사망지 행정구역 정보 */
-  deathAdminDivision?: { id: string; name: string } | null
+  deathAdminDivision?: { id: string; name: string; centerLat?: number | null; centerLng?: number | null } | null
+  /** 출생지 정본 Place ID */
+  birthPlaceId?: string | null
+  /** 사망지 정본 Place ID */
+  deathPlaceId?: string | null
+  /** 묘소·안장지 정본 Place ID */
+  burialPlaceId?: string | null
+  /** 출생지 당대 지명 표기 */
+  birthPlaceHistoricalLabel?: string | null
+  /** 사망지 당대 지명 표기 */
+  deathPlaceHistoricalLabel?: string | null
+  /** 묘소·안장지 당대 지명 표기 */
+  burialPlaceHistoricalLabel?: string | null
+  /** 묘소·안장 관련 메모 */
+  burialNote?: string | null
+  /** 출생지 정본 Place 요약 */
+  birthPlace?: any | null
+  /** 사망지 정본 Place 요약 */
+  deathPlace?: any | null
+  /** 묘소·안장지 정본 Place 요약 */
+  burialPlace?: any | null
+  /** 인물 공간 기록 전체 (출생·사망·묘소·거처·본관 및 일설 목록) */
+  places?: any[]
   // 이벤트 목록에 생몰년 표시 여부
   showLifespanOnEventList?: boolean
   /** 출생일 미상 여부 */

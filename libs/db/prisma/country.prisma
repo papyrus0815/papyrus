@@ -133,9 +133,11 @@ model Country {
   /// 용어 사전 (본문 문구·관직 설명)
   glossaryTerms GlossaryTerm[] @relation("GlossaryTermCountry")
 
-  /// 자연 지리(산·강·호수·해안) 및 인프라(고속도로·철도·공항·항구)
+  /// 자연 지리(산·강·호수·해안) 및 인프라(고속도로·철도·공항·항구) · 범용 장소 정본(Place)
   naturalFeatures NaturalFeature[]
   infrastructures Infrastructure[]
+  places          Place[]          @relation("CountryPlaces")
+  personPlaces    PersonPlace[]    @relation("PersonPlaceCountry")
 
   //--- 등록 계정 (개인 정보 플랫폼)
   accountId String? @map("account_id") @db.Char(36)
@@ -327,6 +329,7 @@ model AdministrativeDivision {
 
   homeTown        HomeTown[]
   cities          City[]
+  places          Place[]           @relation("AdminDivPlaces")
   event           Event[]
   CompanyFacility CompanyFacility[]
   personsBornHere Person[]          @relation("PersonBirthAdminDivision")
