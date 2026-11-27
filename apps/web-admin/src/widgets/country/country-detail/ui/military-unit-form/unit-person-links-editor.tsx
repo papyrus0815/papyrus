@@ -12,6 +12,7 @@ import {
   type UpdateGovernmentPositionTenureDto,
 } from '@/shared/api/person-career'
 import { getAllPersons } from '@/shared/api/persons'
+import { ensureOwnedPositionDefinition } from '@/shared/lib/government-position/ensure-owned-position-definition'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   PersonPickerModal,
@@ -269,6 +270,17 @@ export async function syncUnitPersonDrafts(params: {
   } = params
   const keptTenureIds = new Set<string>()
   const affectedPersonIds = new Set<string>()
+  /*
+   * 직책은 DB 정의 필수(서버 2026-11-27) — 보직 이름을 이 부대 전용 DB 직책으로 확보해 id로 보낸다.
+   * 같은 저장 안에서 새로 만든 정의도 다시 찾도록 목록에 보탠다.
+   */
+  const definitionPool: Array<{
+    id: string
+    title?: string | null
+    militaryUnitId?: string | null
+    administrationDepartmentId?: string | null
+    isGeneric?: boolean | null
+  }> = drafts.length > 0 ? [...(await personCareerApi.getPositionDefinitions({}))] : []
 
   for (const draft of drafts) {
     affectedPersonIds.add(draft.personId)
@@ -294,6 +306,15 @@ export async function syncUnitPersonDrafts(params: {
     const resolvedTitle =
       draft.title.trim() ||
       defaultCommanderTitleForUnitType(unitType, draft.roleKind)
+    const positionDefinitionId = await ensureOwnedPositionDefinition({
+      title: resolvedTitle,
+      positionType,
+      militaryUnitId: unitId,
+      pool: definitionPool,
+    })
+    if (!definitionPool.some((definition) => definition.id === positionDefinitionId)) {
+      definitionPool.push({ id: positionDefinitionId, title: resolvedTitle, militaryUnitId: unitId })
+    }
     const parsedOrdinal = draft.ordinal.trim()
       ? Number.parseInt(draft.ordinal.trim(), 10)
       : null
@@ -303,6 +324,7 @@ export async function syncUnitPersonDrafts(params: {
       const updateDto: UpdateGovernmentPositionTenureDto = {
         personId: draft.personId,
         positionType,
+        positionDefinitionId,
         title: resolvedTitle,
         rankTitle: draft.rankTitle.trim() || null,
         ordinal: parsedOrdinal,
@@ -321,6 +343,7 @@ export async function syncUnitPersonDrafts(params: {
       const createDto: CreateGovernmentPositionTenureDto = {
         personId: draft.personId,
         positionType,
+        positionDefinitionId,
         title: resolvedTitle,
         rankTitle: draft.rankTitle.trim() || undefined,
         ordinal: parsedOrdinal ?? undefined,

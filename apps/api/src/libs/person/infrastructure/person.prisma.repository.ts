@@ -3837,8 +3837,14 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 국가원수/왕위 재임 기록 추가
    */
   /**
-   * 재임이 가리킬 직위 정의 — 모든 재임은 정의를 갖는다.
-   * 정의 id가 오면 그것, 없으면 직위 종류(없으면 OTHER)의 일반 정의(isGeneric).
+   * 재임이 가리킬 직위 정의 — 모든 재임은 **DB에 등록된 구체 직책**을 가리킨다(2026-11-27 필수화).
+   *
+   * - 정의 id가 오면 그것. 단 일반 정의(isGeneric — '각료'·'군 지휘관' 같은 이름 없는 그릇)는 직책이 아니라
+   *   고를 수 없다. 이미 그 정의에 묶인 기록을 그대로 다시 저장하는 것만 허용(keepDefinitionId).
+   * - 정의 id 없이 이름만 오면 DB 정의로 해석한다: ① 그 부처·부대 전용 직책 ② 그 나라에서 보이는 직책
+   *   (전역 또는 그 나라 스코프). 같은 유형을 먼저 고른다.
+   * - 어디에도 없으면 400 — 예전엔 일반 정의에 묶고 이름만 문자열로 남겨, 그 직책이 역대 목록·통계·
+   *   피커 어디에도 서지 않았다(실DB 123행, 2026-11-27 정리).
    */
   private async resolveDefinitionForWrite(
     positionDefinitionId: string | null | undefined,
@@ -3847,12 +3853,17 @@ export class PersonPrismaRepository implements IPersonRepository {
       title?: string | null
       administrationDepartmentId?: string | null
       militaryUnitId?: string | null
+      countryId?: string | null
+      historicalCountryId?: string | null
+      /** 수정 중인 기록이 이미 가리키는 정의 — 일반 정의라도 '그대로 두기'는 허용 */
+      keepDefinitionId?: string | null
     },
   ): Promise<{
     id: string
     positionType: GovernmentPositionType
     title: string
     isMonarchical: boolean
+    isGeneric: boolean
     administrationDepartmentId: string | null
     militaryUnitId: string | null
   }> {
@@ -3861,6 +3872,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       positionType: true,
       title: true,
       isMonarchical: true,
+      isGeneric: true,
       administrationDepartmentId: true,
       militaryUnitId: true,
     } as const
@@ -3872,24 +3884,27 @@ export class PersonPrismaRepository implements IPersonRepository {
       if (!explicitDef) {
         throw new BadRequestException(`직위 정의를 찾을 수 없습니다: ${positionDefinitionId}`)
       }
+      if (explicitDef.isGeneric && explicitDef.id !== context?.keepDefinitionId) {
+        throw new BadRequestException(
+          `'${explicitDef.title}'은(는) 이름 없는 일반 정의라 직책으로 고를 수 없습니다. DB에서 구체 직책을 고르거나 먼저 등록해 주세요.`,
+        )
+      }
       return explicitDef
     }
 
     const trimmedTitle = context?.title?.trim() || null
-    const resolvedType = (positionType ??
-      (context?.militaryUnitId
-        ? 'MILITARY_COMMANDER'
-        : context?.administrationDepartmentId
-          ? 'CABINET_MINISTER'
-          : 'OTHER')) as GovernmentPositionType
+    if (!trimmedTitle) {
+      throw new BadRequestException('직책을 DB에서 골라 주세요(positionDefinitionId).')
+    }
+    const pickSameTypeFirst = <T extends { positionType: GovernmentPositionType }>(rows: T[]): T | null =>
+      (positionType ? rows.find((row) => row.positionType === positionType) : undefined) ?? rows[0] ?? null
 
-    /* 부처 또는 군 부대가 함께 주어졌고 그 기관 전용 직위 정의가 이미 존재하면 자동 재사용 */
-    if (trimmedTitle && (context?.administrationDepartmentId || context?.militaryUnitId)) {
-      const scopedMatch = await this.prisma.governmentPositionDefinition.findFirst({
+    /* ① 그 부처·부대 전용 직책 */
+    if (context?.administrationDepartmentId || context?.militaryUnitId) {
+      const ownedMatches = await this.prisma.governmentPositionDefinition.findMany({
         where: {
           title: trimmedTitle,
-          positionType: resolvedType,
-          isMonarchical: false,
+          isGeneric: false,
           ...(context.administrationDepartmentId
             ? { administrationDepartmentId: context.administrationDepartmentId }
             : {}),
@@ -3897,19 +3912,37 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         select,
       })
-      if (scopedMatch) return scopedMatch
+      const owned = pickSameTypeFirst(ownedMatches)
+      if (owned) return owned
     }
 
-    const definition = await this.prisma.governmentPositionDefinition.findFirst({
-      where: { isGeneric: true, positionType: resolvedType },
+    /* ② 그 나라에서 보이는 직책 — 전역(스코프 0행) 또는 그 나라 스코프. 다른 기관·부대 전용은 제외 */
+    const scopeOr = await this.buildCountryScopeOr(
+      {
+        countryId: context?.countryId ?? undefined,
+        historicalCountryId: context?.historicalCountryId ?? undefined,
+      },
+      { forDefinitionScope: true },
+    )
+    const catalogMatches = await this.prisma.governmentPositionDefinition.findMany({
+      where: {
+        title: trimmedTitle,
+        isGeneric: false,
+        administrationDepartmentId: null,
+        militaryUnitId: null,
+        OR: [
+          { scopes: { none: {} } },
+          ...(scopeOr.length > 0 ? [{ scopes: { some: { OR: scopeOr } } }] : []),
+        ],
+      },
       select,
     })
-    if (!definition) {
-      throw new BadRequestException(
-        `직위 종류 ${resolvedType}의 일반 정의가 없습니다`,
-      )
-    }
-    return definition
+    const catalog = pickSameTypeFirst(catalogMatches)
+    if (catalog) return catalog
+
+    throw new BadRequestException(
+      `직책 '${trimmedTitle}'이(가) DB에 없습니다. 직책을 DB에 먼저 등록한 뒤 골라 주세요.`,
+    )
   }
 
   private async areTenureCountryAxesCompatible(
@@ -4279,11 +4312,13 @@ export class PersonPrismaRepository implements IPersonRepository {
       countryId: dto.countryId,
       historicalCountryId: dto.historicalCountryId,
     })
-    // 직위 정의는 필수 — 정의 id가 오면 그것, 없으면 직위 종류·소속 기관 기반 해석(없으면 일반 정의)
+    // 직위 정의는 필수 — 정의 id, 또는 이름이 가리키는 DB 직책(기관·부대 전용 → 그 나라 카탈로그). 없으면 400
     const definition = await this.resolveDefinitionForWrite(dto.positionDefinitionId, dto.positionType, {
       title: dto.title,
       administrationDepartmentId: dto.administrationDepartmentId,
       militaryUnitId: dto.militaryUnitId,
+      countryId: countryFields.countryId,
+      historicalCountryId: countryFields.historicalCountryId,
     })
     if (dto.positionDefinitionId) {
       await this.assertDefinitionMatchesTenureCountry(
@@ -4473,8 +4508,8 @@ export class PersonPrismaRepository implements IPersonRepository {
   async updateGovernmentPositionTenure(id: string, dto: Partial<CreateGovernmentPositionTenureDto>): Promise<any> {
     const updateData: any = {}
 
-    // 직위 정의·종류·직함 — 정의가 정본. 정의를 비우면(null) 또는 종류만 바꾸면 그 종류의 일반 정의로.
-    // 직함은 정의 이름과 같으면 비운다(구체 직함만 저장)
+    // 직위 정의·종류·직함 — 정의가 정본. 정의를 비우거나(null) 종류를 바꾸거나, 일반 정의에 묶인 기록의
+    // 이름을 바꾸면 그 이름을 DB 직책으로 해석한다(없으면 400). 직함은 정의 이름과 같으면 비운다(구체 직함만 저장)
     if (dto.positionDefinitionId !== undefined || dto.positionType || dto.title !== undefined) {
       const current = await this.prisma.governmentPositionTenure.findUnique({
         where: { id },
@@ -4482,12 +4517,15 @@ export class PersonPrismaRepository implements IPersonRepository {
           title: true,
           administrationDepartmentId: true,
           militaryUnitId: true,
+          countryId: true,
+          historicalCountryId: true,
           positionDefinition: {
             select: {
               id: true,
               positionType: true,
               title: true,
               isMonarchical: true,
+              isGeneric: true,
               administrationDepartmentId: true,
               militaryUnitId: true,
             },
@@ -4496,11 +4534,18 @@ export class PersonPrismaRepository implements IPersonRepository {
       })
       if (!current) throw new NotFoundException('재임 기록을 찾을 수 없습니다')
       let definition = current.positionDefinition
+      const renamesGenericRecord =
+        definition.isGeneric &&
+        dto.title !== undefined &&
+        (dto.title?.trim() || '') !== (current.title?.trim() || '')
       if (dto.positionDefinitionId) {
-        definition = await this.resolveDefinitionForWrite(dto.positionDefinitionId, undefined)
+        definition = await this.resolveDefinitionForWrite(dto.positionDefinitionId, undefined, {
+          keepDefinitionId: current.positionDefinition.id,
+        })
       } else if (
         dto.positionDefinitionId === null ||
-        (dto.positionType && dto.positionType !== definition.positionType)
+        (dto.positionType && dto.positionType !== definition.positionType) ||
+        renamesGenericRecord
       ) {
         definition = await this.resolveDefinitionForWrite(
           undefined,
@@ -4513,6 +4558,11 @@ export class PersonPrismaRepository implements IPersonRepository {
                 : current.administrationDepartmentId,
             militaryUnitId:
               dto.militaryUnitId !== undefined ? dto.militaryUnitId : current.militaryUnitId,
+            countryId: dto.countryId !== undefined ? dto.countryId : current.countryId,
+            historicalCountryId:
+              dto.historicalCountryId !== undefined
+                ? dto.historicalCountryId
+                : current.historicalCountryId,
           },
         )
       }

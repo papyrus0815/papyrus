@@ -40,6 +40,7 @@ import {
   searchPersons,
 } from '@/shared/api/persons'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
+import { ensureOwnedPositionDefinition } from '@/shared/lib/government-position/ensure-owned-position-definition'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { findDepartmentForMember } from '@/shared/lib/ministry-department/department-cabinet-matcher'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -566,15 +567,38 @@ export const CabinetBulkMinisterModal: React.FC<
             }
           : undefined
 
+      /*
+       * 직책은 DB 정의 필수(서버 2026-11-27) — 부처에서 추론한 직위명('X 대신' 등)이 DB에 없으면
+       * 그 부처의 직책으로 먼저 등록하고 id로 보낸다. 부처 없는 행은 이름을 서버가 DB 직책으로 해석한다(없으면 거부).
+       */
+      const definitionPool = [...allDefinitions]
       for (const rowItem of filledRows) {
         const trimmedRole = rowItem.roleTitle.trim()
+        const positionDefinitionId =
+          rowItem.matchedDefinitionId ??
+          (rowItem.departmentId
+            ? await ensureOwnedPositionDefinition({
+                title: trimmedRole,
+                positionType: 'CABINET_MINISTER',
+                administrationDepartmentId: rowItem.departmentId,
+                pool: definitionPool,
+              })
+            : null)
+        if (
+          positionDefinitionId &&
+          !definitionPool.some((definition) => definition.id === positionDefinitionId)
+        ) {
+          definitionPool.push({
+            id: positionDefinitionId,
+            title: trimmedRole,
+            administrationDepartmentId: rowItem.departmentId,
+          })
+        }
         const payload: CreateGovernmentPositionTenureDto = {
           personId: rowItem.personId,
           positionType: 'CABINET_MINISTER',
           title: trimmedRole,
-          ...(rowItem.matchedDefinitionId
-            ? { positionDefinitionId: rowItem.matchedDefinitionId }
-            : {}),
+          ...(positionDefinitionId ? { positionDefinitionId } : {}),
           ...(countryId ? { countryId } : {}),
           ...(historicalCountryId ? { historicalCountryId } : {}),
           ...(rowItem.departmentId

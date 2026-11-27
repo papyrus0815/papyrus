@@ -399,29 +399,6 @@ export class EventSideUnitService {
       return this.list(eventId)
     }
 
-    let genericDef = await this.prisma.governmentPositionDefinition.findFirst({
-      where: { positionType: 'MILITARY_COMMANDER', isGeneric: true },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    })
-    if (!genericDef) {
-      genericDef = await this.prisma.governmentPositionDefinition.findFirst({
-        where: { positionType: 'MILITARY_COMMANDER' },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true },
-      })
-    }
-    if (!genericDef) {
-      genericDef = await this.prisma.governmentPositionDefinition.create({
-        data: {
-          title: '군 지휘관',
-          positionType: 'MILITARY_COMMANDER',
-          isGeneric: true,
-        },
-        select: { id: true },
-      })
-    }
-
     const legacyMatch = row.militaryUnit.commanders.find(
       (cmdItem) => cmdItem.personId === targetPersonId,
     )
@@ -448,14 +425,39 @@ export class EventSideUnitService {
     const computedTitle =
       legacyMatch?.role?.trim() || `${unitName} ${defaultRoleSuffix}`
 
+    /*
+     * 직책은 DB 정의 필수(2026-11-27) — 일반 정의('군 지휘관')에 이름만 문자열로 남기지 않고,
+     * 그 부대 전용 보직 정의를 찾거나 만든다. 같은 부대의 같은 보직은 정의 하나로 모인다.
+     */
+    const commanderTitle = computedTitle.slice(0, 100)
+    const unitPositionDef =
+      (await this.prisma.governmentPositionDefinition.findFirst({
+        where: {
+          militaryUnitId: row.militaryUnit.id,
+          title: commanderTitle,
+          isGeneric: false,
+        },
+        select: { id: true },
+      })) ??
+      (await this.prisma.governmentPositionDefinition.create({
+        data: {
+          title: commanderTitle,
+          positionType: 'MILITARY_COMMANDER',
+          militaryUnitId: row.militaryUnit.id,
+          isGeneric: false,
+          description: '사건 참전 부대 지휘관 연결에서 등록',
+        },
+        select: { id: true },
+      }))
+
     const resolvedEnd = evEnd.year != null ? evEnd : evStart
 
     await this.prisma.governmentPositionTenure.create({
       data: {
         personId: targetPersonId,
-        positionDefinitionId: genericDef.id,
+        positionDefinitionId: unitPositionDef.id,
         positionType: 'MILITARY_COMMANDER',
-        title: computedTitle.slice(0, 100),
+        title: commanderTitle,
         rankTitle: legacyMatch?.rank?.trim() || null,
         militaryUnitId: row.militaryUnit.id,
         countryId: row.militaryUnit.countryId ?? null,
