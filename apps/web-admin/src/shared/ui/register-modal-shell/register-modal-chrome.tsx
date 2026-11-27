@@ -84,6 +84,50 @@ export const HeaderResetBtn = styled.button`
   }
 `
 
+/**
+ * 헤더 '2단 분할 / 1단 보기' 전환 — 사건 등록 모달의 같은 버튼(값 동일).
+ * 1180px 미만에선 분할이 의미 없어 숨긴다(모달이 한 열로 떨어진다).
+ */
+export const LayoutModeToggleBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.35)'
+          : 'rgba(99, 102, 241, 0.28)'
+        : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : 'rgba(99, 102, 241, 0.06)'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? (theme.mode === 'dark' ? '#c7d2fe' : theme.colors.primary) : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+
+  @media (max-width: 1180px) {
+    display: none;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    outline: none;
+  }
+`
+
 export const FooterHint = styled.div<{ $warning?: boolean }>`
   display: flex;
   align-items: center;

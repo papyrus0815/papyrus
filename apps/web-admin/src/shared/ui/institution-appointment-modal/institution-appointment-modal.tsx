@@ -4,7 +4,7 @@ import {
   FiAlertCircle,
   FiCalendar,
   FiClock,
-  FiInfo,
+  FiColumns,
   FiPlus,
   FiSearch,
 } from 'react-icons/fi'
@@ -75,6 +75,7 @@ import {
   FooterShortcutItem,
   HeaderActionsBar,
   HeaderResetBtn,
+  LayoutModeToggleBtn,
   SectionJumpBtn,
   SectionJumpNav,
   useModalSubmitShortcut,
@@ -87,6 +88,15 @@ import {
   PersonRegisterModalStickyFooter,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import { notify } from '@/shared/ui/toast'
+
+import {
+  PositionDefinitionField,
+  type SelectedPositionDefinition,
+} from './position-definition-field'
+import {
+  isGenericDefinition,
+  type PositionDefinitionLike,
+} from './position-definition-options'
 
 export type InstitutionAppointmentContextType =
   | 'DEPARTMENT'
@@ -378,187 +388,9 @@ function formatPartyLabel(party: PoliticalPartyRow): string {
   return `${party.name}${shortPart}${rangePart}`
 }
 
-function dedupeStrings(items: string[]): string[] {
-  const seen = new Set<string>()
-  const result: string[] = []
-  for (const item of items) {
-    const trimmed = item.trim()
-    if (!trimmed || seen.has(trimmed)) continue
-    seen.add(trimmed)
-    result.push(trimmed)
-  }
-  return result
-}
-
-function buildRolePresets(params: {
-  contextType: InstitutionAppointmentContextType
-  departmentName?: string | null
-  departmentKind?: string | null
-  militaryUnitType?: string | null
-}): string[] {
-  const { contextType, departmentName, departmentKind, militaryUnitType } = params
-  const cleanDept = departmentName?.trim() ?? ''
-
-  if (contextType === 'MILITARY_UNIT') {
-    if (militaryUnitType === 'SUPREME_COMMAND') {
-      return [
-        '최고사령관',
-        '총장(Chef)',
-        '작전부장',
-        '참모총장',
-        '총사령관',
-        '군사위원',
-      ]
-    }
-    if (militaryUnitType === 'GENERAL_STAFF') {
-      return [
-        '참모총장',
-        '합참의장',
-        '작전부장',
-        '제1병참총감',
-        '참모차장',
-        '정보부장',
-      ]
-    }
-    if (militaryUnitType === 'SERVICE_HQ') {
-      return ['총사령관', '참모총장', '사령관', '참모장', '작전부장']
-    }
-    if (
-      militaryUnitType === 'THEATER' ||
-      militaryUnitType === 'ARMY_GROUP' ||
-      militaryUnitType === 'FRONT'
-    ) {
-      return ['총사령관', '사령관', '참모장', '군사위원', '작전참모']
-    }
-    if (militaryUnitType === 'FLEET') {
-      return ['함대사령관', '사령장관', '참모장', '전대사령관']
-    }
-    if (
-      militaryUnitType === 'AIR_FLEET' ||
-      militaryUnitType === 'AIR_CORPS' ||
-      militaryUnitType === 'WING'
-    ) {
-      return ['사령관', '비행단장', '참모장']
-    }
-    return ['사령관', '군단장', '사단장', '여단장', '연대장', '참모장']
-  }
-
-  // 1) 사법·재판 기관 (대법원, 헌법재판소, 대심원, 최고재판소, 평리원, 의금부 등)
-  if (
-    /대법원|헌법재판소|대심원|최고재판소|최고법원|고등법원|행정법원|사법원|평리원|의금부|법원|재판소/.test(
-      cleanDept,
-    )
-  ) {
-    if (/헌법재판소/.test(cleanDept)) {
-      return [
-        '헌법재판소장',
-        '헌법재판관',
-        '재판관',
-        '사무처장',
-        '사무차장',
-      ]
-    }
-    if (/의금부/.test(cleanDept)) {
-      return ['판의금부사', '지의금부사', '동지의금부사', '도사']
-    }
-    return dedupeStrings([
-      cleanDept ? `${cleanDept}장` : '대법원장',
-      '대법관',
-      '재판관',
-      '법원장',
-      '부장판사',
-      '법원행정처장',
-    ]).slice(0, 8)
-  }
-
-  // 2) 입법·의회·자문원 기관 (국회, 상원, 하원, 원로원, 추밀원, 중추원 등)
-  if (
-    /국회|의회|상원|하원|원로원|중의원|참의원|추밀원|중추원|입법원|인민회의/.test(
-      cleanDept,
-    )
-  ) {
-    if (/사무처/.test(cleanDept)) {
-      return ['사무총장', '입법차장', '사무차장', '수석전문위원']
-    }
-    if (/추밀원|중추원/.test(cleanDept)) {
-      return ['의장', '부의장', '고문관', '참의', '서기관장']
-    }
-    return ['의장', '부의장', '원내대표', '상임위원장', '사무총장', '의원']
-  }
-
-  // 3) 감사·감찰·선관위·독립 위원회 (감사원, 사헌부, 사간원, 중앙선거관리위원회 등)
-  if (
-    /감사원|회계검사원|사헌부|어사대|사간원|도찰원|선거관리|선관위|인권위원|공정거래|금융위원|방송통신/.test(
-      cleanDept,
-    )
-  ) {
-    if (/사헌부/.test(cleanDept)) {
-      return ['대사헌', '집의', '장령', '지평', '감찰']
-    }
-    if (/사간원/.test(cleanDept)) {
-      return ['대사간', '사간', '헌납', '정언']
-    }
-    if (/감사원|회계검사원/.test(cleanDept)) {
-      return ['원장', '감사위원', '사무총장', '사무차장']
-    }
-    return ['위원장', '부위원장', '상임위원', '사무총장', '위원']
-  }
-
-  if (departmentKind === 'COLONIAL_GOVERNMENT') {
-    return ['총독', '정무총감', '부총독', '민정장관', '경무국장']
-  }
-  if (departmentKind === 'ROYAL_HOUSEHOLD') {
-    return ['비서실장', '국가안보실장', '궁내대신', '도승지', '시종장', '수석비서관']
-  }
-  if (departmentKind === 'OTHER') {
-    return dedupeStrings([
-      ...(cleanDept ? [`${cleanDept}장`] : []),
-      '위원장',
-      '원장',
-      '의장',
-      '사무총장',
-      '상임위원',
-      '위원',
-    ]).slice(0, 8)
-  }
-  if (departmentKind === 'AGENCY') {
-    return ['청장', '위원장', '처장', '원장', '차장', '국장']
-  }
-
-  const presets: string[] = []
-  if (cleanDept) {
-    if (/인민위원부/.test(cleanDept)) {
-      presets.push(
-        `${cleanDept.replace(/부$/, '')}`,
-        '인민위원',
-        '제1부인민위원',
-      )
-    } else if (cleanDept.endsWith('성')) {
-      presets.push(`${cleanDept.slice(0, -1)}대신`, `${cleanDept} 상서`, `${cleanDept} 장관`)
-    } else if (cleanDept.endsWith('조')) {
-      presets.push(`${cleanDept}판서`, `${cleanDept}참판`, `${cleanDept}참의`)
-    } else if (cleanDept.endsWith('부')) {
-      presets.push(`${cleanDept} 장관`, `${cleanDept} 차관`)
-    } else {
-      presets.push(`${cleanDept} 장관`, `${cleanDept} 수장`)
-    }
-  }
-  for (const baseRole of [
-    '장관',
-    '대신',
-    '차관',
-    '국무위원',
-    '부총리',
-    '무임소장관',
-    '청장',
-    '국장',
-  ]) {
-    if (!presets.includes(baseRole)) {
-      presets.push(baseRole)
-    }
-  }
-  return presets.slice(0, 8)
-}
+const APPOINTMENT_LAYOUT_STORAGE_KEY = 'papyrus:appointment-register-layout'
+/** 검색어 없이 보여 줄 인물 후보 칩 수 — 나머지는 '+N명 더 보기' */
+const PERSON_CANDIDATE_PREVIEW = 6
 
 const MILITARY_RANK_PRESETS = [
   '원수',
@@ -698,7 +530,6 @@ export const InstitutionAppointmentModal: React.FC<
   departmentKind,
   militaryUnitId,
   militaryUnitName,
-  militaryUnitType,
   cabinetId,
   cabinetName,
   cabinetStartDate,
@@ -709,6 +540,7 @@ export const InstitutionAppointmentModal: React.FC<
 }) => {
   const queryClient = useQueryClient()
   const instanceId = useId()
+  const positionFieldId = `inst-appt-position-${instanceId}`
   const isEditing = Boolean(editingTenure?.id)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -720,11 +552,34 @@ export const InstitutionAppointmentModal: React.FC<
 
   const [activeSection, setActiveSection] =
     useState<AppointmentSectionKey>('personRole')
+  /* 사건 등록 모달과 같은 1단/2단 전환 — 왼쪽 인물·직책, 오른쪽 기간·정당·상세 */
+  const [layoutMode, setLayoutMode] = useState<'split' | 'single'>(() => {
+    try {
+      return window.localStorage.getItem(APPOINTMENT_LAYOUT_STORAGE_KEY) === 'single'
+        ? 'single'
+        : 'split'
+    } catch {
+      return 'split'
+    }
+  })
+  const toggleLayoutMode = useCallback(() => {
+    setLayoutMode((prevMode) => {
+      const nextMode = prevMode === 'split' ? 'single' : 'split'
+      try {
+        window.localStorage.setItem(APPOINTMENT_LAYOUT_STORAGE_KEY, nextMode)
+      } catch {
+        // 저장소를 못 쓰면 이번 열람에서만 유지
+      }
+      return nextMode
+    })
+  }, [])
   const [activeDatePicker, setActiveDatePicker] = useState<
     'start' | 'end' | null
   >(null)
 
   const [personQuery, setPersonQuery] = useState('')
+  /* 검색어 없이 뜨는 같은 나라 인물 후보는 몇 명만 — 아홉 줄이 직책 칸을 열 바닥으로 밀어냈다 */
+  const [showAllPersonCandidates, setShowAllPersonCandidates] = useState(false)
   const [selectedPersonId, setSelectedPersonId] = useState<string>('')
   const [selectedPersonLabel, setSelectedPersonLabel] = useState<string>('')
   const [showQuickCreatePerson, setShowQuickCreatePerson] = useState(false)
@@ -742,6 +597,9 @@ export const InstitutionAppointmentModal: React.FC<
   const [selectedPositionDefinitionId, setSelectedPositionDefinitionId] =
     useState<string>('')
   const [roleTitle, setRoleTitle] = useState<string>('')
+  /** 직책 칸에서 고른 DB 정의 — 방금 등록한 정의는 목록 재조회 전이라 여기서 들고 있는다 */
+  const [selectedDefinitionMeta, setSelectedDefinitionMeta] =
+    useState<SelectedPositionDefinition | null>(null)
   const [rankTitle, setRankTitle] = useState<string>('')
   const [ordinalInput, setOrdinalInput] = useState<string>('')
   const [partyId, setPartyId] = useState<string>('')
@@ -765,6 +623,8 @@ export const InstitutionAppointmentModal: React.FC<
   const [batchSavedCount, setBatchSavedCount] = useState<number>(0)
 
   const userTouchedRoleRef = useRef(false)
+  /** 사용자가 직책 칸을 직접 바꿨는가 — 수정 모드에서 안 건드린 직책(이름 덧쓰기 포함)은 그대로 둔다 */
+  const positionTouchedRef = useRef(false)
   const userTouchedPartyRef = useRef(false)
   const continueAfterSaveRef = useRef(false)
   const lastBatchSavedTenureRef = useRef<unknown>(undefined)
@@ -818,6 +678,8 @@ export const InstitutionAppointmentModal: React.FC<
 
   const resetCreateFormFields = useCallback(() => {
     userTouchedRoleRef.current = false
+    positionTouchedRef.current = false
+    setSelectedDefinitionMeta(null)
     userTouchedPartyRef.current = false
     quickOrderTouchedRef.current = false
     setErrorMessage(null)
@@ -835,6 +697,7 @@ export const InstitutionAppointmentModal: React.FC<
       }),
     )
     setPersonQuery('')
+    setShowAllPersonCandidates(false)
     setSelectedPersonId('')
     setSelectedPersonLabel('')
     setSelectedDeptId(departmentId ?? '')
@@ -903,6 +766,8 @@ export const InstitutionAppointmentModal: React.FC<
 
     if (editingTenure) {
       userTouchedRoleRef.current = true
+      positionTouchedRef.current = false
+      setSelectedDefinitionMeta(null)
       userTouchedPartyRef.current = true
       setErrorMessage(null)
       setShowQuickCreatePerson(false)
@@ -993,66 +858,44 @@ export const InstitutionAppointmentModal: React.FC<
   >({
     queryKey: ['position-definitions', 'all'],
     queryFn: () => personCareerApi.getPositionDefinitions({}),
-    enabled:
-      isOpen && Boolean(effectiveActiveDeptId || militaryUnitId),
+    enabled: isOpen,
     staleTime: 60_000,
   })
 
-  const scopedPositionDefinitions = useMemo<PickerPositionDefinition[]>(() => {
-    if (contextType === 'MILITARY_UNIT') {
-      if (!militaryUnitId) return []
-      return allPositionDefinitions.filter(
-        (defItem) =>
-          defItem.militaryUnitId === militaryUnitId &&
-          Boolean(defItem.title?.trim()),
-      )
-    }
-    if (!effectiveActiveDeptId) return []
-    return allPositionDefinitions
-      .filter(
-        (defItem) =>
-          defItem.administrationDepartmentId === effectiveActiveDeptId &&
-          !defItem.isMonarchical &&
-          Boolean(defItem.title?.trim()),
-      )
-      .sort(
-        (leftDef, rightDef) =>
-          (leftDef.rank ?? 999) - (rightDef.rank ?? 999) ||
-          (leftDef.title ?? '').localeCompare(rightDef.title ?? '', 'ko'),
-      )
-  }, [
-    allPositionDefinitions,
-    contextType,
-    effectiveActiveDeptId,
-    militaryUnitId,
-  ])
-
-  const scopedDefinitionTitleSet = useMemo(
+  const definitionById = useMemo(
     () =>
-      new Set(
-        scopedPositionDefinitions
-          .map((defItem) => defItem.title?.trim() ?? '')
-          .filter(Boolean),
+      new Map(
+        allPositionDefinitions.map((defItem) => [
+          defItem.id,
+          defItem as PositionDefinitionLike,
+        ]),
       ),
-    [scopedPositionDefinitions],
+    [allPositionDefinitions],
   )
 
-  const rolePresets = useMemo(
-    () =>
-      buildRolePresets({
-        contextType,
-        departmentName: effectiveDepartmentName,
-        departmentKind: effectiveDepartmentKind,
-        militaryUnitType,
-      }).filter((presetTitle) => !scopedDefinitionTitleSet.has(presetTitle)),
-    [
-      contextType,
-      effectiveDepartmentName,
-      effectiveDepartmentKind,
-      militaryUnitType,
-      scopedDefinitionTitleSet,
-    ],
-  )
+  /** 지금 고른 DB 직책 — 일반 정의(자유 입력의 그릇)는 '고른 직책'이 아니다 */
+  const selectedDefinition = useMemo<SelectedPositionDefinition | null>(() => {
+    if (!selectedPositionDefinitionId) return null
+    if (selectedDefinitionMeta?.id === selectedPositionDefinitionId) {
+      return selectedDefinitionMeta
+    }
+    const found = definitionById.get(selectedPositionDefinitionId)
+    if (!found || isGenericDefinition(found)) return null
+    return {
+      id: found.id,
+      title: (found.title ?? '').trim(),
+      positionType: found.positionType ?? null,
+    }
+  }, [definitionById, selectedDefinitionMeta, selectedPositionDefinitionId])
+
+  /** 수정 중인 기록이 DB 직책 없이 이름으로만 저장된 경우(예전 자유 입력) 그 이름 */
+  const legacyRoleTitle =
+    isEditing &&
+    allPositionDefinitions.length > 0 &&
+    !selectedDefinition &&
+    roleTitle.trim()
+      ? roleTitle.trim()
+      : null
 
   const signedStartYear = useMemo(() => {
     const trimmed = startYear.trim()
@@ -1244,6 +1087,14 @@ export const InstitutionAppointmentModal: React.FC<
     signedStartYear,
   ])
 
+  const isPersonCandidateListCapped =
+    !personQuery.trim() && !showAllPersonCandidates
+  const visiblePersonCandidates = isPersonCandidateListCapped
+    ? personCandidates.slice(0, PERSON_CANDIDATE_PREVIEW)
+    : personCandidates
+  const hiddenPersonCandidateCount =
+    personCandidates.length - visiblePersonCandidates.length
+
   const selectedPersonRecord = useMemo(() => {
     if (!selectedPersonId) return null
     return (
@@ -1289,7 +1140,7 @@ export const InstitutionAppointmentModal: React.FC<
       items.push({ label: '임명 인물 선택', section: 'personRole' })
     }
     if (!roleTitle.trim()) {
-      items.push({ label: '보직·직책명', section: 'personRole' })
+      items.push({ label: '직책(DB)', section: 'personRole' })
     }
     if (!startYear.trim()) {
       items.push({ label: '취임·부임 연도', section: 'periodExtra' })
@@ -1442,10 +1293,16 @@ export const InstitutionAppointmentModal: React.FC<
       if (!selectedPersonId) {
         throw new Error('임명할 인물을 선택해주세요.')
       }
-      const trimmedTitle = roleTitle.trim()
-      if (!trimmedTitle) {
-        throw new Error('보직·직책명을 입력하거나 추천 프리셋을 선택해주세요.')
+      /* 직책은 DB 정의에서만 — 수정 모드에서 직책 칸을 안 건드렸으면 기존 직책(이름 덧쓰기 포함)을 그대로 둔다 */
+      const keepExistingPosition = isEditing && !positionTouchedRef.current
+      if (!keepExistingPosition && !selectedDefinition) {
+        throw new Error(
+          '직책을 DB에서 고르세요. 목록에 없으면 「DB에 등록」으로 먼저 등록하면 바로 골라집니다.',
+        )
       }
+      const trimmedTitle = keepExistingPosition
+        ? roleTitle.trim()
+        : (selectedDefinition?.title ?? '')
       const parsedStartYear = Number(startYear.trim())
       if (
         !startYear.trim() ||
@@ -1490,18 +1347,7 @@ export const InstitutionAppointmentModal: React.FC<
         endDateInfo = null
       }
 
-      const matchedDefinition =
-        (selectedPositionDefinitionId
-          ? scopedPositionDefinitions.find(
-              (defItem) =>
-                defItem.id === selectedPositionDefinitionId &&
-                (defItem.title ?? '').trim() === trimmedTitle,
-            )
-          : null) ??
-        scopedPositionDefinitions.find(
-          (defItem) => (defItem.title ?? '').trim() === trimmedTitle,
-        ) ??
-        null
+      const matchedDefinition = keepExistingPosition ? null : selectedDefinition
 
       const resolvedPositionType = inferPositionType({
         contextType,
@@ -1525,16 +1371,14 @@ export const InstitutionAppointmentModal: React.FC<
         selectedCabinetIds.length > 0 ? selectedCabinetIds[0] : null
 
       if (isEditing && editingTenure?.id) {
-        const titleChanged =
-          trimmedTitle !== (editingTenure.title ?? '').trim()
         return personCareerApi.updateGovernmentPositionTenure(editingTenure.id, {
-          positionType: resolvedPositionType,
           ...(matchedDefinition
-            ? { positionDefinitionId: matchedDefinition.id }
-            : titleChanged
-              ? { positionDefinitionId: undefined }
-              : {}),
-          title: trimmedTitle,
+            ? {
+                positionType: resolvedPositionType,
+                positionDefinitionId: matchedDefinition.id,
+                title: matchedDefinition.title,
+              }
+            : {}),
           rankTitle: rankTitle.trim() || null,
           partyId: partyId || null,
           ordinal: parsedOrdinal,
@@ -1605,7 +1449,9 @@ export const InstitutionAppointmentModal: React.FC<
         if (contextType === 'CABINET') {
           setSelectedDeptId('')
           setSelectedPositionDefinitionId('')
+          setSelectedDefinitionMeta(null)
           setRoleTitle('')
+          positionTouchedRef.current = false
         }
         setRankTitle('')
         setOrdinalInput((prevOrd) => {
@@ -1765,7 +1611,7 @@ export const InstitutionAppointmentModal: React.FC<
         void requestClose()
       }}
       title={modalHeading}
-      maxWidth="min(780px, 96vw)"
+      maxWidth={layoutMode === 'split' ? 'min(1240px, 96vw)' : 'min(860px, 96vw)'}
       minHeight="520px"
       fullBleedOnMobile
       closeOnOverlayClick={false}
@@ -1781,7 +1627,7 @@ export const InstitutionAppointmentModal: React.FC<
               $active={activeSection === 'personRole'}
               onClick={() => jumpToSection('personRole')}
             >
-              인물·보직
+              {contextType === 'MILITARY_UNIT' ? '인물·보직' : '인물·직책'}
             </SectionJumpBtn>
             <SectionJumpBtn
               type="button"
@@ -1791,6 +1637,23 @@ export const InstitutionAppointmentModal: React.FC<
               기간·정당·상세
             </SectionJumpBtn>
           </SectionJumpNav>
+          <LayoutModeToggleBtn
+            type="button"
+            $active={layoutMode === 'split'}
+            aria-pressed={layoutMode === 'split'}
+            aria-label={
+              layoutMode === 'split' ? '1단 세로 보기로 전환' : '2단 좌우 분할 보기로 전환'
+            }
+            title={
+              layoutMode === 'split'
+                ? '좌우 2단 분할 보기 중 (클릭 시 1단 세로 보기로 전환)'
+                : '1단 세로 보기 중 (클릭 시 좌우 2단 분할 보기로 전환)'
+            }
+            onClick={toggleLayoutMode}
+          >
+            <FiColumns size={13} aria-hidden />
+            <span>{layoutMode === 'split' ? '2단 분할' : '1단 보기'}</span>
+          </LayoutModeToggleBtn>
           {!isEditing ? (
             <HeaderResetBtn
               type="button"
@@ -1815,40 +1678,22 @@ export const InstitutionAppointmentModal: React.FC<
           </AlertBox>
         ) : null}
 
-        <GuideIntroStrip>
-          <FiInfo size={14} />
-          <div style={{ flex: 1 }}>
-            {contextType === 'CABINET' ? (
-              <>
-                <strong>내각 각료 임명:</strong> 현재 행정부·내각(
-                <strong>{cabinetName ?? '내각'}</strong>)에서 활동한 장관·국무위원을
-                추가합니다. 담당 부처를 먼저 고르면 직책명이 자동으로 채워집니다.
-              </>
-            ) : contextType === 'MILITARY_UNIT' ? (
-              <>
-                <strong>군 지휘관·참모 임명:</strong> 사령부·부대(
-                <strong>{militaryUnitName ?? '부대'}</strong>)를 지휘한 인물과 보직·계급을
-                기록합니다.
-              </>
-            ) : (
-              <>
-                <strong>중앙부처·기관 인사 임명:</strong> 해당 기관(
-                <strong>{effectiveDepartmentName ?? '기관'}</strong>)의 역대 장관·수장 및
-                주요 보직자를 등록합니다.
-              </>
-            )}
-          </div>
-          {batchSavedCount > 0 ? (
+        {/* 사건 등록 모달처럼 머리 안내 띠 없이 — 기관·부대는 머리의 범위 배지가 말한다. 연속 임명 진행만 남긴다 */}
+        {batchSavedCount > 0 ? (
+          <BatchProgressRow>
             <BatchProgressPill>
               연속 임명 · {batchSavedCount}명 완료
             </BatchProgressPill>
-          ) : null}
-        </GuideIntroStrip>
+          </BatchProgressRow>
+        ) : null}
 
         <LabeledRowsWrap>
+          <AppointmentColumns $split={layoutMode === 'split'}>
           {/* ═══════════════ STEP 1: 인물 · 담당 부처 · 보직명 ═══════════════ */}
           <FormGroup ref={personRoleSectionRef}>
-            <FormGroupTitle>1. 임명 인물 · 보직 지정</FormGroupTitle>
+            <FormGroupTitle>
+              임명 인물 · {contextType === 'MILITARY_UNIT' ? '보직' : '직책'}
+            </FormGroupTitle>
 
             <FieldRow>
               <FieldLabel>
@@ -2020,7 +1865,7 @@ export const InstitutionAppointmentModal: React.FC<
                             : '검색어를 입력하거나 [새 인물 즉석 등록]을 눌러 인물을 추가해주세요.'}
                         </EmptyHintBox>
                       ) : (
-                        personCandidates.map((candidateItem) => (
+                        visiblePersonCandidates.map((candidateItem) => (
                           <PersonCandidateBtn
                             key={candidateItem.id}
                             type="button"
@@ -2037,6 +1882,14 @@ export const InstitutionAppointmentModal: React.FC<
                           </PersonCandidateBtn>
                         ))
                       )}
+                      {hiddenPersonCandidateCount > 0 ? (
+                        <MoreCandidatesBtn
+                          type="button"
+                          onClick={() => setShowAllPersonCandidates(true)}
+                        >
+                          +{hiddenPersonCandidateCount}명 더 보기
+                        </MoreCandidatesBtn>
+                      ) : null}
                     </PersonChipWrap>
                   </>
                 )}
@@ -2060,27 +1913,22 @@ export const InstitutionAppointmentModal: React.FC<
                     onChange={(changeEvent) => {
                       const nextDeptId = changeEvent.target.value
                       setSelectedDeptId(nextDeptId)
+                      /* 부처를 바꾸면 그 부처의 DB 직책(첫 번째)을 고른다 — 이름을 지어내 채우지 않는다 */
                       setSelectedPositionDefinitionId('')
-                      const matchedDept = availableDepartments.find(
-                        (deptItem) => deptItem.id === nextDeptId,
-                      )
-                      if (matchedDept && !userTouchedRoleRef.current) {
+                      setSelectedDefinitionMeta(null)
+                      setRoleTitle('')
+                      positionTouchedRef.current = true
+                      if (!userTouchedRoleRef.current) {
                         const deptScopedDef = allPositionDefinitions.find(
                           (defItem) =>
                             defItem.administrationDepartmentId === nextDeptId &&
                             !defItem.isMonarchical &&
+                            !isGenericDefinition(defItem as PositionDefinitionLike) &&
                             defItem.title?.trim(),
                         )
-                        const autoDeptRole =
-                          deptScopedDef?.title?.trim() ??
-                          (matchedDept.name.endsWith('성')
-                            ? `${matchedDept.name.slice(0, -1)}대신`
-                            : matchedDept.name.endsWith('조')
-                              ? `${matchedDept.name}판서`
-                              : `${matchedDept.name} 장관`)
-                        setRoleTitle(autoDeptRole)
                         if (deptScopedDef) {
                           setSelectedPositionDefinitionId(deptScopedDef.id)
+                          setRoleTitle(deptScopedDef.title?.trim() ?? '')
                         }
                       }
                     }}
@@ -2109,76 +1957,39 @@ export const InstitutionAppointmentModal: React.FC<
             ) : null}
 
             <FieldRow>
-              <FieldLabel>
-                보직 · 직책명 <Required>*</Required>
+              <FieldLabel htmlFor={positionFieldId}>
+                {contextType === 'MILITARY_UNIT' ? '보직' : '직책'} <Required>*</Required>
               </FieldLabel>
               <FieldControl>
-                <PresetChipWrap>
-                  {scopedPositionDefinitions.map((defItem) => {
-                    const defTitle = (defItem.title ?? '').trim()
-                    if (!defTitle) return null
-                    const isDefActive =
-                      roleTitle.trim() === defTitle &&
-                      (selectedPositionDefinitionId === defItem.id ||
-                        !selectedPositionDefinitionId)
-                    return (
-                      <RolePresetChip
-                        key={`def-${defItem.id}`}
-                        type="button"
-                        $active={isDefActive}
-                        $defined
-                        title="이 기관에 등록된 고유 관직 정의와 연동됩니다"
-                        onClick={() => {
-                          userTouchedRoleRef.current = true
-                          setRoleTitle(defTitle)
-                          setSelectedPositionDefinitionId(defItem.id)
-                        }}
-                      >
-                        <span className="def-tag">고유 관직</span>
-                        <span>{defTitle}</span>
-                      </RolePresetChip>
-                    )
-                  })}
-                  {rolePresets.map((presetLabel) => (
-                    <RolePresetChip
-                      key={presetLabel}
-                      type="button"
-                      $active={roleTitle.trim() === presetLabel}
-                      onClick={() => {
-                        userTouchedRoleRef.current = true
-                        setRoleTitle(presetLabel)
-                        setSelectedPositionDefinitionId('')
-                      }}
-                    >
-                      {presetLabel}
-                    </RolePresetChip>
-                  ))}
-                </PresetChipWrap>
-
-                <RoleAndOrdinalGrid>
-                  <Input
-                    value={roleTitle}
-                    onChange={(changeEvent) => {
-                      userTouchedRoleRef.current = true
-                      const nextTitle = changeEvent.target.value
-                      setRoleTitle(nextTitle)
-                      const matchedDef = scopedPositionDefinitions.find(
-                        (defItem) =>
-                          (defItem.title ?? '').trim() === nextTitle.trim(),
-                      )
-                      setSelectedPositionDefinitionId(matchedDef?.id ?? '')
-                    }}
-                    placeholder={
-                      contextType === 'MILITARY_UNIT'
-                        ? '직접 입력 (예: 최고사령관, 참모총장, 제2군 사령관)'
-                        : effectiveDepartmentKind === 'OTHER' ||
-                            /법원|재판소|국회|의회|선관위|감사원/.test(
-                              effectiveDepartmentName ?? '',
-                            )
-                          ? '직접 입력 (예: 대법원장, 헌법재판소장, 의장, 위원장, 사무총장)'
-                          : '직접 입력 (예: 외무장관, 재무대신, 판서, 부총리, 무임소장관)'
-                    }
-                  />
+                <PositionDefinitionField
+                  id={positionFieldId}
+                  contextType={contextType}
+                  departmentId={effectiveActiveDeptId || null}
+                  departmentName={effectiveDepartmentName}
+                  militaryUnitId={militaryUnitId}
+                  militaryUnitName={militaryUnitName}
+                  countryId={countryId}
+                  historicalCountryId={historicalCountryId}
+                  value={selectedDefinition?.id ?? ''}
+                  legacyTitle={legacyRoleTitle}
+                  inferPositionType={(title) =>
+                    inferPositionType({
+                      contextType,
+                      departmentName: effectiveDepartmentName,
+                      departmentKind: effectiveDepartmentKind,
+                      roleTitle: title,
+                    })
+                  }
+                  onSelect={(definition) => {
+                    userTouchedRoleRef.current = true
+                    positionTouchedRef.current = true
+                    setSelectedDefinitionMeta(definition)
+                    setSelectedPositionDefinitionId(definition?.id ?? '')
+                    setRoleTitle(definition?.title ?? '')
+                  }}
+                />
+                <OrdinalLine>
+                  <OrdinalLabel>대수</OrdinalLabel>
                   <AdornedNumberBox>
                     <span className="prefix">제</span>
                     <input
@@ -2192,14 +2003,15 @@ export const InstitutionAppointmentModal: React.FC<
                     />
                     <span className="suffix">대</span>
                   </AdornedNumberBox>
-                </RoleAndOrdinalGrid>
+                  <OrdinalHint>그 직책의 몇 대째인지 (선택)</OrdinalHint>
+                </OrdinalLine>
               </FieldControl>
             </FieldRow>
           </FormGroup>
 
           {/* ═══════════════ STEP 2: 재임 기간 · 소속 정당 · 상세 ═══════════════ */}
           <FormGroup ref={periodExtraSectionRef}>
-            <FormGroupTitle>2. 재임 기간 · 소속 정당 · 상세</FormGroupTitle>
+            <FormGroupTitle>재임 기간 · 소속 정당 · 상세</FormGroupTitle>
 
             <FieldRow>
               <FieldLabel>
@@ -2427,6 +2239,7 @@ export const InstitutionAppointmentModal: React.FC<
               </FieldControl>
             </FieldRow>
           </FormGroup>
+          </AppointmentColumns>
         </LabeledRowsWrap>
       </PersonRegisterModalFormScroll>
 
@@ -2560,35 +2373,42 @@ const ContextScopeBadge = styled.span<{
           : '#15803d'};
 `
 
-const GuideIntroStrip = styled.div`
+const BatchProgressRow = styled.div`
   display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 10px 14px;
-  margin-bottom: 18px;
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.08)'
-      : 'rgba(99, 102, 241, 0.05)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.22)'
-        : 'rgba(99, 102, 241, 0.16)'};
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  justify-content: flex-end;
+  margin: 0 0 12px;
+`
 
-  > svg {
-    flex-shrink: 0;
-    margin-top: 3px;
-    color: ${({ theme }) => theme.colors.primary};
-  }
+/*
+ * 2단 분할 — 1180px 이상에서 왼쪽(인물·직책) | 오른쪽(기간·정당·상세), 사이 세로선.
+ * 반 폭 열에선 옆 라벨 열을 172→124px로 줄여 칸이 좁아지지 않게 한다.
+ */
+const AppointmentColumns = styled.div<{ $split: boolean }>`
+  ${({ $split, theme }) =>
+    $split
+      ? `
+    @media (min-width: 1180px) {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      column-gap: 0;
+      align-items: start;
 
-  strong {
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.primary};
+      && > section:first-of-type {
+        padding-right: 26px;
+      }
+      && > section + section {
+        margin-top: 0;
+        padding-left: 26px;
+        border-left: 1px solid ${theme.colors.border.light};
+      }
+    }
+  `
+      : ''}
+
+  @media (min-width: 1180px) {
+    && ${FieldRow} {
+      ${({ $split }) => ($split ? 'grid-template-columns: 124px minmax(0, 1fr); column-gap: 16px;' : '')}
+    }
   }
 `
 
@@ -2765,6 +2585,26 @@ const SmallGhostBtn = styled.button`
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
     color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const MoreCandidatesBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.activeLight};
   }
 `
 
@@ -3017,14 +2857,28 @@ const RolePresetChip = styled.button<{ $active: boolean; $defined?: boolean }>`
   }
 `
 
-const RoleAndOrdinalGrid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 130px;
+/* 대수 줄 — 직책 칸 아래 짧은 한 줄(직책 검색 칸 옆에 붙이면 칩·검색 칸과 높이가 어긋난다) */
+const OrdinalLine = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  margin-top: 8px;
 
-  @media (max-width: 560px) {
-    grid-template-columns: 1fr;
+  > div {
+    width: 128px;
   }
+`
+
+const OrdinalLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const OrdinalHint = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const AdornedNumberBox = styled.div`
