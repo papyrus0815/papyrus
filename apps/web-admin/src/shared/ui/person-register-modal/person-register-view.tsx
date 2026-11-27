@@ -135,6 +135,10 @@ import {
   NotFoundTitle,
   OriginalNameInputWrap,
   PersonFormLayoutWrap,
+  ProfileAvatarColumn,
+  ProfileHeader,
+  ProfileIdentity,
+  ProfileIdentityBlock,
   SplitColumnLeft,
   SplitColumnRight,
   SplitColumnsGrid,
@@ -3118,6 +3122,13 @@ export function PersonRegisterView({
     familySectionCount,
   ])
 
+  const showSurnameMeaning = Boolean(surname.trim() || surnameMeaning.trim())
+  const showMiddleNameMeaning = Boolean(
+    middleName.trim() || middleNameMeaning.trim(),
+  )
+  const nameMeaningColumnCount =
+    1 + (showSurnameMeaning ? 1 : 0) + (showMiddleNameMeaning ? 1 : 0)
+
   const basicGroup = (
     <FormGroup id="person-form-group-basic" data-form-section="basic">
       <FormGroupTitle>
@@ -3128,13 +3139,35 @@ export function PersonRegisterView({
           </FormGroupSummaryBadge>
         )}
       </FormGroupTitle>
-      <FormRows>
-        {/* 성명 — 왼쪽 라벨 하나, 오른쪽 성·이름·중간이름 칸 */}
-        <FieldRow>
-          <FieldLabel htmlFor={fid('surname')} data-no-optional>
-            성명
-          </FieldLabel>
-          <FieldControl>
+      {/*
+       * 프로필 머리 — 왼쪽 맨 위에 사진(아바타), 오른쪽에 성명·국적·성별.
+       * 사진을 셋째 줄 업로드 띠에서 폼의 얼굴로 올려 '프로필을 만든다'는 느낌을 준다.
+       * 아바타 열은 아래 행들의 라벨 열과 같은 x에서 끝나 필드 열이 한 줄로 맞는다.
+       */}
+      <ProfileHeader>
+        <ProfileAvatarColumn>
+          <ProfilePhotoField
+            inputId="person-thumbnail-upload"
+            hintId="person-thumbnail-hint"
+            src={
+              thumbnailObjectUrl ||
+              (profileImageUrl.trim()
+                ? getUploadImageUrl(profileImageUrl) || profileImageUrl
+                : null)
+            }
+            pendingFile={pendingThumbnailFile}
+            personName={namePreview}
+            disabled={isSubmitting}
+            onFile={acceptThumbnailFile}
+            onRemove={() => {
+              handleRemoveThumbnail()
+              markDirty()
+            }}
+          />
+        </ProfileAvatarColumn>
+        <ProfileIdentity>
+          {/* 성명 — 성·이름·중간이름 칸이 각자 라벨을 위에 둔다 */}
+          <ProfileIdentityBlock>
             <InlineFields $template="minmax(90px, 0.8fr) minmax(140px, 1.4fr) minmax(110px, 1fr)">
               <NameCell>
                 <FieldLabel htmlFor={fid('surname')}>성</FieldLabel>
@@ -3232,15 +3265,10 @@ export function PersonRegisterView({
                 )}
               </NameOrderControl>
             )}
-          </FieldControl>
-        </FieldRow>
+          </ProfileIdentityBlock>
 
-        {/* 국적·성별 — 필수 2항목을 성명 바로 아래 한 행의 좌우 2열로 배치해 시선·탭 동선 단축 */}
-        <FieldRow>
-          <FieldLabel htmlFor={fid('countryId')} data-no-optional>
-            국적 · 성별
-          </FieldLabel>
-          <FieldControl>
+          {/* 국적·성별 — 필수 2항목을 성명 바로 아래 한 줄 좌우 2열로 배치해 시선·탭 동선 단축 */}
+          <ProfileIdentityBlock>
             <InlineFields $template="minmax(220px, 1.4fr) auto">
               <NameCell>
                 <FieldLabel htmlFor={fid('countryId')}>
@@ -3304,36 +3332,11 @@ export function PersonRegisterView({
                 )}
               </NameCell>
             </InlineFields>
-          </FieldControl>
-        </FieldRow>
+          </ProfileIdentityBlock>
+        </ProfileIdentity>
+      </ProfileHeader>
 
-        {/* 프로필 사진 — 실제로 보일 원 모양 그대로 미리 본다(profile-photo-field) */}
-        <FieldRow>
-          <FieldLabel htmlFor="person-thumbnail-upload">
-            프로필 사진
-          </FieldLabel>
-          <FieldControl>
-            <ProfilePhotoField
-              inputId="person-thumbnail-upload"
-              hintId="person-thumbnail-hint"
-              src={
-                thumbnailObjectUrl ||
-                (profileImageUrl.trim()
-                  ? getUploadImageUrl(profileImageUrl) || profileImageUrl
-                  : null)
-              }
-              pendingFile={pendingThumbnailFile}
-              personName={namePreview}
-              disabled={isSubmitting}
-              onFile={acceptThumbnailFile}
-              onRemove={() => {
-                handleRemoveThumbnail()
-                markDirty()
-              }}
-            />
-          </FieldControl>
-        </FieldRow>
-
+      <FormRows>
         <FieldRow>
           <FieldLabel htmlFor={fid('originalName')}>
             이름 원어
@@ -3344,7 +3347,7 @@ export function PersonRegisterView({
                 id={fid('originalName')}
                 value={originalName}
                 onChange={(e) => setOriginalName(e.target.value)}
-                placeholder="Franklin D. Roosevelt"
+                placeholder="예: Franklin D. Roosevelt"
               />
             </OriginalNameInputWrap>
           </FieldControl>
@@ -3355,18 +3358,19 @@ export function PersonRegisterView({
             이름의 뜻
           </FieldLabel>
           <FieldControl>
-            <InlineFields $cols={3}>
-              <FormInput
-                id={fid('surnameMeaning')}
-                value={surnameMeaning}
-                onChange={(changeEvent) =>
-                  setSurnameMeaning(changeEvent.target.value)
-                }
-                disabled={!surname.trim()}
-                placeholder={
-                  surname.trim() ? '성의 뜻' : '성의 뜻 (성 없음)'
-                }
-              />
+            {/* 해당 없는 칸(성·중간이름이 없는 인물)은 '(없음)' 비활성 칸으로 두지 않고 뺀다 — 값이 남아 있으면 유지 */}
+            <InlineFields $cols={nameMeaningColumnCount}>
+              {showSurnameMeaning && (
+                <FormInput
+                  id={fid('surnameMeaning')}
+                  value={surnameMeaning}
+                  onChange={(changeEvent) =>
+                    setSurnameMeaning(changeEvent.target.value)
+                  }
+                  placeholder="성의 뜻"
+                  aria-label="성의 뜻"
+                />
+              )}
               <FormInput
                 id={fid('nameMeaning')}
                 value={nameMeaning}
@@ -3374,20 +3378,19 @@ export function PersonRegisterView({
                   setNameMeaning(changeEvent.target.value)
                 }
                 placeholder="이름의 뜻"
+                aria-label="이름의 뜻"
               />
-              <FormInput
-                id={fid('middleNameMeaning')}
-                value={middleNameMeaning}
-                onChange={(changeEvent) =>
-                  setMiddleNameMeaning(changeEvent.target.value)
-                }
-                disabled={!middleName.trim()}
-                placeholder={
-                  middleName.trim()
-                    ? '중간이름의 뜻'
-                    : '중간이름의 뜻 (중간이름 없음)'
-                }
-              />
+              {showMiddleNameMeaning && (
+                <FormInput
+                  id={fid('middleNameMeaning')}
+                  value={middleNameMeaning}
+                  onChange={(changeEvent) =>
+                    setMiddleNameMeaning(changeEvent.target.value)
+                  }
+                  placeholder="중간이름의 뜻"
+                  aria-label="중간이름의 뜻"
+                />
+              )}
             </InlineFields>
           </FieldControl>
         </FieldRow>

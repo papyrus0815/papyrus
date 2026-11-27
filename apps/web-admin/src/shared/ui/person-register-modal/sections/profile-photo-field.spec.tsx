@@ -51,14 +51,16 @@ describe('ProfilePhotoField', () => {
     expect(onFile).toHaveBeenCalledWith(file)
   })
 
-  it('찬 칸 — 상세·목록 두 원 미리보기, 크기·용량, 작은 사진 안내', () => {
+  it('찬 아바타 — 눌러서 바꾸기, 크기·용량, 작은 사진 안내, 새 파일은 선택 취소', () => {
     const pendingFile = new File([new Uint8Array(150 * 1024)], 'face.jpg', { type: 'image/jpeg' })
-    renderField({ src: 'blob:face', pendingFile })
+    const { onRemove } = renderField({ src: 'blob:face', pendingFile })
     expect(screen.getByText('새 사진 · 저장할 때 올라갑니다')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '프로필 사진 바꾸기' })).toBeInTheDocument()
     loadImage(screen.getByAltText('나폴레옹 프로필 사진'), 200, 260)
     expect(screen.getByText(/200×260px · 150KB/)).toBeInTheDocument()
     expect(screen.getByText(/흐릿할 수 있습니다/)).toBeInTheDocument()
-    expect(screen.getByText('목록')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '선택한 사진 취소' }))
+    expect(onRemove).toHaveBeenCalled()
   })
 
   it('가로로 긴 사진은 잘림 안내', () => {

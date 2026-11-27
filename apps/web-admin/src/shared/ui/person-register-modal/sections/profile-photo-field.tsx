@@ -1,18 +1,18 @@
 /**
- * 인물 프로필 사진 칸 — 등록 폼에서 **실제로 보일 모양 그대로** 미리 본다.
+ * 인물 프로필 사진 — 등록 폼 맨 위 왼쪽의 **아바타**. 프로필을 만드는 느낌이 나도록 큰 원 하나가
+ * 폼의 얼굴이 되고, 오른쪽에 성명·국적·성별이 붙는다(person-register-view ProfileHeader).
  *
- * 예전엔 공용 업로드 띠(KitUpload*)의 72×48 가로 사각 미리보기였다. 그런데 인물 사진은 상세 머리에서
- * 120px **원**(위쪽 가운데 맞춤, object-position: top center)으로, 목록·검색에선 작은 원으로 선다.
- * 사각 미리보기로는 얼굴이 원 밖으로 잘리는지 알 수 없었다.
+ * 예전엔 '프로필 사진' 행 안의 가로 업로드 띠(72px 원 + 28px 목록 원 + 긴 안내)라, 이름·국적보다 아래에
+ * 있었고 사진을 고른 뒤에도 서류 칸처럼 보였다.
  *
- * - 미리보기 두 개: 상세(72px 원) · 목록(28px 원) — 같은 맞춤(cover + top center)
- * - 사진 정보: 크기(px)·파일 용량(새로 고른 파일), 작거나 가로로 긴 사진은 한 줄 안내(막지 않음)
+ * - 상세 머리와 같은 맞춤(원 · cover · top center)으로 미리 본다 — 얼굴이 원 밖으로 잘리는지 바로 보인다
+ * - 원을 누르거나 끌어 놓기 · 붙여넣기(⌘V, 폼이 처리) — 빈 원/찬 원이 같은 크기라 고른 뒤 출렁이지 않는다
+ * - 사진 정보(크기·용량)와 작거나 가로로 긴 사진 안내는 원 아래 한두 줄(막지 않음)
  * - 불러오기 실패(깨진 주소)는 실패라고 말하고 바꾸기를 권한다
- * - 끌어 놓기 · 누르기 · 붙여넣기(⌘V, 폼이 처리) — 빈 칸/찬 칸이 같은 높이라 고른 뒤 폼이 출렁이지 않는다
  */
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 
-import { FiAlertTriangle, FiCamera, FiUser, FiX } from 'react-icons/fi'
+import { FiAlertTriangle, FiCamera, FiPlus, FiUser } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { kitC } from '@/shared/ui/register-form-kit/register-form-kit'
@@ -53,14 +53,14 @@ export function ProfilePhotoField({
   onRemove,
 }: ProfilePhotoFieldProps) {
   const [dragOver, setDragOver] = useState(false)
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null)
-  const [broken, setBroken] = useState(false)
-
-  /* 사진이 바뀌면 잰 크기·실패 표시를 비운다 */
-  useEffect(() => {
-    setSize(null)
-    setBroken(false)
-  }, [src])
+  /*
+   * 잰 크기·실패는 '어느 주소를 쟀는지'와 함께 둔다 — 사진이 바뀌면 자연히 무효.
+   * (예전엔 src 바뀔 때 effect로 비웠는데, 캐시된 사진은 effect보다 onLoad가 먼저 와 잰 값이 지워졌다)
+   */
+  const [measured, setMeasured] = useState<{ src: string; width: number; height: number } | null>(null)
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null)
+  const size = measured && measured.src === src ? measured : null
+  const broken = brokenSrc !== null && brokenSrc === src
 
   const openPicker = () => {
     if (!disabled) document.getElementById(inputId)?.click()
@@ -91,7 +91,6 @@ export function ProfilePhotoField({
   const alt = personName ? `${personName} 프로필 사진` : '프로필 사진'
   const hasPhoto = Boolean(src)
 
-  /* 사진 정보·안내 한 줄 */
   const facts = [
     size && `${size.width}×${size.height}px`,
     pendingFile && formatBytes(pendingFile.size),
@@ -105,87 +104,82 @@ export function ProfilePhotoField({
         : null
 
   return (
-    <Shell $dragOver={dragOver} $filled={hasPhoto} {...dragHandlers}>
-      {hasPhoto && src ? (
-        <>
-          <Previews>
-            <PreviewButton
-              type="button"
-              onClick={openPicker}
-              disabled={disabled}
-              aria-label="프로필 사진 바꾸기"
-              title="눌러서 바꾸기"
-            >
-              <Circle $size={72}>
-                {broken ? (
-                  <FiAlertTriangle size={20} aria-hidden />
-                ) : (
-                  <img
-                    src={src}
-                    alt={alt}
-                    onLoad={(event) =>
-                      setSize({
-                        width: event.currentTarget.naturalWidth,
-                        height: event.currentTarget.naturalHeight,
-                      })
-                    }
-                    onError={() => setBroken(true)}
-                  />
-                )}
-              </Circle>
-              <CameraBadge aria-hidden>
-                <FiCamera size={11} />
-              </CameraBadge>
-            </PreviewButton>
-            {!broken && (
-              <MiniPreview aria-hidden>
-                <Circle $size={28}>
-                  <img src={src} alt="" />
-                </Circle>
-                <span>목록</span>
-              </MiniPreview>
-            )}
-          </Previews>
-          <Text>
-            <strong>{dragOver ? '여기에 놓아 바꾸기' : pendingFile ? '새 사진 · 저장할 때 올라갑니다' : '프로필 사진'}</strong>
-            <span id={hintId}>
-              {facts.length > 0 ? `${facts.join(' · ')} · ` : ''}끌어 놓거나 붙여넣어(⌘V) 바꿀 수 있습니다
-            </span>
+    <Shell {...dragHandlers}>
+      <AvatarButton
+        type="button"
+        onClick={openPicker}
+        disabled={disabled}
+        aria-label={hasPhoto ? '프로필 사진 바꾸기' : '프로필 사진 올리기'}
+        aria-describedby={hintId}
+        title={hasPhoto ? '눌러서 바꾸기' : undefined}
+      >
+        <Avatar $empty={!hasPhoto} $dragOver={dragOver}>
+          {hasPhoto && src ? (
+            broken ? (
+              <FiAlertTriangle size={24} aria-hidden />
+            ) : (
+              <img
+                src={src}
+                alt={alt}
+                onLoad={(event) =>
+                  setMeasured({
+                    src,
+                    width: event.currentTarget.naturalWidth,
+                    height: event.currentTarget.naturalHeight,
+                  })
+                }
+                onError={() => setBrokenSrc(src)}
+              />
+            )
+          ) : (
+            <EmptyFace aria-hidden>
+              <FiUser size={34} strokeWidth={1.5} />
+            </EmptyFace>
+          )}
+          {/* 찬 원 — 올라가면 '바꾸기' 베일, 끌어 오면 '놓기' 베일 */}
+          {(hasPhoto || dragOver) && (
+            <Veil $visible={dragOver} aria-hidden>
+              <FiCamera size={18} />
+              <span>{dragOver ? '여기에 놓기' : '바꾸기'}</span>
+            </Veil>
+          )}
+        </Avatar>
+        <CornerBadge aria-hidden>
+          {hasPhoto ? <FiCamera size={13} /> : <FiPlus size={15} strokeWidth={2.6} />}
+        </CornerBadge>
+      </AvatarButton>
+
+      <Caption>
+        {hasPhoto ? (
+          <>
+            {pendingFile && <Status>새 사진 · 저장할 때 올라갑니다</Status>}
+            <Meta id={hintId}>
+              {facts.length > 0 ? facts.join(' · ') : '끌어 놓기 · ⌘V로 바꾸기'}
+            </Meta>
             {warning && (
               <Warning role={broken ? 'alert' : undefined}>
-                <FiAlertTriangle size={12} aria-hidden />
+                <FiAlertTriangle size={11} aria-hidden />
                 {warning}
               </Warning>
             )}
-          </Text>
-          <Actions>
-            <ChangeButton type="button" onClick={openPicker} disabled={disabled}>
-              바꾸기
-            </ChangeButton>
             <RemoveButton
               type="button"
               onClick={onRemove}
               disabled={disabled}
               aria-label={pendingFile ? '선택한 사진 취소' : '프로필 사진 제거'}
-              title={pendingFile ? '선택 취소' : '사진 제거'}
             >
-              <FiX size={15} />
+              {pendingFile ? '선택 취소' : '사진 제거'}
             </RemoveButton>
-          </Actions>
-        </>
-      ) : (
-        <EmptyButton type="button" onClick={openPicker} disabled={disabled} aria-describedby={hintId}>
-          <Circle $size={72} $empty>
-            <FiUser size={26} aria-hidden />
-            <PlusBadge aria-hidden>+</PlusBadge>
-          </Circle>
-          <Text>
-            <strong>{dragOver ? '여기에 놓아 올리기' : '프로필 사진 올리기'}</strong>
-            <span id={hintId}>누르거나 끌어 놓기 · 붙여넣기(⌘V)도 됩니다</span>
-            <span className="spec">JPG·PNG·WEBP 등 · 10MB 이하 · 얼굴이 위쪽에 오는 세로 사진이 잘 맞습니다</span>
-          </Text>
-        </EmptyButton>
-      )}
+          </>
+        ) : (
+          <>
+            <Status>{dragOver ? '여기에 놓아 올리기' : '프로필 사진'}</Status>
+            <Meta id={hintId}>누르기 · 끌어 놓기 · ⌘V</Meta>
+            <Spec>JPG·PNG·WEBP · 10MB 이하</Spec>
+          </>
+        )}
+      </Caption>
+
       <HiddenInput
         id={inputId}
         type="file"
@@ -205,55 +199,66 @@ export function ProfilePhotoField({
 
 /* ───────────────────────── 조판 ───────────────────────── */
 
-const Shell = styled.div<{ $dragOver: boolean; $filled: boolean }>`
+/** 원 지름 — 상위(ProfileHeader)가 폭 단계마다 --profile-avatar-size로 바꾼다 */
+const AVATAR_SIZE = 'var(--profile-avatar-size, 112px)'
+
+const Shell = styled.div`
   position: relative;
-  box-sizing: border-box;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
-  min-height: 96px;
-  padding: ${({ $filled }) => ($filled ? '10px 10px 10px 12px' : '0')};
-  border-radius: 12px;
-  border: 1px ${({ $filled, $dragOver }) => ($filled && !$dragOver ? 'solid' : 'dashed')}
-    ${({ $dragOver, $filled, theme }) =>
-      $dragOver ? kitC(theme).focus : $filled ? kitC(theme).border : kitC(theme).borderHover};
-  background: ${({ $dragOver, theme }) => ($dragOver ? kitC(theme).section : kitC(theme).content)};
-  box-shadow: ${({ $dragOver, theme }) => ($dragOver ? `0 0 0 3px ${kitC(theme).focusHalo}` : 'none')};
-  transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
+  min-width: 0;
+
+  /* 한 열 폭(모바일) — 원 옆에 안내를 붙인다 */
+  @media (max-width: 768px) {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+  }
 `
 
-const Previews = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  flex-shrink: 0;
-`
-
-const Circle = styled.span<{ $size: number; $empty?: boolean }>`
+const Avatar = styled.span<{ $empty: boolean; $dragOver: boolean }>`
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: ${({ $size }) => $size}px;
-  height: ${({ $size }) => $size}px;
-  flex-shrink: 0;
+  width: ${AVATAR_SIZE};
+  height: ${AVATAR_SIZE};
   overflow: hidden;
   border-radius: 50%;
-  background: ${({ theme }) => kitC(theme).section};
   color: ${({ theme }) => kitC(theme).textMuted};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(160deg, #2a2a2e 0%, #1f1f23 100%)'
+      : 'linear-gradient(160deg, #eef0f6 0%, #e3e7f0 100%)'};
+  /* 흰 링 + 바깥 테 — 상세 머리 아바타와 같은 '사진 액자' */
+  box-shadow:
+    0 0 0 3px ${({ theme }) => kitC(theme).content},
+    0 0 0 4px ${({ theme }) => kitC(theme).border},
+    0 6px 18px ${({ theme }) => (theme.mode === 'dark' ? 'rgba(0,0,0,0.45)' : 'rgba(15,23,42,0.10)')};
+  transition:
+    box-shadow 0.15s ease,
+    color 0.15s ease;
+
   ${({ $empty, theme }) =>
-    $empty
-      ? css`
-          overflow: visible;
-          border: 1.5px dashed ${kitC(theme).borderHover};
-        `
-      : css`
-          border: 1px solid ${kitC(theme).border};
-        `}
+    $empty &&
+    css`
+      box-shadow:
+        0 0 0 3px ${kitC(theme).content},
+        0 0 0 4px ${kitC(theme).borderHover};
+    `}
+
+  ${({ $dragOver, theme }) =>
+    $dragOver &&
+    css`
+      color: ${kitC(theme).focus};
+      box-shadow:
+        0 0 0 3px ${kitC(theme).content},
+        0 0 0 5px ${kitC(theme).focus},
+        0 0 0 10px ${kitC(theme).focusHalo};
+    `}
 
   img {
     width: 100%;
@@ -264,175 +269,148 @@ const Circle = styled.span<{ $size: number; $empty?: boolean }>`
   }
 `
 
-const PreviewButton = styled.button`
+const EmptyFace = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(4px);
+`
+
+const Veil = styled.span<{ $visible: boolean }>`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.52);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: ${({ $visible }) => ($visible ? 1 : 0)};
+  transition: opacity 0.15s ease;
+`
+
+const CornerBadge = styled.span`
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid ${({ theme }) => kitC(theme).content};
+  background: ${({ theme }) => theme.colors.primary};
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+  transition: transform 0.15s ease;
+`
+
+const AvatarButton = styled.button`
   position: relative;
+  flex-shrink: 0;
   padding: 0;
   border: none;
   border-radius: 50%;
   background: none;
   cursor: pointer;
 
-  &:hover:not(:disabled) ${Circle} {
-    border-color: ${({ theme }) => kitC(theme).focus};
+  &:hover:not(:disabled) ${Veil} {
+    opacity: 1;
+  }
+  &:hover:not(:disabled) ${Avatar} {
+    color: ${({ theme }) => kitC(theme).focus};
+  }
+  &:hover:not(:disabled) ${CornerBadge} {
+    transform: scale(1.08);
   }
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px ${({ theme }) => kitC(theme).focusHalo};
+  }
+  &:focus-visible ${Avatar} {
+    box-shadow:
+      0 0 0 3px ${({ theme }) => kitC(theme).content},
+      0 0 0 5px ${({ theme }) => kitC(theme).focus},
+      0 0 0 9px ${({ theme }) => kitC(theme).focusHalo};
   }
   &:disabled {
     cursor: not-allowed;
+    opacity: 0.6;
   }
 `
 
-const badgeCss = css`
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2px solid ${({ theme }) => kitC(theme).content};
-  background: ${({ theme }) => theme.colors.primary};
-  color: #fff;
-`
-
-const CameraBadge = styled.span`
-  ${badgeCss}
-`
-
-const PlusBadge = styled.span`
-  ${badgeCss}
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1;
-`
-
-const MiniPreview = styled.span`
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  font-size: 10.5px;
-  color: ${({ theme }) => kitC(theme).textMuted};
-`
-
-const Text = styled.span`
+const Caption = styled.span`
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  flex: 1;
+  align-items: center;
+  gap: 2px;
   min-width: 0;
-  text-align: left;
+  max-width: 100%;
+  text-align: center;
 
-  strong {
-    font-size: 13.5px;
-    font-weight: 600;
-    color: ${({ theme }) => kitC(theme).textPrimary};
+  @media (max-width: 768px) {
+    align-items: flex-start;
+    text-align: left;
   }
-  span {
-    font-size: 12px;
-    line-height: 1.45;
-    color: ${({ theme }) => kitC(theme).textSecondary};
-  }
-  .spec {
-    color: ${({ theme }) => kitC(theme).textMuted};
-  }
+`
+
+const Status = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: ${({ theme }) => kitC(theme).textPrimary};
+`
+
+const Meta = styled.span`
+  font-size: 11.5px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => kitC(theme).textSecondary};
+`
+
+const Spec = styled.span`
+  font-size: 11px;
+  line-height: 1.45;
+  color: ${({ theme }) => kitC(theme).textMuted};
 `
 
 const Warning = styled.span`
   display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  && {
-    color: ${({ theme }) => theme.colors.alert.warning.fg};
-  }
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: left;
+  color: ${({ theme }) => theme.colors.alert.warning.fg};
+
   svg {
     flex-shrink: 0;
+    margin-top: 2px;
   }
 `
 
-const Actions = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  align-self: center;
-`
-
-const ChangeButton = styled.button`
-  height: 32px;
-  padding: 0 12px;
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => kitC(theme).textPrimary};
-  background: ${({ theme }) => kitC(theme).section};
-  border: 1px solid ${({ theme }) => kitC(theme).border};
-  border-radius: 8px;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    border-color: ${({ theme }) => kitC(theme).borderHover};
-  }
-  &:focus-visible {
-    outline: none;
-    border-color: ${({ theme }) => kitC(theme).focus};
-    box-shadow: 0 0 0 3px ${({ theme }) => kitC(theme).focusHalo};
-  }
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-`
-
-/** 제거 — 평소엔 중성색, hover·focus에서만 파괴색 */
+/** 제거 — 평소엔 흐린 글자, hover·focus에서만 파괴색 */
 const RemoveButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
+  margin-top: 4px;
+  padding: 2px 8px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
   color: ${({ theme }) => kitC(theme).textMuted};
+  background: transparent;
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
 
   &:hover:not(:disabled),
   &:focus-visible {
     color: ${({ theme }) => theme.colors.alert.danger.fg};
     background: ${({ theme }) => kitC(theme).section};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px ${({ theme }) => kitC(theme).focusHalo};
-  }
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-`
-
-const EmptyButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  min-height: 94px;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  font-family: inherit;
-  cursor: pointer;
-
-  &:hover:not(:disabled) ${Circle} {
-    border-color: ${({ theme }) => kitC(theme).focus};
-    color: ${({ theme }) => kitC(theme).focus};
   }
   &:focus-visible {
     outline: none;

@@ -203,6 +203,65 @@ export const FieldErrorActionBtn = styled.button`
   }
 `
 
+// ─── 프로필 머리 — 사진(아바타) | 성명·국적·성별 ─────────────────────────────
+// 아바타 열 폭은 아래 행들의 '라벨 열 + 간격'에서 머리의 테두리·안쪽 여백을 뺀 값이라,
+// 오른쪽 성명 칸이 아래 행들의 필드 열과 같은 x에서 시작한다.
+//   기본:   1 + 15 + 136 + 20 = 172 = 148 + 24
+//   ≤1024: 1 + 15 + 116 + 18 = 150 = 132 + 18
+
+export const ProfileHeader = styled.div`
+  --profile-avatar-size: 112px;
+  display: grid;
+  grid-template-columns: 136px minmax(0, 1fr);
+  column-gap: 20px;
+  align-items: center;
+  /* 오른쪽 끝도 아래 필드 열(680px) 끝에 맞춘다 — 넓은 페이지에서 판만 화면 끝까지 늘어나지 않게 */
+  max-width: calc(172px + 680px + 17px);
+  box-sizing: border-box;
+  margin: 2px 0 12px;
+  padding: 20px 16px 18px 15px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 14px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(129,140,248,0.07) 0%, rgba(255,255,255,0.02) 62%)'
+      : 'linear-gradient(180deg, rgba(99,102,241,0.06) 0%, rgba(248,250,252,0.7) 62%)'};
+
+  @media (max-width: 1024px) {
+    --profile-avatar-size: 100px;
+    grid-template-columns: 116px minmax(0, 1fr);
+    column-gap: 18px;
+  }
+  @media (max-width: 768px) {
+    --profile-avatar-size: 84px;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 18px;
+    padding: 16px 14px;
+  }
+`
+
+export const ProfileAvatarColumn = styled.div`
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  align-self: start;
+`
+
+export const ProfileIdentity = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  max-width: 680px;
+`
+
+export const ProfileIdentityBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+`
+
 // ─── Layout wrapper — 사건 등록 폼(event-create.styles)과 동일한 옆 라벨 행 ──────
 // 라벨 열 148px(13/600 secondary, 2단 분할 시 104px) | 간격 24 | 필드 열(상한 680px).
 // 격자 규칙 — 라벨(또는 라벨을 품은 머리 줄)은 1열 1행에 못박고, 나머지 자식은 전부 2열.
