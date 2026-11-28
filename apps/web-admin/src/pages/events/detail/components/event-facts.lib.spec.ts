@@ -50,6 +50,17 @@ describe('groupCountriesByRole', () => {
       '소련',
     ])
   })
+
+  it('DECLARATION 세부 유형에서 INITIATOR는 발신·주도국으로 표시한다', () => {
+    const groups = groupCountriesByRole(
+      [
+        { id: 'ah', name: '오스트리아-헝가리 제국', role: 'INITIATOR', historical: true },
+        { id: 'rs', name: '세르비아 왕국', role: 'TARGET', historical: true },
+      ],
+      'DECLARATION',
+    )
+    expect(groups.map((group) => group.label)).toEqual(['발신·주도국', '대상국'])
+  })
 })
 
 describe('filledSections', () => {

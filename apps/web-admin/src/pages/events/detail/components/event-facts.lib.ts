@@ -106,7 +106,9 @@ export function groupCountriesByRole(
       const label =
         eventType === 'WAR_DECLARATION' && option.value === 'INITIATOR'
           ? '선포국'
-          : option.label
+          : eventType === 'DECLARATION' && option.value === 'INITIATOR'
+            ? '발신·주도국'
+            : option.label
       groups.push({ label, countries: members })
     }
   }

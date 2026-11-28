@@ -324,3 +324,73 @@ export const LONG_AFTERMATH_CHARS = 2500
 export function shouldCollapseLongSection(kind: 'narrative' | 'aftermath', length: number): boolean {
   return length > (kind === 'narrative' ? LONG_NARRATIVE_CHARS : LONG_AFTERMATH_CHARS)
 }
+
+/* ───────────── 요약·배경 중복 감지 및 배경 → 전개 단락 분리 ───────────── */
+
+function normalizePlainText(html?: string | null): string {
+  if (!html) return ''
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;|&#160;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** 요약(description)과 배경(background) 첫 도입부가 중복 서술되었는지 판정 */
+export function detectSummaryBackgroundOverlap(
+  description?: string | null,
+  backgroundHtml?: string | null,
+): boolean {
+  const desc = normalizePlainText(description)
+  const bg = normalizePlainText(backgroundHtml)
+  if (desc.length < 20 || bg.length < 20) return false
+  const firstSentence = (text: string) => text.split(/(?<=[.다요])\s+/)[0] ?? text
+  const descFirst = firstSentence(desc)
+  const bgFirst = firstSentence(bg)
+  const compact = (text: string) => text.replace(/[\s,·.'"‘’“”()[\]]/g, '')
+  const descCompact = compact(descFirst)
+  const bgCompact = compact(bgFirst)
+  if (descCompact.length >= 20 && bgCompact.length >= 20 && descCompact.slice(0, 20) === bgCompact.slice(0, 20)) {
+    return true
+  }
+  const sameOpening =
+    descCompact.length >= 12 &&
+    bgCompact.length >= 12 &&
+    descCompact.slice(0, 12) === bgCompact.slice(0, 12)
+  const bothDefinitional =
+    /(?:사건|조치|선언|통첩|결의|회담|전투|전쟁|협정|조약)이다\.?$/.test(descFirst) &&
+    /(?:사건|조치|선언|통첩|결의|회담|전투|전쟁|협정|조약)이다\.?$/.test(bgFirst)
+  return sameOpening && bothDefinitional
+}
+
+/** 리치텍스트 HTML을 빈 줄(`<div><br></div>`, `</p><p>`, `\n\n`) 단위의 문단 블록으로 나눈다 */
+export function splitHtmlParagraphBlocks(html?: string | null): string[] {
+  if (!html) return []
+  const rawBlocks = html
+    .replace(/<div>\s*<br\s*\/?>\s*<\/div>/gi, '\n\n')
+    .replace(/<p>\s*<br\s*\/?>\s*<\/p>/gi, '\n\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '</p>\n\n<p>')
+    .split(/\n{2,}/)
+    .map((chunk) =>
+      chunk
+        .replace(/^<div>([\s\S]*)<\/div>$/i, '$1')
+        .trim(),
+    )
+    .filter((chunk) => plainTextLength(chunk) > 0)
+
+  return rawBlocks.map((chunk) => (/^<(p|div|ul|ol|blockquote)\b/i.test(chunk) ? chunk : `<p>${chunk}</p>`))
+}
+
+/** 문단 본문에서 짧은 단락 제목 후보를 뽑는다 */
+export function deriveParagraphTitle(blockHtml: string, index: number): string {
+  const period = extractBodyLeadPeriod(blockHtml)
+  const plain = normalizePlainText(blockHtml)
+  const firstSentence = plain.split(/(?<=[.다요])\s+/)[0] ?? plain
+  const clause = firstSentence
+    .replace(/^\d{3,4}년(?:\s*\d{1,2}월)?(?:\s*\d{1,2}일)?\s*/, '')
+    .split(/[,—–]/)[0]
+    .trim()
+  const trimmed = clause.length > 26 ? `${clause.slice(0, 26).trim()}…` : clause
+  if (period && trimmed) return `${period} · ${trimmed}`
+  return trimmed || `전개 ${index + 1}`
+}

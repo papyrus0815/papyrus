@@ -20,6 +20,8 @@ import {
   AFTERMATH_TYPE,
   BACKGROUND_TYPE,
   backgroundLength,
+  deriveParagraphTitle,
+  detectSummaryBackgroundOverlap,
   LEAD_CLAMP_CHARS,
   mergeSectionPayload,
   NARRATIVE_TYPE,
@@ -27,6 +29,7 @@ import {
   plainTextLength,
   readProseHtml,
   sectionKindOf,
+  splitHtmlParagraphBlocks,
   type SectionKind,
   type SectionRow,
   syncRowsWithServer,
@@ -331,6 +334,37 @@ export function DetailNarrative({
   /* 나눌 단락이 있어야 나누기다 — 한 단락짜리 전개는 연관 탭의 안내로 충분하다 */
   const canSplit = Boolean(onRequestSplit) && narrativeRows.length >= 2
 
+  const hasLeadOverlap = useMemo(
+    () => detectSummaryBackgroundOverlap(event.description, event.background),
+    [event.description, event.background],
+  )
+  const backgroundBlocks = useMemo(
+    () => splitHtmlParagraphBlocks(event.background),
+    [event.background],
+  )
+  const canExtractNarrativeFromBackground =
+    !developmentSlot &&
+    !event.deletedAt &&
+    narrativeRows.length === 0 &&
+    backgroundBlocks.length >= 2
+
+  const extractNarrativeFromBackground = () => {
+    if (backgroundBlocks.length < 2) return
+    const [leadBlock, ...restBlocks] = backgroundBlocks
+    const createdRows: SectionRow[] = restBlocks.map((blockHtml, idx) => ({
+      key: nextKey(),
+      title: deriveParagraphTitle(blockHtml, idx),
+      content: blockHtml,
+      sectionType: NARRATIVE_TYPE,
+    }))
+    setNarrativeRows(createdRows)
+    narrativeFold.setCollapsed(false)
+    onPatch({
+      background: leadBlock,
+      eventSections: mergeSectionPayload(backgroundRows, createdRows, aftermathRows),
+    })
+  }
+
   return (
     <>
       {/* 배경 — 요약 본문 1개 + 번호 단락. */}
@@ -366,6 +400,22 @@ export function DetailNarrative({
               사건이 일어나게 된 원인, 구조적 맥락, 직전 정세를 요약과 단락으로 기록합니다.
             </SectionHintText>
           </S.SectionHeaderGroup>
+          {!event.deletedAt && (hasLeadOverlap || canExtractNarrativeFromBackground) && (
+            <BackgroundAssistBar role="note">
+              <span>
+                {hasLeadOverlap && canExtractNarrativeFromBackground
+                  ? `위의 사건 요약과 첫 도입부가 겹치고, 전개가 비어 있는 채 문단 ${backgroundBlocks.length}개가 모두 배경에 들어 있습니다.`
+                  : hasLeadOverlap
+                    ? '배경의 첫 도입부가 위의 사건 요약과 중복됩니다. 배경에는 사건 직전의 원인·정세를 적어 주세요.'
+                    : `전개 단락이 비어 있고 배경에 ${backgroundBlocks.length}개 문단이 함께 적혀 있습니다.`}
+              </span>
+              {canExtractNarrativeFromBackground && (
+                <AssistActionBtn type="button" onClick={extractNarrativeFromBackground}>
+                  뒷문단 {backgroundBlocks.length - 1}개 전개로 분리
+                </AssistActionBtn>
+              )}
+            </BackgroundAssistBar>
+          )}
           <div id="background-body">
           {/* 요약 본문은 타임라인의 첫 마디 — 번호 단락과 한 선에 꿴다 */}
           <NarrativeSectionList
@@ -680,4 +730,38 @@ const StrayList = styled.ul`
   margin: 0;
   padding-left: 18px;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const BackgroundAssistBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const AssistActionBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(129,140,248,0.14)' : 'rgba(79,70,229,0.08)')};
+  }
 `

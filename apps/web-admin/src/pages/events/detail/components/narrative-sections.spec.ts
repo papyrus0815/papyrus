@@ -24,7 +24,10 @@ import {
   extractBodyLeadPeriod,
   syncRowsWithServer,
   addHeadingAnchors,
+  deriveParagraphTitle,
+  detectSummaryBackgroundOverlap,
   extractProseHeadings,
+  splitHtmlParagraphBlocks,
 } from './narrative-sections.lib'
 
 const row = (over: Partial<SectionRow> = {}): SectionRow => ({
@@ -286,5 +289,30 @@ describe('단락 소제목 앵커', () => {
     const anchored = sanitizeRichTextHtml(addHeadingAnchors(html, 'narrative-2'))
     expect(anchored).toContain('id="narrative-2-h1"')
     expect(anchored).toContain('id="narrative-2-h2"')
+  })
+})
+
+describe('요약·배경 중복 감지 및 문단 분리', () => {
+  it('요약과 배경의 첫 도입부가 같으면 중복으로 감지한다', () => {
+    expect(
+      detectSummaryBackgroundOverlap(
+        '1914년 7월 23일 오후 6시, 주베오그라드 오스트리아-헝가리 공사가 최후통첩을 전달한 사건이다.',
+        '<p>1914년 7월 23일 오후 6시, 오스트리아-헝가리 제국이 최후통첩을 전달한 사건이다.</p>',
+      ),
+    ).toBe(true)
+    expect(
+      detectSummaryBackgroundOverlap(
+        '1914년 7월 23일 오후 6시, 주베오그라드 오스트리아-헝가리 공사가 최후통첩을 전달한 사건이다.',
+        '<p>사라예보 황태자 부부 암살 사건 이후 빈 외무부는 독일의 백지수표를 확보했다.</p>',
+      ),
+    ).toBe(false)
+  })
+
+  it('빈 줄로 나뉜 HTML 문단을 손실 없이 분리하고 제목을 뽑는다', () => {
+    const blocks = splitHtmlParagraphBlocks(
+      '첫 문단 도입부<div><br></div><div>1914년 7월 19일 제2차 빈 공동각료회의 의결에 따라 통첩을 전달했다.</div><div><br></div><div>특히 가장 치명적인 독소 조항은 제5항과 제6항이었다.</div>',
+    )
+    expect(blocks).toHaveLength(3)
+    expect(deriveParagraphTitle(blocks[1], 0)).toContain('1914년 7월 19일')
   })
 })
