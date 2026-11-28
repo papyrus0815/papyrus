@@ -11,7 +11,7 @@
 import { Fragment, lazy, Suspense, useEffect, useMemo, useState } from 'react'
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { FiPlus, FiX } from 'react-icons/fi'
+import { FiPlus, FiUser, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
@@ -4394,7 +4394,10 @@ function PersonListField({
               }
             }}
           >
-            <QuickSearchInput
+            <SearchLeadIcon aria-hidden>
+              <FiUser size={14} />
+            </SearchLeadIcon>
+            <IconQuickSearchInput
               type="search"
               aria-label={`${label} 빠른 검색`}
               placeholder="인물 이름 검색 후 Enter로 즉시 추가 (예: 로베스피에르, 당통)"
@@ -5515,10 +5518,41 @@ const SidesVsGaugeSegment = styled.div<{ $slot?: SideSlot; $empty?: boolean }>`
  * 뷰포트가 아니라 판 폭을 따라야 해서 미디어쿼리 대신 auto-fit.
  */
 const SideBoardGrid = styled.div`
+  container-type: inline-size;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-  gap: 12px;
+  gap: 22px 22px;
   min-width: 0;
+
+  /* VS 패 — 카드마다 $slot이 달라 클래스가 갈리므로 '& + &'가 아니라 부모에서 형제를 잡는다 */
+  > * + *::before {
+    content: 'VS';
+    position: absolute;
+    left: 50%;
+    top: -11px;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 3px solid ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#ffffff')};
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#1e293b')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#ffffff')};
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    z-index: 1;
+  }
+
+  /* 두 장이 나란할 때(판 ≥ 582px) — 짝수 카드는 왼쪽 사이에, 다음 줄 첫 카드는 위 사이에 */
+  @container (min-width: 582px) {
+    > :nth-child(even)::before {
+      left: -11px;
+      top: 50%;
+    }
+  }
 `
 
 const sideSlotAccentColor = (slot: SideSlot | undefined): string => {
@@ -5534,24 +5568,35 @@ const sideSlotAccentColor = (slot: SideSlot | undefined): string => {
   }
 }
 
+/*
+ * 진영 카드 = 깃발. 위쪽은 진영 색이 번지는 머리(색 띠 3px 대신), 이름은 칸이 아니라 제목,
+ * 소속 자리는 끌어 놓는 점선 판. 카드 사이엔 'VS' 패 — 쌓이면 사이 위, 나란하면 사이 옆.
+ */
 const SideCard = styled.div<{ $slot?: SideSlot; $dragOver?: boolean }>`
+  --side-accent: ${({ $slot }) => sideSlotAccentColor($slot)};
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 12px;
+  gap: 9px;
+  padding: 12px 12px 12px;
+  border-radius: 14px;
   border: 1px solid
+    ${({ $dragOver, $slot }) =>
+      $dragOver ? sideSlotAccentColor($slot) : `${sideSlotAccentColor($slot)}40`};
+  background:
+    linear-gradient(
+      180deg,
+      ${({ $slot, theme }) => `${sideSlotAccentColor($slot)}${theme.mode === 'dark' ? '26' : '17'}`} 0,
+      transparent 72px
+    ),
     ${({ $dragOver, $slot, theme }) =>
-      $dragOver ? sideSlotAccentColor($slot) : S.getC(theme).border.light};
-  border-top: 3px solid ${({ $slot }) => sideSlotAccentColor($slot)};
-  background: ${({ $dragOver, $slot, theme }) =>
-    $dragOver
-      ? `${sideSlotAccentColor($slot)}12`
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.025)'
-        : '#f8fafc'};
+      $dragOver
+        ? `${sideSlotAccentColor($slot)}12`
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.02)'
+          : '#ffffff'};
   box-shadow: ${({ $dragOver, $slot }) =>
-    $dragOver ? `0 0 0 2px ${sideSlotAccentColor($slot)}33` : 'none'};
+    $dragOver ? `0 0 0 3px ${sideSlotAccentColor($slot)}33` : 'none'};
   transition: border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
   min-width: 0;
 `
@@ -5559,7 +5604,7 @@ const SideCard = styled.div<{ $slot?: SideSlot; $dragOver?: boolean }>`
 const SideCardHeaderRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   min-width: 0;
 `
 
@@ -5567,43 +5612,45 @@ const SideSlotBadge = styled.span<{ $slot?: SideSlot }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 6px;
-  background: ${({ $slot }) => `${sideSlotAccentColor($slot)}18`};
-  color: ${({ $slot }) => sideSlotAccentColor($slot)};
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: ${({ $slot }) => sideSlotAccentColor($slot)};
+  color: #ffffff;
   font-size: 11.5px;
   font-weight: 800;
+  box-shadow: 0 2px 6px ${({ $slot }) => `${sideSlotAccentColor($slot)}55`};
   flex-shrink: 0;
 `
 
+/** 진영 이름 — 깃발의 제목(테 없이 밑줄, 포커스 땐 진영 색 밑줄) */
 const SideNameInput = styled.input`
-  height: 34px;
-  border-radius: 8px;
+  height: 36px;
+  border-radius: 0;
   font-family: inherit;
-  font-size: 13px;
-  letter-spacing: -0.01em;
-  padding: 0 11px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
-  background: ${({ theme }) => S.getC(theme).background.content};
+  font-size: 15px;
+  letter-spacing: -0.015em;
+  padding: 0 2px;
+  border: none;
+  border-bottom: 1.5px solid ${({ theme }) => S.getC(theme).border.default};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
-  font-weight: 600;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-weight: 700;
+  transition: border-color 0.15s ease;
 
   &::placeholder {
     color: ${({ theme }) => S.getC(theme).text.muted};
-    font-weight: 500;
+    font-weight: 600;
   }
 
   &:hover {
-    border-color: ${({ theme }) => S.getC(theme).border.hover};
+    border-bottom-color: ${({ theme }) => S.getC(theme).border.hover};
   }
 
   &:focus,
   &:focus-visible {
     outline: none;
-    border-color: ${({ theme }) => S.getC(theme).border.focus};
-    box-shadow: 0 0 0 3px ${({ theme }) => S.getC(theme).border.focusHalo};
+    border-bottom-color: var(--side-accent);
   }
 `
 
@@ -5771,18 +5818,24 @@ const SideVsOutcomeBadge = styled.span<{ $outcome: SideOutcome }>`
   }};
 `
 
+/** 소속 자리 — 국가·인물·조직 칩을 끌어 놓는 판(점선 = 놓는 자리) */
 const SideMemberWrap = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
-  padding: 2px 0;
-  background: transparent;
+  min-height: 48px;
+  padding: 8px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1.5px dashed color-mix(in srgb, var(--side-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--side-accent) 4%, transparent);
 `
 
 const SideEmptyHint = styled.span`
+  flex: 1;
   font-size: 12px;
+  text-align: center;
   word-break: keep-all;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -6043,4 +6096,20 @@ const QuickMetricFieldLabel = styled.label`
 const AddButtonExample = styled.span`
   font-weight: 400;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/* 검색 칸 앞 종류 아이콘 — 참여 인물 칸이 다른 검색 칸과 같은 빈 상자로 보이지 않게 */
+const SearchLeadIcon = styled.span`
+  position: absolute;
+  left: 11px;
+  top: 18px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  pointer-events: none;
+  z-index: 1;
+`
+
+const IconQuickSearchInput = styled(QuickSearchInput)`
+  padding-left: 32px;
 `

@@ -5,6 +5,7 @@ import {
   FiArrowDown,
   FiArrowUp,
   FiClock,
+  FiFlag,
   FiLayers,
   FiLink2,
   FiMapPin,
@@ -2577,7 +2578,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       }
                     }}
                   >
-                    <CountryQuickSearchInput
+                    <LinkSearchIcon aria-hidden>
+                      <FiFlag size={14} />
+                    </LinkSearchIcon>
+                    <LinkSearchInput
                       type="search"
                       aria-label="참여국 빠른 검색"
                       placeholder="국가 이름·약칭 빠른 검색 (예: 청일, 영프, 프랑스, 영국…)"
