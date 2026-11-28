@@ -152,7 +152,10 @@ describe('WarDeclarationFormModal friendly studio interactions', () => {
   it('toggles casus belli sparks on/off, expands progressive drawers on demand, updates vote meter, and swaps parties', async () => {
     renderModal(true)
 
-    // 1. 초기 대치 전광판 & 자동 제목 미리보기 확인
+    // 1. 초기 위기 계기판 · 대치 전광판 · 자동 제목 미리보기 확인
+    expect(
+      screen.getByText('LV.5 · 전면 교전 돌입 · 정식 선전포고'),
+    ).toBeInTheDocument()
     expect(screen.getByText('포고 전문 미리보기')).toBeInTheDocument()
     expect(
       screen.getByText(/미국.*측이 일본 제국에 공식 선전포고를 전달함/),
@@ -179,14 +182,32 @@ describe('WarDeclarationFormModal friendly studio interactions', () => {
       target: { value: '388' },
     })
     expect(screen.getByText('만장일치 가결')).toBeInTheDocument()
-    expect(screen.getByText(/100%/)).toBeInTheDocument()
+    expect(screen.getAllByText(/100%/).length).toBeGreaterThanOrEqual(2)
 
-    // 4. 종결 방식 칩을 누르기 전에는 종결 세부 입력이 접혀 있다가, 선택 시 부드럽게 펼쳐짐
+    // 4. 종결 방식 칩을 누르기 전에는 종결 세부 입력이 접혀 있다가, 선택 시 상단 위기 계기판이 '종전·강화 기록됨'으로 전환되고 세부 입력이 펼쳐짐
     expect(screen.queryByText('종결 · 휴전 날짜')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: '항복 조인' }))
     expect(screen.getByText('종결 · 휴전 날짜')).toBeInTheDocument()
+    expect(screen.getByText('종전·강화 기록됨 (항복 조인)')).toBeInTheDocument()
 
-    // 5. 공수 전환 클릭 시 선포국 ↔ 상대국 역전 확인
+    // 5. 관련 사건 서랍: 기본적으로 접혀 있고, 펼치면 새 사건 생성 없이 탭 전환으로 한 번에 하나의 검색창만 노출됨
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /이미 등록된 관련 사건\(최후통첩·연설 등\)이 있을 때만 연결 — 없어도 됩니다/,
+      }),
+    )
+    expect(screen.getByTestId('war-decl-ultimatum-event')).toBeInTheDocument()
+    expect(
+      screen.queryByTestId('war-decl-narrative-event'),
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: /당일 연설·비화 사건/ }))
+    expect(screen.getByTestId('war-decl-narrative-event')).toBeInTheDocument()
+    expect(
+      screen.queryByTestId('war-decl-ultimatum-event'),
+    ).not.toBeInTheDocument()
+
+    // 6. 공수 전환 클릭 시 선포국 ↔ 상대국 역전 확인
     fireEvent.click(screen.getByRole('button', { name: /공수 전환/ }))
     expect(
       screen.getByText(/일본 제국.*측이.*미국에 공식 선전포고를 전달함/),

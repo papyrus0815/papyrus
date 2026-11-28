@@ -1,8 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { AnimatePresence, motion } from 'framer-motion'
 import type { IconType } from 'react-icons'
 import {
+  FiActivity,
   FiAlertCircle,
   FiAlertTriangle,
   FiAward,
@@ -74,12 +76,6 @@ import {
   KitBusyBar,
 } from '@/shared/ui/register-form-kit/register-form-kit'
 import {
-  FieldControl,
-  FieldHint,
-  FieldLabel,
-  FieldRow,
-  FormGroup,
-  FormGroupTitle,
   Input,
   OptionalTag,
   SubField,
@@ -140,7 +136,7 @@ export interface WarDeclarationFormModalProps {
   onSaved?: (saved: WarDeclarationDto) => void
 }
 
-type NarrativeLinkMode = 'none' | 'existing' | 'create'
+type RelatedEventTab = 'ultimatum' | 'narrative'
 
 interface PartyState {
   id: string
@@ -177,12 +173,8 @@ interface FormState {
   warEventInitialTitle: string
   ultimatumEventId: string
   ultimatumEventInitialTitle: string
-  narrativeMode: NarrativeLinkMode
   narrativeEventId: string
   narrativeEventInitialTitle: string
-  inlineEventTitle: string
-  inlineEventDescription: string
-  inlineEventDomain: 'DIPLOMACY' | 'MILITARY' | 'POLITICS'
   terminationKind: WarTerminationKind | ''
   endedEra: 'BC' | 'AD'
   endedYear: string
@@ -192,7 +184,7 @@ interface FormState {
   terminationNote: string
 }
 
-/* ─── 개전 유형별 시맨틱 톤 · 친근한 한 줄 설명 스펙 ─── */
+/* ─── 개전 유형별 시맨틱 컬러 · 벡터 연출 · 대표 역사 사례 스펙 ─── */
 
 const KIND_TONE_SPEC: Record<
   WarDeclarationKind,
@@ -204,7 +196,11 @@ const KIND_TONE_SPEC: Record<
     accent: string
     vectorBadge: string
     friendlySub: string
-    dashed?: boolean
+    example: string
+    tensionLevel: 1 | 2 | 3 | 4 | 5
+    tensionLabel: string
+    beamMode: 'comet' | 'countdown' | 'shield' | 'lightning' | 'flip' | 'sever'
+    sealGlyph: string
   }
 > = {
   FORMAL_DECLARATION: {
@@ -213,8 +209,13 @@ const KIND_TONE_SPEC: Record<
     text: '#b91c1c',
     textDark: '#fca5a5',
     accent: '#dc2626',
-    vectorBadge: '공식 포고 ──▶',
+    vectorBadge: '공식 선전포고 전달',
     friendlySub: '외교 각서·의회 승인 후 정식 통보',
+    example: '예: 1914 오스트리아→세르비아 · 1941 미국→일본',
+    tensionLevel: 5,
+    tensionLabel: '전면 교전 돌입 · 정식 선전포고',
+    beamMode: 'comet',
+    sealGlyph: '宣',
   },
   ULTIMATUM_EXPIRY: {
     Icon: FiClock,
@@ -222,8 +223,13 @@ const KIND_TONE_SPEC: Record<
     text: '#b45309',
     textDark: '#fcd34d',
     accent: '#d97706',
-    vectorBadge: '시한 만료 ──▶',
+    vectorBadge: '최후통첩 시한 만료',
     friendlySub: '최후통첩 시한이 지나 개전 돌입',
+    example: '예: 1914 영국→독일 · 1939 영·불→독일',
+    tensionLevel: 4,
+    tensionLabel: '시한 만료 · 조건부 자동 개전',
+    beamMode: 'countdown',
+    sealGlyph: '限',
   },
   ALLIANCE_ENTRY: {
     Icon: FiShield,
@@ -231,8 +237,13 @@ const KIND_TONE_SPEC: Record<
     text: '#1d4ed8',
     textDark: '#93c5fd',
     accent: '#2563eb',
-    vectorBadge: '동맹 참전 ──▶',
+    vectorBadge: '동맹 의무 참전',
     friendlySub: '동맹·상호방위 조약에 따라 합류',
+    example: '예: 상호방위·삼국동맹 연쇄 참전',
+    tensionLevel: 4,
+    tensionLabel: '동맹 조약 발동 · 연쇄 참전',
+    beamMode: 'shield',
+    sealGlyph: '盟',
   },
   UNDECLARED_HOSTILITIES: {
     Icon: FiZap,
@@ -240,9 +251,13 @@ const KIND_TONE_SPEC: Record<
     text: '#7e22ce',
     textDark: '#d8b4fe',
     accent: '#9333ea',
-    vectorBadge: '무선전 기습 ⚡▶',
+    vectorBadge: '무선전 기습 개전',
     friendlySub: '사전 통보 없이 기습 공격으로 시작',
-    dashed: true,
+    example: '예: 1904 여순 기습 · 1941 바르바로사 작전',
+    tensionLevel: 5,
+    tensionLabel: '선전 절차 생략 · 기습 무력 충돌',
+    beamMode: 'lightning',
+    sealGlyph: '襲',
   },
   CO_BELLIGERENCY: {
     Icon: FiRefreshCw,
@@ -250,8 +265,13 @@ const KIND_TONE_SPEC: Record<
     text: '#0f766e',
     textDark: '#5eead4',
     accent: '#0d9488',
-    vectorBadge: '진영 전환 ↻▶',
+    vectorBadge: '진영 전환 · 공동교전',
     friendlySub: '진영을 바꿔 어제의 동맹과 교전',
+    example: '예: 1943 이탈리아 바돌리오 정부 대독 선전',
+    tensionLevel: 3,
+    tensionLabel: '진영 전환 · 공동교전국 재참전',
+    beamMode: 'flip',
+    sealGlyph: '轉',
   },
   DIPLOMATIC_SEVERANCE: {
     Icon: FiSlash,
@@ -259,9 +279,13 @@ const KIND_TONE_SPEC: Record<
     text: '#334155',
     textDark: '#cbd5e1',
     accent: '#64748b',
-    vectorBadge: '외교 단교 ─✕─',
+    vectorBadge: '외교 관계 단절 (단교)',
     friendlySub: '대사 소환 및 공식 국교 단절',
-    dashed: true,
+    example: '예: 1917 미·독 단교 (선전포고 2개월 전)',
+    tensionLevel: 2,
+    tensionLabel: '외교 결렬 · 국교 단절 단계',
+    beamMode: 'sever',
+    sealGlyph: '斷',
   },
 }
 
@@ -281,20 +305,6 @@ const TERMINATION_OPTIONS: ChoiceChipOption<WarTerminationKind>[] =
     label: WAR_TERMINATION_KIND_LABELS[key],
   }))
 
-const NARRATIVE_MODE_OPTIONS: ChoiceChipOption<NarrativeLinkMode>[] = [
-  { value: 'none', label: '연결 안 함' },
-  { value: 'existing', label: '기존 사건 연결' },
-  { value: 'create', label: '+ 새 사건 바로 만들기' },
-]
-
-const INLINE_DOMAIN_OPTIONS: ChoiceChipOption<
-  'DIPLOMACY' | 'MILITARY' | 'POLITICS'
->[] = [
-  { value: 'DIPLOMACY', label: '외교' },
-  { value: 'MILITARY', label: '군사' },
-  { value: 'POLITICS', label: '정치' },
-]
-
 const numOrNull = (raw: string): number | null => {
   const trimmed = raw.trim()
   if (!trimmed) return null
@@ -312,7 +322,7 @@ function formatCompactDateParts(
   if (y == null) return null
   const prefix = era === 'BC' ? `BC ${y}` : `${y}`
   const m = numOrNull(monthStr)
-  if (m == null) return era === 'BC' ? `${prefix}년` : `${prefix}년`
+  if (m == null) return `${prefix}년`
   const d = numOrNull(dayStr)
   if (d == null) return `${prefix}년 ${m}월`
   return `${prefix}년 ${m}월 ${d}일`
@@ -507,12 +517,8 @@ function buildInitialState(props: {
       warEventInitialTitle: editing.warEvent?.title ?? '',
       ultimatumEventId: editing.ultimatumEventId ?? '',
       ultimatumEventInitialTitle: editing.ultimatumEvent?.title ?? '',
-      narrativeMode: editing.narrativeEventId ? 'existing' : 'none',
       narrativeEventId: editing.narrativeEventId ?? '',
       narrativeEventInitialTitle: editing.narrativeEvent?.title ?? '',
-      inlineEventTitle: '',
-      inlineEventDescription: '',
-      inlineEventDomain: 'DIPLOMACY',
       terminationKind: editing.terminationKind ?? '',
       endedEra: editing.endedEra ?? 'AD',
       endedYear: editing.endedYear != null ? String(editing.endedYear) : '',
@@ -552,12 +558,8 @@ function buildInitialState(props: {
     warEventInitialTitle: props.defaultWarEvent?.title ?? '',
     ultimatumEventId: '',
     ultimatumEventInitialTitle: '',
-    narrativeMode: narr?.id ? 'existing' : 'none',
     narrativeEventId: narr?.id ?? '',
     narrativeEventInitialTitle: narr?.title ?? '',
-    inlineEventTitle: '',
-    inlineEventDescription: '',
-    inlineEventDomain: 'DIPLOMACY',
     terminationKind: '',
     endedEra: 'AD',
     endedYear: '',
@@ -600,6 +602,7 @@ export function WarDeclarationFormModal({
     }),
   )
   const [saving, setSaving] = useState(false)
+  const [swapSpinCount, setSwapSpinCount] = useState(0)
   const [pickerSlot, setPickerSlot] = useState<
     'declaring' | 'target' | 'extraTarget' | null
   >(null)
@@ -607,11 +610,12 @@ export function WarDeclarationFormModal({
     'declared' | 'severance' | 'ended' | null
   >(null)
 
-  // 친근한 점진적 공개(Progressive Disclosure) 토글 상태
   const [showCustomTitleMemo, setShowCustomTitleMemo] = useState(false)
   const [showPersonFallback, setShowPersonFallback] = useState(false)
   const [showTerminationDetails, setShowTerminationDetails] = useState(false)
   const [showExtraEventsDrawer, setShowExtraEventsDrawer] = useState(false)
+  const [relatedEventTab, setRelatedEventTab] =
+    useState<RelatedEventTab>('ultimatum')
 
   useEffect(() => {
     if (!open) {
@@ -627,19 +631,25 @@ export function WarDeclarationFormModal({
       defaultNarrativeEvent,
     })
     setActiveNavSection('stage')
+    setSwapSpinCount(0)
     setForm(next)
     setShowCustomTitleMemo(Boolean(next.title.trim() || next.summary.trim()))
     setShowPersonFallback(Boolean(next.decidedByPersonId))
     setShowTerminationDetails(
       Boolean(
-        next.terminationKind ||
+        (next.terminationKind && next.terminationKind !== 'ONGOING') ||
           next.endedYear.trim() ||
           next.peaceTreatyId ||
           next.terminationNote.trim(),
       ),
     )
     setShowExtraEventsDrawer(
-      Boolean(next.ultimatumEventId || next.narrativeMode !== 'none'),
+      Boolean(next.ultimatumEventId || next.narrativeEventId),
+    )
+    setRelatedEventTab(
+      next.narrativeEventId && !next.ultimatumEventId
+        ? 'narrative'
+        : 'ultimatum',
     )
   }, [
     open,
@@ -780,7 +790,6 @@ export function WarDeclarationFormModal({
     )
   }, [editing, activeRegimeAtDate?.warConsentChamberId])
 
-  // 당대 추천 국가원수·정부수반 목록 (원클릭 칩 & 자동 추천 공용)
   const contemporaryHeadCandidates = useMemo(() => {
     const rawTenures = Array.isArray(tenures) ? tenures : []
     const preferHos =
@@ -944,7 +953,6 @@ export function WarDeclarationFormModal({
     }))
   }, [treatiesResult])
 
-  // 선택된 서명권자 요약 (인장 카드 & 라이브 전문 프리뷰용)
   const selectedLeaderSummary = useMemo(() => {
     if (form.decidedByTenureId) {
       const hit = (Array.isArray(tenures) ? tenures : []).find(
@@ -1011,7 +1019,6 @@ export function WarDeclarationFormModal({
     return sy || ey ? `역사 국가 · ${sy}~${ey}` : '역사 국가'
   }, [form.target, historicalCountries])
 
-  // 시간 간격 계산 (단교→개전 / 개전→종전)
   const severanceGapLabel = useMemo(
     () =>
       form.kind === 'DIPLOMATIC_SEVERANCE' || form.showSeveranceDate
@@ -1072,7 +1079,6 @@ export function WarDeclarationFormModal({
     ],
   )
 
-  // 의회 표결 게이지 계산
   const voteStats = useMemo(() => {
     const y = numOrNull(form.yeas) ?? 0
     const n = numOrNull(form.nays) ?? 0
@@ -1135,7 +1141,25 @@ export function WarDeclarationFormModal({
     return '{선포국}의 대(對){상대국} 선전포고'
   }, [form.declaring, form.target, form.kind])
 
-  // 실시간 외교 포고 전문 티커 조판
+  const formattedDeclaredDate = useMemo(
+    () =>
+      formatCompactDateParts(
+        form.declaredEra,
+        form.declaredYear,
+        form.declaredMonth,
+        form.declaredDay,
+      ),
+    [form.declaredEra, form.declaredYear, form.declaredMonth, form.declaredDay],
+  )
+
+  const selectedTreatyName = useMemo(() => {
+    if (!form.peaceTreatyId) return null
+    return (
+      (treatiesResult?.items ?? []).find((t) => t.id === form.peaceTreatyId)
+        ?.name ?? null
+    )
+  }, [form.peaceTreatyId, treatiesResult?.items])
+
   const liveDispatchInfo = useMemo(() => {
     if (!form.declaring && !form.target) {
       return {
@@ -1162,12 +1186,6 @@ export function WarDeclarationFormModal({
       ...form.extraTargets.map((t) => t.name),
     ]
     const targText = allTargets.join(' · ')
-    const dateText = formatCompactDateParts(
-      form.declaredEra,
-      form.declaredYear,
-      form.declaredMonth,
-      form.declaredDay,
-    )
     const leaderText = selectedLeaderSummary
       ? `(${selectedLeaderSummary.name}${selectedLeaderSummary.role !== '직접 지정 인물' ? ` · ${selectedLeaderSummary.role}` : ''})`
       : ''
@@ -1188,16 +1206,12 @@ export function WarDeclarationFormModal({
       form.endedMonth,
       form.endedDay,
     )
-    const treatyName = form.peaceTreatyId
-      ? (treatiesResult?.items ?? []).find((t) => t.id === form.peaceTreatyId)
-          ?.name
-      : null
     const tail =
-      endDateText || treatyName || form.terminationKind
+      endDateText || selectedTreatyName || form.terminationKind
         ? ` — ${[
             endDateText,
-            treatyName
-              ? `《${treatyName}》`
+            selectedTreatyName
+              ? `《${selectedTreatyName}》`
               : form.terminationKind
                 ? WAR_TERMINATION_KIND_LABELS[form.terminationKind]
                 : null,
@@ -1211,26 +1225,22 @@ export function WarDeclarationFormModal({
 
     return {
       ready: true,
-      text: `${dateText ? `${dateText}, ` : ''}${declText}${leaderText} 측이${casusPart} ${targText}에 ${actionVerb[form.kind]}${tail}`,
+      text: `${formattedDeclaredDate ? `${formattedDeclaredDate}, ` : ''}${declText}${leaderText} 측이${casusPart} ${targText}에 ${actionVerb[form.kind]}${tail}`,
     }
   }, [
     form.declaring,
     form.target,
     form.extraTargets,
-    form.declaredEra,
-    form.declaredYear,
-    form.declaredMonth,
-    form.declaredDay,
+    formattedDeclaredDate,
     form.casusBelli,
     form.kind,
     form.endedEra,
     form.endedYear,
     form.endedMonth,
     form.endedDay,
-    form.peaceTreatyId,
     form.terminationKind,
     selectedLeaderSummary,
-    treatiesResult?.items,
+    selectedTreatyName,
     belligerenceDurationLabel,
   ])
 
@@ -1275,7 +1285,47 @@ export function WarDeclarationFormModal({
     form.declaring && form.target && !isSameParty && !isDateInverted && !saving,
   )
 
+  // 단계별 완료·풍성도 체크 (어디까지 입력됐는지 한눈에 확 보이게!)
+  const stepStatus = useMemo(() => {
+    const step1 = Boolean(
+      form.declaring &&
+        form.target &&
+        (form.declaredYear.trim() || form.casusBelli.trim()),
+    )
+    const step2 = Boolean(
+      form.decidedByTenureId ||
+        form.decidedByPersonId ||
+        form.cabinetId ||
+        form.approvedChamberId ||
+        voteStats,
+    )
+    const step3 = Boolean(
+      form.warEventId ||
+        form.terminationKind ||
+        form.endedYear.trim() ||
+        form.peaceTreatyId ||
+        form.ultimatumEventId ||
+        form.narrativeEventId,
+    )
+    const filledDetailsCount = [
+      form.declaredYear.trim(),
+      form.casusBelli.trim(),
+      form.decidedByTenureId || form.decidedByPersonId,
+      form.approvedChamberId || voteStats,
+      form.warEventId,
+      form.terminationKind || form.peaceTreatyId,
+    ].filter(Boolean).length
+    return { step1, step2, step3, filledDetailsCount }
+  }, [form, voteStats])
+
+  const isConcluded = Boolean(
+    (form.terminationKind && form.terminationKind !== 'ONGOING') ||
+      form.peaceTreatyId ||
+      form.endedYear.trim(),
+  )
+
   const swapParties = () => {
+    setSwapSpinCount((c) => c + 1)
     setForm((prev) => ({
       ...prev,
       declaring: prev.target,
@@ -1287,7 +1337,6 @@ export function WarDeclarationFormModal({
     }))
   }
 
-  // 명분 스파크 칩: 한 번 누르면 추가, 다시 누르면 깔끔하게 제거!
   const toggleCasusSpark = (snippet: string) => {
     setForm((prev) => {
       const parts = prev.casusBelli
@@ -1438,19 +1487,7 @@ export function WarDeclarationFormModal({
       abstentions: numOrNull(form.abstentions),
       warEventId: form.warEventId || null,
       ultimatumEventId: form.ultimatumEventId || null,
-      narrativeEventId:
-        form.narrativeMode === 'existing'
-          ? form.narrativeEventId || null
-          : null,
-      ...(form.narrativeMode === 'create'
-        ? {
-            createNarrativeEvent: {
-              title: form.inlineEventTitle.trim() || null,
-              description: form.inlineEventDescription.trim() || null,
-              domain: form.inlineEventDomain,
-            },
-          }
-        : {}),
+      narrativeEventId: form.narrativeEventId || null,
       terminationKind: form.terminationKind || null,
       endedEra: endedYear != null ? form.endedEra : null,
       endedYear,
@@ -1527,7 +1564,9 @@ export function WarDeclarationFormModal({
       onClose()
     } catch (err) {
       notify.error(
-        err instanceof Error ? err.message : '저장에 실패했어요. 잠시 후 다시 시도해 주세요.',
+        err instanceof Error
+          ? err.message
+          : '저장에 실패했어요. 잠시 후 다시 시도해 주세요.',
       )
     } finally {
       setSaving(false)
@@ -1613,6 +1652,9 @@ export function WarDeclarationFormModal({
 
   const kindTone = KIND_TONE_SPEC[form.kind]
   const KindVectorIcon = kindTone.Icon
+  const bothPartiesReady = Boolean(
+    form.declaring && form.target && !isSameParty,
+  )
 
   const activeSparkSet = useMemo(
     () =>
@@ -1626,14 +1668,16 @@ export function WarDeclarationFormModal({
   )
 
   const showTerminationDetailFields =
-    Boolean(form.terminationKind) ||
+    Boolean(form.terminationKind && form.terminationKind !== 'ONGOING') ||
     showTerminationDetails ||
     Boolean(form.endedYear.trim()) ||
     Boolean(form.peaceTreatyId) ||
     Boolean(form.terminationNote.trim())
 
   const extraLinkedCount =
-    (form.ultimatumEventId ? 1 : 0) + (form.narrativeMode !== 'none' ? 1 : 0)
+    (form.ultimatumEventId ? 1 : 0) + (form.narrativeEventId ? 1 : 0)
+
+  const sealTriggerKey = `${form.kind}-${bothPartiesReady ? 'ready' : 'idle'}-${isConcluded ? 'peace' : 'war'}-${selectedLeaderSummary?.name ?? ''}`
 
   return (
     <>
@@ -1643,10 +1687,10 @@ export function WarDeclarationFormModal({
         title={editing ? '선전포고 · 개전 기록 수정' : '선전포고 · 개전 기록하기'}
         maxWidth={
           layoutMode === 'split'
-            ? 'min(1180px, 96vw)'
-            : 'min(860px, 96vw)'
+            ? 'min(1480px, 96vw)'
+            : 'min(1060px, 96vw)'
         }
-        minHeight="80vh"
+        minHeight="86vh"
         fullBleedOnMobile
         closeOnOverlayClick={
           !saving && pickerSlot === null && activeDatePicker === null
@@ -1660,31 +1704,33 @@ export function WarDeclarationFormModal({
                 $active={activeNavSection === 'stage'}
                 onClick={() => jumpToSection('stage')}
               >
-                ① 당사국·개전
+                ① 당사국·개전 {bothPartiesReady ? '✓' : ''}
               </SectionJumpBtn>
               <SectionJumpBtn
                 type="button"
                 $active={activeNavSection === 'constitution'}
                 onClick={() => jumpToSection('constitution')}
               >
-                ② 결정·표결
+                ② 결정·표결 {stepStatus.step2 ? '✓' : ''}
               </SectionJumpBtn>
               <SectionJumpBtn
                 type="button"
                 $active={activeNavSection === 'chain'}
                 onClick={() => jumpToSection('chain')}
               >
-                ③ 전쟁·마무리
+                ③ 전쟁·마무리 {stepStatus.step3 ? '✓' : ''}
               </SectionJumpBtn>
             </SectionJumpNav>
             <LayoutModeToggleBtn
               type="button"
               $active={layoutMode === 'split'}
               onClick={toggleLayoutMode}
-              title="2단 한눈에 보기 / 1단 차근차근 보기 전환"
+              title="넓은 2단 보기 / 넓은 1단 보기 전환"
             >
-              <FiColumns size={12.5} aria-hidden />
-              <span>{layoutMode === 'split' ? '2단 보기' : '1단 보기'}</span>
+              <FiColumns size={13} aria-hidden />
+              <span>
+                {layoutMode === 'split' ? '넓은 2단 보기' : '1단 크게 보기'}
+              </span>
             </LayoutModeToggleBtn>
             {!editing ? (
               <HeaderResetBtn
@@ -1700,8 +1746,9 @@ export function WarDeclarationFormModal({
                   setShowCustomTitleMemo(false)
                   setShowPersonFallback(false)
                   setShowTerminationDetails(false)
-                  setShowExtraEventsDrawer(
-                    Boolean(reset.narrativeMode !== 'none'),
+                  setShowExtraEventsDrawer(Boolean(reset.narrativeEventId))
+                  setRelatedEventTab(
+                    reset.narrativeEventId ? 'narrative' : 'ultimatum',
                   )
                 }}
               >
@@ -1711,7 +1758,7 @@ export function WarDeclarationFormModal({
           </HeaderActionsBar>
         }
       >
-        <PersonRegisterModalFormScroll ref={scrollRef}>
+        <WideModalScroll ref={scrollRef}>
           {saving ? (
             <KitBusyBar role="status" aria-live="polite">
               선전포고 기록을 저장하고 있어요...
@@ -1719,25 +1766,76 @@ export function WarDeclarationFormModal({
           ) : null}
 
           <StudioCanvas>
-            {/* ═══ 상단 하이라이트: 누가 누구에게 선포했나요? + 한 줄 포고 전문 미리보기 ═══ */}
+            {/* ═══ 상단 라이브 상황판: 위기 수위 계기판 + 당사국 키네틱 대치 + 국새 포고문 카드 ═══ */}
             <ConfrontationStage
               id="war-decl-sec-stage"
-              $accentRgb={kindTone.rgb}
+              $accentRgb={isConcluded ? '22, 163, 74' : kindTone.rgb}
               aria-label="교전 당사국 대치 구도"
             >
+              {/* 1) 한눈에 현재 국면을 확 알려주는 라이브 위기·종전 계기판 */}
+              <CrisisMeterRibbon>
+                <div className="meter-left">
+                  <FiActivity size={14} aria-hidden />
+                  <span className="meter-title">현재 외교·교전 국면</span>
+                  <CrisisLevelBars aria-hidden>
+                    {[1, 2, 3, 4, 5].map((lv) => (
+                      <CrisisBarSegment
+                        key={lv}
+                        $active={
+                          isConcluded ? true : lv <= kindTone.tensionLevel
+                        }
+                        $rgb={isConcluded ? '22, 163, 74' : kindTone.rgb}
+                      />
+                    ))}
+                  </CrisisLevelBars>
+                  <CrisisStatusBadge
+                    $concluded={isConcluded}
+                    $rgb={kindTone.rgb}
+                    $accent={kindTone.accent}
+                  >
+                    {isConcluded
+                      ? `종전·강화 기록됨 (${
+                          selectedTreatyName ??
+                          (form.terminationKind
+                            ? WAR_TERMINATION_KIND_LABELS[form.terminationKind]
+                            : '교전 종료')
+                        })`
+                      : `LV.${kindTone.tensionLevel} · ${kindTone.tensionLabel}`}
+                  </CrisisStatusBadge>
+                </div>
+
+                {belligerenceDurationLabel ? (
+                  <DurationHighlightPill>
+                    총 교전 기간 {belligerenceDurationLabel}
+                  </DurationHighlightPill>
+                ) : severanceGapLabel ? (
+                  <DurationHighlightPill $tone="amber">
+                    단교 {severanceGapLabel} 후 개전
+                  </DurationHighlightPill>
+                ) : null}
+              </CrisisMeterRibbon>
+
+              {/* 2) 좌·우 당사국 카드 & 키네틱 벡터 아레나 */}
               <ArenaGrid>
-                {/* 좌측: 선포국 카드 */}
+                {/* 좌측: 선포국 와이드 카드 */}
                 <BelligerentDossier
+                  as={motion.div}
+                  key={`decl-${swapSpinCount}`}
+                  initial={
+                    swapSpinCount > 0 ? { x: 26, opacity: 0.65 } : false
+                  }
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 28 }}
                   $side="declaring"
                   $filled={Boolean(form.declaring)}
                 >
                   <DossierHeaderRow>
                     <DossierEyebrow $side="declaring">
-                      <FiFlag size={11.5} aria-hidden />
+                      <FiFlag size={13} aria-hidden />
                       <span>누가 먼저 선포·개전했나요?</span>
                     </DossierEyebrow>
                     <RequiredMiniBadge $done={Boolean(form.declaring)}>
-                      {form.declaring ? '선택됨' : '필수'}
+                      {form.declaring ? '✓ 선택됨' : '필수'}
                     </RequiredMiniBadge>
                   </DossierHeaderRow>
 
@@ -1748,14 +1846,17 @@ export function WarDeclarationFormModal({
                         onClick={() => setPickerSlot('declaring')}
                         title="클릭해서 선포한 국가 변경하기"
                       >
-                        <DossierEmblem $side="declaring">
+                        <DossierEmblem
+                          $side="declaring"
+                          $engaged={bothPartiesReady && !isConcluded}
+                        >
                           {form.declaring.flagEmoji ||
                             form.declaring.name.slice(0, 1)}
                         </DossierEmblem>
                         <DossierNameBlock>
                           <DossierCountryName>
-                            {form.declaring.name}
-                            <span className="change-hint">변경</span>
+                            <span>{form.declaring.name}</span>
+                            <span className="change-hint">국가 변경</span>
                           </DossierCountryName>
                           <DossierPolitySub>
                             {declaringPolityMeta}
@@ -1779,7 +1880,7 @@ export function WarDeclarationFormModal({
                         }
                         aria-label="선포국 선택 해제"
                       >
-                        <FiX size={14} />
+                        <FiX size={16} />
                       </DossierClearBtn>
                     </DossierSelectedBody>
                   ) : (
@@ -1788,7 +1889,7 @@ export function WarDeclarationFormModal({
                       onClick={() => setPickerSlot('declaring')}
                     >
                       <span className="main">
-                        <FiPlus size={15} />
+                        <FiPlus size={17} />
                         선포한 국가 고르기
                       </span>
                       <span className="sub">
@@ -1798,35 +1899,75 @@ export function WarDeclarationFormModal({
                   )}
                 </BelligerentDossier>
 
-                {/* 중앙: 인터랙티브 개전 벡터 스위치 */}
+                {/* 중앙: 유형별 라이브 애니메이션 빔 + 스프링 공수 전환 허브 */}
                 <VectorHub>
                   <VectorBadge
+                    as={motion.div}
+                    key={form.kind}
+                    initial={{ scale: 0.9, opacity: 0.5 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 440, damping: 24 }}
                     $rgb={kindTone.rgb}
                     $accent={kindTone.accent}
                     title={WAR_DECLARATION_KIND_HINTS[form.kind]}
                   >
-                    <KindVectorIcon size={12.5} aria-hidden />
+                    <KindVectorIcon size={14} aria-hidden />
                     <span>{kindTone.vectorBadge}</span>
                   </VectorBadge>
-                  <VectorTrack $rgb={kindTone.rgb} $dashed={kindTone.dashed} />
+
+                  {/* 6가지 시작 방식마다 다르게 움직이는 키네틱 트랙 */}
+                  <KineticBeamStage
+                    $rgb={kindTone.rgb}
+                    $mode={kindTone.beamMode}
+                    $engaged={bothPartiesReady}
+                    aria-hidden
+                  >
+                    {kindTone.beamMode === 'sever' ? (
+                      <>
+                        <div className="half left" />
+                        <span className="sever-mark">✕</span>
+                        <div className="half right" />
+                      </>
+                    ) : (
+                      <>
+                        <div className="base-rail" />
+                        <div className="traveling-pulse" />
+                        <span className="arrow-head">▶</span>
+                      </>
+                    )}
+                  </KineticBeamStage>
+
                   <SwapDirectionPill
                     type="button"
                     onClick={swapParties}
                     title="선포한 나라와 상대 나라를 서로 맞바꿔요"
                   >
-                    <FiRefreshCw size={11.5} />
+                    <motion.span
+                      animate={{ rotate: swapSpinCount * 180 }}
+                      transition={{ type: 'spring', stiffness: 320, damping: 20 }}
+                      style={{ display: 'inline-flex' }}
+                    >
+                      <FiRefreshCw size={13} />
+                    </motion.span>
                     <span>공수 전환</span>
                   </SwapDirectionPill>
                 </VectorHub>
 
-                {/* 우측: 상대국 카드 + 동시 선포국 스택 */}
+                {/* 우측: 상대국 와이드 카드 + 동시 선포국 스택 */}
                 <BelligerentDossier
+                  as={motion.div}
+                  key={`targ-${swapSpinCount}`}
+                  initial={
+                    swapSpinCount > 0 ? { x: -26, opacity: 0.65 } : false
+                  }
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 28 }}
                   $side="target"
                   $filled={Boolean(form.target)}
                 >
                   <DossierHeaderRow>
                     <DossierEyebrow $side="target">
-                      <FiShield size={11.5} aria-hidden />
+                      <FiShield size={13} aria-hidden />
                       <span>
                         어느 나라를 상대로 하나요?
                         {form.extraTargets.length > 0
@@ -1835,7 +1976,7 @@ export function WarDeclarationFormModal({
                       </span>
                     </DossierEyebrow>
                     <RequiredMiniBadge $done={Boolean(form.target)}>
-                      {form.target ? '선택됨' : '필수'}
+                      {form.target ? '✓ 선택됨' : '필수'}
                     </RequiredMiniBadge>
                   </DossierHeaderRow>
 
@@ -1847,14 +1988,17 @@ export function WarDeclarationFormModal({
                           onClick={() => setPickerSlot('target')}
                           title="클릭해서 상대 국가 변경하기"
                         >
-                          <DossierEmblem $side="target">
+                          <DossierEmblem
+                            $side="target"
+                            $engaged={bothPartiesReady && !isConcluded}
+                          >
                             {form.target.flagEmoji ||
                               form.target.name.slice(0, 1)}
                           </DossierEmblem>
                           <DossierNameBlock>
                             <DossierCountryName>
-                              {form.target.name}
-                              <span className="change-hint">변경</span>
+                              <span>{form.target.name}</span>
+                              <span className="change-hint">국가 변경</span>
                             </DossierCountryName>
                             <DossierPolitySub>
                               {targetPolityMeta}
@@ -1868,35 +2012,42 @@ export function WarDeclarationFormModal({
                           }
                           aria-label="상대국 선택 해제"
                         >
-                          <FiX size={14} />
+                          <FiX size={16} />
                         </DossierClearBtn>
                       </DossierSelectedBody>
 
                       {!editing ? (
                         <ExtraDominoStack>
-                          {form.extraTargets.map((et, idx) => (
-                            <DominoChip
-                              key={`${et.isHistorical ? 'h' : 'm'}:${et.id}`}
-                            >
-                              <span>
-                                {et.flagEmoji ? `${et.flagEmoji} ` : ''}
-                                {et.name}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => removeExtraTarget(idx)}
-                                aria-label={`${et.name} 제외`}
+                          <AnimatePresence initial={false}>
+                            {form.extraTargets.map((et, idx) => (
+                              <DominoChip
+                                as={motion.span}
+                                key={`${et.isHistorical ? 'h' : 'm'}:${et.id}`}
+                                initial={{ scale: 0.85, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.85, opacity: 0 }}
+                                transition={{ duration: 0.16 }}
                               >
-                                <FiX size={11} />
-                              </button>
-                            </DominoChip>
-                          ))}
+                                <span>
+                                  {et.flagEmoji ? `${et.flagEmoji} ` : ''}
+                                  {et.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeExtraTarget(idx)}
+                                  aria-label={`${et.name} 제외`}
+                                >
+                                  <FiX size={12} />
+                                </button>
+                              </DominoChip>
+                            ))}
+                          </AnimatePresence>
                           <AddDominoBtn
                             type="button"
                             onClick={() => setPickerSlot('extraTarget')}
                             title="같은 날 여러 나라에 동시에 선전포고했다면 한 번에 묶어 저장할 수 있어요"
                           >
-                            <FiPlus size={11.5} />
+                            <FiPlus size={12.5} />
                             <span>같은 날 선포한 국가 더 추가</span>
                           </AddDominoBtn>
                         </ExtraDominoStack>
@@ -1908,7 +2059,7 @@ export function WarDeclarationFormModal({
                       onClick={() => setPickerSlot('target')}
                     >
                       <span className="main">
-                        <FiPlus size={15} />
+                        <FiPlus size={17} />
                         상대 국가 고르기
                       </span>
                       <span className="sub">
@@ -1925,79 +2076,188 @@ export function WarDeclarationFormModal({
                 </AlertBox>
               ) : null}
 
-              {/* 실시간 한 줄 포고 전문 미리보기 */}
+              {/* 3) 국새 인장 애니메이션이 찍히는 라이브 포고문 카드 */}
               <DispatchTickerBar $ready={liveDispatchInfo.ready}>
-                <DispatchKicker $accent={kindTone.accent}>
-                  포고 전문 미리보기
-                </DispatchKicker>
-                <DispatchPreviewSentence $muted={!liveDispatchInfo.ready}>
-                  {liveDispatchInfo.text}
-                </DispatchPreviewSentence>
+                <WaxSealMedallion
+                  as={motion.div}
+                  key={sealTriggerKey}
+                  initial={
+                    liveDispatchInfo.ready
+                      ? { scale: 1.32, rotate: -14, opacity: 0.4 }
+                      : false
+                  }
+                  animate={{ scale: 1, rotate: -4, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 18 }}
+                  $rgb={isConcluded ? '22, 163, 74' : kindTone.rgb}
+                  $ready={liveDispatchInfo.ready}
+                  aria-hidden
+                >
+                  <span>{isConcluded ? '和' : kindTone.sealGlyph}</span>
+                </WaxSealMedallion>
+
+                <DispatchContentStack>
+                  <div className="top-row">
+                    <DispatchKicker
+                      $accent={isConcluded ? '#16a34a' : kindTone.accent}
+                    >
+                      포고 전문 미리보기
+                    </DispatchKicker>
+
+                    {/* 핵심 요소를 색깔 배지로 한눈에 요약해 주는 토큰 바 */}
+                    {liveDispatchInfo.ready ? (
+                      <VisualTokenStrip aria-hidden>
+                        {formattedDeclaredDate ? (
+                          <SummaryToken $tone="neutral">
+                            📅 {formattedDeclaredDate}
+                          </SummaryToken>
+                        ) : null}
+                        <SummaryToken $tone="crimson">
+                          🚩 {form.declaring!.name}
+                        </SummaryToken>
+                        <SummaryToken $tone="slate">→</SummaryToken>
+                        <SummaryToken $tone="blue">
+                          🎯 {form.target!.name}
+                          {form.extraTargets.length > 0
+                            ? ` 외 ${form.extraTargets.length}개국`
+                            : ''}
+                        </SummaryToken>
+                        {selectedLeaderSummary ? (
+                          <SummaryToken $tone="indigo">
+                            🖋 {selectedLeaderSummary.name}
+                          </SummaryToken>
+                        ) : null}
+                        {voteStats ? (
+                          <SummaryToken
+                            $tone={voteStats.passed ? 'emerald' : 'crimson'}
+                          >
+                            🏛 {voteStats.verdict} ({voteStats.yeaPct}%)
+                          </SummaryToken>
+                        ) : null}
+                        {isConcluded ? (
+                          <SummaryToken $tone="emerald">
+                            🕊{' '}
+                            {selectedTreatyName ??
+                              (form.terminationKind
+                                ? WAR_TERMINATION_KIND_LABELS[
+                                    form.terminationKind
+                                  ]
+                                : '종전')}
+                          </SummaryToken>
+                        ) : null}
+                      </VisualTokenStrip>
+                    ) : null}
+                  </div>
+
+                  <DispatchPreviewSentence $muted={!liveDispatchInfo.ready}>
+                    {liveDispatchInfo.text}
+                  </DispatchPreviewSentence>
+                </DispatchContentStack>
               </DispatchTickerBar>
             </ConfrontationStage>
 
-            {/* ═══ 본문 2단(또는 1단) 작업실 ═══ */}
+            {/* ═══ 본문 와이드 2단(또는 1단) 작업실 ═══ */}
             <WorkspaceColumns $split={layoutMode === 'split'}>
-              {/* ── 좌측 열: 1. 어떻게, 언제, 왜 시작됐나요? ── */}
+              {/* ── 좌측 카드: STEP 1 어떻게, 언제, 왜 시작됐나요? ── */}
               <ColumnStack>
-                <FormGroup>
+                <StudioSectionCard>
                   <FriendlySectionHeader>
-                    <FormGroupTitle>
-                      1. 어떻게, 언제, 왜 시작됐나요?
-                    </FormGroupTitle>
+                    <SectionTitleRow>
+                      <StepNumberPill $tone="crimson">
+                        STEP 1 {stepStatus.step1 ? '✓' : ''}
+                      </StepNumberPill>
+                      <StudioSectionTitle>
+                        1. 어떻게, 언제, 왜 시작됐나요?
+                      </StudioSectionTitle>
+                    </SectionTitleRow>
                     <SectionSubHint>
-                      국가만 골랐다면 아래 항목은 아는 만큼만 가볍게 적어도 바로 저장돼요.
+                      카드를 눌러 시작 방식을 고르면 대표 역사 사례와 함께 상단 상황판이 즉시 반응해요.
                     </SectionSubHint>
                   </FriendlySectionHeader>
 
-                  {/* 6가지 상황 카드 그리드 — 한눈에 설명까지 읽히는 친근한 카드 */}
-                  <FieldRow>
-                    <FieldLabel as="div">시작 방식</FieldLabel>
-                    <FieldControl>
-                      <ScenarioKindGrid role="radiogroup" aria-label="시작 방식">
-                        {WAR_DECLARATION_KIND_ORDER.map((key) => {
-                          const spec = KIND_TONE_SPEC[key]
-                          const CardIcon = spec.Icon
-                          const selected = form.kind === key
-                          return (
-                            <ScenarioKindCard
-                              key={key}
-                              type="button"
-                              role="radio"
-                              aria-checked={selected}
-                              $selected={selected}
-                              $rgb={spec.rgb}
-                              $text={spec.text}
-                              $textDark={spec.textDark}
-                              onClick={() =>
-                                setForm((prev) => ({ ...prev, kind: key }))
-                              }
-                            >
-                              <div className="card-top">
-                                <span className="icon-wrap">
-                                  <CardIcon size={13.5} aria-hidden />
-                                </span>
-                                <strong>{WAR_DECLARATION_KIND_LABELS[key]}</strong>
-                              </div>
-                              <span className="card-sub">{spec.friendlySub}</span>
-                            </ScenarioKindCard>
-                          )
-                        })}
-                      </ScenarioKindGrid>
-                      <FieldHint>{WAR_DECLARATION_KIND_HINTS[form.kind]}</FieldHint>
-                    </FieldControl>
-                  </FieldRow>
+                  {/* 3×2 와이드 시나리오 카드 그리드 (선택 시 체크 배지 + 대표 사례 표시) */}
+                  <StudioFieldBlock>
+                    <StudioFieldLabelRow>
+                      <StudioFieldLabel as="div">시작 방식</StudioFieldLabel>
+                    </StudioFieldLabelRow>
 
-                  {/* 에스컬레이션 날짜 트랙 */}
-                  <FieldRow>
-                    <FieldLabel as="div">
-                      선포 · 개전 날짜 <OptionalTag>(선택)</OptionalTag>
-                    </FieldLabel>
-                    <FieldControl>
-                      <EscalationTimelineCard>
+                    <ScenarioKindGrid role="radiogroup" aria-label="시작 방식">
+                      {WAR_DECLARATION_KIND_ORDER.map((key) => {
+                        const spec = KIND_TONE_SPEC[key]
+                        const CardIcon = spec.Icon
+                        const selected = form.kind === key
+                        return (
+                          <ScenarioKindCard
+                            as={motion.button}
+                            whileHover={{ y: -2 }}
+                            whileTap={{ scale: 0.985 }}
+                            key={key}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            $selected={selected}
+                            $rgb={spec.rgb}
+                            $text={spec.text}
+                            $textDark={spec.textDark}
+                            onClick={() =>
+                              setForm((prev) => ({ ...prev, kind: key }))
+                            }
+                          >
+                            <div className="card-top">
+                              <span className="icon-wrap">
+                                <CardIcon size={15} aria-hidden />
+                              </span>
+                              <strong>{WAR_DECLARATION_KIND_LABELS[key]}</strong>
+                              {selected ? (
+                                <span className="selected-check" aria-hidden>
+                                  <FiCheck size={11.5} />
+                                </span>
+                              ) : null}
+                            </div>
+                            <span className="card-sub">{spec.friendlySub}</span>
+                            <span className="card-example">{spec.example}</span>
+                          </ScenarioKindCard>
+                        )
+                      })}
+                    </ScenarioKindGrid>
+                    <StudioFieldHint>
+                      {WAR_DECLARATION_KIND_HINTS[form.kind]}
+                    </StudioFieldHint>
+                  </StudioFieldBlock>
+
+                  {/* 시원한 가로폭의 에스컬레이션 날짜 트랙 */}
+                  <StudioFieldBlock>
+                    <StudioFieldLabelRow>
+                      <StudioFieldLabel as="div">
+                        선포 · 개전 날짜 <OptionalTag>(선택)</OptionalTag>
+                      </StudioFieldLabel>
+                      {form.kind !== 'DIPLOMATIC_SEVERANCE' &&
+                      !form.showSeveranceDate ? (
+                        <PillActionBtn
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              showSeveranceDate: true,
+                            }))
+                          }
+                        >
+                          <FiPlus size={12.5} />
+                          <span>앞서 단교한 날짜도 추가</span>
+                        </PillActionBtn>
+                      ) : null}
+                    </StudioFieldLabelRow>
+
+                    <EscalationTimelineCard>
+                      <AnimatePresence initial={false}>
                         {form.kind === 'DIPLOMATIC_SEVERANCE' ||
                         form.showSeveranceDate ? (
-                          <>
+                          <motion.div
+                            key="severance-step"
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.18 }}
+                          >
                             <EscalationStep>
                               <StepHeaderRow>
                                 <StepBadge $tone="slate">
@@ -2062,113 +2322,102 @@ export function WarDeclarationFormModal({
                               <span className="line" />
                               {severanceGapLabel ? (
                                 <span className="pill">
-                                  단교 후 {severanceGapLabel} 만에 개전
+                                  ⚡ 단교 후 {severanceGapLabel} 만에 개전
                                 </span>
                               ) : null}
                             </EscalationConnector>
-                          </>
+                          </motion.div>
                         ) : null}
+                      </AnimatePresence>
 
-                        <EscalationStep>
-                          <StepHeaderRow>
-                            <StepBadge $tone="crimson">
-                              {form.kind === 'DIPLOMATIC_SEVERANCE' ||
-                              form.showSeveranceDate
-                                ? '2단계 · 선전포고 · 개전 날짜'
-                                : '선전포고 · 개전 날짜'}
-                            </StepBadge>
-                            {form.kind !== 'DIPLOMATIC_SEVERANCE' &&
-                            !form.showSeveranceDate ? (
-                              <StepDismissBtn
-                                type="button"
-                                onClick={() =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    showSeveranceDate: true,
-                                  }))
-                                }
-                              >
-                                + 앞서 단교한 날짜도 추가
-                              </StepDismissBtn>
-                            ) : null}
-                          </StepHeaderRow>
-                          <InlineDateField
-                            appearance="field"
-                            anchorId={declaredAnchorId}
-                            pickerOpen={activeDatePicker === 'declared'}
-                            era={form.declaredEra}
-                            year={form.declaredYear}
-                            month={form.declaredMonth}
-                            day={form.declaredDay}
-                            onEra={(era) =>
-                              setForm((prev) => ({ ...prev, declaredEra: era }))
-                            }
-                            onYear={(val) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                declaredYear: val,
-                              }))
-                            }
-                            onMonth={(val) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                declaredMonth: val,
-                              }))
-                            }
-                            onDay={(val) =>
-                              setForm((prev) => ({ ...prev, declaredDay: val }))
-                            }
-                            onOpenPicker={() => setActiveDatePicker('declared')}
-                            ariaLabel="선전포고·개전 시점"
-                          />
-                        </EscalationStep>
-                      </EscalationTimelineCard>
-                      <FieldHint>
-                        정확한 월·일을 몰라도 연도만 적으면 충분해요 (예: 1914년).
-                      </FieldHint>
-                    </FieldControl>
-                  </FieldRow>
+                      <EscalationStep>
+                        <StepHeaderRow>
+                          <StepBadge $tone="crimson">
+                            {form.kind === 'DIPLOMATIC_SEVERANCE' ||
+                            form.showSeveranceDate
+                              ? '2단계 · 선전포고 · 개전 날짜'
+                              : '선전포고 · 개전 날짜'}
+                          </StepBadge>
+                          <DateOptionalNote>
+                            연도만 적어도 충분해요 (예: 1914년)
+                          </DateOptionalNote>
+                        </StepHeaderRow>
+                        <InlineDateField
+                          appearance="field"
+                          anchorId={declaredAnchorId}
+                          pickerOpen={activeDatePicker === 'declared'}
+                          era={form.declaredEra}
+                          year={form.declaredYear}
+                          month={form.declaredMonth}
+                          day={form.declaredDay}
+                          onEra={(era) =>
+                            setForm((prev) => ({ ...prev, declaredEra: era }))
+                          }
+                          onYear={(val) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              declaredYear: val,
+                            }))
+                          }
+                          onMonth={(val) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              declaredMonth: val,
+                            }))
+                          }
+                          onDay={(val) =>
+                            setForm((prev) => ({ ...prev, declaredDay: val }))
+                          }
+                          onOpenPicker={() => setActiveDatePicker('declared')}
+                          ariaLabel="선전포고·개전 시점"
+                        />
+                      </EscalationStep>
+                    </EscalationTimelineCard>
+                  </StudioFieldBlock>
 
-                  {/* 개전 명분 + 토글 가능한 빠른 명분 칩 */}
-                  <FieldRow>
-                    <FieldLabel htmlFor="war-decl-casus-belli">
-                      전쟁 명분 · 이유 <OptionalTag>(선택)</OptionalTag>
-                    </FieldLabel>
-                    <FieldControl>
-                      <Input
-                        id="war-decl-casus-belli"
-                        value={form.casusBelli}
-                        onChange={(ev) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            casusBelli: ev.target.value,
-                          }))
-                        }
-                        placeholder="예: 사라예보 사건 배후 책임 추궁 및 최후통첩 거부"
-                      />
-                      <SparkBar aria-label="자주 쓰이는 명분 바로 넣기">
-                        <span className="kicker">눌러서 바로 넣기:</span>
-                        {CASUS_BELLI_SPARKS.map((sp) => {
-                          const isActive = activeSparkSet.has(sp.snippet)
-                          return (
-                            <SparkChip
-                              key={sp.label}
-                              type="button"
-                              $active={isActive}
-                              onClick={() => toggleCasusSpark(sp.snippet)}
-                              title={
-                                isActive
-                                  ? '다시 누르면 이 문구를 빼요'
-                                  : `누르면 "${sp.snippet}" 문구가 들어가요`
-                              }
-                            >
-                              {isActive ? `✓ ${sp.label}` : `+ ${sp.label}`}
-                            </SparkChip>
-                          )
-                        })}
-                      </SparkBar>
-                    </FieldControl>
-                  </FieldRow>
+                  {/* 큼지막한 개전 명분 입력 + 스프링 팝 토글 칩 */}
+                  <StudioFieldBlock>
+                    <StudioFieldLabelRow>
+                      <StudioFieldLabel htmlFor="war-decl-casus-belli">
+                        전쟁 명분 · 이유 <OptionalTag>(선택)</OptionalTag>
+                      </StudioFieldLabel>
+                    </StudioFieldLabelRow>
+
+                    <WideInput
+                      id="war-decl-casus-belli"
+                      value={form.casusBelli}
+                      onChange={(ev) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          casusBelli: ev.target.value,
+                        }))
+                      }
+                      placeholder="예: 사라예보 사건 배후 책임 추궁 및 최후통첩 거부"
+                    />
+                    <SparkBar aria-label="자주 쓰이는 명분 바로 넣기">
+                      <span className="kicker">눌러서 바로 넣기:</span>
+                      {CASUS_BELLI_SPARKS.map((sp) => {
+                        const isActive = activeSparkSet.has(sp.snippet)
+                        return (
+                          <SparkChip
+                            as={motion.button}
+                            whileTap={{ scale: 0.94 }}
+                            key={sp.label}
+                            type="button"
+                            $active={isActive}
+                            onClick={() => toggleCasusSpark(sp.snippet)}
+                            title={
+                              isActive
+                                ? '다시 누르면 이 문구를 빼요'
+                                : `누르면 "${sp.snippet}" 문구가 들어가요`
+                            }
+                          >
+                            {isActive ? `✓ ${sp.label}` : `+ ${sp.label}`}
+                          </SparkChip>
+                        )
+                      })}
+                    </SparkBar>
+                  </StudioFieldBlock>
 
                   {/* 접이식 문서 제목 · 추가 메모 서랍 */}
                   <CollapsibleHelperBox>
@@ -2178,7 +2427,7 @@ export function WarDeclarationFormModal({
                       onClick={() => setShowCustomTitleMemo((v) => !v)}
                     >
                       <span className="left">
-                        <FiEdit3 size={13} aria-hidden />
+                        <FiEdit3 size={14} aria-hidden />
                         <span>
                           {form.title.trim()
                             ? `직접 입력한 제목: 「${form.title.trim()}」`
@@ -2190,57 +2439,72 @@ export function WarDeclarationFormModal({
                           ? '접기'
                           : '제목 바꾸기 · 메모 남기기'}
                         {showCustomTitleMemo ? (
-                          <FiChevronUp size={13} />
+                          <FiChevronUp size={14} />
                         ) : (
-                          <FiChevronDown size={13} />
+                          <FiChevronDown size={14} />
                         )}
                       </span>
                     </CollapsibleTriggerBtn>
 
-                    {showCustomTitleMemo ? (
-                      <CollapsibleBody>
-                        <SubField>
-                          <SubFieldLabel>
-                            고유 포고 문서 제목 (비워 두면 자동 생성돼요)
-                          </SubFieldLabel>
-                          <Input
-                            id="war-decl-title"
-                            value={form.title}
-                            onChange={(ev) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                title: ev.target.value,
-                              }))
-                            }
-                            placeholder={`비워 두면 "${autoGeneratedTitle}"(으)로 저장돼요`}
-                          />
-                        </SubField>
-                        <SubField>
-                          <SubFieldLabel>보충 메모</SubFieldLabel>
-                          <PersonRegisterModalTextarea
-                            id="war-decl-summary"
-                            rows={2}
-                            value={form.summary}
-                            onChange={(ev) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                summary: ev.target.value,
-                              }))
-                            }
-                            placeholder="외교 각서 전달 시각, 구력 표기, 역사적 배경 메모 등 자유롭게 적어 주세요"
-                          />
-                        </SubField>
-                      </CollapsibleBody>
-                    ) : null}
+                    <AnimatePresence initial={false}>
+                      {showCustomTitleMemo ? (
+                        <CollapsibleBody
+                          as={motion.div}
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.16 }}
+                        >
+                          <SubField>
+                            <SubFieldLabel>
+                              고유 포고 문서 제목 (비워 두면 자동 생성돼요)
+                            </SubFieldLabel>
+                            <WideInput
+                              id="war-decl-title"
+                              value={form.title}
+                              onChange={(ev) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  title: ev.target.value,
+                                }))
+                              }
+                              placeholder={`비워 두면 "${autoGeneratedTitle}"(으)로 저장돼요`}
+                            />
+                          </SubField>
+                          <SubField>
+                            <SubFieldLabel>보충 메모</SubFieldLabel>
+                            <WideTextarea
+                              id="war-decl-summary"
+                              rows={3}
+                              value={form.summary}
+                              onChange={(ev) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  summary: ev.target.value,
+                                }))
+                              }
+                              placeholder="외교 각서 전달 시각, 구력 표기, 역사적 배경 메모 등 자유롭게 적어 주세요"
+                            />
+                          </SubField>
+                        </CollapsibleBody>
+                      ) : null}
+                    </AnimatePresence>
                   </CollapsibleHelperBox>
-                </FormGroup>
+                </StudioSectionCard>
               </ColumnStack>
 
-              {/* ── 우측 열: 2. 누가 결정·승인했나요? + 3. 어떤 전쟁으로 이어지고 어떻게 끝났나요? ── */}
+              {/* ── 우측 카드 스택: STEP 2 결정·표결 + STEP 3 전쟁·마무리 ── */}
               <ColumnStack>
-                <FormGroup id="war-decl-sec-constitution">
+                <StudioSectionCard id="war-decl-sec-constitution">
                   <FriendlySectionHeader>
-                    <FormGroupTitle>2. 누가 결정하고 승인했나요?</FormGroupTitle>
+                    <SectionTitleRow>
+                      <StepNumberPill $tone="indigo">
+                        STEP 2 {stepStatus.step2 ? '✓' : ''}
+                      </StepNumberPill>
+                      <StudioSectionTitle>
+                        2. 누가 결정하고 승인했나요?
+                      </StudioSectionTitle>
+                    </SectionTitleRow>
                     <SectionSubHint>
                       선포 연도를 적으면 당시 국가원수·내각과 헌법 절차를 자동으로 찾아드려요.
                     </SectionSubHint>
@@ -2250,7 +2514,7 @@ export function WarDeclarationFormModal({
                     <ConstitutionalCard>
                       <ConstitutionalTopRow>
                         <div className="regime-title">
-                          <FiShield size={13} aria-hidden />
+                          <FiShield size={14} aria-hidden />
                           <strong>
                             {activeRegimeAtDate.name || '당대 정치 체제'}
                           </strong>
@@ -2266,16 +2530,25 @@ export function WarDeclarationFormModal({
                         </div>
                         {constitutionalEval ? (
                           <ConstitutionalVerdictBadge
+                            as={motion.span}
+                            key={constitutionalEval.badge}
+                            initial={{ scale: 0.9, opacity: 0.5 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{
+                              type: 'spring',
+                              stiffness: 420,
+                              damping: 22,
+                            }}
                             $tone={constitutionalEval.tone}
                           >
                             {constitutionalEval.tone === 'valid' ? (
-                              <FiCheckCircle size={11.5} />
+                              <FiCheckCircle size={12.5} />
                             ) : constitutionalEval.tone === 'warning' ? (
-                              <FiAlertTriangle size={11.5} />
+                              <FiAlertTriangle size={12.5} />
                             ) : constitutionalEval.tone === 'bypass' ? (
-                              <FiZap size={11.5} />
+                              <FiZap size={12.5} />
                             ) : (
-                              <FiAward size={11.5} />
+                              <FiAward size={12.5} />
                             )}
                             <span>{constitutionalEval.badge}</span>
                           </ConstitutionalVerdictBadge>
@@ -2291,131 +2564,147 @@ export function WarDeclarationFormModal({
                     </ConstitutionalCard>
                   ) : null}
 
-                  <FieldRow>
-                    <FieldLabel as="div">
-                      결정권자 · 내각 <OptionalTag>(선택)</OptionalTag>
-                    </FieldLabel>
-                    <FieldControl>
-                      {/* 당시 재임 수반 원클릭 추천 바 */}
-                      {contemporaryHeadCandidates.length > 0 ? (
-                        <QuickLeaderBar>
-                          <span className="kicker">당시 수반 바로 선택:</span>
-                          {contemporaryHeadCandidates.map((cand) => {
-                            const selected = form.decidedByTenureId === cand.id
-                            return (
-                              <QuickLeaderChip
-                                key={cand.id}
-                                type="button"
-                                $selected={selected}
-                                onClick={() =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    decidedByTenureId: selected ? '' : cand.id,
-                                    decidedByPersonId: '',
-                                  }))
-                                }
-                              >
-                                {selected ? '✓ ' : ''}
-                                {cand.name} · {cand.role}
-                              </QuickLeaderChip>
-                            )
-                          })}
-                        </QuickLeaderBar>
-                      ) : null}
+                  <StudioFieldBlock>
+                    <StudioFieldLabelRow>
+                      <StudioFieldLabel as="div">
+                        결정권자 · 내각 <OptionalTag>(선택)</OptionalTag>
+                      </StudioFieldLabel>
+                    </StudioFieldLabelRow>
 
-                      <SubFieldPair $cols={2}>
+                    {contemporaryHeadCandidates.length > 0 ? (
+                      <QuickLeaderBar>
+                        <span className="kicker">당시 수반 바로 선택:</span>
+                        {contemporaryHeadCandidates.map((cand) => {
+                          const selected = form.decidedByTenureId === cand.id
+                          return (
+                            <QuickLeaderChip
+                              as={motion.button}
+                              whileTap={{ scale: 0.95 }}
+                              key={cand.id}
+                              type="button"
+                              $selected={selected}
+                              onClick={() =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  decidedByTenureId: selected ? '' : cand.id,
+                                  decidedByPersonId: '',
+                                }))
+                              }
+                            >
+                              {selected ? '✓ ' : ''}
+                              {cand.name} · {cand.role}
+                            </QuickLeaderChip>
+                          )
+                        })}
+                      </QuickLeaderBar>
+                    ) : null}
+
+                    <SubFieldPair $cols={2}>
+                      <SubField>
+                        <SubFieldLabel>결정·서명한 수반 (재임 기록)</SubFieldLabel>
+                        <SearchableSelect
+                          options={tenureOptions}
+                          value={form.decidedByTenureId}
+                          onChange={(next) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              decidedByTenureId: next,
+                              ...(next ? { decidedByPersonId: '' } : {}),
+                            }))
+                          }
+                          placeholder={
+                            form.declaring
+                              ? '군주·대통령·총리 검색'
+                              : '위에서 선포국을 먼저 골라 주세요'
+                          }
+                          searchPlaceholder="인물명이나 직위로 검색..."
+                          ariaLabel="결정·선포 수반 재임 기록"
+                          disabled={!form.declaring}
+                          clearable
+                        />
+                      </SubField>
+                      <SubField>
+                        <SubFieldLabel>당시 내각·행정부</SubFieldLabel>
+                        <SearchableSelect
+                          options={cabinetOptions}
+                          value={form.cabinetId}
+                          onChange={(next) =>
+                            setForm((prev) => ({ ...prev, cabinetId: next }))
+                          }
+                          placeholder={
+                            form.declaring
+                              ? '당시 내각 선택'
+                              : '위에서 선포국을 먼저 골라 주세요'
+                          }
+                          searchPlaceholder="내각 이름 검색..."
+                          ariaLabel="소속 내각"
+                          disabled={!form.declaring}
+                          clearable
+                        />
+                      </SubField>
+                    </SubFieldPair>
+
+                    {!form.decidedByTenureId ? (
+                      showPersonFallback || form.decidedByPersonId ? (
                         <SubField>
-                          <SubFieldLabel>결정·서명한 수반 (재임 기록)</SubFieldLabel>
+                          <StepHeaderRow>
+                            <SubFieldLabel>
+                              재임 기록 없이 인물에서 직접 찾기
+                            </SubFieldLabel>
+                            {!form.decidedByPersonId ? (
+                              <StepDismissBtn
+                                type="button"
+                                onClick={() => setShowPersonFallback(false)}
+                              >
+                                접기
+                              </StepDismissBtn>
+                            ) : null}
+                          </StepHeaderRow>
                           <SearchableSelect
-                            options={tenureOptions}
-                            value={form.decidedByTenureId}
+                            options={personFallbackOptions}
+                            value={form.decidedByPersonId}
                             onChange={(next) =>
                               setForm((prev) => ({
                                 ...prev,
-                                decidedByTenureId: next,
-                                ...(next ? { decidedByPersonId: '' } : {}),
+                                decidedByPersonId: next,
                               }))
                             }
                             placeholder={
                               form.declaring
-                                ? '군주·대통령·총리 검색'
+                                ? '국가 소속 인물 이름으로 검색'
                                 : '위에서 선포국을 먼저 골라 주세요'
                             }
-                            searchPlaceholder="인물명이나 직위로 검색..."
-                            ariaLabel="결정·선포 수반 재임 기록"
+                            searchPlaceholder="인물 이름 검색..."
+                            ariaLabel="결정·서명 인물 직접 지정"
                             disabled={!form.declaring}
                             clearable
                           />
                         </SubField>
-                        <SubField>
-                          <SubFieldLabel>당시 내각·행정부</SubFieldLabel>
-                          <SearchableSelect
-                            options={cabinetOptions}
-                            value={form.cabinetId}
-                            onChange={(next) =>
-                              setForm((prev) => ({ ...prev, cabinetId: next }))
-                            }
-                            placeholder={
-                              form.declaring
-                                ? '당시 내각 선택'
-                                : '위에서 선포국을 먼저 골라 주세요'
-                            }
-                            searchPlaceholder="내각 이름 검색..."
-                            ariaLabel="소속 내각"
-                            disabled={!form.declaring}
-                            clearable
-                          />
-                        </SubField>
-                      </SubFieldPair>
+                      ) : form.declaring ? (
+                        <InlineTextToggleBtn
+                          type="button"
+                          onClick={() => setShowPersonFallback(true)}
+                        >
+                          찾는 인물이 재임 목록에 없나요? 인물에서 직접 찾기
+                        </InlineTextToggleBtn>
+                      ) : null
+                    ) : null}
 
-                      {!form.decidedByTenureId ? (
-                        showPersonFallback || form.decidedByPersonId ? (
-                          <SubField>
-                            <StepHeaderRow>
-                              <SubFieldLabel>
-                                재임 기록 없이 인물에서 직접 찾기
-                              </SubFieldLabel>
-                              {!form.decidedByPersonId ? (
-                                <StepDismissBtn
-                                  type="button"
-                                  onClick={() => setShowPersonFallback(false)}
-                                >
-                                  접기
-                                </StepDismissBtn>
-                              ) : null}
-                            </StepHeaderRow>
-                            <SearchableSelect
-                              options={personFallbackOptions}
-                              value={form.decidedByPersonId}
-                              onChange={(next) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  decidedByPersonId: next,
-                                }))
-                              }
-                              placeholder={
-                                form.declaring
-                                  ? '국가 소속 인물 이름으로 검색'
-                                  : '위에서 선포국을 먼저 골라 주세요'
-                              }
-                              searchPlaceholder="인물 이름 검색..."
-                              ariaLabel="결정·서명 인물 직접 지정"
-                              disabled={!form.declaring}
-                              clearable
-                            />
-                          </SubField>
-                        ) : form.declaring ? (
-                          <InlineTextToggleBtn
-                            type="button"
-                            onClick={() => setShowPersonFallback(true)}
-                          >
-                            찾는 인물이 재임 목록에 없나요? 인물에서 직접 찾기
-                          </InlineTextToggleBtn>
-                        ) : null
-                      ) : null}
-
+                    {/* 선택 즉시 도장이 쾅 찍히듯 나타나는 서명 인장 카드 */}
+                    <AnimatePresence initial={false}>
                       {selectedLeaderSummary ? (
-                        <SignatorySealCard>
+                        <SignatorySealCard
+                          as={motion.div}
+                          key={selectedLeaderSummary.name}
+                          initial={{ scale: 1.04, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.97, opacity: 0 }}
+                          transition={{
+                            type: 'spring',
+                            stiffness: 400,
+                            damping: 22,
+                          }}
+                        >
                           <SealAvatar>
                             {selectedLeaderSummary.avatar ? (
                               <img
@@ -2432,123 +2721,138 @@ export function WarDeclarationFormModal({
                             <strong>{selectedLeaderSummary.name}</strong>
                             <span>{selectedLeaderSummary.role}</span>
                           </div>
-                          <span className="seal-stamp">
-                            <FiUserCheck size={12} /> 개전 서명·결정자
-                          </span>
+                          <motion.span
+                            className="seal-stamp"
+                            initial={{ scale: 1.35, rotate: -10, opacity: 0.3 }}
+                            animate={{ scale: 1, rotate: -2.5, opacity: 1 }}
+                            transition={{
+                              type: 'spring',
+                              stiffness: 450,
+                              damping: 16,
+                            }}
+                          >
+                            <FiUserCheck size={13} /> 개전 서명·결정자
+                          </motion.span>
                         </SignatorySealCard>
                       ) : null}
-                    </FieldControl>
-                  </FieldRow>
+                    </AnimatePresence>
+                  </StudioFieldBlock>
 
-                  <FieldRow>
-                    <FieldLabel as="div">
-                      의회 승인 · 표결 <OptionalTag>(선택)</OptionalTag>
-                    </FieldLabel>
-                    <FieldControl>
-                      <SearchableSelect
-                        options={chamberOptions}
-                        value={form.approvedChamberId}
-                        onChange={(next) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            approvedChamberId: next,
-                          }))
-                        }
-                        placeholder={
-                          form.declaring
-                            ? '승인한 의회 선택 (예: 연방하원 · 입법의회 · 상원)'
-                            : '위에서 선포국을 먼저 골라 주세요'
-                        }
-                        searchPlaceholder="의회 이름 검색..."
-                        ariaLabel="승인·의결 의회 원"
-                        disabled={!form.declaring}
-                        clearable
-                      />
-
-                      <VoteQuickHeader>
-                        <span>표결 결과가 알려져 있다면 숫자를 적어 보세요</span>
-                        <div className="helpers">
+                  <StudioFieldBlock>
+                    <StudioFieldLabelRow>
+                      <StudioFieldLabel as="div">
+                        의회 승인 · 표결 <OptionalTag>(선택)</OptionalTag>
+                      </StudioFieldLabel>
+                      <div style={{ display: 'inline-flex', gap: 10 }}>
+                        <VoteHelperBtn
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              nays: '0',
+                              abstentions: '0',
+                            }))
+                          }
+                          title="반대 0 · 기권 0으로 빠르게 채워요"
+                        >
+                          반대·기권 0으로 채우기
+                        </VoteHelperBtn>
+                        {voteStats ? (
                           <VoteHelperBtn
                             type="button"
                             onClick={() =>
                               setForm((prev) => ({
                                 ...prev,
-                                nays: '0',
-                                abstentions: '0',
+                                yeas: '',
+                                nays: '',
+                                abstentions: '',
                               }))
                             }
-                            title="반대 0 · 기권 0으로 빠르게 채워요"
                           >
-                            반대·기권 0으로 채우기
+                            비우기
                           </VoteHelperBtn>
-                          {voteStats ? (
-                            <VoteHelperBtn
-                              type="button"
-                              onClick={() =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  yeas: '',
-                                  nays: '',
-                                  abstentions: '',
-                                }))
-                              }
-                            >
-                              비우기
-                            </VoteHelperBtn>
-                          ) : null}
-                        </div>
-                      </VoteQuickHeader>
+                        ) : null}
+                      </div>
+                    </StudioFieldLabelRow>
 
-                      <SubFieldPair $cols={3}>
-                        <SubField>
-                          <SubFieldLabel>찬성표</SubFieldLabel>
-                          <Input
-                            inputMode="numeric"
-                            value={form.yeas}
-                            onChange={(ev) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                yeas: ev.target.value.replace(/[^0-9]/g, ''),
-                              }))
-                            }
-                            placeholder="예: 388"
-                          />
-                        </SubField>
-                        <SubField>
-                          <SubFieldLabel>반대표</SubFieldLabel>
-                          <Input
-                            inputMode="numeric"
-                            value={form.nays}
-                            onChange={(ev) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                nays: ev.target.value.replace(/[^0-9]/g, ''),
-                              }))
-                            }
-                            placeholder="예: 1"
-                          />
-                        </SubField>
-                        <SubField>
-                          <SubFieldLabel>기권</SubFieldLabel>
-                          <Input
-                            inputMode="numeric"
-                            value={form.abstentions}
-                            onChange={(ev) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                abstentions: ev.target.value.replace(
-                                  /[^0-9]/g,
-                                  '',
-                                ),
-                              }))
-                            }
-                            placeholder="예: 0"
-                          />
-                        </SubField>
-                      </SubFieldPair>
+                    <SearchableSelect
+                      options={chamberOptions}
+                      value={form.approvedChamberId}
+                      onChange={(next) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          approvedChamberId: next,
+                        }))
+                      }
+                      placeholder={
+                        form.declaring
+                          ? '승인한 의회 선택 (예: 연방하원 · 입법의회 · 상원)'
+                          : '위에서 선포국을 먼저 골라 주세요'
+                      }
+                      searchPlaceholder="의회 이름 검색..."
+                      ariaLabel="승인·의결 의회 원"
+                      disabled={!form.declaring}
+                      clearable
+                    />
 
+                    <SubFieldPair $cols={3}>
+                      <SubField>
+                        <SubFieldLabel>찬성표</SubFieldLabel>
+                        <WideVoteInput
+                          inputMode="numeric"
+                          value={form.yeas}
+                          onChange={(ev) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              yeas: ev.target.value.replace(/[^0-9]/g, ''),
+                            }))
+                          }
+                          placeholder="예: 388"
+                        />
+                      </SubField>
+                      <SubField>
+                        <SubFieldLabel>반대표</SubFieldLabel>
+                        <WideVoteInput
+                          inputMode="numeric"
+                          value={form.nays}
+                          onChange={(ev) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              nays: ev.target.value.replace(/[^0-9]/g, ''),
+                            }))
+                          }
+                          placeholder="예: 1"
+                        />
+                      </SubField>
+                      <SubField>
+                        <SubFieldLabel>기권</SubFieldLabel>
+                        <WideVoteInput
+                          inputMode="numeric"
+                          value={form.abstentions}
+                          onChange={(ev) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              abstentions: ev.target.value.replace(
+                                /[^0-9]/g,
+                                '',
+                              ),
+                            }))
+                          }
+                          placeholder="예: 0"
+                        />
+                      </SubField>
+                    </SubFieldPair>
+
+                    {/* 과반선(50%) 눈금과 스프링 판정 배지가 살아 움직이는 표결 전광판 */}
+                    <AnimatePresence initial={false}>
                       {voteStats ? (
-                        <VoteMeterCard>
+                        <VoteMeterCard
+                          as={motion.div}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 4 }}
+                          transition={{ duration: 0.18 }}
+                        >
                           <div className="head">
                             <span className="counts">
                               찬성 <strong>{voteStats.y}</strong> (
@@ -2559,52 +2863,73 @@ export function WarDeclarationFormModal({
                                 ? ` · 기권 ${voteStats.a} (${voteStats.absPct}%)`
                                 : ''}
                             </span>
-                            <VoteVerdictChip $passed={voteStats.passed}>
+                            <VoteVerdictChip
+                              as={motion.span}
+                              key={voteStats.verdict}
+                              initial={{ scale: 0.85 }}
+                              animate={{ scale: 1 }}
+                              transition={{
+                                type: 'spring',
+                                stiffness: 460,
+                                damping: 20,
+                              }}
+                              $passed={voteStats.passed}
+                            >
                               {voteStats.verdict}
                             </VoteVerdictChip>
                           </div>
-                          <VoteStackBar
-                            role="img"
-                            aria-label={`찬성 ${voteStats.yeaPct}%, 반대 ${voteStats.nayPct}%`}
-                          >
-                            <div
-                              className="yea"
-                              style={{ width: `${voteStats.yeaPct}%` }}
-                            />
-                            <div
-                              className="nay"
-                              style={{ width: `${voteStats.nayPct}%` }}
-                            />
-                            <div
-                              className="abs"
-                              style={{ width: `${voteStats.absPct}%` }}
-                            />
-                          </VoteStackBar>
+                          <VoteBarContainer>
+                            <VoteStackBar
+                              role="img"
+                              aria-label={`찬성 ${voteStats.yeaPct}%, 반대 ${voteStats.nayPct}%`}
+                            >
+                              <div
+                                className="yea"
+                                style={{ width: `${voteStats.yeaPct}%` }}
+                              />
+                              <div
+                                className="nay"
+                                style={{ width: `${voteStats.nayPct}%` }}
+                              />
+                              <div
+                                className="abs"
+                                style={{ width: `${voteStats.absPct}%` }}
+                              />
+                            </VoteStackBar>
+                            <MajorityMarker title="과반 기준선 (50%)" aria-hidden />
+                          </VoteBarContainer>
                         </VoteMeterCard>
                       ) : null}
-                    </FieldControl>
-                  </FieldRow>
-                </FormGroup>
+                    </AnimatePresence>
+                  </StudioFieldBlock>
+                </StudioSectionCard>
 
-                {/* ── 3. 어떤 전쟁으로 이어지고 어떻게 끝났나요? ── */}
-                <FormGroup id="war-decl-sec-chain">
+                {/* ── STEP 3. 어떤 전쟁으로 이어지고 어떻게 끝났나요? ── */}
+                <StudioSectionCard id="war-decl-sec-chain">
                   <FriendlySectionHeader>
-                    <FormGroupTitle>
-                      3. 어떤 전쟁으로 이어지고 어떻게 끝났나요?
-                    </FormGroupTitle>
+                    <SectionTitleRow>
+                      <StepNumberPill $tone="emerald">
+                        STEP 3 {stepStatus.step3 ? '✓' : ''}
+                      </StepNumberPill>
+                      <StudioSectionTitle>
+                        3. 어떤 전쟁으로 이어지고 어떻게 끝났나요?
+                      </StudioSectionTitle>
+                    </SectionTitleRow>
                     <SectionSubHint>
                       큰 전쟁에 연결해 두면 해당 전쟁의 참전국 타임라인에 자동으로 반영돼요.
                     </SectionSubHint>
                   </FriendlySectionHeader>
 
                   <DominoChainStack>
-                    {/* Step A: 소속 상위 전쟁 (가장 자주 쓰는 연결) */}
+                    {/* Step A: 소속 상위 전쟁 */}
                     <ChainNode>
                       <ChainNodeDot $color="#4f46e5" />
                       <ChainNodeContent>
                         <ChainNodeTitle>
-                          <FiGitCommit size={12.5} aria-hidden />
-                          <span>소속 전쟁 연결 (예: 제1차 세계대전 · 태평양 전쟁)</span>
+                          <FiGitCommit size={13.5} aria-hidden />
+                          <span>
+                            소속 전쟁 연결 (예: 제1차 세계대전 · 태평양 전쟁)
+                          </span>
                           <OptionalTag>(선택)</OptionalTag>
                         </ChainNodeTitle>
                         <LinkedEventPickerField
@@ -2622,12 +2947,12 @@ export function WarDeclarationFormModal({
                       </ChainNodeContent>
                     </ChainNode>
 
-                    {/* Step B: 교전 마무리 방식 & 강화조약 (칩 클릭 시 날짜·조약 펼침) */}
+                    {/* Step B: 교전 마무리 방식 & 강화조약 */}
                     <ChainNode>
                       <ChainNodeDot $color="#16a34a" />
                       <ChainNodeContent>
                         <ChainNodeTitle>
-                          <FiCheckCircle size={12.5} aria-hidden />
+                          <FiCheckCircle size={13.5} aria-hidden />
                           <span>전쟁은 어떻게 마무리됐나요?</span>
                           {belligerenceDurationLabel ? (
                             <DurationPill>
@@ -2653,100 +2978,114 @@ export function WarDeclarationFormModal({
                           }}
                         />
 
-                        {showTerminationDetailFields ? (
-                          <TerminationDetailsCard>
-                            <SubFieldPair $cols={2}>
-                              <SubField>
-                                <SubFieldLabel>종결 · 휴전 날짜</SubFieldLabel>
-                                <InlineDateField
-                                  appearance="field"
-                                  anchorId={endedAnchorId}
-                                  pickerOpen={activeDatePicker === 'ended'}
-                                  era={form.endedEra}
-                                  year={form.endedYear}
-                                  month={form.endedMonth}
-                                  day={form.endedDay}
-                                  onEra={(era) =>
-                                    setForm((prev) => ({
-                                      ...prev,
-                                      endedEra: era,
-                                    }))
-                                  }
-                                  onYear={(val) =>
-                                    setForm((prev) => ({
-                                      ...prev,
-                                      endedYear: val,
-                                    }))
-                                  }
-                                  onMonth={(val) =>
-                                    setForm((prev) => ({
-                                      ...prev,
-                                      endedMonth: val,
-                                    }))
-                                  }
-                                  onDay={(val) =>
-                                    setForm((prev) => ({
-                                      ...prev,
-                                      endedDay: val,
-                                    }))
-                                  }
-                                  onOpenPicker={() =>
-                                    setActiveDatePicker('ended')
-                                  }
-                                  ariaLabel="교전 종결 시점"
-                                />
-                              </SubField>
-                              <SubField>
-                                <SubFieldLabel>체결된 강화 · 평화 조약</SubFieldLabel>
-                                <SearchableSelect
-                                  options={peaceTreatyOptions}
-                                  value={form.peaceTreatyId}
-                                  onChange={(next) =>
-                                    setForm((prev) => ({
-                                      ...prev,
-                                      peaceTreatyId: next,
-                                    }))
-                                  }
-                                  placeholder={
-                                    form.declaring
-                                      ? '베르사유 조약 · 파리 조약 등 검색'
-                                      : '위에서 선포국을 먼저 골라 주세요'
-                                  }
-                                  searchPlaceholder="조약 이름 검색..."
-                                  ariaLabel="종결 강화·평화 조약"
-                                  disabled={!form.declaring}
-                                  clearable
-                                />
-                              </SubField>
-                            </SubFieldPair>
-                            <Input
-                              value={form.terminationNote}
-                              onChange={(ev) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  terminationNote: ev.target.value,
-                                }))
-                              }
-                              placeholder="마무리 한 줄 설명 (예: 1918.11.11 콩피에뉴 휴전협정 후 베르사유 조약 체결)"
-                            />
-                            {isDateInverted ? (
-                              <AlertBox variant="danger" icon={<FiAlertCircle />}>
-                                종결 날짜가 선포 날짜보다 앞섭니다. 날짜를 확인해 주세요.
-                              </AlertBox>
-                            ) : null}
-                          </TerminationDetailsCard>
-                        ) : (
-                          <InlineTextToggleBtn
-                            type="button"
-                            onClick={() => setShowTerminationDetails(true)}
-                          >
-                            + 종결 날짜나 강화조약도 함께 적기 (진행 중이면 비워 두어도 돼요)
-                          </InlineTextToggleBtn>
-                        )}
+                        <AnimatePresence initial={false}>
+                          {showTerminationDetailFields ? (
+                            <TerminationDetailsCard
+                              as={motion.div}
+                              key="termination-details"
+                              initial={{ opacity: 0, y: -6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -6 }}
+                              transition={{ duration: 0.18 }}
+                            >
+                              <SubFieldPair $cols={2}>
+                                <SubField>
+                                  <SubFieldLabel>종결 · 휴전 날짜</SubFieldLabel>
+                                  <InlineDateField
+                                    appearance="field"
+                                    anchorId={endedAnchorId}
+                                    pickerOpen={activeDatePicker === 'ended'}
+                                    era={form.endedEra}
+                                    year={form.endedYear}
+                                    month={form.endedMonth}
+                                    day={form.endedDay}
+                                    onEra={(era) =>
+                                      setForm((prev) => ({
+                                        ...prev,
+                                        endedEra: era,
+                                      }))
+                                    }
+                                    onYear={(val) =>
+                                      setForm((prev) => ({
+                                        ...prev,
+                                        endedYear: val,
+                                      }))
+                                    }
+                                    onMonth={(val) =>
+                                      setForm((prev) => ({
+                                        ...prev,
+                                        endedMonth: val,
+                                      }))
+                                    }
+                                    onDay={(val) =>
+                                      setForm((prev) => ({
+                                        ...prev,
+                                        endedDay: val,
+                                      }))
+                                    }
+                                    onOpenPicker={() =>
+                                      setActiveDatePicker('ended')
+                                    }
+                                    ariaLabel="교전 종결 시점"
+                                  />
+                                </SubField>
+                                <SubField>
+                                  <SubFieldLabel>
+                                    체결된 강화 · 평화 조약
+                                  </SubFieldLabel>
+                                  <SearchableSelect
+                                    options={peaceTreatyOptions}
+                                    value={form.peaceTreatyId}
+                                    onChange={(next) =>
+                                      setForm((prev) => ({
+                                        ...prev,
+                                        peaceTreatyId: next,
+                                      }))
+                                    }
+                                    placeholder={
+                                      form.declaring
+                                        ? '베르사유 조약 · 파리 조약 등 검색'
+                                        : '위에서 선포국을 먼저 골라 주세요'
+                                    }
+                                    searchPlaceholder="조약 이름 검색..."
+                                    ariaLabel="종결 강화·평화 조약"
+                                    disabled={!form.declaring}
+                                    clearable
+                                  />
+                                </SubField>
+                              </SubFieldPair>
+                              <WideInput
+                                value={form.terminationNote}
+                                onChange={(ev) =>
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    terminationNote: ev.target.value,
+                                  }))
+                                }
+                                placeholder="마무리 한 줄 설명 (예: 1918.11.11 콩피에뉴 휴전협정 후 베르사유 조약 체결)"
+                              />
+                              {isDateInverted ? (
+                                <AlertBox
+                                  variant="danger"
+                                  icon={<FiAlertCircle />}
+                                >
+                                  종결 날짜가 선포 날짜보다 앞섭니다. 날짜를 확인해 주세요.
+                                </AlertBox>
+                              ) : null}
+                            </TerminationDetailsCard>
+                          ) : (
+                            <InlineTextToggleBtn
+                              type="button"
+                              onClick={() => setShowTerminationDetails(true)}
+                            >
+                              + 종결 날짜나 강화조약도 함께 적기 (진행 중이면 비워 두어도 돼요)
+                            </InlineTextToggleBtn>
+                          )}
+                        </AnimatePresence>
                       </ChainNodeContent>
                     </ChainNode>
 
-                    {/* Step C: 선행 최후통첩 & 개전 비화·연설 보조 사건 (접이식 서랍) */}
+                    {/* Step C: 이미 등록된 관련 사건 연결 (없어도 되는 선택 연결 — 탭으로 한 번에 하나씩만 깔끔하게 노출) */}
                     <ChainNode $last>
                       <ChainNodeDot $color="#d97706" />
                       <ChainNodeContent>
@@ -2759,152 +3098,140 @@ export function WarDeclarationFormModal({
                             }
                           >
                             <span className="left">
-                              <FiBookOpen size={13} aria-hidden />
+                              <FiBookOpen size={14} aria-hidden />
                               <span>
-                                선행 최후통첩 · 개전 연설/비화 사건 연결
+                                이미 등록된 관련 사건(최후통첩·연설 등)이 있을 때만 연결 — 없어도 됩니다
                                 {extraLinkedCount > 0
-                                  ? ` (${extraLinkedCount}건 설정됨)`
+                                  ? ` (${extraLinkedCount}건 연결됨)`
                                   : ''}
                               </span>
                             </span>
                             <span className="right">
-                              {showExtraEventsDrawer ? '접기' : '펼쳐서 연결'}
+                              {showExtraEventsDrawer ? '접기' : '있을 때만 펼치기'}
                               {showExtraEventsDrawer ? (
-                                <FiChevronUp size={13} />
+                                <FiChevronUp size={14} />
                               ) : (
-                                <FiChevronDown size={13} />
+                                <FiChevronDown size={14} />
                               )}
                             </span>
                           </CollapsibleTriggerBtn>
 
-                          {showExtraEventsDrawer ? (
-                            <CollapsibleBody>
-                              <SubField>
-                                <SubFieldLabel>
-                                  선행 최후통첩 · 외교 각서 사건
-                                </SubFieldLabel>
-                                <LinkedEventPickerField
-                                  inputId="war-decl-ultimatum-event"
-                                  value={form.ultimatumEventId}
-                                  initialTitle={
-                                    form.ultimatumEventInitialTitle || null
-                                  }
-                                  nearYear={signedDeclaredYear}
-                                  onChange={(nextId) =>
-                                    setForm((prev) => ({
-                                      ...prev,
-                                      ultimatumEventId: nextId,
-                                    }))
-                                  }
-                                />
-                              </SubField>
+                          <AnimatePresence initial={false}>
+                            {showExtraEventsDrawer ? (
+                              <CollapsibleBody
+                                as={motion.div}
+                                initial={{ opacity: 0, y: -6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -6 }}
+                                transition={{ duration: 0.16 }}
+                              >
+                                <RelatedEventGuideNote>
+                                  이 모달의 선전포고 기록만 저장해도 충분해요. 사건 메뉴에 이미 작성된 직전 최후통첩이나 당일 연설·일화 글이 있을 때만 골라서 이어 주세요.
+                                </RelatedEventGuideNote>
 
-                              <SubField>
-                                <SubFieldLabel>
-                                  개전 연설 · 각서 전달 등 보조 서사 사건
-                                </SubFieldLabel>
-                                <ChoiceChips
-                                  ariaLabel="보조 서술 사건 연결 방식"
-                                  options={NARRATIVE_MODE_OPTIONS}
-                                  value={form.narrativeMode}
-                                  onChange={(next) => {
-                                    if (next) {
-                                      setForm((prev) => ({
-                                        ...prev,
-                                        narrativeMode: next,
-                                      }))
-                                    }
-                                  }}
-                                />
-                                {form.narrativeMode === 'existing' ? (
-                                  <LinkedEventPickerField
-                                    value={form.narrativeEventId}
-                                    initialTitle={
-                                      form.narrativeEventInitialTitle || null
-                                    }
-                                    nearYear={signedDeclaredYear}
-                                    onChange={(nextId) =>
-                                      setForm((prev) => ({
-                                        ...prev,
-                                        narrativeEventId: nextId,
-                                      }))
-                                    }
-                                  />
-                                ) : null}
-                                {form.narrativeMode === 'create' ? (
-                                  <InlineEventBox>
-                                    <SubFieldPair $cols={2}>
-                                      <SubField>
-                                        <SubFieldLabel>
-                                          새 사건 제목 (비워 두면 자동 생성)
-                                        </SubFieldLabel>
-                                        <Input
-                                          value={form.inlineEventTitle}
-                                          onChange={(ev) =>
-                                            setForm((prev) => ({
-                                              ...prev,
-                                              inlineEventTitle: ev.target.value,
-                                            }))
-                                          }
-                                          placeholder="예: 루스벨트 대통령의 치욕의 날 의회 연설"
-                                        />
-                                      </SubField>
-                                      <SubField>
-                                        <SubFieldLabel>사건 분야</SubFieldLabel>
-                                        <ChoiceChips
-                                          ariaLabel="보조 사건 분야"
-                                          options={INLINE_DOMAIN_OPTIONS}
-                                          value={form.inlineEventDomain}
-                                          onChange={(next) => {
-                                            if (next) {
-                                              setForm((prev) => ({
-                                                ...prev,
-                                                inlineEventDomain: next,
-                                              }))
-                                            }
-                                          }}
-                                        />
-                                      </SubField>
-                                    </SubFieldPair>
-                                    <SubField>
-                                      <SubFieldLabel>사건 이야기 요약</SubFieldLabel>
-                                      <PersonRegisterModalTextarea
-                                        rows={2}
-                                        value={form.inlineEventDescription}
-                                        onChange={(ev) =>
-                                          setForm((prev) => ({
-                                            ...prev,
-                                            inlineEventDescription:
-                                              ev.target.value,
-                                          }))
-                                        }
-                                        placeholder="각서 전달 과정, 의회 연설, 당시 분위기 등을 편하게 적어 주세요"
-                                      />
-                                    </SubField>
-                                  </InlineEventBox>
-                                ) : null}
-                              </SubField>
-                            </CollapsibleBody>
-                          ) : null}
+                                <RelatedEventTabBar role="tablist" aria-label="관련 사건 종류">
+                                  <RelatedEventTabBtn
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={relatedEventTab === 'ultimatum'}
+                                    $active={relatedEventTab === 'ultimatum'}
+                                    onClick={() => setRelatedEventTab('ultimatum')}
+                                  >
+                                    <FiClock size={13} aria-hidden />
+                                    <span>직전 최후통첩 사건</span>
+                                    {form.ultimatumEventId ? (
+                                      <span className="linked-dot">✓ 연결됨</span>
+                                    ) : null}
+                                  </RelatedEventTabBtn>
+                                  <RelatedEventTabBtn
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={relatedEventTab === 'narrative'}
+                                    $active={relatedEventTab === 'narrative'}
+                                    onClick={() => setRelatedEventTab('narrative')}
+                                  >
+                                    <FiBookOpen size={13} aria-hidden />
+                                    <span>당일 연설·비화 사건</span>
+                                    {form.narrativeEventId ? (
+                                      <span className="linked-dot">✓ 연결됨</span>
+                                    ) : null}
+                                  </RelatedEventTabBtn>
+                                </RelatedEventTabBar>
+
+                                {relatedEventTab === 'ultimatum' ? (
+                                  <SubField key="tab-ultimatum">
+                                    <SubFieldLabel>
+                                      개전 직전에 보낸 최후통첩 · 외교 각서 사건 검색
+                                    </SubFieldLabel>
+                                    <LinkedEventPickerField
+                                      inputId="war-decl-ultimatum-event"
+                                      value={form.ultimatumEventId}
+                                      initialTitle={
+                                        form.ultimatumEventInitialTitle || null
+                                      }
+                                      nearYear={signedDeclaredYear}
+                                      onChange={(nextId) =>
+                                        setForm((prev) => ({
+                                          ...prev,
+                                          ultimatumEventId: nextId,
+                                        }))
+                                      }
+                                    />
+                                    <StudioFieldHint>
+                                      예: 오스트리아의 7월 최후통첩, 포츠담 선언 등 개전 직전 통첩 사건
+                                    </StudioFieldHint>
+                                  </SubField>
+                                ) : (
+                                  <SubField key="tab-narrative">
+                                    <SubFieldLabel>
+                                      선전포고 당일의 연설 · 각서 전달 비화 사건 검색
+                                    </SubFieldLabel>
+                                    <LinkedEventPickerField
+                                      inputId="war-decl-narrative-event"
+                                      value={form.narrativeEventId}
+                                      initialTitle={
+                                        form.narrativeEventInitialTitle || null
+                                      }
+                                      nearYear={signedDeclaredYear}
+                                      onChange={(nextId) =>
+                                        setForm((prev) => ({
+                                          ...prev,
+                                          narrativeEventId: nextId,
+                                        }))
+                                      }
+                                    />
+                                    <StudioFieldHint>
+                                      예: 루스벨트 치욕의 날 의회 연설, 대사관 개전 각서 수교 일화 등
+                                    </StudioFieldHint>
+                                  </SubField>
+                                )}
+                              </CollapsibleBody>
+                            ) : null}
+                          </AnimatePresence>
                         </CollapsibleHelperBox>
                       </ChainNodeContent>
                     </ChainNode>
                   </DominoChainStack>
-                </FormGroup>
+                </StudioSectionCard>
               </ColumnStack>
             </WorkspaceColumns>
           </StudioCanvas>
-        </PersonRegisterModalFormScroll>
+        </WideModalScroll>
 
         <PersonRegisterModalStickyFooter>
           <FooterHint $warning={!canSubmit && (isDateInverted || isSameParty)}>
             {canSubmit ? (
               <FooterReadyGroup>
                 <FooterReadyBadge>
-                  <FiCheck size={12} aria-hidden />
+                  <FiCheck size={13} aria-hidden />
                   바로 저장할 수 있어요!
                 </FooterReadyBadge>
-                <span>단축키 ⌘/Ctrl + Enter</span>
+                <span>
+                  {stepStatus.filledDetailsCount > 0
+                    ? `상세 항목 ${stepStatus.filledDetailsCount}개 함께 기록됨 · `
+                    : ''}
+                  단축키 ⌘/Ctrl + Enter
+                </span>
               </FooterReadyGroup>
             ) : (
               <FooterStepPromptRow>
@@ -3014,53 +3341,338 @@ export function WarDeclarationFormModal({
   )
 }
 
+/* ═══════════════════════════ Keyframe Animations ═══════════════════════════ */
+
+const cometGlide = keyframes`
+  0% { transform: translateX(-100%); opacity: 0.25; }
+  45% { opacity: 1; }
+  100% { transform: translateX(260%); opacity: 0.2; }
+`
+
+const lightningFlash = keyframes`
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+`
+
+const radarAura = keyframes`
+  0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.28); }
+  70% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+`
+
+const shieldAura = keyframes`
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.26); }
+  70% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+`
+
+const severPulse = keyframes`
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.16); }
+`
+
 /* ═══════════════════════════ Styled Components ═══════════════════════════ */
+
+const WideModalScroll = styled(PersonRegisterModalFormScroll)`
+  padding: 24px 32px 32px;
+
+  @media (max-width: 768px) {
+    padding: 16px 16px 24px;
+  }
+`
 
 const StudioCanvas = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
+  width: 100%;
+`
+
+const StudioSectionCard = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 24px 26px;
+  border-radius: 16px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(24, 24, 27, 0.55)' : '#ffffff'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'none'
+      : '0 1px 3px rgba(15, 23, 42, 0.04)'};
+
+  @media (max-width: 768px) {
+    padding: 18px 16px;
+    gap: 18px;
+  }
 `
 
 const FriendlySectionHeader = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const SectionTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+`
+
+const StepNumberPill = styled.span<{ $tone: 'crimson' | 'indigo' | 'emerald' }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  ${({ theme, $tone }) => {
+    if ($tone === 'crimson') {
+      return css`
+        background: ${theme.mode === 'dark'
+          ? 'rgba(239, 68, 68, 0.2)'
+          : 'rgba(220, 38, 38, 0.1)'};
+        color: ${theme.mode === 'dark' ? '#fca5a5' : '#dc2626'};
+      `
+    }
+    if ($tone === 'emerald') {
+      return css`
+        background: ${theme.mode === 'dark'
+          ? 'rgba(22, 163, 74, 0.2)'
+          : 'rgba(22, 163, 74, 0.1)'};
+        color: ${theme.mode === 'dark' ? '#86efac' : '#15803d'};
+      `
+    }
+    return css`
+      background: ${theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.22)'
+        : 'rgba(99, 102, 241, 0.1)'};
+      color: ${theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'};
+    `
+  }}
+`
+
+const StudioSectionTitle = styled.h3`
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const SectionSubHint = styled.p`
   margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const StudioFieldBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+`
+
+const StudioFieldLabelRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+`
+
+const StudioFieldLabel = styled.label`
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const StudioFieldHint = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const WideInput = styled(Input)`
+  width: 100%;
+  max-width: none;
+  min-height: 44px;
+  font-size: 14px;
+  padding: 10px 14px;
+`
+
+const WideVoteInput = styled(Input)`
+  width: 100%;
+  max-width: none;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 10px 14px;
+`
+
+const WideTextarea = styled(PersonRegisterModalTextarea)`
+  width: 100%;
+  max-width: none;
+  font-size: 14px;
+  line-height: 1.55;
+  padding: 11px 14px;
+`
+
+const PillActionBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.primary};
+  font: inherit;
   font-size: 12px;
-  line-height: 1.45;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : 'rgba(99, 102, 241, 0.06)'};
+  }
 `
 
 const ConfrontationStage = styled.section<{ $accentRgb: string }>`
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px 18px;
-  border-radius: 14px;
-  border: 1px solid
+  gap: 16px;
+  padding: 20px 26px 22px;
+  border-radius: 18px;
+  border: 1.5px solid
     ${({ theme, $accentRgb }) =>
       theme.mode === 'dark'
-        ? `rgba(${$accentRgb}, 0.32)`
-        : `rgba(${$accentRgb}, 0.22)`};
+        ? `rgba(${$accentRgb}, 0.38)`
+        : `rgba(${$accentRgb}, 0.28)`};
   background: ${({ theme, $accentRgb }) =>
     theme.mode === 'dark'
-      ? `linear-gradient(135deg, rgba(${$accentRgb}, 0.11) 0%, rgba(15, 23, 42, 0.74) 55%, rgba(37, 99, 235, 0.08) 100%)`
-      : `linear-gradient(135deg, rgba(${$accentRgb}, 0.05) 0%, rgba(248, 250, 252, 0.96) 55%, rgba(37, 99, 235, 0.04) 100%)`};
+      ? `linear-gradient(135deg, rgba(${$accentRgb}, 0.13) 0%, rgba(15, 23, 42, 0.78) 55%, rgba(37, 99, 235, 0.09) 100%)`
+      : `linear-gradient(135deg, rgba(${$accentRgb}, 0.06) 0%, rgba(248, 250, 252, 0.98) 55%, rgba(37, 99, 235, 0.045) 100%)`};
+  transition: border-color 260ms ease, background 260ms ease;
+
+  @media (max-width: 768px) {
+    padding: 16px;
+  }
+`
+
+const CrisisMeterRibbon = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  .meter-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  .meter-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const CrisisLevelBars = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+`
+
+const CrisisBarSegment = styled.span<{ $active: boolean; $rgb: string }>`
+  width: 16px;
+  height: 7px;
+  border-radius: 999px;
+  background: ${({ theme, $active, $rgb }) =>
+    $active ? `rgba(${$rgb}, 0.85)` : theme.colors.border.light};
+  transition: background 220ms ease, transform 220ms ease;
+`
+
+const CrisisStatusBadge = styled.span<{
+  $concluded: boolean
+  $rgb: string
+  $accent: string
+}>`
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  ${({ theme, $concluded, $rgb, $accent }) =>
+    $concluded
+      ? css`
+          background: ${theme.mode === 'dark'
+            ? 'rgba(22, 163, 74, 0.24)'
+            : 'rgba(22, 163, 74, 0.12)'};
+          color: ${theme.mode === 'dark' ? '#86efac' : '#15803d'};
+        `
+      : css`
+          background: ${theme.mode === 'dark'
+            ? `rgba(${$rgb}, 0.24)`
+            : `rgba(${$rgb}, 0.11)`};
+          color: ${theme.mode === 'dark' ? '#f8fafc' : $accent};
+        `}
+`
+
+const DurationHighlightPill = styled.span<{ $tone?: 'amber' | 'emerald' }>`
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: ${({ theme, $tone }) =>
+    $tone === 'amber'
+      ? theme.mode === 'dark'
+        ? 'rgba(217, 119, 6, 0.22)'
+        : 'rgba(217, 119, 6, 0.11)'
+      : theme.mode === 'dark'
+        ? 'rgba(22, 163, 74, 0.22)'
+        : 'rgba(22, 163, 74, 0.11)'};
+  color: ${({ theme, $tone }) =>
+    $tone === 'amber'
+      ? theme.mode === 'dark'
+        ? '#fcd34d'
+        : '#b45309'
+      : theme.mode === 'dark'
+        ? '#86efac'
+        : '#15803d'};
 `
 
 const ArenaGrid = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 144px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) 196px minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
 
-  @media (max-width: 780px) {
+  @media (max-width: 880px) {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 12px;
   }
 `
 
@@ -3070,38 +3682,39 @@ const BelligerentDossier = styled.div<{
 }>`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 94px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 120px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1.5px solid
     ${({ theme, $side, $filled }) =>
       !$filled
         ? theme.colors.border.default
         : $side === 'declaring'
           ? theme.mode === 'dark'
-            ? 'rgba(239, 68, 68, 0.35)'
-            : 'rgba(220, 38, 38, 0.25)'
+            ? 'rgba(239, 68, 68, 0.42)'
+            : 'rgba(220, 38, 38, 0.3)'
           : theme.mode === 'dark'
-            ? 'rgba(59, 130, 246, 0.35)'
-            : 'rgba(37, 99, 235, 0.25)'};
+            ? 'rgba(59, 130, 246, 0.42)'
+            : 'rgba(37, 99, 235, 0.3)'};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.8)' : '#ffffff'};
-  transition: border-color 140ms ease;
+    theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.84)' : '#ffffff'};
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 `
 
 const DossierHeaderRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
 `
 
 const DossierEyebrow = styled.div<{ $side: 'declaring' | 'target' }>`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
+  gap: 6px;
+  font-size: 13px;
   font-weight: 700;
   color: ${({ theme, $side }) =>
     $side === 'declaring'
@@ -3114,9 +3727,9 @@ const DossierEyebrow = styled.div<{ $side: 'declaring' | 'target' }>`
 `
 
 const RequiredMiniBadge = styled.span<{ $done: boolean }>`
-  padding: 1px 7px;
+  padding: 3px 10px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   background: ${({ theme, $done }) =>
     $done
@@ -3136,56 +3749,60 @@ const DossierSelectedBody = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
 `
 
 const DossierIdentityButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   min-width: 0;
   flex: 1;
-  padding: 2px 0;
+  padding: 4px 0;
   border: none;
   background: transparent;
   text-align: left;
   cursor: pointer;
 
   .change-hint {
-    margin-left: 6px;
-    padding: 1px 6px;
-    border-radius: 5px;
-    font-size: 10.5px;
+    margin-left: 8px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
     font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    color: ${({ theme }) => theme.colors.text.secondary};
     background: ${({ theme }) => theme.colors.background.secondary};
-    opacity: 0.75;
-    transition: opacity 120ms ease, color 120ms ease;
+    border: 1px solid ${({ theme }) => theme.colors.border.light};
+    transition: border-color 120ms ease, color 120ms ease;
+    flex-shrink: 0;
   }
 
   &:hover .change-hint {
-    opacity: 1;
     color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
   }
 `
 
-const DossierEmblem = styled.span<{ $side: 'declaring' | 'target' }>`
+const DossierEmblem = styled.span<{
+  $side: 'declaring' | 'target'
+  $engaged?: boolean
+}>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 50px;
+  height: 50px;
+  border-radius: 13px;
   flex-shrink: 0;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 23px;
+  font-weight: 800;
   background: ${({ theme, $side }) =>
     $side === 'declaring'
       ? theme.mode === 'dark'
-        ? 'rgba(239, 68, 68, 0.16)'
+        ? 'rgba(239, 68, 68, 0.18)'
         : 'rgba(220, 38, 38, 0.09)'
       : theme.mode === 'dark'
-        ? 'rgba(59, 130, 246, 0.16)'
+        ? 'rgba(59, 130, 246, 0.18)'
         : 'rgba(37, 99, 235, 0.09)'};
   color: ${({ theme, $side }) =>
     $side === 'declaring'
@@ -3195,29 +3812,43 @@ const DossierEmblem = styled.span<{ $side: 'declaring' | 'target' }>`
       : theme.mode === 'dark'
         ? '#93c5fd'
         : '#1d4ed8'};
+  ${({ $engaged, $side }) =>
+    $engaged &&
+    css`
+      animation: ${$side === 'declaring' ? radarAura : shieldAura} 2.2s
+        ease-out infinite;
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    `}
 `
 
 const DossierNameBlock = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 `
 
 const DossierCountryName = styled.strong`
   display: inline-flex;
   align-items: center;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
   color: ${({ theme }) => theme.colors.text.primary};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+
+  > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 `
 
 const DossierPolitySub = styled.span`
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3227,9 +3858,9 @@ const DossierClearBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -3248,12 +3879,12 @@ const DossierEmptyTrigger = styled.button`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 5px;
   width: 100%;
-  min-height: 54px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  min-height: 68px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1.5px dashed ${({ theme }) => theme.colors.border.medium};
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.primary};
   font: inherit;
@@ -3263,13 +3894,13 @@ const DossierEmptyTrigger = styled.button`
   .main {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 13px;
+    gap: 7px;
+    font-size: 15px;
     font-weight: 700;
   }
 
   .sub {
-    font-size: 11px;
+    font-size: 12.5px;
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
@@ -3277,14 +3908,9 @@ const DossierEmptyTrigger = styled.button`
     border-color: ${({ theme }) => theme.colors.primary};
     background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.09)'
-        : 'rgba(99, 102, 241, 0.04)'};
+        ? 'rgba(99, 102, 241, 0.1)'
+        : 'rgba(99, 102, 241, 0.045)'};
   }
-`
-
-const dashFlow = keyframes`
-  from { background-position: 0 0; }
-  to { background-position: 24px 0; }
 `
 
 const VectorHub = styled.div`
@@ -3292,51 +3918,114 @@ const VectorHub = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 10px;
 `
 
 const VectorBadge = styled.div<{ $rgb: string; $accent: string }>`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  gap: 6px;
+  padding: 6px 14px;
   border-radius: 999px;
   background: ${({ theme, $rgb }) =>
     theme.mode === 'dark'
-      ? `rgba(${$rgb}, 0.22)`
-      : `rgba(${$rgb}, 0.11)`};
-  border: 1px solid ${({ $rgb }) => `rgba(${$rgb}, 0.36)`};
+      ? `rgba(${$rgb}, 0.24)`
+      : `rgba(${$rgb}, 0.12)`};
+  border: 1px solid ${({ $rgb }) => `rgba(${$rgb}, 0.4)`};
   color: ${({ theme, $accent }) =>
     theme.mode === 'dark' ? '#f8fafc' : $accent};
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 700;
   white-space: nowrap;
 `
 
-const VectorTrack = styled.div<{ $rgb: string; $dashed?: boolean }>`
+const KineticBeamStage = styled.div<{
+  $rgb: string
+  $mode: 'comet' | 'countdown' | 'shield' | 'lightning' | 'flip' | 'sever'
+  $engaged: boolean
+}>`
+  position: relative;
+  display: flex;
+  align-items: center;
   width: 100%;
-  height: 3px;
-  border-radius: 999px;
-  ${({ $rgb, $dashed }) =>
-    $dashed
-      ? css`
-          background-image: repeating-linear-gradient(
-            90deg,
-            rgba(${$rgb}, 0.75) 0 8px,
-            transparent 8px 14px
-          );
-          background-size: 24px 3px;
-          animation: ${dashFlow} 1.1s linear infinite;
-        `
-      : css`
-          background: linear-gradient(
-            90deg,
-            rgba(${$rgb}, 0.25) 0%,
-            rgba(${$rgb}, 0.85) 100%
-          );
-        `}
+  height: 18px;
 
-  @media (max-width: 780px) {
+  .base-rail {
+    position: relative;
+    flex: 1;
+    height: 4px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: ${({ $rgb, $mode }) =>
+      $mode === 'lightning'
+        ? `repeating-linear-gradient(90deg, rgba(${$rgb}, 0.72) 0 8px, transparent 8px 14px)`
+        : `rgba(${$rgb}, 0.24)`};
+    ${({ $mode }) =>
+      $mode === 'lightning' &&
+      css`
+        animation: ${lightningFlash} 0.9s ease-in-out infinite;
+      `}
+  }
+
+  .traveling-pulse {
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 36%;
+    height: 4px;
+    border-radius: 999px;
+    background: ${({ $rgb }) =>
+      `linear-gradient(90deg, transparent 0%, rgba(${$rgb}, 0.95) 75%, #ffffff 100%)`};
+    animation: ${cometGlide}
+      ${({ $mode }) =>
+        $mode === 'lightning'
+          ? '0.85s'
+          : $mode === 'countdown'
+            ? '1.9s'
+            : '1.45s'}
+      ease-in-out infinite;
+    opacity: ${({ $engaged }) => ($engaged ? 1 : 0.45)};
+  }
+
+  .arrow-head {
+    margin-left: 4px;
+    font-size: 11px;
+    line-height: 1;
+    color: ${({ $rgb }) => `rgb(${$rgb})`};
+  }
+
+  .half {
+    flex: 1;
+    height: 3px;
+    border-radius: 999px;
+    background: ${({ $rgb }) =>
+      `repeating-linear-gradient(90deg, rgba(${$rgb}, 0.65) 0 6px, transparent 6px 11px)`};
+  }
+
+  .sever-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin: 0 5px;
+    border-radius: 50%;
+    background: rgba(220, 38, 38, 0.14);
+    color: #dc2626;
+    font-size: 11px;
+    font-weight: 800;
+    animation: ${severPulse} 1.6s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .base-rail,
+    .traveling-pulse,
+    .sever-mark {
+      animation: none;
+    }
+  }
+
+  @media (max-width: 880px) {
     display: none;
   }
 `
@@ -3344,20 +4033,23 @@ const VectorTrack = styled.div<{ $rgb: string; $dashed?: boolean }>`
 const SwapDirectionPill = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.secondary};
   font: inherit;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
   }
 `
 
@@ -3365,21 +4057,21 @@ const ExtraDominoStack = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
-  padding-top: 6px;
+  gap: 7px;
+  padding-top: 10px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const DominoChip = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 6px;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
 
   button {
@@ -3396,15 +4088,15 @@ const DominoChip = styled.span`
 const AddDominoBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 8px;
-  border-radius: 6px;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font: inherit;
-  font-size: 11.5px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
 
   &:hover {
@@ -3415,32 +4107,135 @@ const AddDominoBtn = styled.button`
 
 const DispatchTickerBar = styled.div<{ $ready: boolean }>`
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 10px 13px;
-  border-radius: 10px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 13px;
   border: 1px solid
     ${({ theme, $ready }) =>
       $ready ? theme.colors.border.default : theme.colors.border.light};
   background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'rgba(15, 23, 42, 0.68)'
-      : 'rgba(255, 255, 255, 0.88)'};
+      ? 'rgba(15, 23, 42, 0.74)'
+      : 'rgba(255, 255, 255, 0.94)'};
+`
+
+const WaxSealMedallion = styled.div<{ $rgb: string; $ready: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px dashed
+    ${({ $rgb, $ready }) =>
+      $ready ? `rgba(${$rgb}, 0.65)` : 'rgba(148, 163, 184, 0.35)'};
+  background: ${({ theme, $rgb, $ready }) =>
+    !$ready
+      ? theme.colors.background.secondary
+      : theme.mode === 'dark'
+        ? `rgba(${$rgb}, 0.24)`
+        : `rgba(${$rgb}, 0.12)`};
+  color: ${({ theme, $rgb, $ready }) =>
+    !$ready
+      ? theme.colors.text.tertiary
+      : theme.mode === 'dark'
+        ? '#f8fafc'
+        : `rgb(${$rgb})`};
+  font-size: 16px;
+  font-weight: 900;
+  box-shadow: ${({ $rgb, $ready }) =>
+    $ready ? `0 3px 10px rgba(${$rgb}, 0.18)` : 'none'};
+`
+
+const DispatchContentStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+
+  .top-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
 `
 
 const DispatchKicker = styled.span<{ $accent: string }>`
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.03em;
   color: ${({ $accent }) => $accent};
   flex-shrink: 0;
 `
 
+const VisualTokenStrip = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+`
+
+const SummaryToken = styled.span<{
+  $tone: 'neutral' | 'crimson' | 'blue' | 'indigo' | 'emerald' | 'slate'
+}>`
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  ${({ theme, $tone }) => {
+    if ($tone === 'slate') {
+      return css`
+        padding: 0 2px;
+        color: ${theme.colors.text.tertiary};
+      `
+    }
+    if ($tone === 'crimson') {
+      return css`
+        background: ${theme.mode === 'dark'
+          ? 'rgba(239, 68, 68, 0.2)'
+          : 'rgba(220, 38, 38, 0.09)'};
+        color: ${theme.mode === 'dark' ? '#fca5a5' : '#b91c1c'};
+      `
+    }
+    if ($tone === 'blue') {
+      return css`
+        background: ${theme.mode === 'dark'
+          ? 'rgba(59, 130, 246, 0.2)'
+          : 'rgba(37, 99, 235, 0.09)'};
+        color: ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'};
+      `
+    }
+    if ($tone === 'indigo') {
+      return css`
+        background: ${theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.22)'
+          : 'rgba(99, 102, 241, 0.1)'};
+        color: ${theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'};
+      `
+    }
+    if ($tone === 'emerald') {
+      return css`
+        background: ${theme.mode === 'dark'
+          ? 'rgba(22, 163, 74, 0.22)'
+          : 'rgba(22, 163, 74, 0.1)'};
+        color: ${theme.mode === 'dark' ? '#86efac' : '#15803d'};
+      `
+    }
+    return css`
+      background: ${theme.colors.background.secondary};
+      color: ${theme.colors.text.secondary};
+    `
+  }}
+`
+
 const DispatchPreviewSentence = styled.p<{ $muted?: boolean }>`
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.6;
   color: ${({ theme, $muted }) =>
     $muted ? theme.colors.text.secondary : theme.colors.text.primary};
   font-weight: ${({ $muted }) => ($muted ? 400 : 500)};
@@ -3449,11 +4244,11 @@ const DispatchPreviewSentence = styled.p<{ $muted?: boolean }>`
 const WorkspaceColumns = styled.div<{ $split: boolean }>`
   display: grid;
   grid-template-columns: ${({ $split }) =>
-    $split ? 'minmax(0, 1.05fr) minmax(0, 0.95fr)' : '1fr'};
-  gap: 22px;
+    $split ? 'minmax(0, 1fr) minmax(0, 1fr)' : '1fr'};
+  gap: 26px;
   align-items: start;
 
-  @media (max-width: 1100px) {
+  @media (max-width: 1120px) {
     grid-template-columns: 1fr;
   }
 `
@@ -3461,18 +4256,23 @@ const WorkspaceColumns = styled.div<{ $split: boolean }>`
 const ColumnStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 22px;
   min-width: 0;
 `
 
-/* ─── 6가지 개전 방식 시나리오 카드 그리드 ─── */
+/* ─── 3×2 와이드 시나리오 카드 그리드 ─── */
 
 const ScenarioKindGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
 
-  @media (max-width: 560px) {
+  @media (max-width: 1360px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 580px) {
     grid-template-columns: 1fr;
   }
 `
@@ -3483,35 +4283,43 @@ const ScenarioKindCard = styled.button<{
   $text: string
   $textDark: string
 }>`
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  padding: 9px 11px;
-  border-radius: 10px;
-  border: 1px solid
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 94px;
+  padding: 13px 15px;
+  border-radius: 13px;
+  border: 1.5px solid
     ${({ theme, $selected, $rgb }) =>
-      $selected ? `rgba(${$rgb}, 0.55)` : theme.colors.border.light};
+      $selected ? `rgba(${$rgb}, 0.68)` : theme.colors.border.light};
   background: ${({ theme, $selected, $rgb }) =>
     $selected
       ? theme.mode === 'dark'
-        ? `rgba(${$rgb}, 0.18)`
-        : `rgba(${$rgb}, 0.08)`
-      : theme.colors.background.primary};
+        ? `rgba(${$rgb}, 0.22)`
+        : `rgba(${$rgb}, 0.085)`
+      : theme.colors.background.secondary};
+  box-shadow: ${({ $selected, $rgb }) =>
+    $selected ? `0 4px 14px rgba(${$rgb}, 0.14)` : 'none'};
   text-align: left;
   font: inherit;
   cursor: pointer;
-  transition: border-color 130ms ease, background 130ms ease;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 
   .card-top {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 9px;
+    width: 100%;
     min-width: 0;
 
     strong {
-      font-size: 12.5px;
+      flex: 1;
+      font-size: 13.5px;
       font-weight: 700;
+      line-height: 1.3;
       color: ${({ theme, $selected, $text, $textDark }) =>
         $selected
           ? theme.mode === 'dark'
@@ -3521,40 +4329,57 @@ const ScenarioKindCard = styled.button<{
     }
   }
 
+  .selected-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: ${({ $rgb }) => `rgb(${$rgb})`};
+    color: #ffffff;
+  }
+
   .icon-wrap {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 7px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
     flex-shrink: 0;
     background: ${({ theme, $rgb }) =>
       theme.mode === 'dark'
-        ? `rgba(${$rgb}, 0.22)`
-        : `rgba(${$rgb}, 0.12)`};
+        ? `rgba(${$rgb}, 0.24)`
+        : `rgba(${$rgb}, 0.13)`};
     color: ${({ theme, $text, $textDark }) =>
       theme.mode === 'dark' ? $textDark : $text};
   }
 
   .card-sub {
+    font-size: 12px;
+    line-height: 1.4;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  .card-example {
     font-size: 11px;
     line-height: 1.35;
     color: ${({ theme }) => theme.colors.text.tertiary};
-    padding-left: 31px;
   }
 
   &:hover {
-    border-color: ${({ $rgb }) => `rgba(${$rgb}, 0.48)`};
+    border-color: ${({ $rgb }) => `rgba(${$rgb}, 0.55)`};
   }
 `
 
 const EscalationTimelineCard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 11px 12px;
-  border-radius: 10px;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 13px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.secondary};
 `
@@ -3562,18 +4387,19 @@ const EscalationTimelineCard = styled.div`
 const EscalationStep = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 `
 
 const StepHeaderRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
+  flex-wrap: wrap;
 `
 
 const StepBadge = styled.span<{ $tone: 'slate' | 'crimson' }>`
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 700;
   color: ${({ theme, $tone }) =>
     $tone === 'crimson'
@@ -3583,12 +4409,17 @@ const StepBadge = styled.span<{ $tone: 'slate' | 'crimson' }>`
       : theme.colors.text.secondary};
 `
 
+const DateOptionalNote = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 const StepDismissBtn = styled.button`
   border: none;
   background: transparent;
   padding: 0;
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.primary};
   cursor: pointer;
@@ -3601,25 +4432,25 @@ const StepDismissBtn = styled.button`
 const EscalationConnector = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 2px 4px;
+  gap: 10px;
+  padding: 4px 4px;
 
   .line {
     width: 2px;
-    height: 16px;
+    height: 18px;
     background: ${({ theme }) => theme.colors.border.medium};
     border-radius: 2px;
-    margin-left: 8px;
+    margin-left: 10px;
   }
 
   .pill {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
     border-radius: 999px;
     background: ${({ theme }) => theme.colors.background.primary};
     border: 1px solid ${({ theme }) => theme.colors.border.default};
-    color: ${({ theme }) => theme.colors.text.secondary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -3627,34 +4458,37 @@ const SparkBar = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
-  margin-top: 5px;
+  gap: 7px;
+  margin-top: 2px;
 
   .kicker {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     color: ${({ theme }) => theme.colors.text.tertiary};
-    margin-right: 2px;
+    margin-right: 4px;
   }
 `
 
 const SparkChip = styled.button<{ $active?: boolean }>`
-  padding: 3px 9px;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid
     ${({ theme, $active }) =>
-      $active ? theme.colors.primary : theme.colors.border.light};
+      $active ? theme.colors.primary : theme.colors.border.default};
   background: ${({ theme, $active }) =>
     $active
       ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.22)'
+        ? 'rgba(99, 102, 241, 0.24)'
         : 'rgba(99, 102, 241, 0.1)'
       : theme.colors.background.secondary};
   color: ${({ theme, $active }) =>
     $active ? theme.colors.primary : theme.colors.text.secondary};
   font: inherit;
-  font-size: 11.5px;
-  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  font-size: 12.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
   cursor: pointer;
   transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
 
@@ -3667,7 +4501,7 @@ const SparkChip = styled.button<{ $active?: boolean }>`
 const CollapsibleHelperBox = styled.div`
   display: flex;
   flex-direction: column;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.secondary};
   overflow: hidden;
@@ -3677,9 +4511,9 @@ const CollapsibleTriggerBtn = styled.button`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 13px 16px;
   border: none;
   background: transparent;
   font: inherit;
@@ -3689,9 +4523,9 @@ const CollapsibleTriggerBtn = styled.button`
   .left {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     min-width: 0;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     color: ${({ theme }) => theme.colors.text.secondary};
 
@@ -3705,10 +4539,10 @@ const CollapsibleTriggerBtn = styled.button`
   .right {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     flex-shrink: 0;
-    font-size: 11.5px;
-    font-weight: 600;
+    font-size: 12.5px;
+    font-weight: 700;
     color: ${({ theme }) => theme.colors.primary};
   }
 
@@ -3720,8 +4554,8 @@ const CollapsibleTriggerBtn = styled.button`
 const CollapsibleBody = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px;
+  gap: 14px;
+  padding: 16px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.primary};
 `
@@ -3730,9 +4564,9 @@ const InlineTextToggleBtn = styled.button`
   align-self: flex-start;
   border: none;
   background: transparent;
-  padding: 2px 0;
+  padding: 4px 0;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.primary};
   cursor: pointer;
@@ -3746,17 +4580,20 @@ const QuickLeaderBar = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 
   .kicker {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
 const QuickLeaderChip = styled.button<{ $selected: boolean }>`
-  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 13px;
   border-radius: 999px;
   border: 1px solid
     ${({ theme, $selected }) =>
@@ -3764,13 +4601,13 @@ const QuickLeaderChip = styled.button<{ $selected: boolean }>`
   background: ${({ theme, $selected }) =>
     $selected
       ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.22)'
+        ? 'rgba(99, 102, 241, 0.24)'
         : 'rgba(99, 102, 241, 0.1)'
       : theme.colors.background.secondary};
   color: ${({ theme, $selected }) =>
     $selected ? theme.colors.primary : theme.colors.text.primary};
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
 
@@ -3779,28 +4616,12 @@ const QuickLeaderChip = styled.button<{ $selected: boolean }>`
   }
 `
 
-const VoteQuickHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-
-  .helpers {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-`
-
 const VoteHelperBtn = styled.button`
   border: none;
   background: transparent;
   padding: 0;
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.primary};
   cursor: pointer;
@@ -3813,16 +4634,16 @@ const VoteHelperBtn = styled.button`
 const ConstitutionalCard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.secondary};
 
   .notes {
     margin: 0;
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: 13px;
+    line-height: 1.5;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
@@ -3831,24 +4652,24 @@ const ConstitutionalTopRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 
   .regime-title {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     flex-wrap: wrap;
-    font-size: 12.5px;
+    font-size: 13.5px;
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
   .rule-tag {
-    padding: 1px 7px;
-    border-radius: 5px;
+    padding: 2px 9px;
+    border-radius: 6px;
     border: 1px solid ${({ theme }) => theme.colors.border.default};
     background: ${({ theme }) => theme.colors.background.primary};
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
@@ -3859,41 +4680,41 @@ const ConstitutionalVerdictBadge = styled.span<{
 }>`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: 5px;
+  padding: 4px 11px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   ${({ theme, $tone }) => {
     if ($tone === 'valid') {
       return css`
         background: ${theme.mode === 'dark'
-          ? 'rgba(22, 163, 74, 0.2)'
-          : 'rgba(22, 163, 74, 0.1)'};
+          ? 'rgba(22, 163, 74, 0.22)'
+          : 'rgba(22, 163, 74, 0.11)'};
         color: ${theme.mode === 'dark' ? '#86efac' : '#15803d'};
       `
     }
     if ($tone === 'warning') {
       return css`
         background: ${theme.mode === 'dark'
-          ? 'rgba(239, 68, 68, 0.2)'
-          : 'rgba(220, 38, 38, 0.1)'};
+          ? 'rgba(239, 68, 68, 0.22)'
+          : 'rgba(220, 38, 38, 0.11)'};
         color: ${theme.mode === 'dark' ? '#fca5a5' : '#b91c1c'};
       `
     }
     if ($tone === 'bypass') {
       return css`
         background: ${theme.mode === 'dark'
-          ? 'rgba(147, 51, 234, 0.22)'
-          : 'rgba(147, 51, 234, 0.1)'};
+          ? 'rgba(147, 51, 234, 0.24)'
+          : 'rgba(147, 51, 234, 0.11)'};
         color: ${theme.mode === 'dark' ? '#d8b4fe' : '#7e22ce'};
       `
     }
     if ($tone === 'executive') {
       return css`
         background: ${theme.mode === 'dark'
-          ? 'rgba(37, 99, 235, 0.2)'
-          : 'rgba(37, 99, 235, 0.1)'};
+          ? 'rgba(37, 99, 235, 0.22)'
+          : 'rgba(37, 99, 235, 0.11)'};
         color: ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'};
       `
     }
@@ -3907,25 +4728,25 @@ const ConstitutionalVerdictBadge = styled.span<{
 const SignatorySealCard = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 11px;
-  border-radius: 9px;
+  gap: 12px;
+  padding: 12px 15px;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.secondary};
 
   .meta {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
     min-width: 0;
     flex: 1;
 
     strong {
-      font-size: 13px;
+      font-size: 14.5px;
       color: ${({ theme }) => theme.colors.text.primary};
     }
     span {
-      font-size: 11.5px;
+      font-size: 12.5px;
       color: ${({ theme }) => theme.colors.text.tertiary};
     }
   }
@@ -3933,24 +4754,28 @@ const SignatorySealCard = styled.div`
   .seal-stamp {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: 6px;
-    border: 1px solid
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1.5px solid
       ${({ theme }) =>
         theme.mode === 'dark'
-          ? 'rgba(220, 38, 38, 0.35)'
-          : 'rgba(220, 38, 38, 0.25)'};
+          ? 'rgba(220, 38, 38, 0.45)'
+          : 'rgba(220, 38, 38, 0.32)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(220, 38, 38, 0.12)'
+        : 'rgba(220, 38, 38, 0.05)'};
     color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#dc2626')};
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 12px;
+    font-weight: 800;
     white-space: nowrap;
   }
 `
 
 const SealAvatar = styled.div`
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   overflow: hidden;
   display: flex;
@@ -3959,7 +4784,7 @@ const SealAvatar = styled.div`
   flex-shrink: 0;
   background: ${({ theme }) => theme.colors.background.primary};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
 
@@ -3973,9 +4798,9 @@ const SealAvatar = styled.div`
 const VoteMeterCard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 9px 11px;
-  border-radius: 9px;
+  gap: 9px;
+  padding: 13px 15px;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.secondary};
 
@@ -3983,12 +4808,12 @@ const VoteMeterCard = styled.div`
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 10px;
     flex-wrap: wrap;
   }
 
   .counts {
-    font-size: 12px;
+    font-size: 13px;
     color: ${({ theme }) => theme.colors.text.secondary};
     font-variant-numeric: tabular-nums;
 
@@ -3999,17 +4824,17 @@ const VoteMeterCard = styled.div`
 `
 
 const VoteVerdictChip = styled.span<{ $passed: boolean }>`
-  padding: 2px 8px;
+  padding: 3px 11px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   background: ${({ theme, $passed }) =>
     $passed
       ? theme.mode === 'dark'
-        ? 'rgba(22, 163, 74, 0.22)'
+        ? 'rgba(22, 163, 74, 0.24)'
         : 'rgba(22, 163, 74, 0.12)'
       : theme.mode === 'dark'
-        ? 'rgba(239, 68, 68, 0.22)'
+        ? 'rgba(239, 68, 68, 0.24)'
         : 'rgba(220, 38, 38, 0.12)'};
   color: ${({ theme, $passed }) =>
     $passed
@@ -4021,26 +4846,43 @@ const VoteVerdictChip = styled.span<{ $passed: boolean }>`
         : '#b91c1c'};
 `
 
+const VoteBarContainer = styled.div`
+  position: relative;
+  width: 100%;
+`
+
 const VoteStackBar = styled.div`
   display: flex;
   width: 100%;
-  height: 8px;
+  height: 11px;
   border-radius: 999px;
   overflow: hidden;
   background: ${({ theme }) => theme.colors.border.light};
 
   .yea {
     background: #16a34a;
-    transition: width 180ms ease;
+    transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .nay {
     background: #dc2626;
-    transition: width 180ms ease;
+    transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .abs {
     background: #94a3b8;
-    transition: width 180ms ease;
+    transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
   }
+`
+
+const MajorityMarker = styled.span`
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 2px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(15,23,42,0.45)'};
+  pointer-events: none;
 `
 
 const DominoChainStack = styled.div`
@@ -4051,9 +4893,9 @@ const DominoChainStack = styled.div`
 const ChainNode = styled.div<{ $last?: boolean }>`
   position: relative;
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
-  gap: 10px;
-  padding-bottom: ${({ $last }) => ($last ? '0' : '16px')};
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  padding-bottom: ${({ $last }) => ($last ? '0' : '22px')};
 
   ${({ $last, theme }) =>
     !$last &&
@@ -4061,8 +4903,8 @@ const ChainNode = styled.div<{ $last?: boolean }>`
       &::before {
         content: '';
         position: absolute;
-        left: 9px;
-        top: 16px;
+        left: 11px;
+        top: 18px;
         bottom: 0;
         width: 2px;
         background: ${theme.colors.border.light};
@@ -4071,10 +4913,10 @@ const ChainNode = styled.div<{ $last?: boolean }>`
 `
 
 const ChainNodeDot = styled.span<{ $color: string }>`
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   margin-top: 4px;
-  margin-left: 4px;
+  margin-left: 5px;
   border-radius: 50%;
   background: ${({ $color }) => $color};
   box-shadow: 0 0 0 3px ${({ theme }) => theme.colors.background.primary};
@@ -4084,24 +4926,24 @@ const ChainNodeDot = styled.span<{ $color: string }>`
 const ChainNodeContent = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 `
 
 const ChainNodeTitle = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   flex-wrap: wrap;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const DurationPill = styled.span`
-  padding: 1px 8px;
+  padding: 2px 10px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   background: ${({ theme }) =>
     theme.mode === 'dark'
@@ -4113,37 +4955,88 @@ const DurationPill = styled.span`
 const TerminationDetailsCard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 11px 12px;
-  border-radius: 10px;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.secondary};
 `
 
-const InlineEventBox = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 11px 12px;
+const RelatedEventGuideNote = styled.p`
+  margin: 0;
+  padding: 10px 12px;
   border-radius: 9px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: ${({ theme }) => theme.colors.background.secondary};
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RelatedEventTabBar = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+`
+
+const RelatedEventTabBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid
+    ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.border.default};
+  background: ${({ theme, $active }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.22)'
+        : 'rgba(99, 102, 241, 0.09)'
+      : theme.colors.background.secondary};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+
+  .linked-dot {
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(22, 163, 74, 0.24)'
+        : 'rgba(22, 163, 74, 0.12)'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#86efac' : '#15803d')};
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
 `
 
 const FooterStepPromptRow = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 
   .guide {
-    font-size: 12px;
+    font-size: 13px;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
 const FooterStepBtn = styled.button`
-  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.primary};
   background: ${({ theme }) =>
@@ -4152,7 +5045,7 @@ const FooterStepBtn = styled.button`
       : 'rgba(99, 102, 241, 0.08)'};
   color: ${({ theme }) => theme.colors.primary};
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
 
