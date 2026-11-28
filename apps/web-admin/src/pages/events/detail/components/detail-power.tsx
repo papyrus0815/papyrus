@@ -15,10 +15,18 @@
 import { useMemo, useState } from 'react'
 
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiPlus, FiX } from 'react-icons/fi'
+import { FiArrowUpRight, FiPlus, FiX } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { ledgerAccent, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
+import { politicalSystemKeys } from '@/entities/political-system/api'
+import {
+  GOVERNMENT_FORM_LABEL,
+  LEGISLATURE_TYPE_LABEL,
+  type GovernmentForm,
+  type LegislatureType,
+} from '@/entities/political-system/model/political-system'
 import { metaText } from '@/pages/events/styles/theme'
 import {
   type ElectionDetailDto,
@@ -36,15 +44,25 @@ import {
   getPersonReignAdjacency,
   personReignAdjacencyKeys,
 } from '@/shared/api/person-reign-adjacency'
+import {
+  listPoliticalSystems,
+  updatePoliticalSystem,
+  type PoliticalSystem,
+  type PoliticalSystemScope,
+} from '@/shared/api/political-system'
 import { formatCountryYearShort } from '@/shared/lib/country-period'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
-import { type EventDetail } from '../use-event-detail'
+import {
+  type EventDetail,
+  type EventDetailFoundedPoliticalSystem,
+} from '../use-event-detail'
 import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
 
 interface DetailPowerProps {
@@ -76,18 +94,30 @@ const yearLabel = (year: number | null) => formatCountryYearShort(year) ?? '?'
 const spanLabel = (start: number | null, end: number | null) =>
   start == null && end == null ? null : `${yearLabel(start)}–${end == null ? '' : yearLabel(end)}`
 
+const signedYear = (era: string | null | undefined, year: number | null | undefined) =>
+  year == null ? null : era === 'BC' ? -year : year
+
 export function hasPowerData(event: EventDetail): boolean {
-  return (event.accessions?.length ?? 0) > 0 || (event.elections?.length ?? 0) > 0
+  return (
+    (event.accessions?.length ?? 0) > 0 ||
+    (event.elections?.length ?? 0) > 0 ||
+    (event.politicalSystemsFounded?.length ?? 0) > 0
+  )
 }
 
 export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerProps) {
   const queryClient = useQueryClient()
   const accessions = useMemo(() => event.accessions ?? [], [event.accessions])
   const elections = useMemo(() => event.elections ?? [], [event.elections])
+  const foundedSystems = useMemo(
+    () => event.politicalSystemsFounded ?? [],
+    [event.politicalSystemsFounded],
+  )
   const eventYear = parseIsoDateParts(event.startDate ?? null)?.year ?? null
 
   const [accessionPickerOpen, setAccessionPickerOpen] = useState(false)
   const [electionPickerOpen, setElectionPickerOpen] = useState(false)
+  const [regimePickerOpen, setRegimePickerOpen] = useState(false)
 
   const refreshEvent = () => void queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
 
@@ -231,15 +261,134 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
     if (ok) setElectionMutation.mutate({ electionId, eventId: null })
   }
 
-  if (!expectPower && accessions.length === 0 && elections.length === 0) return null
+  /* ── 출범 헌정 체제 ── */
+  const relatedCountryScopes = useMemo<PoliticalSystemScope[]>(
+    () => [
+      ...(event.relatedCountries ?? []).map((country) => ({ countryId: country.id })),
+      ...(event.relatedHistoricalCountries ?? []).map((country) => ({
+        historicalCountryId: country.id,
+      })),
+    ],
+    [event.relatedCountries, event.relatedHistoricalCountries],
+  )
+
+  const { data: candidateSystems = [], isLoading: candidateSystemsLoading } = useQuery({
+    queryKey: [
+      ...eventKeys.detail(event.id),
+      'regime-link-candidates',
+      relatedCountryScopes.map((scope) => scope.countryId ?? scope.historicalCountryId).join(','),
+    ],
+    queryFn: async () => {
+      if (relatedCountryScopes.length === 0) return [] as PoliticalSystem[]
+      const lists = await Promise.all(
+        relatedCountryScopes.map((scope) => listPoliticalSystems(scope)),
+      )
+      const dedup = new Map<string, PoliticalSystem>()
+      for (const list of lists) {
+        for (const item of list) {
+          if (!dedup.has(item.id)) dedup.set(item.id, item)
+        }
+      }
+      return Array.from(dedup.values())
+    },
+    enabled: regimePickerOpen,
+    staleTime: 60_000,
+  })
+
+  const setRegimeMutation = useMutation({
+    mutationFn: ({ systemId, foundingEventId }: { systemId: string; foundingEventId: string | null }) =>
+      updatePoliticalSystem(systemId, { foundingEventId }),
+    onSuccess: (_result, variables) => {
+      notify.success(
+        variables.foundingEventId
+          ? '출범 헌정 체제를 이 사건에 연결했습니다'
+          : '헌정 체제 연결을 해제했습니다',
+      )
+      void queryClient.invalidateQueries({ queryKey: politicalSystemKeys.all })
+      refreshEvent()
+    },
+    onError: () => notify.error('헌정 체제 연결을 바꾸지 못했습니다'),
+  })
+
+  const regimeOptions = useMemo(() => {
+    const linked = new Set(foundedSystems.map((sys) => sys.id))
+    return candidateSystems
+      .filter((sys) => !linked.has(sys.id))
+      .sort((left, right) => {
+        const leftStart = signedYear(left.startEra, left.startYear)
+        const rightStart = signedYear(right.startEra, right.startYear)
+        if (eventYear != null && leftStart != null && rightStart != null) {
+          return Math.abs(leftStart - eventYear) - Math.abs(rightStart - eventYear)
+        }
+        return (leftStart ?? 99999) - (rightStart ?? 99999)
+      })
+      .map((sys) => {
+        const formLabel = sys.governmentForm
+          ? GOVERNMENT_FORM_LABEL[sys.governmentForm as GovernmentForm] ?? sys.governmentForm
+          : '정체'
+        const displayName = sys.name?.trim() || formLabel
+        const polityName = sys.historicalCountry?.name ?? sys.country?.name ?? null
+        const period = spanLabel(
+          signedYear(sys.startEra, sys.startYear),
+          signedYear(sys.endEra, sys.endYear),
+        )
+        const elsewhere = sys.foundingEvent?.title ?? null
+        return {
+          value: sys.id,
+          label: `${polityName ? `[${polityName}] ` : ''}${displayName}`,
+          description: [
+            formLabel,
+            period,
+            elsewhere ? `이미 ‘${elsewhere}’에 연결됨 — 고르면 옮김` : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        }
+      })
+  }, [candidateSystems, eventYear, foundedSystems])
+
+  const pickRegime = async (systemId: string) => {
+    setRegimePickerOpen(false)
+    const picked = candidateSystems.find((sys) => sys.id === systemId)
+    const elsewhere = picked?.foundingEvent?.title ?? null
+    const displayName = picked?.name?.trim() || '헌정 체제'
+    if (elsewhere) {
+      const ok = await confirm({
+        title: '다른 사건에서 옮기기',
+        message: `「${displayName}」은 지금 ‘${elsewhere}’을 출범 사건으로 가리키고 있습니다. 이 사건으로 옮길까요?`,
+        confirmLabel: '옮기기',
+      })
+      if (!ok) return
+    }
+    setRegimeMutation.mutate({ systemId, foundingEventId: event.id })
+  }
+
+  const unlinkRegime = async (systemId: string, label: string) => {
+    const ok = await confirm({
+      title: '연결 해제',
+      message: `「${label}」에서 출범 사건 연결만 끊습니다. 헌정 체제 기록 자체는 남습니다.`,
+      confirmLabel: '연결 해제',
+      danger: true,
+    })
+    if (ok) setRegimeMutation.mutate({ systemId, foundingEventId: null })
+  }
+
+  const hasAny =
+    accessions.length > 0 || elections.length > 0 || foundedSystems.length > 0
+
+  if (!expectPower && !hasAny) return null
 
   return (
     <S.Section id="power">
       <S.SectionHeaderGroup>
         <S.SectionHeader>
-          <S.SectionTitle $sub>권력 교체·선거</S.SectionTitle>
-          {(accessions.length > 0 || elections.length > 0) && (
+          <S.SectionTitle $sub>권력 교체·헌정·선거</S.SectionTitle>
+          {hasAny && (
             <S.SectionActions>
+              <HeaderControlBtn type="button" onClick={() => setRegimePickerOpen(true)}>
+                <FiPlus size={13} aria-hidden />
+                헌정 체제 연결
+              </HeaderControlBtn>
               <HeaderControlBtn type="button" onClick={() => setAccessionPickerOpen(true)}>
                 <FiPlus size={13} aria-hidden />
                 취임·즉위 연결
@@ -252,9 +401,27 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
           )}
         </S.SectionHeader>
         <SectionHintText>
-          이 사건으로 일어난 통치자·수반의 권력 승계(취임·즉위)와 관련 선거 결과를 연결합니다.
+          이 사건으로 출범·전환된 헌정 체제, 통치자·수반의 권력 승계(취임·즉위), 관련 선거 결과를 연결합니다.
         </SectionHintText>
       </S.SectionHeaderGroup>
+
+      {foundedSystems.length > 0 && (
+        <Rows aria-label="출범 헌정 체제">
+          {foundedSystems.map((sys) => {
+            const formLabel = sys.governmentForm
+              ? GOVERNMENT_FORM_LABEL[sys.governmentForm as GovernmentForm] ?? sys.governmentForm
+              : '헌정 체제'
+            const displayLabel = sys.name?.trim() || formLabel
+            return (
+              <FoundedSystemRow
+                key={sys.id}
+                system={sys}
+                onUnlink={() => void unlinkRegime(sys.id, displayLabel)}
+              />
+            )
+          })}
+        </Rows>
+      )}
 
       {accessions.length > 0 && (
         <Rows aria-label="취임·즉위">
@@ -274,7 +441,15 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
           {elections.map((election, index) => (
             <ElectionRow
               key={election.id}
+              electionId={election.id}
               name={election.name}
+              countryJumpId={
+                electionDetails[index]?.data?.historicalCountryId ??
+                electionDetails[index]?.data?.countryId ??
+                election.historicalCountryId ??
+                election.countryId ??
+                null
+              }
               detail={electionDetails[index]?.data}
               onPersonClick={onPersonClick}
               onUnlink={() => void unlinkElection(election.id, election.name)}
@@ -283,12 +458,12 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
         </Rows>
       )}
 
-      {accessions.length === 0 && elections.length === 0 && (
+      {!hasAny && (
         <S.EmptyGuide>
           <S.EmptyGuideBody>
-            <S.EmptyGuideTitle>아직 연결된 권력 승계 · 선거 기록이 없습니다</S.EmptyGuideTitle>
+            <S.EmptyGuideTitle>아직 연결된 헌정 출범 · 권력 승계 · 선거 기록이 없습니다</S.EmptyGuideTitle>
             <S.EmptyGuideDesc>
-              이 사건을 계기로 교체된 국가원수 취임·즉위 기록이나 선거 결과를 연결하면 승계 구도와 득표 결과가 표시됩니다.
+              이 사건을 계기로 수립된 헌정 체제, 국가원수·수반 취임·즉위 기록, 또는 선거 결과를 연결하면 권력 구도와 개표 결과가 함께 표시됩니다.
             </S.EmptyGuideDesc>
           </S.EmptyGuideBody>
           <S.EmptyGuideActions>
@@ -296,12 +471,35 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
               <FiPlus aria-hidden />
               취임 · 즉위 연결
             </S.EmptyPrimaryAction>
+            <S.EmptySecondaryAction type="button" onClick={() => setRegimePickerOpen(true)}>
+              헌정 체제 연결
+            </S.EmptySecondaryAction>
             <S.EmptySecondaryAction type="button" onClick={() => setElectionPickerOpen(true)}>
               선거 결과 연결
             </S.EmptySecondaryAction>
           </S.EmptyGuideActions>
         </S.EmptyGuide>
       )}
+
+      <SelectModal
+        isOpen={regimePickerOpen}
+        onClose={() => setRegimePickerOpen(false)}
+        title="이 사건으로 출범·전환된 헌정 체제"
+        options={regimeOptions}
+        isLoading={candidateSystemsLoading}
+        searchable
+        searchPlaceholder="헌정 체제·정부 형태로 검색..."
+        headerExtra={
+          <PickerNote>
+            {relatedCountryScopes.length === 0
+              ? '이 사건에 연결된 관련 국가가 없습니다. 먼저 참여 국가를 지정하면 해당 국가의 헌정 체제 목록이 표시됩니다.'
+              : !candidateSystemsLoading && regimeOptions.length === 0
+                ? '연결할 수 있는 헌정 체제가 없습니다. 국가 상세 → 정부·행정 → 정체 탭에서 먼저 등록하세요.'
+                : '관련 국가에 등록된 헌정 체제 중 이 사건으로 출범·수립된 체제를 선택합니다.'}
+          </PickerNote>
+        }
+        onSelect={(systemId) => void pickRegime(systemId)}
+      />
 
       <SelectModal
         isOpen={accessionPickerOpen}
@@ -467,6 +665,80 @@ function PredecessorName({
   )
 }
 
+/* ───────────────────────── 출범 헌정 체제 ───────────────────────── */
+
+function FoundedSystemRow({
+  system,
+  onUnlink,
+}: {
+  system: EventDetailFoundedPoliticalSystem
+  onUnlink: () => void
+}) {
+  const formLabel = system.governmentForm
+    ? GOVERNMENT_FORM_LABEL[system.governmentForm as GovernmentForm] ?? system.governmentForm
+    : null
+  const legLabel = system.legislatureType
+    ? LEGISLATURE_TYPE_LABEL[system.legislatureType as LegislatureType] ?? system.legislatureType
+    : null
+  const titleLabel = system.name?.trim() || formLabel || '헌정 체제'
+  const countryJumpId = system.historicalCountryId ?? system.countryId ?? null
+  const period = spanLabel(
+    signedYear(system.startEra, system.startYear),
+    signedYear(system.endEra, system.endYear),
+  )
+
+  return (
+    <Row>
+      <Head>
+        <RegimeHeadLine>
+          <HandoverEventBadge>헌정 출범</HandoverEventBadge>
+          {countryJumpId ? (
+            <RecordLink
+              to={pathKeys.countryPoliticalSystem(countryJumpId)}
+              title="해당 국가의 정체·헌정 탭으로 이동"
+            >
+              <span>{titleLabel}</span>
+              <FiArrowUpRight size={14} aria-hidden />
+            </RecordLink>
+          ) : (
+            <ElectionName>{titleLabel}</ElectionName>
+          )}
+          {system.isCurrent && <HandoverEventBadge>현행</HandoverEventBadge>}
+        </RegimeHeadLine>
+        <UnlinkButton
+          type="button"
+          onClick={onUnlink}
+          aria-label={`${titleLabel} 헌정 출범 연결 해제`}
+        >
+          <FiX />
+        </UnlinkButton>
+      </Head>
+      <Meta>
+        {[
+          system.countryName,
+          formLabel && formLabel !== titleLabel ? formLabel : null,
+          legLabel,
+          period,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+        {system.constitutionLaw && (
+          <>
+            {' · 근거 헌법 '}
+            {countryJumpId ? (
+              <InlineLawLink to={pathKeys.countryLaws(countryJumpId)}>
+                {system.constitutionLaw.name}
+              </InlineLawLink>
+            ) : (
+              <span>{system.constitutionLaw.name}</span>
+            )}
+          </>
+        )}
+      </Meta>
+    </Row>
+  )
+}
+
 /* ───────────────────────── 선거 ───────────────────────── */
 
 interface PartySlice {
@@ -518,12 +790,16 @@ function partySlices(results: ElectionPartyResultDto[]): { slices: PartySlice[];
 }
 
 function ElectionRow({
+  electionId,
   name,
+  countryJumpId,
   detail,
   onPersonClick,
   onUnlink,
 }: {
+  electionId: string
   name: string
+  countryJumpId: string | null
   detail: ElectionDetailDto | undefined
   onPersonClick: (personId: string) => void
   onUnlink: () => void
@@ -536,7 +812,17 @@ function ElectionRow({
   return (
     <Row>
       <Head>
-        <ElectionName>{name}</ElectionName>
+        {countryJumpId ? (
+          <RecordLink
+            to={`${pathKeys.countryElections(countryJumpId)}?electionId=${encodeURIComponent(electionId)}`}
+            title="국가 선거·개표 원장 상세 보기"
+          >
+            <span>{name}</span>
+            <FiArrowUpRight size={14} aria-hidden />
+          </RecordLink>
+        ) : (
+          <ElectionName>{name}</ElectionName>
+        )}
         <UnlinkButton type="button" onClick={onUnlink} aria-label={`${name} 연결 해제`}>
           <FiX />
         </UnlinkButton>
@@ -869,5 +1155,42 @@ const UnlinkButton = styled.button`
 
   &:hover {
     color: ${({ theme }) => theme.colors.error};
+  }
+`
+
+const RegimeHeadLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+`
+
+const RecordLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const InlineLawLink = styled(Link)`
+  color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: underline;
+  text-decoration-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  text-underline-offset: 3px;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration-color: currentColor;
   }
 `

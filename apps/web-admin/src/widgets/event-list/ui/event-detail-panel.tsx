@@ -406,6 +406,83 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             </>
           )}
 
+          {(selectedEvent.politicalSystemsFounded?.length ?? 0) > 0 && (
+            <>
+              <Detail.InfoLabel>
+                <FiLayers size={ICON_SIZE.base} aria-hidden="true" />
+                <span>출범 헌정</span>
+              </Detail.InfoLabel>
+              <Detail.ChipRow>
+                {(selectedEvent.politicalSystemsFounded ?? []).map((sys) => {
+                  const jumpCountryId =
+                    sys.historicalCountryId ?? sys.countryId ?? null
+                  const label = sys.name?.trim() || '헌정 체제'
+                  return (
+                    <Detail.CountryChip
+                      key={sys.id}
+                      as={jumpCountryId ? 'button' : 'span'}
+                      type={jumpCountryId ? 'button' : undefined}
+                      $interactive={Boolean(jumpCountryId)}
+                      title={
+                        jumpCountryId
+                          ? `${label} — 국가 정체·헌정 탭으로 이동`
+                          : undefined
+                      }
+                      onClick={
+                        jumpCountryId
+                          ? () =>
+                              navigate(
+                                pathKeys.countryPoliticalSystem(jumpCountryId),
+                              )
+                          : undefined
+                      }
+                    >
+                      🏛️ {label}
+                    </Detail.CountryChip>
+                  )
+                })}
+              </Detail.ChipRow>
+            </>
+          )}
+
+          {(selectedEvent.elections?.length ?? 0) > 0 && (
+            <>
+              <Detail.InfoLabel>
+                <FiTarget size={ICON_SIZE.base} aria-hidden="true" />
+                <span>연결 선거</span>
+              </Detail.InfoLabel>
+              <Detail.ChipRow>
+                {(selectedEvent.elections ?? []).map((election) => {
+                  const jumpCountryId =
+                    election.historicalCountryId ?? election.countryId ?? null
+                  return (
+                    <Detail.CountryChip
+                      key={election.id}
+                      as={jumpCountryId ? 'button' : 'span'}
+                      type={jumpCountryId ? 'button' : undefined}
+                      $interactive={Boolean(jumpCountryId)}
+                      title={
+                        jumpCountryId
+                          ? `${election.name} — 선거·개표 원장으로 이동`
+                          : undefined
+                      }
+                      onClick={
+                        jumpCountryId
+                          ? () =>
+                              navigate(
+                                `${pathKeys.countryElections(jumpCountryId)}?electionId=${encodeURIComponent(election.id)}`,
+                              )
+                          : undefined
+                      }
+                    >
+                      🗳️ {election.name}
+                    </Detail.CountryChip>
+                  )
+                })}
+              </Detail.ChipRow>
+            </>
+          )}
+
           {hasSections && (
             <>
               <Detail.InfoLabel>

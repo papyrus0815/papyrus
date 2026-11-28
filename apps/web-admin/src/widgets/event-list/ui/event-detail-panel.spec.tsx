@@ -145,4 +145,45 @@ describe('EventDetailPanel — 상위 사건 링크', () => {
       id: 'joseon',
     })
   })
+
+  it('출범 헌정 체제 및 연결 선거 칩을 렌더링하고 클릭 시 해당 국가 탭으로 이동한다', () => {
+    navigateMock.mockClear()
+    const eventWithReverseLinks = {
+      ...event,
+      politicalSystemsFounded: [
+        {
+          id: 'ps-6rep',
+          name: '제6공화국',
+          governmentForm: 'PRESIDENTIAL',
+          countryId: 'kr',
+          historicalCountryId: null,
+        },
+      ],
+      elections: [
+        {
+          id: 'el-13pres',
+          name: '제13대 대통령 선거',
+          countryId: 'kr',
+          historicalCountryId: null,
+        },
+      ],
+    } as unknown as HistoricalEvent
+
+    renderWithTheme(
+      withQueryClient(
+        <EventDetailPanel
+          {...baseProps}
+          selectedEvent={eventWithReverseLinks}
+        />,
+      ),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /제6공화국/ }))
+    expect(navigateMock).toHaveBeenCalledWith('/country/kr/government/system')
+
+    fireEvent.click(screen.getByRole('button', { name: /제13대 대통령 선거/ }))
+    expect(navigateMock).toHaveBeenCalledWith(
+      '/country/kr/elections?electionId=el-13pres',
+    )
+  })
 })

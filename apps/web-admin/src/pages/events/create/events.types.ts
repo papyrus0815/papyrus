@@ -245,4 +245,21 @@ export interface HistoricalEvent {
   }>
   /** 키워드 (동일 사건 매핑/검색용) */
   keywords?: string[] | null
+  /** 이 사건으로 출범·전환된 헌정 체제 (상세 로드 시 선택 포함) */
+  politicalSystemsFounded?: Array<{
+    id: string
+    name: string | null
+    governmentForm: string | null
+    countryId: string | null
+    historicalCountryId: string | null
+    countryName?: string | null
+  }>
+  /** 이 사건을 서사로 가진 선거 (상세 로드 시 선택 포함) */
+  elections?: Array<{
+    id: string
+    name: string
+    pollDate?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+  }>
 }

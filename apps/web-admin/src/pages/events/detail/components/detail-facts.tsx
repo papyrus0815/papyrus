@@ -260,6 +260,8 @@ export function DetailFacts({
   const parent = event.parentEvent
   const extraParentCount = event.extraParents?.length ?? 0
   const treaties = event.treaties ?? []
+  const politicalSystemsFounded = event.politicalSystemsFounded ?? []
+  const elections = event.elections ?? []
   const hasOriginalDate = Boolean(
     event.startCalendar || event.startDateOriginal || event.endCalendar || event.endDateOriginal,
   )
@@ -589,6 +591,32 @@ export function DetailFacts({
               title={treaties.map((treaty) => treaty.name).join(', ')}
             >
               {treaties.length === 1 ? treaties[0].name : `${treaties.length}건`}
+            </JumpButton>
+          </FactRow>
+        )}
+        {politicalSystemsFounded.length > 0 && (
+          <FactRow label="출범 헌정" wide>
+            <JumpButton
+              type="button"
+              onClick={() => jumpTo('power')}
+              title={politicalSystemsFounded
+                .map((ps) => ps.name ?? ps.countryName ?? '헌정 체제')
+                .join(', ')}
+            >
+              {politicalSystemsFounded.length === 1
+                ? (politicalSystemsFounded[0].name ?? '헌정 체제 1건')
+                : `${politicalSystemsFounded.length}건`}
+            </JumpButton>
+          </FactRow>
+        )}
+        {elections.length > 0 && (
+          <FactRow label="연결 선거" wide>
+            <JumpButton
+              type="button"
+              onClick={() => jumpTo('power')}
+              title={elections.map((election) => election.name).join(', ')}
+            >
+              {elections.length === 1 ? elections[0].name : `${elections.length}건`}
             </JumpButton>
           </FactRow>
         )}
