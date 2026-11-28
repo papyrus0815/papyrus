@@ -353,6 +353,28 @@ export class PoliticalPartyController {
             pollDate: true,
             convocationOrdinal: true,
             totalSeats: true,
+            chamberId: true,
+            countryId: true,
+            historicalCountryId: true,
+            chamber: {
+              select: {
+                id: true,
+                name: true,
+                localName: true,
+                role: true,
+                sizes: {
+                  select: {
+                    id: true,
+                    seats: true,
+                    startEra: true,
+                    startYear: true,
+                    endEra: true,
+                    endYear: true,
+                  },
+                  orderBy: { sortOrder: 'asc' },
+                },
+              },
+            },
           },
         },
       },

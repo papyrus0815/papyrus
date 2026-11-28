@@ -19,12 +19,48 @@ import { serializeElectionBigInt } from '../election-serialize.util'
 import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
 import { assertLawMatchesPoliticalPartyJurisdictionAsync } from '../domain/law-jurisdiction.util'
 
-/** 응답에 연결 국가/역사국가 요약({id,name})을 실어주는 공용 include */
+/** 응답에 연결 국가/역사국가 요약({id,name}) 및 이 헌법을 기본 규범으로 삼는 정체 요약을 실어주는 공용 include */
 const LAW_COUNTRY_INCLUDE = {
   lawType: { select: { id: true, name: true } },
   country: { select: { id: true, name: true } },
   historicalCountry: { select: { id: true, name: true } },
+  passedChamber: {
+    select: { id: true, name: true, shortName: true, localName: true, role: true },
+  },
+  politicalSystemsAsConstitution: {
+    select: {
+      id: true,
+      name: true,
+      governmentForm: true,
+      startEra: true,
+      startYear: true,
+      endEra: true,
+      endYear: true,
+      isCurrent: true,
+    },
+  },
 } satisfies Prisma.LawInclude
+
+function parseOptionalNonNegativeInt(
+  rawValue: unknown,
+  label: string,
+): { ok: true; value: number | null } | { ok: false; message: string } {
+  if (rawValue === null || rawValue === undefined) return { ok: true, value: null }
+  if (typeof rawValue === 'number') {
+    if (!Number.isInteger(rawValue) || rawValue < 0)
+      return { ok: false, message: `${label}은(는) 0 이상의 정수만 입력할 수 있습니다.` }
+    return { ok: true, value: rawValue }
+  }
+  if (typeof rawValue === 'string') {
+    const trimmed = rawValue.trim()
+    if (trimmed === '') return { ok: true, value: null }
+    const parsed = parseInt(trimmed, 10)
+    if (!Number.isFinite(parsed) || String(parsed) !== trimmed || parsed < 0)
+      return { ok: false, message: `${label}은(는) 0 이상의 정수만 입력할 수 있습니다.` }
+    return { ok: true, value: parsed }
+  }
+  return { ok: false, message: `${label} 형식이 올바르지 않습니다.` }
+}
 
 function parseOptionalPositiveInt(
   v: unknown,
@@ -83,6 +119,10 @@ export interface CreateLawBody {
   lawTypeId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
+  passedChamberId?: string | null
+  yeas?: number | null
+  nays?: number | null
+  abstentions?: number | null
 }
 
 export interface UpdateLawBody {
@@ -96,6 +136,10 @@ export interface UpdateLawBody {
   lawTypeId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
+  passedChamberId?: string | null
+  yeas?: number | null
+  nays?: number | null
+  abstentions?: number | null
 }
 
 /**
@@ -156,6 +200,21 @@ export class LawController {
         '제정·시행일이 폐지일보다 뒤일 수 없습니다.',
       )
     }
+    const yeas = parseOptionalNonNegativeInt(body.yeas, '찬성 의석수')
+    if (!yeas.ok) throw new BadRequestException(yeas.message)
+    const nays = parseOptionalNonNegativeInt(body.nays, '반대 의석수')
+    if (!nays.ok) throw new BadRequestException(nays.message)
+    const abstentions = parseOptionalNonNegativeInt(body.abstentions, '기권 의석수')
+    if (!abstentions.ok) throw new BadRequestException(abstentions.message)
+
+    const trimmedChamberId = body.passedChamberId?.trim() || null
+    if (trimmedChamberId) {
+      await this.assertChamberMatchesLawJurisdiction(trimmedChamberId, {
+        countryId: body.countryId ?? null,
+        historicalCountryId: body.historicalCountryId ?? null,
+      })
+    }
+
     const row = await this.prisma.law.create({
       data: {
         name: body.name,
@@ -168,6 +227,10 @@ export class LawController {
         lawTypeId: body.lawTypeId ?? undefined,
         countryId: body.countryId ?? undefined,
         historicalCountryId: body.historicalCountryId ?? undefined,
+        passedChamberId: trimmedChamberId ?? undefined,
+        yeas: yeas.value ?? undefined,
+        nays: nays.value ?? undefined,
+        abstentions: abstentions.value ?? undefined,
       },
       include: LAW_COUNTRY_INCLUDE,
     })
@@ -259,6 +322,19 @@ export class LawController {
           )
         }
       }
+      if (this.prisma.politicalSystem?.findMany) {
+        const linkedSystems = await this.prisma.politicalSystem.findMany({
+          where: { constitutionLawId: id },
+          select: { id: true, name: true, countryId: true, historicalCountryId: true },
+        })
+        for (const sys of linkedSystems) {
+          await assertLawMatchesPoliticalPartyJurisdictionAsync(
+            this.prisma,
+            nextLawJurisdiction,
+            sys,
+          )
+        }
+      }
       if (body.countryId !== undefined) {
         data.country = body.countryId
           ? { connect: { id: body.countryId } }
@@ -269,6 +345,41 @@ export class LawController {
           ? { connect: { id: body.historicalCountryId } }
           : { disconnect: true }
       }
+    }
+    if (body.passedChamberId !== undefined) {
+      const trimmedChamberId = body.passedChamberId?.trim() || null
+      if (trimmedChamberId) {
+        const effJurisdiction = {
+          countryId:
+            body.countryId !== undefined ? body.countryId : existing.countryId,
+          historicalCountryId:
+            body.historicalCountryId !== undefined
+              ? body.historicalCountryId
+              : existing.historicalCountryId,
+        }
+        await this.assertChamberMatchesLawJurisdiction(
+          trimmedChamberId,
+          effJurisdiction,
+        )
+        data.passedChamber = { connect: { id: trimmedChamberId } }
+      } else {
+        data.passedChamber = { disconnect: true }
+      }
+    }
+    if (body.yeas !== undefined) {
+      const parsedYeas = parseOptionalNonNegativeInt(body.yeas, '찬성 의석수')
+      if (!parsedYeas.ok) throw new BadRequestException(parsedYeas.message)
+      data.yeas = parsedYeas.value
+    }
+    if (body.nays !== undefined) {
+      const parsedNays = parseOptionalNonNegativeInt(body.nays, '반대 의석수')
+      if (!parsedNays.ok) throw new BadRequestException(parsedNays.message)
+      data.nays = parsedNays.value
+    }
+    if (body.abstentions !== undefined) {
+      const parsedAbst = parseOptionalNonNegativeInt(body.abstentions, '기권 의석수')
+      if (!parsedAbst.ok) throw new BadRequestException(parsedAbst.message)
+      data.abstentions = parsedAbst.value
     }
     const row = await this.prisma.law.update({
       where: { id },
@@ -286,5 +397,24 @@ export class LawController {
       this.prisma.politicalPartyLaw.deleteMany({ where: { lawId: id } }),
       this.prisma.law.delete({ where: { id } }),
     ])
+  }
+
+  private async assertChamberMatchesLawJurisdiction(
+    chamberId: string,
+    lawAxis: { countryId: string | null; historicalCountryId: string | null },
+  ) {
+    if (!this.prisma.chamber?.findUnique) return
+    const chamber = await this.prisma.chamber.findUnique({
+      where: { id: chamberId },
+      select: { id: true, name: true, countryId: true, historicalCountryId: true },
+    })
+    if (!chamber) {
+      throw new BadRequestException('지정한 의회 원(Chamber)을 찾을 수 없습니다.')
+    }
+    await assertLawMatchesPoliticalPartyJurisdictionAsync(
+      this.prisma,
+      lawAxis,
+      chamber,
+    )
   }
 }

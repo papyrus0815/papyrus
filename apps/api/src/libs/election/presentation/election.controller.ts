@@ -62,6 +62,19 @@ const electionInclude = {
       party: { select: { id: true, name: true, shortName: true } },
       electoralDistrict: { select: { id: true, name: true, code: true } },
       result: true,
+      resultingTenure: {
+        select: {
+          id: true,
+          title: true,
+          positionType: true,
+          ordinal: true,
+          startEra: true,
+          startYear: true,
+          endEra: true,
+          endYear: true,
+          positionDefinition: { select: { id: true, title: true } },
+        },
+      },
     },
     orderBy: { id: 'asc' as const },
   },
@@ -257,6 +270,8 @@ export class ElectionController {
     @Query('hasPartyResults') hasPartyResults?: string,
     /** 콤마로 구분한 `ElectionType` 값 (예: `PRESIDENTIAL_OR_HEAD,PARLIAMENTARY_PROPORTIONAL`) */
     @Query('electionTypes') electionTypesRaw?: string,
+    /** 특정 의회 원(Chamber)의 선거만 조회 */
+    @Query('chamberId') chamberId?: string,
   ): Promise<any> {
     let where: Prisma.ElectionWhereInput = {}
 
@@ -268,6 +283,10 @@ export class ElectionController {
         this.prisma,
         countryId,
       )) as Prisma.ElectionWhereInput
+    }
+
+    if (chamberId?.trim()) {
+      where.chamberId = chamberId.trim()
     }
 
     if (hasPartyResults === 'true' || hasPartyResults === '1') {
@@ -299,6 +318,15 @@ export class ElectionController {
         // 어느 FK가 찼는지로 현대/역사 판별 가능(검토서 F13)
         country: { select: { id: true, name: true } },
         historicalCountry: { select: { id: true, name: true } },
+        chamber: {
+          select: {
+            id: true,
+            name: true,
+            localName: true,
+            role: true,
+            composition: true,
+          },
+        },
         candidacies: { select: { id: true } },
         ballotOptions: { select: { id: true } },
         // 연결 사건 요약 — 사건 쪽 '선거 연결' 후보가 '이미 ‘X’에 연결됨'을 보이게(한 선거=한 사건이라 고르면 옮겨 간다)
@@ -931,6 +959,22 @@ export class ElectionController {
       body.voterTurnoutPercent,
       '투표율',
     )
+    const isNonChamberElectionType =
+      body.electionType === 'PRESIDENTIAL_OR_HEAD' ||
+      body.electionType === 'REFERENDUM_OR_PLEBISCITE'
+    const resolvedChamberId = isNonChamberElectionType
+      ? null
+      : await this.assertChamberId(body.chamberId, {
+          countryId: body.countryId ?? null,
+          historicalCountryId: body.historicalCountryId ?? null,
+        })
+    await this.assertUniqueConvocationOrdinal({
+      countryId: body.countryId ?? null,
+      historicalCountryId: body.historicalCountryId ?? null,
+      electionType: body.electionType,
+      chamberId: resolvedChamberId ?? null,
+      convocationOrdinal: body.convocationOrdinal ?? null,
+    })
 
     const row = await this.prisma.election.create({
       data: {
@@ -954,7 +998,7 @@ export class ElectionController {
           body.resultingLegislatureDissolutionNotes ?? undefined,
         voterTurnoutPercent: turnoutDecimal ?? undefined,
         totalSeats: body.totalSeats ?? undefined,
-        chamberId: (await this.assertChamberId(body.chamberId)) ?? undefined,
+        chamberId: resolvedChamberId ?? undefined,
         countryId: body.countryId ?? undefined,
         historicalCountryId: body.historicalCountryId ?? undefined,
         scopeAdministrativeDivisionId: body.scopeAdministrativeDivisionId ?? undefined,
@@ -1019,9 +1063,35 @@ export class ElectionController {
         '투표율',
       )
     if (body.totalSeats !== undefined) data.totalSeats = body.totalSeats
-    if (body.chamberId !== undefined) {
+    const nextElectionType =
+      body.electionType !== undefined ? body.electionType : existing.electionType
+    const nextCountryId =
+      body.countryId !== undefined ? body.countryId : existing.countryId
+    const nextHistoricalCountryId =
+      body.historicalCountryId !== undefined
+        ? body.historicalCountryId
+        : existing.historicalCountryId
+    const isNextNonChamberType =
+      nextElectionType === 'PRESIDENTIAL_OR_HEAD' ||
+      nextElectionType === 'REFERENDUM_OR_PLEBISCITE'
+    if (isNextNonChamberType) {
+      if (body.chamberId !== undefined || existing.chamberId != null) {
+        data.chamberId = null
+      }
+    } else if (body.chamberId !== undefined) {
       /* 이 갱신은 국가 FK를 스칼라로 쓰는 unchecked 입력 — 관계(connect)와 섞지 않는다 */
-      data.chamberId = await this.assertChamberId(body.chamberId)
+      data.chamberId = await this.assertChamberId(body.chamberId, {
+        countryId: nextCountryId ?? null,
+        historicalCountryId: nextHistoricalCountryId ?? null,
+      })
+    } else if (
+      existing.chamberId &&
+      (body.countryId !== undefined || body.historicalCountryId !== undefined)
+    ) {
+      await this.assertChamberId(existing.chamberId, {
+        countryId: nextCountryId ?? null,
+        historicalCountryId: nextHistoricalCountryId ?? null,
+      })
     }
     if (body.countryId !== undefined) data.countryId = body.countryId
     if (body.historicalCountryId !== undefined) data.historicalCountryId = body.historicalCountryId
@@ -1068,6 +1138,18 @@ export class ElectionController {
       resultingLegislatureClosureDate: nextClosureDate,
       totalSeats: nextTotalSeats,
       convocationOrdinal: nextConvocationOrdinal,
+    })
+    const nextChamberId =
+      data.chamberId !== undefined
+        ? (data.chamberId as string | null)
+        : existing.chamberId
+    await this.assertUniqueConvocationOrdinal({
+      excludeId: id,
+      countryId: nextCountryId ?? null,
+      historicalCountryId: nextHistoricalCountryId ?? null,
+      electionType: nextElectionType,
+      chamberId: nextChamberId ?? null,
+      convocationOrdinal: nextConvocationOrdinal ?? null,
     })
 
     const row = await this.prisma.election.update({
@@ -1212,13 +1294,117 @@ export class ElectionController {
     return withHash.toUpperCase()
   }
 
-  /** 원 — 있는지만 본다(국가가 바뀌는 선거도 있어 국가 일치는 강제하지 않는다) */
-  private async assertChamberId(raw: string | null | undefined): Promise<string | null | undefined> {
+  /**
+   * 원 검증 — 존재 여부 및 국가 호환성 확인.
+   * 같은 현대국 계승 사슬(예: 이탈리아 왕국 원로원 → 파시스트 이탈리아 선거)은 허용하되,
+   * 전혀 다른 국가의 원(예: 프랑스 하원을 한국 선거에 연결)은 400으로 막는다.
+   */
+  private async assertChamberId(
+    raw: string | null | undefined,
+    electionAxis?: { countryId: string | null; historicalCountryId: string | null },
+  ): Promise<string | null | undefined> {
     if (raw === undefined) return undefined
     if (raw === null || raw === '') return null
-    const chamber = await this.prisma.chamber.findUnique({ where: { id: raw }, select: { id: true } })
+    const chamber = await this.prisma.chamber.findUnique({
+      where: { id: raw },
+      select: { id: true, name: true, countryId: true, historicalCountryId: true },
+    })
     if (!chamber) throw new BadRequestException('원을 찾을 수 없습니다.')
+
+    if (
+      electionAxis &&
+      (electionAxis.countryId || electionAxis.historicalCountryId) &&
+      (chamber.countryId || chamber.historicalCountryId)
+    ) {
+      const directOk = await areJurisdictionsCompatible(
+        this.prisma,
+        electionAxis,
+        {
+          countryId: chamber.countryId ?? null,
+          historicalCountryId: chamber.historicalCountryId ?? null,
+        },
+      )
+      if (!directOk) {
+        const sameModernBridge =
+          Boolean(
+            electionAxis.countryId &&
+              chamber.countryId &&
+              electionAxis.countryId === chamber.countryId,
+          ) ||
+          (await this.shareAnyModernCountryBridge(
+            electionAxis.historicalCountryId,
+            chamber.historicalCountryId,
+          ))
+        if (!sameModernBridge) {
+          throw new BadRequestException(
+            `원(${chamber.name})의 소속 국가가 이 선거의 소속 국가와 일치하지 않습니다.`,
+          )
+        }
+      }
+    }
     return raw
+  }
+
+  private async shareAnyModernCountryBridge(
+    leftHistoricalId: string | null,
+    rightHistoricalId: string | null,
+  ): Promise<boolean> {
+    if (
+      !leftHistoricalId ||
+      !rightHistoricalId ||
+      !this.prisma.historicalCountryModernCountry?.findMany
+    ) {
+      return false
+    }
+    const [leftLinks, rightLinks] = await Promise.all([
+      this.prisma.historicalCountryModernCountry.findMany({
+        where: { historicalCountryId: leftHistoricalId },
+        select: { modernCountryId: true },
+      }),
+      this.prisma.historicalCountryModernCountry.findMany({
+        where: { historicalCountryId: rightHistoricalId },
+        select: { modernCountryId: true },
+      }),
+    ])
+    const rightSet = new Set(rightLinks.map((row) => row.modernCountryId))
+    return leftLinks.some((row) => rightSet.has(row.modernCountryId))
+  }
+
+  /**
+   * MySQL UNIQUE 인덱스는 NULL 컬럼(chamberId=null 또는 historicalCountryId=null)이 섞이면 중복을 허용하므로,
+   * 회차(convocationOrdinal)가 지정된 경우 동일 (국가, 역사국가, 선거유형, 원) 내 중복을 앱 레벨에서 선제 차단한다.
+   */
+  private async assertUniqueConvocationOrdinal(input: {
+    excludeId?: string
+    countryId: string | null
+    historicalCountryId: string | null
+    electionType: string
+    chamberId: string | null
+    convocationOrdinal: number | null
+  }): Promise<void> {
+    if (
+      input.convocationOrdinal == null ||
+      !this.prisma.election?.findFirst ||
+      (!input.countryId && !input.historicalCountryId)
+    ) {
+      return
+    }
+    const duplicate = await this.prisma.election.findFirst({
+      where: {
+        ...(input.excludeId ? { id: { not: input.excludeId } } : {}),
+        countryId: input.countryId,
+        historicalCountryId: input.historicalCountryId,
+        electionType: input.electionType as any,
+        chamberId: input.chamberId,
+        convocationOrdinal: input.convocationOrdinal,
+      },
+      select: { id: true, name: true },
+    })
+    if (duplicate) {
+      throw new ConflictException(
+        `동일 국가·유형${input.chamberId ? '·원' : ''}에 제${input.convocationOrdinal}대 회차 선거(${duplicate.name})가 이미 등록되어 있습니다.`,
+      )
+    }
   }
 
   /**
@@ -1302,6 +1488,8 @@ export class ElectionController {
       select: {
         id: true,
         accountId: true,
+        electionType: true,
+        chamberId: true,
         countryId: true,
         historicalCountryId: true,
         pollDate: true,

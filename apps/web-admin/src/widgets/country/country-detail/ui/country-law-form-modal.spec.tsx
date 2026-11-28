@@ -181,6 +181,108 @@ describe('LawFormModal — 사건 등록 모달 문법 재디자인', () => {
       expect(onCreateLawType).toHaveBeenCalledWith('율령')
     })
   })
+
+  it('의회 원(chambers) 목록이 주어지면 의결 원·찬반 의석수를 선택해 함께 제출한다', async () => {
+    const { onSubmit } = renderLawModal({
+      chambers: [
+        {
+          id: 'ch-bundestag',
+          name: '연방의회',
+          localName: 'Bundestag',
+          role: 'LOWER',
+          sortOrder: 0,
+          sizes: [],
+        } as any,
+      ],
+    })
+
+    fireEvent.change(screen.getByLabelText(/^명칭/), {
+      target: { value: '독일연방공화국 기본법' },
+    })
+    fireEvent.change(screen.getByLabelText(/^의결 원·표결/), {
+      target: { value: 'ch-bundestag' },
+    })
+    fireEvent.change(screen.getByLabelText('찬성(석)'), {
+      target: { value: '53' },
+    })
+    fireEvent.change(screen.getByLabelText('반대(석)'), {
+      target: { value: '12' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '법령 등록' }))
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mode: 'create',
+          body: expect.objectContaining({
+            name: '독일연방공화국 기본법',
+            passedChamberId: 'ch-bundestag',
+            yeas: 53,
+            nays: 12,
+          }),
+        }),
+      )
+    })
+  })
+
+  it('정체(politicalSystems)가 주어지면 제1원(하원·단원)을 의결 원으로 자동 기본 세팅한다', async () => {
+    const { onSubmit } = renderLawModal({
+      chambers: [
+        {
+          id: 'ch-bundesrat',
+          name: '연방참의원',
+          localName: 'Bundesrat',
+          role: 'UPPER',
+          sortOrder: 0,
+          sizes: [],
+        } as any,
+        {
+          id: 'ch-bundestag',
+          name: '연방의회',
+          localName: 'Bundestag',
+          role: 'LOWER',
+          sortOrder: 1,
+          sizes: [],
+        } as any,
+      ],
+      politicalSystems: [
+        {
+          id: 'ps-de',
+          name: '독일연방공화국 체제',
+          countryId: 'de',
+          historicalCountryId: null,
+          isCurrent: true,
+          governmentForm: 'PARLIAMENTARY',
+          legislatureType: 'BICAMERAL',
+          lowerChamberId: 'ch-bundestag',
+          upperChamberId: 'ch-bundesrat',
+        } as any,
+      ],
+    })
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^의결 원·표결/)).toHaveValue(
+        'ch-bundestag',
+      )
+    })
+
+    fireEvent.change(screen.getByLabelText(/^명칭/), {
+      target: { value: '연방선거법' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '법령 등록' }))
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mode: 'create',
+          body: expect.objectContaining({
+            name: '연방선거법',
+            passedChamberId: 'ch-bundestag',
+          }),
+        }),
+      )
+    })
+  })
 })
 
 describe('CountryLawsSection — 공용 보라색 등록 버튼 + 모달 연동', () => {

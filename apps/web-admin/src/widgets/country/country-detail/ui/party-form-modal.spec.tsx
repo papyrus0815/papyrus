@@ -16,6 +16,7 @@ jest.mock('@/shared/hooks/use-click-sound.hook', () => ({ useClickSound: () => j
 jest.mock('@/shared/api/client', () => ({ getApiConnection: () => ({}) }))
 jest.mock('@/shared/api/api.service', () => ({}))
 jest.mock('@/shared/api/military-unit', () => ({}))
+jest.mock('@/entities/political-system/api', () => ({ usePoliticalSystems: () => ({ data: [] }) }))
 jest.mock('@/shared/api/political-party', () => ({
   /* 상수·라벨(종류·이름 유형·법적 지위)은 실제 모듈 그대로 — 네트워크만 막는다 */
   ...jest.requireActual('@/shared/api/political-party'),

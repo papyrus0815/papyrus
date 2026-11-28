@@ -150,12 +150,6 @@ export class CabinetPoliticalPartyController {
       if (epr.partyId !== body.partyId) {
         throw new BadRequestException('선거 집계와 선택한 정당이 일치하지 않습니다.')
       }
-      const taken = await this.prisma.cabinetPoliticalParty.findFirst({
-        where: { electionPartyResultId: body.electionPartyResultId },
-      })
-      if (taken) {
-        throw new BadRequestException('이 선거 집계는 이미 다른 행정부와 연결되어 있습니다.')
-      }
 
       const ec = epr.election
       const cabinetPolityScope = cabinet.headTenure ?? {

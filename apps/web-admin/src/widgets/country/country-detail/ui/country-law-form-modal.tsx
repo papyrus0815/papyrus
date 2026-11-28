@@ -23,7 +23,19 @@ import {
 import styled from 'styled-components'
 
 import * as EventFormS from '@/pages/events/create/event-create.styles'
+import {
+  defaultPassedChamberIdFromSystem,
+  findPoliticalSystemAtDate,
+  GOVERNMENT_FORM_LABEL,
+  LEGISLATURE_TYPE_LABEL,
+} from '@/entities/political-system/model/political-system'
+import {
+  type ChamberDto,
+  chamberLabel,
+  labelChamberRole,
+} from '@/shared/api/chamber'
 import type { LawRow, LawTypeRow } from '@/shared/api/election'
+import type { PoliticalSystem } from '@/shared/api/political-system'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
 import {
@@ -204,6 +216,10 @@ export interface LawFormSubmitPayload {
     lawTypeId: string | null
     countryId: string | null
     historicalCountryId: string | null
+    passedChamberId?: string | null
+    yeas?: number | null
+    nays?: number | null
+    abstentions?: number | null
   }
 }
 
@@ -213,6 +229,8 @@ export interface LawFormModalProps {
   initial?: LawRow | null
   lawScope: { countryId?: string; historicalCountryId?: string }
   historicalCountryOptions?: ReadonlyArray<{ id: string; name: string }>
+  chambers?: ReadonlyArray<ChamberDto>
+  politicalSystems?: ReadonlyArray<PoliticalSystem>
   lawTypes: ReadonlyArray<LawTypeRow>
   saving: boolean
   creatingLawType?: boolean
@@ -227,6 +245,8 @@ export function LawFormModal({
   initial,
   lawScope,
   historicalCountryOptions = [],
+  chambers = [],
+  politicalSystems = [],
   lawTypes,
   saving,
   creatingLawType = false,
@@ -252,6 +272,21 @@ export function LawFormModal({
   )
   const [paragraphInput, setParagraphInput] = useState(() =>
     initial?.paragraphNumber != null ? String(initial.paragraphNumber) : '',
+  )
+  const [passedChamberId, setPassedChamberId] = useState(
+    () => initial?.passedChamberId ?? initial?.passedChamber?.id ?? '',
+  )
+  const passedChamberManuallyTouchedRef = useRef(
+    Boolean(initial?.passedChamberId ?? initial?.passedChamber?.id),
+  )
+  const [yeasInput, setYeasInput] = useState(() =>
+    initial?.yeas != null ? String(initial.yeas) : '',
+  )
+  const [naysInput, setNaysInput] = useState(() =>
+    initial?.nays != null ? String(initial.nays) : '',
+  )
+  const [abstentionsInput, setAbstentionsInput] = useState(() =>
+    initial?.abstentions != null ? String(initial.abstentions) : '',
   )
   const [summary, setSummary] = useState(() => initial?.summary ?? '')
   const [noteInput, setNoteInput] = useState(() => initial?.note ?? '')
@@ -293,6 +328,17 @@ export function LawFormModal({
       setParagraphInput(
         target?.paragraphNumber != null ? String(target.paragraphNumber) : '',
       )
+      setPassedChamberId(
+        target?.passedChamberId ?? target?.passedChamber?.id ?? '',
+      )
+      passedChamberManuallyTouchedRef.current = Boolean(
+        target?.passedChamberId ?? target?.passedChamber?.id,
+      )
+      setYeasInput(target?.yeas != null ? String(target.yeas) : '')
+      setNaysInput(target?.nays != null ? String(target.nays) : '')
+      setAbstentionsInput(
+        target?.abstentions != null ? String(target.abstentions) : '',
+      )
       setSummary(target?.summary ?? '')
       setNoteInput(target?.note ?? '')
       setDateErrors({})
@@ -308,6 +354,60 @@ export function LawFormModal({
     if (!isOpen) return
     applyFromInitial(mode === 'edit' ? initial : null)
   }, [isOpen, mode, initial, applyFromInitial])
+
+  const matchedPoliticalSystem = useMemo(
+    () =>
+      findPoliticalSystemAtDate(politicalSystems, {
+        countryId: lawScope.countryId ?? null,
+        historicalCountryId:
+          lawScope.historicalCountryId ?? (scopeHistoricalCountryId || null),
+        isoDate: startDateInput || null,
+        fallbackToCurrent: !startDateInput,
+      }),
+    [
+      politicalSystems,
+      lawScope.countryId,
+      lawScope.historicalCountryId,
+      scopeHistoricalCountryId,
+      startDateInput,
+    ],
+  )
+
+  const sortedChambers = useMemo(() => {
+    const activeIds = new Set(
+      [
+        matchedPoliticalSystem?.lowerChamberId,
+        matchedPoliticalSystem?.upperChamberId,
+      ].filter((id): id is string => Boolean(id)),
+    )
+    return [...chambers].sort((left, right) => {
+      const leftActive = activeIds.has(left.id) ? 0 : 1
+      const rightActive = activeIds.has(right.id) ? 0 : 1
+      if (leftActive !== rightActive) return leftActive - rightActive
+      return left.name.localeCompare(right.name, 'ko')
+    })
+  }, [chambers, matchedPoliticalSystem])
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      mode !== 'create' ||
+      passedChamberManuallyTouchedRef.current ||
+      passedChamberId ||
+      chambers.length === 0
+    ) {
+      return
+    }
+    const suggestedChamberId = defaultPassedChamberIdFromSystem(
+      matchedPoliticalSystem,
+    )
+    if (
+      suggestedChamberId &&
+      chambers.some((chamber) => chamber.id === suggestedChamberId)
+    ) {
+      setPassedChamberId(suggestedChamberId)
+    }
+  }, [isOpen, mode, passedChamberId, chambers, matchedPoliticalSystem])
 
   const showHistoricalCountryPicker = Boolean(
     lawScope.countryId &&
@@ -423,8 +523,21 @@ export function LawFormModal({
         endDateInput,
         articleInput.trim(),
         paragraphInput.trim(),
+        passedChamberId.trim(),
+        yeasInput.trim(),
+        naysInput.trim(),
+        abstentionsInput.trim(),
       ].filter(Boolean).length,
-    [startDateInput, endDateInput, articleInput, paragraphInput],
+    [
+      startDateInput,
+      endDateInput,
+      articleInput,
+      paragraphInput,
+      passedChamberId,
+      yeasInput,
+      naysInput,
+      abstentionsInput,
+    ],
   )
 
   const narrativeFilledCount = useMemo(
@@ -556,6 +669,28 @@ export function LawFormModal({
         scopeHistoricalCountryId,
       )
 
+      const parseVoteInt = (raw: string): number | null => {
+        const trimmed = raw.trim()
+        if (!trimmed) return null
+        const num = Number(trimmed)
+        return Number.isInteger(num) && num >= 0 ? num : null
+      }
+      const hasAnyChamberVoteFields = Boolean(
+        passedChamberId ||
+          yeasInput.trim() ||
+          naysInput.trim() ||
+          abstentionsInput.trim() ||
+          mode === 'edit',
+      )
+      const chamberVoteFields = hasAnyChamberVoteFields
+        ? {
+            passedChamberId: passedChamberId || null,
+            yeas: parseVoteInt(yeasInput),
+            nays: parseVoteInt(naysInput),
+            abstentions: parseVoteInt(abstentionsInput),
+          }
+        : {}
+
       const result = await onSubmit({
         mode,
         id: mode === 'edit' ? initial?.id : undefined,
@@ -570,6 +705,7 @@ export function LawFormModal({
           note: noteInput.trim() || null,
           lawTypeId: lawTypeId || null,
           ...scopeFields,
+          ...chamberVoteFields,
         },
       })
 
@@ -577,6 +713,10 @@ export function LawFormModal({
         setName('')
         setArticleInput('')
         setParagraphInput('')
+        setPassedChamberId('')
+        setYeasInput('')
+        setNaysInput('')
+        setAbstentionsInput('')
         setStartDateInput('')
         setEndDateInput('')
         setSummary('')
@@ -602,6 +742,10 @@ export function LawFormModal({
       endDateInput,
       noteInput,
       lawTypeId,
+      passedChamberId,
+      yeasInput,
+      naysInput,
+      abstentionsInput,
       scrollToTopAndFocusName,
     ],
   )
@@ -878,6 +1022,84 @@ export function LawFormModal({
           )}
         </EventFormS.FormField>
       </EventFormS.FormRow>
+
+      {chambers.length > 0 ||
+      passedChamberId ||
+      yeasInput ||
+      naysInput ||
+      abstentionsInput ? (
+        <EventFormS.FormRow>
+          <EventFormS.FormLabel htmlFor="country-law-passed-chamber">
+            의결 원·표결<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+          </EventFormS.FormLabel>
+          <EventFormS.FormField>
+            {sortedChambers.length > 0 ? (
+              <FormSelectNative
+                id="country-law-passed-chamber"
+                value={passedChamberId}
+                onChange={(event) => {
+                  passedChamberManuallyTouchedRef.current = true
+                  setPassedChamberId(event.target.value)
+                }}
+              >
+                <option value="">(미지정 · 의결 원 기록 안 함)</option>
+                {sortedChambers.map((chamber) => (
+                  <option key={chamber.id} value={chamber.id}>
+                    {chamberLabel(chamber)} · {labelChamberRole(chamber.role)}
+                  </option>
+                ))}
+              </FormSelectNative>
+            ) : null}
+            {matchedPoliticalSystem ? (
+              <EventFormS.Hint>
+                활성 헌정 체제:{' '}
+                <strong>
+                  {matchedPoliticalSystem.name?.trim() || '헌정 체제'}
+                </strong>
+                {matchedPoliticalSystem.governmentForm
+                  ? ` · ${GOVERNMENT_FORM_LABEL[matchedPoliticalSystem.governmentForm]}`
+                  : ''}
+                {matchedPoliticalSystem.legislatureType
+                  ? ` · ${LEGISLATURE_TYPE_LABEL[matchedPoliticalSystem.legislatureType]}`
+                  : ''}
+              </EventFormS.Hint>
+            ) : null}
+            <FormS.SubTitleGrid
+              style={{ marginTop: chambers.length > 0 ? 8 : 0 }}
+            >
+              <FormS.SubTitleField htmlFor="country-law-yeas">
+                <FormS.SubTitleLabel>찬성(석)</FormS.SubTitleLabel>
+                <EventFormS.Input
+                  id="country-law-yeas"
+                  type="text"
+                  inputMode="numeric"
+                  value={yeasInput}
+                  onChange={(event) =>
+                    setYeasInput(event.target.value.replace(/\D/g, ''))
+                  }
+                  placeholder="예: 198"
+                />
+              </FormS.SubTitleField>
+              <FormS.SubTitleField htmlFor="country-law-nays">
+                <FormS.SubTitleLabel>반대(석)</FormS.SubTitleLabel>
+                <EventFormS.Input
+                  id="country-law-nays"
+                  type="text"
+                  inputMode="numeric"
+                  value={naysInput}
+                  onChange={(event) =>
+                    setNaysInput(event.target.value.replace(/\D/g, ''))
+                  }
+                  placeholder="예: 2"
+                />
+              </FormS.SubTitleField>
+            </FormS.SubTitleGrid>
+            <EventFormS.Hint>
+              제헌국회·하원·상원 등 가결 의회와 표결 의석 수를 함께 남깁니다.
+            </EventFormS.Hint>
+          </EventFormS.FormField>
+        </EventFormS.FormRow>
+      ) : null}
     </FormS.FormGroupSection>
   )
 

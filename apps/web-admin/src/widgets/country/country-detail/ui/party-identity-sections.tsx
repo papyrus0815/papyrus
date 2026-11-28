@@ -11,6 +11,11 @@ import { FiEdit2, FiPlus, FiStar, FiTrash2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import * as EventFormS from '@/pages/events/create/event-create.styles'
+import { usePoliticalSystems } from '@/entities/political-system/api'
+import {
+  findPoliticalSystemAtDate,
+  formatPoliticalSystemContextSummary,
+} from '@/entities/political-system/model/political-system'
 import { getLaws } from '@/shared/api/election'
 import {
   POLITICAL_PARTY_ALIAS_TYPE_OPTIONS,
@@ -547,6 +552,26 @@ export function PartyLegalStatusFormModal({
   })
   const sortedLaws = useMemo(() => [...laws].sort((left, right) => left.name.localeCompare(right.name, 'ko')), [laws])
 
+  const { data: politicalSystems = [] } = usePoliticalSystems(
+    countryId || historicalCountryId ? { countryId, historicalCountryId } : {},
+  )
+  const activeSystemAtStart = useMemo(
+    () =>
+      findPoliticalSystemAtDate(politicalSystems, {
+        countryId: countryId ?? null,
+        historicalCountryId: historicalCountryId ?? null,
+        era: start.era,
+        year: start.year ?? null,
+        month: start.month ?? null,
+        day: start.day ?? null,
+        fallbackToCurrent: start.year == null,
+      }),
+    [politicalSystems, countryId, historicalCountryId, start],
+  )
+  const isOnePartyRegime =
+    activeSystemAtStart?.partySystem === 'ONE_PARTY' ||
+    activeSystemAtStart?.governmentForm === 'ONE_PARTY'
+
   const startError = periodDateFormError(start)
   const endError = isCurrent ? null : periodDateFormError(end)
   const inverted = !isCurrent && isPeriodFormInverted(start, end)
@@ -598,6 +623,59 @@ export function PartyLegalStatusFormModal({
                 ))}
               </FormSelectNative>
               {statusHint ? <EventFormS.Hint>{statusHint}</EventFormS.Hint> : null}
+              {isOnePartyRegime && activeSystemAtStart ? (
+                <EventFormS.Hint>
+                  당시 헌정 체제({formatPoliticalSystemContextSummary(activeSystemAtStart) || '일당제'})는 일당제입니다 — 집권 정당이면{' '}
+                  <button
+                    type="button"
+                    onClick={() => setStatus('SOLE_LEGAL')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: 'inherit',
+                      fontWeight: 700,
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    유일 합법 정당
+                  </button>
+                  {' · '}
+                  <button
+                    type="button"
+                    onClick={() => setStatus('RULING_STATE_PARTY')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: 'inherit',
+                      fontWeight: 700,
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    집권 국가정당
+                  </button>
+                  , 야당·타 정당이면{' '}
+                  <button
+                    type="button"
+                    onClick={() => setStatus('BANNED')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: 'inherit',
+                      fontWeight: 700,
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    불법화·금지
+                  </button>
+                  를 권장합니다.
+                </EventFormS.Hint>
+              ) : null}
             </EventFormS.FormField>
           </EventFormS.FormRow>
           <PeriodPair

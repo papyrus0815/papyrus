@@ -10,8 +10,9 @@ type PrismaElectionClient = {
 }
 
 /**
- * 동일 국가(현대/역사)·동일 선거 유형·동일 행정 범위에서,
+ * 동일 국가(현대/역사)·동일 선거 유형·동일 의회 원(chamber)·동일 행정 범위에서,
  * 직전 회차(회차 번호 - 1) 또는 직전 투표일(회차 미입력 시) 선거 1건을 찾는다.
+ * 양원제 국가에서 하원 선거가 직전 상원 선거와 섞여 비교되는 것을 막기 위해 chamberId가 지정된 경우 같은 원끼리만 비교한다.
  */
 export async function findPreviousComparableElection(
   prisma: PrismaElectionClient,
@@ -25,6 +26,7 @@ export async function findPreviousComparableElection(
     | 'convocationOrdinal'
     | 'pollDate'
   > & {
+    chamberId?: string | null
     accountId?: string | null
     status?: string | null
   },
@@ -37,6 +39,10 @@ export async function findPreviousComparableElection(
     electionType: current.electionType,
     NOT: { id: current.id },
     status: { not: 'CANCELLED' },
+  }
+
+  if (current.chamberId) {
+    scopeWhere.chamberId = current.chamberId
   }
 
   if (current.accountId !== undefined) {

@@ -29,6 +29,7 @@ import {
   FiX,
   FiCheckSquare,
   FiUsers,
+  FiUserPlus,
   FiLink,
 } from 'react-icons/fi'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -64,6 +65,19 @@ import {
   ledgerSubtleFill,
 } from '@/entities/event/ui/ledger-tokens'
 import { usePersons } from '@/entities/person/api'
+import {
+  usePoliticalSystems,
+  type PoliticalSystem,
+} from '@/entities/political-system/api'
+import {
+  ELECTORAL_SYSTEM_TYPE_LABEL,
+  findPoliticalSystemAtDate,
+  formatPoliticalSystemContextSummary,
+  GOVERNMENT_FORM_LABEL,
+  HEAD_SELECTION_METHOD_LABEL,
+  headOfStateTitleOf,
+  PARTY_SYSTEM_LABEL,
+} from '@/entities/political-system/model/political-system'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import {
   ELECTION_STATUS_OPTIONS,
@@ -131,11 +145,13 @@ import { pathKeys } from '@/shared/router'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { PopoverMenu } from '@/shared/ui/popover-menu'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
-import { chamberApi, chamberKeys, chamberLabel, chamberSeatsAt, labelChamberRole } from '@/shared/api/chamber'
+import { chamberApi, chamberKeys, chamberLabel, chamberSeatsAt, labelChamberComposition, labelChamberRole } from '@/shared/api/chamber'
+import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import {
   ModalBody,
   ModalBoxWide,
@@ -1705,6 +1721,12 @@ export function CountryElectionsSection({
     | { mode: 'edit'; electionId: string; alliance: ElectionAllianceDto }
     | null
   >(null)
+  /** 당선 후보 → 공직 재임(GovernmentPositionTenure) 원스톱 연결 */
+  const [tenureLinkTarget, setTenureLinkTarget] = useState<{
+    candidacy: ElectionCandidacyDto
+    election: ElectionDetailDto
+    matchedSystem: PoliticalSystem | null
+  } | null>(null)
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string
     message: string
@@ -1731,15 +1753,69 @@ export function CountryElectionsSection({
     enabled: !!scopeKey,
   })
 
+  const { data: politicalSystems = [] } = usePoliticalSystems(
+    scopeKey ? electionScope : {},
+  )
+
+  /** 양원제 구분: 선거 목록에 등장하는 의회 원(Chamber) 목록 */
+  const distinctElectionChambers = useMemo(() => {
+    const byId = new Map<
+      string,
+      { id: string; label: string; role: string; count: number }
+    >()
+    for (const row of list) {
+      if (!row.chamber?.id) continue
+      const existing = byId.get(row.chamber.id)
+      if (existing) {
+        existing.count += 1
+      } else {
+        byId.set(row.chamber.id, {
+          id: row.chamber.id,
+          label: chamberLabel(row.chamber),
+          role: row.chamber.role,
+          count: 1,
+        })
+      }
+    }
+    return Array.from(byId.values())
+  }, [list])
+
+  const [stripChamberId, setStripChamberId] = useState<string>(
+    () => searchParams.get('chamberId') ?? '',
+  )
+  const effectiveStripChamberId = useMemo(() => {
+    if (distinctElectionChambers.length <= 1) return ''
+    if (
+      stripChamberId &&
+      distinctElectionChambers.some((ch) => ch.id === stripChamberId)
+    ) {
+      return stripChamberId
+    }
+    if (
+      detail?.chamberId &&
+      distinctElectionChambers.some((ch) => ch.id === detail.chamberId)
+    ) {
+      return detail.chamberId
+    }
+    const lowerFirst =
+      distinctElectionChambers.find((ch) => ch.role !== 'UPPER') ??
+      distinctElectionChambers[0]
+    return lowerFirst?.id ?? ''
+  }, [distinctElectionChambers, stripChamberId, detail?.chamberId])
+
   /* 「역대 의회 구성」 — 의석이 있는 선거 최근 8회(없으면 전체 최근 8회)의 상세를 불러 정당별 의석을 얻는다.
-     목록 응답엔 정당 집계가 없다. 상세와 같은 키라 고른 선거를 열 때 캐시를 함께 쓴다. */
+     양원제 국가에서 하원(예: 465석)과 상원(예: 248석) 선거가 한 띠에 번갈아 섞이지 않도록 활성 원별로 묶는다. */
   const parliamentStripElections = useMemo(() => {
-    const withSeats = list.filter((row) => (row.totalSeats ?? 0) > 0)
-    const pool = withSeats.length > 0 ? withSeats : list
+    const chamberScoped = effectiveStripChamberId
+      ? list.filter((row) => row.chamberId === effectiveStripChamberId)
+      : list
+    const baseList = chamberScoped.length > 0 ? chamberScoped : list
+    const withSeats = baseList.filter((row) => (row.totalSeats ?? 0) > 0)
+    const pool = withSeats.length > 0 ? withSeats : baseList
     return [...pool]
       .sort((left, right) => String(left.pollDate).localeCompare(String(right.pollDate)))
       .slice(-8)
-  }, [list])
+  }, [list, effectiveStripChamberId])
   const parliamentStripQueries = useQueries({
     queries: parliamentStripElections.map((row) => ({
       queryKey: qk.detail(row.id),
@@ -2186,6 +2262,12 @@ export function CountryElectionsSection({
   /** 목록 필터 — 탭 전환에도 유지 (컴포넌트 마운트 유지 중) */
   const [listSearch, setListSearch] = useState('')
   const [listTypeFilter, setListTypeFilter] = useState<string>('')
+  const [listChamberFilter, setListChamberFilter] = useState<string>(
+    () => searchParams.get('chamberId') ?? '',
+  )
+  const [listRegimeFilter, setListRegimeFilter] = useState<string>(
+    () => searchParams.get('regimeId') ?? '',
+  )
   const [listStatusFilter, setListStatusFilter] = useState<string>('')
   const [listSortKey, setListSortKey] = useState<'pollDate' | 'ordinal'>(
     'pollDate',
@@ -2194,14 +2276,87 @@ export function CountryElectionsSection({
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [partyCreateTick, setPartyCreateTick] = useState(0)
 
+  const regimeIdFromUrl = searchParams.get('regimeId') ?? ''
+  useEffect(() => {
+    setListRegimeFilter(regimeIdFromUrl)
+  }, [regimeIdFromUrl])
+
+  const updateRegimeFilter = useCallback(
+    (nextRegimeId: string) => {
+      setListRegimeFilter(nextRegimeId)
+      const nextParams = new URLSearchParams(searchParams)
+      if (nextRegimeId) {
+        nextParams.set('regimeId', nextRegimeId)
+      } else {
+        nextParams.delete('regimeId')
+      }
+      setSearchParams(nextParams, { replace: true })
+    },
+    [searchParams, setSearchParams],
+  )
+
+  const electionRegimeById = useMemo(() => {
+    const map = new Map<string, PoliticalSystem>()
+    if (politicalSystems.length === 0) return map
+    for (const row of list) {
+      const matched = findPoliticalSystemAtDate(politicalSystems, {
+        countryId: row.countryId,
+        historicalCountryId: row.historicalCountryId,
+        isoDate: row.pollDate,
+        fallbackToCurrent: false,
+      })
+      if (matched) {
+        map.set(row.id, matched)
+      }
+    }
+    return map
+  }, [list, politicalSystems])
+
+  const regimeFilterEntries = useMemo(() => {
+    if (politicalSystems.length < 2) return []
+    return politicalSystems.map((sysItem) => {
+      const label =
+        sysItem.name?.trim() ||
+        (sysItem.governmentForm
+          ? GOVERNMENT_FORM_LABEL[sysItem.governmentForm]
+          : '헌정 체제')
+      let count = 0
+      for (const row of list) {
+        if (electionRegimeById.get(row.id)?.id === sysItem.id) {
+          count += 1
+        }
+      }
+      return {
+        id: sysItem.id,
+        label,
+        count,
+      }
+    })
+  }, [politicalSystems, list, electionRegimeById])
+
   const filteredList = useMemo(() => {
     const query = listSearch.trim().toLowerCase()
     return list.filter((row) => {
+      const matchedRegime = electionRegimeById.get(row.id)
       if (query) {
-        const hay = `${row.name} ${row.shortName ?? ''}`.toLowerCase()
+        const regimeTitle = matchedRegime?.name ?? ''
+        const hay =
+          `${row.name} ${row.shortName ?? ''} ${row.chamber?.name ?? ''} ${regimeTitle}`.toLowerCase()
         if (!hay.includes(query)) return false
       }
       if (listTypeFilter && row.electionType !== listTypeFilter) return false
+      if (listRegimeFilter) {
+        if (listRegimeFilter === '__none__') {
+          if (matchedRegime) return false
+        } else if (matchedRegime?.id !== listRegimeFilter) {
+          return false
+        }
+      }
+      if (listChamberFilter === '__none__') {
+        if (row.chamberId) return false
+      } else if (listChamberFilter && row.chamberId !== listChamberFilter) {
+        return false
+      }
       if (listStatusFilter === '__completed__') {
         if (row.status !== 'FINALIZED' && row.status !== 'COMPLETED')
           return false
@@ -2213,7 +2368,15 @@ export function CountryElectionsSection({
       }
       return true
     })
-  }, [list, listSearch, listTypeFilter, listStatusFilter])
+  }, [
+    list,
+    listSearch,
+    listTypeFilter,
+    listRegimeFilter,
+    listChamberFilter,
+    listStatusFilter,
+    electionRegimeById,
+  ])
 
   const sortedList = useMemo(() => {
     const mult = listSortDir === 'asc' ? 1 : -1
@@ -2233,17 +2396,17 @@ export function CountryElectionsSection({
     return arr
   }, [filteredList, listSortKey, listSortDir])
 
-  /** 선거 서브탭 진입 시 선택된 선거가 없거나 목록에 없으면 가장 상단(최신) 선거 자동 선택 */
+  /** 선거 서브탭 진입 또는 체제·유형 필터 전환 시 선택된 선거가 표시 목록에 없으면 최상단 선거 자동 선택 */
   useEffect(() => {
     if (politicsViewTab !== 'elections' || listLoading) return
     if (sortedList.length === 0) return
-    const existsInList = selectedId
-      ? list.some((e) => e.id === selectedId)
+    const existsInSorted = selectedId
+      ? sortedList.some((e) => e.id === selectedId)
       : false
-    if (!selectedId || !existsInList) {
+    if (!selectedId || !existsInSorted) {
       setSelectedId(sortedList[0].id)
     }
-  }, [politicsViewTab, listLoading, sortedList, list, selectedId, setSelectedId])
+  }, [politicsViewTab, listLoading, sortedList, selectedId, setSelectedId])
 
   const sectionTheme = useTheme()
   const isSectionDark = sectionTheme.mode === 'dark'
@@ -2502,6 +2665,35 @@ export function CountryElectionsSection({
                         ? ` · 평균 투표율 ${electionKpiSummary.avgTurnout}%`
                         : ''}
                     </BentoCardBadge>
+                    {distinctElectionChambers.length > 1 ? (
+                      <div
+                        role="tablist"
+                        aria-label="의회 원 전환"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        {distinctElectionChambers.map((ch) => {
+                          const isActive = ch.id === effectiveStripChamberId
+                          return (
+                            <ElectionBentoLegendBtn
+                              key={ch.id}
+                              type="button"
+                              role="tab"
+                              aria-selected={isActive}
+                              $active={isActive}
+                              onClick={() => setStripChamberId(ch.id)}
+                            >
+                              <span>{ch.label}</span>
+                              <strong>{ch.count}</strong>
+                            </ElectionBentoLegendBtn>
+                          )
+                        })}
+                      </div>
+                    ) : null}
                   </BentoCardTitleGroup>
                   <BentoActionBtn
                     type="button"
@@ -2536,6 +2728,38 @@ export function CountryElectionsSection({
                           <strong>{slice.meta}</strong>
                         </ElectionBentoLegendBtn>
                       ))}
+                    </ElectionBentoLegendRow>
+                  ) : null}
+                  {regimeFilterEntries.length >= 2 ? (
+                    <ElectionBentoLegendRow aria-label="헌정 체제 시대별 선거 필터">
+                      <ElectionBentoLegendBtn
+                        type="button"
+                        $active={!listRegimeFilter}
+                        onClick={() => updateRegimeFilter('')}
+                        title="전체 헌정 체제 보기"
+                      >
+                        <span>전체 체제</span>
+                        <strong>{list.length}건</strong>
+                      </ElectionBentoLegendBtn>
+                      {regimeFilterEntries.map((regimeItem) => {
+                        const isActive = listRegimeFilter === regimeItem.id
+                        return (
+                          <ElectionBentoLegendBtn
+                            key={regimeItem.id}
+                            type="button"
+                            $active={isActive}
+                            onClick={() =>
+                              updateRegimeFilter(
+                                isActive ? '' : regimeItem.id,
+                              )
+                            }
+                            title={`${regimeItem.label} 시기 선거 필터 토글`}
+                          >
+                            <span>{regimeItem.label}</span>
+                            <strong>{regimeItem.count}건</strong>
+                          </ElectionBentoLegendBtn>
+                        )
+                      })}
                     </ElectionBentoLegendRow>
                   ) : null}
                 </BentoCardBody>
@@ -2590,6 +2814,7 @@ export function CountryElectionsSection({
                         $active={
                           filtersExpanded ||
                           !!listTypeFilter ||
+                          !!listChamberFilter ||
                           !!listStatusFilter ||
                           listSortKey !== 'pollDate' ||
                           listSortDir !== 'desc'
@@ -2601,6 +2826,7 @@ export function CountryElectionsSection({
                       >
                         <FiSliders size={14} strokeWidth={2.25} aria-hidden />
                         {(listTypeFilter ? 1 : 0) +
+                          (listChamberFilter ? 1 : 0) +
                           (listStatusFilter ? 1 : 0) +
                           (listSortKey !== 'pollDate' || listSortDir !== 'desc'
                             ? 1
@@ -2608,6 +2834,7 @@ export function CountryElectionsSection({
                         0 ? (
                           <FilterBadge>
                             {(listTypeFilter ? 1 : 0) +
+                              (listChamberFilter ? 1 : 0) +
                               (listStatusFilter ? 1 : 0) +
                               (listSortKey !== 'pollDate' ||
                               listSortDir !== 'desc'
@@ -2648,6 +2875,43 @@ export function CountryElectionsSection({
                           </ElectionListFilterSelect>
                         </ElectionListFilterRow>
                         <ElectionListFilterRow>
+                          {regimeFilterEntries.length >= 2 ? (
+                            <ElectionListFilterSelect
+                              value={listRegimeFilter}
+                              onChange={(e) =>
+                                updateRegimeFilter(e.target.value)
+                              }
+                              aria-label="헌정 체제 필터"
+                            >
+                              <option value="">전체 헌정 체제</option>
+                              {regimeFilterEntries.map((regimeItem) => (
+                                <option
+                                  key={regimeItem.id}
+                                  value={regimeItem.id}
+                                >
+                                  {regimeItem.label} ({regimeItem.count})
+                                </option>
+                              ))}
+                              <option value="__none__">체제 미매칭 시기</option>
+                            </ElectionListFilterSelect>
+                          ) : null}
+                          {distinctElectionChambers.length > 0 ? (
+                            <ElectionListFilterSelect
+                              value={listChamberFilter}
+                              onChange={(e) =>
+                                setListChamberFilter(e.target.value)
+                              }
+                              aria-label="의회 원 필터"
+                            >
+                              <option value="">전체 원(院)</option>
+                              {distinctElectionChambers.map((ch) => (
+                                <option key={ch.id} value={ch.id}>
+                                  {ch.label} ({ch.count})
+                                </option>
+                              ))}
+                              <option value="__none__">원 미지정 (대선·국민투표 등)</option>
+                            </ElectionListFilterSelect>
+                          ) : null}
                           <ElectionListFilterSelect
                             value={`${listSortKey}:${listSortDir}`}
                             onChange={(e) => {
@@ -2674,7 +2938,11 @@ export function CountryElectionsSection({
                     ) : null}
                     <ElectionListFilterMeta>
                       전체 {list.length}건 · 표시 {sortedList.length}건
-                      {listSearch || listTypeFilter || listStatusFilter ? (
+                      {listSearch ||
+                      listTypeFilter ||
+                      listRegimeFilter ||
+                      listChamberFilter ||
+                      listStatusFilter ? (
                         <>
                           {' · '}
                           <button
@@ -2682,6 +2950,8 @@ export function CountryElectionsSection({
                             onClick={() => {
                               setListSearch('')
                               setListTypeFilter('')
+                              updateRegimeFilter('')
+                              setListChamberFilter('')
                               setListStatusFilter('')
                             }}
                             style={{
@@ -2703,7 +2973,12 @@ export function CountryElectionsSection({
                 ) : null}
                 {listLoading ? (
                   <ElectionListScrollArea>
-                    <ChartSkeleton variant="bars" rows={6} />
+                    <LedgerTableSkeleton
+                      rows={6}
+                      columns={3}
+                      showToolbar={false}
+                      label="선거 목록을 불러오는 중"
+                    />
                   </ElectionListScrollArea>
                 ) : sortedList.length === 0 ? (
                   <ElectionListScrollArea>
@@ -2716,7 +2991,24 @@ export function CountryElectionsSection({
                     <ElectionListStack>
                       {sortedList.map((electionRow) => {
                         const end = electionListEndLine(electionRow)
+                        const matchedRowRegime =
+                          politicalSystems.length >= 2
+                            ? electionRegimeById.get(electionRow.id)
+                            : undefined
                         const subMetaParts: string[] = []
+                        if (matchedRowRegime) {
+                          const regimeText =
+                            matchedRowRegime.name?.trim() ||
+                            (matchedRowRegime.governmentForm
+                              ? GOVERNMENT_FORM_LABEL[
+                                  matchedRowRegime.governmentForm
+                                ]
+                              : null)
+                          if (regimeText) subMetaParts.push(regimeText)
+                        }
+                        if (electionRow.chamber) {
+                          subMetaParts.push(chamberLabel(electionRow.chamber))
+                        }
                         if (
                           electionRow.voterTurnoutPercent != null &&
                           String(electionRow.voterTurnoutPercent).trim() !== ''
@@ -2867,11 +3159,21 @@ export function CountryElectionsSection({
                         countryId ?? detail.countryId ?? undefined
                       }
                       parties={parties}
+                      politicalSystems={politicalSystems}
                       sameTypeElections={list.filter(
-                        (e) => e.electionType === detail.electionType,
+                        (e) =>
+                          e.electionType === detail.electionType &&
+                          (e.chamberId ?? null) === (detail.chamberId ?? null),
                       )}
                       onSelectElection={(eid) => setSelectedId(eid)}
                       candidacyLabel={candidacyLabel}
+                      onRegisterWinnerTenure={(cand, matchedSystem) =>
+                        setTenureLinkTarget({
+                          candidacy: cand,
+                          election: detail,
+                          matchedSystem,
+                        })
+                      }
                       onAddPartyResult={() =>
                         setPartyResultModal({
                           mode: 'create',
@@ -3081,6 +3383,7 @@ export function CountryElectionsSection({
             }
             existingElections={list}
             historicalCountryOptions={historicalCountryOptions}
+            politicalSystems={politicalSystems}
             saving={saveElectionMut.isPending}
             onClose={() => setElectionModal(null)}
             onSubmit={(payload) => {
@@ -3107,6 +3410,17 @@ export function CountryElectionsSection({
             parties={parties}
             districts={districts}
             existingCandidacies={detail?.candidacies ?? []}
+            activePoliticalSystem={
+              detail
+                ? findPoliticalSystemAtDate(politicalSystems, {
+                    countryId: detail.countryId ?? countryId ?? null,
+                    historicalCountryId:
+                      detail.historicalCountryId ?? historicalCountryId ?? null,
+                    isoDate: detail.pollDate,
+                    fallbackToCurrent: false,
+                  })
+                : null
+            }
             mode={candidacyModal.mode}
             initial={
               candidacyModal.mode === 'edit' ? candidacyModal.row : undefined
@@ -3262,6 +3576,75 @@ export function CountryElectionsSection({
             }
           />
         )}
+
+        {tenureLinkTarget &&
+        (tenureLinkTarget.candidacy.personId ??
+          tenureLinkTarget.candidacy.person?.id) ? (
+          <TenureRegisterPanel
+            personId={
+              (tenureLinkTarget.candidacy.personId ??
+                tenureLinkTarget.candidacy.person?.id)!
+            }
+            open
+            onClose={() => setTenureLinkTarget(null)}
+            onSuccess={() => {
+              invalidate()
+              void queryClient.invalidateQueries({
+                queryKey: ['tenures-by-country'],
+              })
+              void queryClient.invalidateQueries({
+                queryKey: ['cabinets-by-country'],
+              })
+              setTenureLinkTarget(null)
+            }}
+            initialCountryId={
+              countryId ?? tenureLinkTarget.election.countryId ?? undefined
+            }
+            initialHistoricalCountryId={
+              tenureLinkTarget.election.historicalCountryId ??
+              historicalCountryId ??
+              null
+            }
+            initialPositionDefinitionId={
+              tenureLinkTarget.election.electionType === 'PRESIDENTIAL_OR_HEAD'
+                ? (tenureLinkTarget.matchedSystem?.headOfStatePositionId ?? null)
+                : null
+            }
+            initialPositionTitle={
+              tenureLinkTarget.election.electionType === 'PRESIDENTIAL_OR_HEAD'
+                ? (tenureLinkTarget.matchedSystem
+                    ? headOfStateTitleOf(tenureLinkTarget.matchedSystem)
+                    : null) ?? '대통령'
+                : tenureLinkTarget.election.electionType ===
+                      'PARLIAMENTARY_CONSTITUENCY' ||
+                    tenureLinkTarget.election.electionType ===
+                      'PARLIAMENTARY_PROPORTIONAL' ||
+                    tenureLinkTarget.election.electionType === 'BY_ELECTION'
+                  ? tenureLinkTarget.election.chamber?.name
+                    ? `${tenureLinkTarget.election.chamber.name} 의원`
+                    : '국회의원'
+                  : null
+            }
+            initialPositionType={
+              tenureLinkTarget.election.electionType === 'PRESIDENTIAL_OR_HEAD'
+                ? 'HEAD_OF_STATE'
+                : tenureLinkTarget.election.electionType === 'LOCAL'
+                  ? 'LOCAL_GOVERNMENT'
+                  : 'LEGISLATOR'
+            }
+            initialStartDate={
+              tenureLinkTarget.election.legislatureTermStart ??
+              tenureLinkTarget.election.pollDate
+            }
+            initialPartyId={tenureLinkTarget.candidacy.partyId ?? null}
+            initialAppointmentMethod="DIRECT_ELECTION"
+            initialElectionCandidacyId={tenureLinkTarget.candidacy.id}
+            initialChamberId={tenureLinkTarget.election.chamberId ?? null}
+            initialOrdinal={
+              tenureLinkTarget.election.convocationOrdinal ?? null
+            }
+          />
+        ) : null}
       </ElectionsPoliticsTabPanel>
     </CountryElectionsSectionRoot>
   )
@@ -3272,9 +3655,11 @@ function ElectionDetailPanel({
   /** 서버 엔티티 검색 한정(정당 등) — 현대 국가 id */
   entityLinkCountryId,
   parties,
+  politicalSystems = [],
   sameTypeElections,
   onSelectElection,
   candidacyLabel,
+  onRegisterWinnerTenure,
   onAddPartyResult,
   onSyncPartyResultsFromCandidacies,
   syncingPartyResults,
@@ -3303,9 +3688,14 @@ function ElectionDetailPanel({
   detail: ElectionDetailDto
   entityLinkCountryId?: string
   parties: PoliticalPartyRow[]
+  politicalSystems?: PoliticalSystem[]
   sameTypeElections: ElectionListRow[]
   onSelectElection?: (electionId: string) => void
   candidacyLabel: (c: ElectionCandidacyDto) => string
+  onRegisterWinnerTenure?: (
+    c: ElectionCandidacyDto,
+    matchedSystem: PoliticalSystem | null,
+  ) => void
   onAddPartyResult: () => void
   onSyncPartyResultsFromCandidacies?: () => void
   syncingPartyResults?: boolean
@@ -3336,6 +3726,23 @@ function ElectionDetailPanel({
   creatingNarrativeEvent?: boolean
 }) {
   const navigate = useNavigate()
+
+  const matchedSystemAtPoll = useMemo(
+    () =>
+      findPoliticalSystemAtDate(politicalSystems, {
+        countryId: detail.countryId ?? entityLinkCountryId ?? null,
+        historicalCountryId: detail.historicalCountryId ?? null,
+        isoDate: detail.pollDate,
+        fallbackToCurrent: false,
+      }),
+    [
+      politicalSystems,
+      detail.countryId,
+      detail.historicalCountryId,
+      detail.pollDate,
+      entityLinkCountryId,
+    ],
+  )
 
   /** 본문 엔티티(인물) 클릭 — `RichTextProseWithEntityClicks` → 인물 상세 모달 */
   const [mentionPersonId, setMentionPersonId] = useState<string | null>(null)
@@ -4671,6 +5078,14 @@ function ElectionDetailPanel({
                     <span>{electionScopeCountryLabel(detail)}</span>
                   </ElectionHeroFactItem>
                 ) : null}
+                {matchedSystemAtPoll ? (
+                  <ElectionHeroFactItem>
+                    <span className="k">당시 정체</span>
+                    <span>
+                      {formatPoliticalSystemContextSummary(matchedSystemAtPoll)}
+                    </span>
+                  </ElectionHeroFactItem>
+                ) : null}
               </ElectionHeroCompactFacts>
 
               {/* ── 사건 상세 DetailPower.ElectionRow 스타일 핵심 결과 & 파워 바 ── */}
@@ -5118,6 +5533,13 @@ function ElectionDetailPanel({
                                 {detail.totalSeats != null
                                   ? ` · 총 ${detail.totalSeats}석`
                                   : ''}
+                                {matchedSystemAtPoll?.electoralSystem
+                                  ? ` · ${ELECTORAL_SYSTEM_TYPE_LABEL[matchedSystemAtPoll.electoralSystem]}`
+                                  : ''}
+                                {matchedSystemAtPoll?.electoralThresholdPercent !=
+                                null
+                                  ? ` · 봉쇄 ${matchedSystemAtPoll.electoralThresholdPercent}%`
+                                  : ''}
                               </ElectionSectionSubtitle>
                             </ElectionSectionHeaderLeft>
                             {/* 추가는 '정당 집계·추이' 탭에서 — 요약 카드엔 그 탭으로 가는 길 하나만 */}
@@ -5402,6 +5824,34 @@ function ElectionDetailPanel({
                                           <ElectedBadge style={{ marginLeft: 0 }}>
                                             당선
                                           </ElectedBadge>
+                                        ) : null}
+                                        {cand.resultingTenure ? (
+                                          <span
+                                            className="muted"
+                                            title="연결된 공직 재임"
+                                            style={{ fontSize: 11 }}
+                                          >
+                                            재임:{' '}
+                                            {cand.resultingTenure
+                                              .positionDefinition?.title ??
+                                              cand.resultingTenure.title ??
+                                              '연결됨'}
+                                          </span>
+                                        ) : cand.result?.elected &&
+                                          pid &&
+                                          onRegisterWinnerTenure ? (
+                                          <ElectionChainBtn
+                                            type="button"
+                                            onClick={() =>
+                                              onRegisterWinnerTenure(
+                                                cand,
+                                                matchedSystemAtPoll,
+                                              )
+                                            }
+                                            title="당선자의 대통령·의원·공직 재임 기록을 선거와 연결해 등록합니다"
+                                          >
+                                            + 재임 등록
+                                          </ElectionChainBtn>
                                         ) : null}
                                         {pct ? <strong>{pct}</strong> : null}
                                         {votesStr !== '—' ? (
@@ -6790,6 +7240,39 @@ function ElectionDetailPanel({
                                         {voteShareLabel}
                                       </CandidacyPartyMeta>
                                     ) : null}
+                                    {c.resultingTenure ? (
+                                      <CandidacyPartyMeta>
+                                        재임 연결:{' '}
+                                        {c.resultingTenure.positionDefinition
+                                          ?.title ??
+                                          c.resultingTenure.title ??
+                                          '공직 재임'}
+                                        {c.resultingTenure.ordinal != null
+                                          ? ` (제${c.resultingTenure.ordinal}대)`
+                                          : ''}
+                                      </CandidacyPartyMeta>
+                                    ) : c.result?.elected &&
+                                      resolvedPersonId &&
+                                      onRegisterWinnerTenure ? (
+                                      <div style={{ marginTop: 4 }}>
+                                        <ElectionChainBtn
+                                          type="button"
+                                          onClick={() =>
+                                            onRegisterWinnerTenure(
+                                              c,
+                                              matchedSystemAtPoll,
+                                            )
+                                          }
+                                          title="당선 결과를 바탕으로 공직 재임을 등록하고 이 선거와 연결합니다"
+                                        >
+                                          <FiUserPlus
+                                            size={11}
+                                            aria-hidden
+                                          />
+                                          재임 등록
+                                        </ElectionChainBtn>
+                                      </div>
+                                    ) : null}
                                   </DataTd>
                                   <DataTd>
                                     {rankSeatParts.length > 0
@@ -7327,6 +7810,7 @@ export function ElectionFormModal({
   initialTab,
   existingElections = [],
   historicalCountryOptions,
+  politicalSystems: externalPoliticalSystems,
   saving,
   onClose,
   onSubmit,
@@ -7343,6 +7827,8 @@ export function ElectionFormModal({
   existingElections?: ElectionListRow[]
   /** 현대 국가와 연결된 역사 국가 — 현대 국가 상세에서만 전달 */
   historicalCountryOptions: Array<{ id: string; name: string }>
+  /** 국가·역사국가 정체 목록 — 미전달 시 내부에서 조회 */
+  politicalSystems?: PoliticalSystem[]
   saving: boolean
   onClose: () => void
   onSubmit: (p: {
@@ -7358,6 +7844,7 @@ export function ElectionFormModal({
   const [electionType, setElectionType] = useState(
     initial?.electionType ?? 'PARLIAMENTARY_CONSTITUENCY',
   )
+  const electionTypeManuallyTouchedRef = useRef(mode === 'edit')
   const [status, setStatus] = useState(initial?.status ?? 'SCHEDULED')
   const [statusManuallyChanged, setStatusManuallyChanged] = useState(false)
   const [pollDate, setPollDate] = useState(
@@ -7384,18 +7871,14 @@ export function ElectionFormModal({
   )
   /* 어느 원의 선거인가(B7) — 원을 고르고 총 의석이 비어 있으면 투표 연도의 정원으로 채운다 */
   const [chamberId, setChamberId] = useState(initial?.chamberId ?? '')
-  const chamberScope = {
-    countryId: electionScope.historicalCountryId ? null : (electionScope.countryId ?? null),
-    historicalCountryId: electionScope.historicalCountryId ?? null,
-  }
-  const { data: chambers = [] } = useQuery({
-    queryKey: chamberKeys.list(chamberScope),
-    queryFn: () => chamberApi.list(chamberScope),
-    enabled: Boolean(chamberScope.countryId || chamberScope.historicalCountryId),
-    staleTime: 60_000,
-  })
+  const [chamberManuallyTouched, setChamberManuallyTouched] = useState(
+    Boolean(initial?.chamberId),
+  )
   const [totalSeatsStr, setTotalSeatsStr] = useState(
     initial?.totalSeats != null ? String(initial.totalSeats) : '',
+  )
+  const [totalSeatsManuallyTouched, setTotalSeatsManuallyTouched] = useState(
+    initial?.totalSeats != null,
   )
   const [pollEndYmd, setPollEndYmd] = useState(() =>
     toLocalDateYmd(initial?.pollEndDate),
@@ -7425,11 +7908,235 @@ export function ElectionFormModal({
     electionScope.countryId && !electionScope.historicalCountryId,
   )
 
+  const { data: fetchedPoliticalSystems = [] } = usePoliticalSystems(
+    externalPoliticalSystems === undefined ? electionScope : {},
+  )
+  const politicalSystems =
+    externalPoliticalSystems ?? fetchedPoliticalSystems
+
+  const effectiveHistoricalIdForLookup =
+    electionScope.historicalCountryId ?? (scopeHistoricalCountryId || null)
+
+  const chamberScope = useMemo(
+    () => ({
+      countryId: electionScope.historicalCountryId
+        ? null
+        : (electionScope.countryId ?? null),
+      historicalCountryId: electionScope.historicalCountryId ?? null,
+    }),
+    [electionScope.countryId, electionScope.historicalCountryId],
+  )
+  const { data: chambersRaw = [] } = useQuery({
+    queryKey: chamberKeys.list(chamberScope),
+    queryFn: () => chamberApi.list(chamberScope),
+    enabled: Boolean(chamberScope.countryId || chamberScope.historicalCountryId),
+    staleTime: 60_000,
+  })
+
+  /** 투표일과 선택된 정치체에 부합하는 활성 정체(PoliticalSystem) */
+  const activePoliticalSystem = useMemo(
+    () =>
+      findPoliticalSystemAtDate(politicalSystems, {
+        countryId: electionScope.countryId ?? null,
+        historicalCountryId: effectiveHistoricalIdForLookup,
+        isoDate: pollDate,
+        fallbackToCurrent: false,
+      }),
+    [
+      politicalSystems,
+      electionScope.countryId,
+      effectiveHistoricalIdForLookup,
+      pollDate,
+    ],
+  )
+
+  /** 현대국가 페이지에서 과거 투표일을 입력했을 때 연결된 역사국가 자동 추천 */
+  const suggestedHistoricalCountry = useMemo(() => {
+    if (
+      !showHistoricalCountryPicker ||
+      scopeHistoricalCountryId ||
+      !activePoliticalSystem?.historicalCountryId
+    ) {
+      return null
+    }
+    const found = historicalCountryOptions.find(
+      (hc) => hc.id === activePoliticalSystem.historicalCountryId,
+    )
+    if (!found) {
+      if (activePoliticalSystem.historicalCountry?.id) {
+        return {
+          id: activePoliticalSystem.historicalCountry.id,
+          name: activePoliticalSystem.historicalCountry.name,
+        }
+      }
+      return null
+    }
+    return found
+  }, [
+    showHistoricalCountryPicker,
+    scopeHistoricalCountryId,
+    activePoliticalSystem,
+    historicalCountryOptions,
+  ])
+
+  /** 활성 정체에 지정된 원(하원·상원)을 맨 위로 올린 원 목록 */
+  const chambers = useMemo(() => {
+    const activeSet = new Set(
+      [
+        activePoliticalSystem?.lowerChamberId,
+        activePoliticalSystem?.upperChamberId,
+      ].filter((id): id is string => Boolean(id)),
+    )
+    return [...chambersRaw].sort((left, right) => {
+      const leftActive = activeSet.has(left.id) ? 0 : 1
+      const rightActive = activeSet.has(right.id) ? 0 : 1
+      if (leftActive !== rightActive) return leftActive - rightActive
+      return left.name.localeCompare(right.name, 'ko')
+    })
+  }, [chambersRaw, activePoliticalSystem])
+
+  const isNonChamberElectionType =
+    electionType === 'PRESIDENTIAL_OR_HEAD' ||
+    electionType === 'REFERENDUM_OR_PLEBISCITE'
+  const isParliamentaryElectionType =
+    electionType === 'PARLIAMENTARY_CONSTITUENCY' ||
+    electionType === 'PARLIAMENTARY_PROPORTIONAL' ||
+    electionType === 'BY_ELECTION'
+
+  /** 원 정원 이력(ChamberSize) → 정체(lowerHouseSeats/upperHouseSeats) 폴백으로 당시 정원 산출 */
+  const deriveSeatsForChamberAtPoll = useCallback(
+    (targetChamberId: string, ymd: string): number | null => {
+      if (!targetChamberId) return null
+      const chamber = chambersRaw.find((item) => item.id === targetChamberId)
+      const pollYear = Number(String(ymd).slice(0, 4))
+      const validYear =
+        Number.isFinite(pollYear) && pollYear > 0 ? pollYear : null
+      if (chamber) {
+        const fromHistory = chamberSeatsAt(chamber.sizes, validYear)
+        if (fromHistory != null) return fromHistory
+      }
+      if (activePoliticalSystem) {
+        if (
+          targetChamberId === activePoliticalSystem.lowerChamberId &&
+          activePoliticalSystem.lowerHouseSeats != null
+        ) {
+          return activePoliticalSystem.lowerHouseSeats
+        }
+        if (
+          targetChamberId === activePoliticalSystem.upperChamberId &&
+          activePoliticalSystem.upperHouseSeats != null
+        ) {
+          return activePoliticalSystem.upperHouseSeats
+        }
+        if (
+          chamber?.role === 'UPPER' &&
+          activePoliticalSystem.upperHouseSeats != null
+        ) {
+          return activePoliticalSystem.upperHouseSeats
+        }
+        if (
+          chamber?.role !== 'UPPER' &&
+          activePoliticalSystem.lowerHouseSeats != null
+        ) {
+          return activePoliticalSystem.lowerHouseSeats
+        }
+      }
+      return null
+    },
+    [chambersRaw, activePoliticalSystem],
+  )
+
+  // 활성 정체(PoliticalSystem)에 따라 초기 선거 유형(입법부 없음→대선, 비례대표제→비례 총선) 및 기본 의회 원 자동 설정
+  useEffect(() => {
+    if (
+      mode !== 'create' ||
+      electionTypeManuallyTouchedRef.current ||
+      !activePoliticalSystem
+    ) {
+      return
+    }
+    if (activePoliticalSystem.legislatureType === 'NONE') {
+      if (electionType !== 'PRESIDENTIAL_OR_HEAD') {
+        setElectionType('PRESIDENTIAL_OR_HEAD')
+      }
+      return
+    }
+    if (
+      activePoliticalSystem.electoralSystem === 'PARTY_LIST_PR' &&
+      electionType === 'PARLIAMENTARY_CONSTITUENCY'
+    ) {
+      setElectionType('PARLIAMENTARY_PROPORTIONAL')
+    }
+  }, [mode, activePoliticalSystem, electionType])
+
+  // 대통령·국민투표 전환 시 원(chamberId) 자동 정리, 단원제·양원제 의회 선거 시 활성 제1원(하원) 자동 선택
+  useEffect(() => {
+    if (isNonChamberElectionType) {
+      if (chamberId) setChamberId('')
+      return
+    }
+    const defaultSystemChamberId =
+      activePoliticalSystem?.legislatureType &&
+      activePoliticalSystem.legislatureType !== 'NONE'
+        ? (activePoliticalSystem.lowerChamberId ??
+          activePoliticalSystem.upperChamberId ??
+          null)
+        : null
+    if (
+      mode === 'create' &&
+      isParliamentaryElectionType &&
+      !chamberManuallyTouched &&
+      !chamberId &&
+      defaultSystemChamberId
+    ) {
+      setChamberId(defaultSystemChamberId)
+    }
+  }, [
+    isNonChamberElectionType,
+    isParliamentaryElectionType,
+    mode,
+    chamberManuallyTouched,
+    chamberId,
+    activePoliticalSystem,
+  ])
+
+  // 원 또는 투표일이 바뀔 때 사용자가 수동 편집하지 않은 총 의석을 당시 정원으로 자동 반영
+  useEffect(() => {
+    if (totalSeatsManuallyTouched || isNonChamberElectionType) return
+    if (chamberId) {
+      const seats = deriveSeatsForChamberAtPoll(chamberId, pollDate)
+      if (seats != null) {
+        setTotalSeatsStr(String(seats))
+      }
+      return
+    }
+    if (
+      mode === 'create' &&
+      isParliamentaryElectionType &&
+      activePoliticalSystem?.legislatureType !== 'NONE' &&
+      activePoliticalSystem?.lowerHouseSeats != null &&
+      !totalSeatsStr.trim()
+    ) {
+      setTotalSeatsStr(String(activePoliticalSystem.lowerHouseSeats))
+    }
+  }, [
+    chamberId,
+    pollDate,
+    totalSeatsManuallyTouched,
+    isNonChamberElectionType,
+    isParliamentaryElectionType,
+    mode,
+    activePoliticalSystem,
+    deriveSeatsForChamberAtPoll,
+    totalSeatsStr,
+  ])
+
   useEffect(() => {
     if (mode !== 'edit' || !initial) return
     setName(initial.name ?? '')
     setShortName(initial.shortName ?? '')
     setElectionType(initial.electionType ?? 'PARLIAMENTARY_CONSTITUENCY')
+    electionTypeManuallyTouchedRef.current = true
     setStatus(initial.status ?? 'SCHEDULED')
     setStatusManuallyChanged(false)
     setPollDate(
@@ -7448,7 +8155,9 @@ export function ElectionFormModal({
     setTotalSeatsStr(
       initial.totalSeats != null ? String(initial.totalSeats) : '',
     )
+    setTotalSeatsManuallyTouched(initial.totalSeats != null)
     setChamberId(initial.chamberId ?? '')
+    setChamberManuallyTouched(Boolean(initial.chamberId))
     setConvOrdinalStr(
       initial.convocationOrdinal != null
         ? String(initial.convocationOrdinal)
@@ -7466,11 +8175,15 @@ export function ElectionFormModal({
   }, [mode, initial, initialTab])
 
   const nextSuggestedOrdinal = useMemo(() => {
-    const sameType = existingElections.filter(
-      (e) =>
-        e.electionType === electionType &&
-        (mode !== 'edit' || e.id !== initial?.id),
-    )
+    const targetHistId =
+      electionScope.historicalCountryId ?? (scopeHistoricalCountryId || null)
+    const sameType = existingElections.filter((e) => {
+      if (e.electionType !== electionType) return false
+      if (mode === 'edit' && e.id === initial?.id) return false
+      if ((e.historicalCountryId ?? null) !== targetHistId) return false
+      if (chamberId && (e.chamberId ?? '') !== chamberId) return false
+      return true
+    })
     const maxOrd = sameType.reduce(
       (acc, e) =>
         e.convocationOrdinal != null && e.convocationOrdinal > acc
@@ -7479,7 +8192,15 @@ export function ElectionFormModal({
       0,
     )
     return maxOrd > 0 ? maxOrd + 1 : sameType.length + 1
-  }, [existingElections, electionType, mode, initial?.id])
+  }, [
+    existingElections,
+    electionType,
+    mode,
+    initial?.id,
+    electionScope.historicalCountryId,
+    scopeHistoricalCountryId,
+    chamberId,
+  ])
 
   const activeOrdinalForTemplate = useMemo(() => {
     const parsed = parseOptionalNonNegativeInt(convOrdinalStr)
@@ -7853,6 +8574,11 @@ export function ElectionFormModal({
     >
       <FormS.FormGroupTitle id={`${ELECTION_FORM_SECTION_ID.basic}-title`}>
         기본 정보
+        {activePoliticalSystem ? (
+          <FormS.FormGroupSummaryBadge title="투표일 기준 매칭된 헌정 체제">
+            {formatPoliticalSystemContextSummary(activePoliticalSystem)}
+          </FormS.FormGroupSummaryBadge>
+        ) : null}
       </FormS.FormGroupTitle>
       <EventFormS.FormRow>
         <EventFormS.FormLabel htmlFor="election-form-name">
@@ -7879,10 +8605,57 @@ export function ElectionFormModal({
             ariaLabelledBy="election-form-type-label"
             value={electionType}
             onChange={(next) => {
-              if (next) setElectionType(next)
+              if (next) {
+                electionTypeManuallyTouchedRef.current = true
+                setElectionType(next)
+              }
             }}
             options={typeChipOptions}
           />
+          {isParliamentaryElectionType &&
+          activePoliticalSystem?.legislatureType === 'NONE' ? (
+            <EventFormS.Hint>
+              참고: 당시 헌정 체제(
+              {activePoliticalSystem.name || '의회 없음'})는 입법부 없음(NONE)으로
+              등록되어 있습니다. 제헌의회·자문기구 선거인지 확인하세요.
+            </EventFormS.Hint>
+          ) : electionType === 'PRESIDENTIAL_OR_HEAD' &&
+            activePoliticalSystem?.headSelectionMethod === 'INDIRECT' ? (
+            <EventFormS.Hint>
+              참고: 당시 헌정 체제(
+              {activePoliticalSystem.name || '간선제'})는 국가원수{' '}
+              <strong>
+                {
+                  HEAD_SELECTION_METHOD_LABEL[
+                    activePoliticalSystem.headSelectionMethod
+                  ]
+                }
+              </strong>
+              으로 등록되어 있습니다. 간선 대선(의회·선거인단 표결) 기록임을
+              서술·후보 결과에 함께 남기면 명확합니다.
+            </EventFormS.Hint>
+          ) : electionType === 'PRESIDENTIAL_OR_HEAD' &&
+            activePoliticalSystem &&
+            (activePoliticalSystem.governmentForm === 'PARLIAMENTARY' ||
+              activePoliticalSystem.governmentForm ===
+                'CONSTITUTIONAL_MONARCHY' ||
+              activePoliticalSystem.governmentForm === 'ABSOLUTE_MONARCHY') &&
+            activePoliticalSystem.headOfStateHasPower === false ? (
+            <EventFormS.Hint>
+              참고: 당시 헌정 체제(
+              {GOVERNMENT_FORM_LABEL[activePoliticalSystem.governmentForm]})는
+              내각 책임·입헌군주제 계열입니다. 총리가 선출되는 총선이라면 의회 선거
+              유형을 고르세요.
+            </EventFormS.Hint>
+          ) : isParliamentaryElectionType &&
+            activePoliticalSystem?.electoralSystem === 'PARALLEL' ? (
+            <EventFormS.Hint>
+              참고: 당시 헌정 체제는{' '}
+              <strong>병립형(지역구+비례대표)</strong> 선거제입니다. 지역구와
+              비례대표를 각각 등록할 때 동일 회차·동일 원(院)으로 지정하면 대시보드에서
+              자동 합산됩니다.
+            </EventFormS.Hint>
+          ) : null}
         </EventFormS.FormField>
       </EventFormS.FormRow>
       <EventFormS.FormRow>
@@ -7943,6 +8716,29 @@ export function ElectionFormModal({
                   </option>
                 ))}
             </FormSelectNative>
+            {suggestedHistoricalCountry ? (
+              <EventFormS.Hint>
+                투표일({pollDate.slice(0, 4)}년)은 역사 국가 「
+                {suggestedHistoricalCountry.name}」 시기입니다 —{' '}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setScopeHistoricalCountryId(suggestedHistoricalCountry.id)
+                  }
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: '#6366f1',
+                    fontWeight: 700,
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                  }}
+                >
+                  이 역사 국가로 설정
+                </button>
+              </EventFormS.Hint>
+            ) : null}
           </EventFormS.FormField>
         </EventFormS.FormRow>
       ) : null}
@@ -8064,11 +8860,13 @@ export function ElectionFormModal({
                 inputMode="numeric"
                 autoComplete="off"
                 value={totalSeatsStr}
-                onChange={(event) =>
-                  setTotalSeatsStr(
-                    sanitizeNonNegativeIntInput(event.target.value),
+                onChange={(event) => {
+                  const sanitized = sanitizeNonNegativeIntInput(
+                    event.target.value,
                   )
-                }
+                  setTotalSeatsStr(sanitized)
+                  setTotalSeatsManuallyTouched(sanitized.trim() !== '')
+                }}
                 placeholder="0 이상 정수"
               />
             </FormS.SubTitleField>
@@ -8100,25 +8898,68 @@ export function ElectionFormModal({
           <FormSelectNative
             id="election-chamber"
             value={chamberId}
+            disabled={isNonChamberElectionType}
             onChange={(event) => {
               const nextId = event.target.value
+              setChamberManuallyTouched(true)
               setChamberId(nextId)
-              const chamber = chambers.find((candidate) => candidate.id === nextId)
-              if (chamber && !totalSeatsStr.trim()) {
-                const year = Number(String(pollDate).slice(0, 4))
-                const seats = chamberSeatsAt(chamber.sizes, Number.isFinite(year) && year > 0 ? year : null)
+              if (nextId && !totalSeatsManuallyTouched) {
+                const seats = deriveSeatsForChamberAtPoll(nextId, pollDate)
                 if (seats != null) setTotalSeatsStr(String(seats))
               }
             }}
           >
             <option value="">고르지 않음 — 대통령·국민투표 등</option>
-            {chambers.map((chamber) => (
-              <option key={chamber.id} value={chamber.id}>
-                {chamberLabel(chamber)} · {labelChamberRole(chamber.role)}
-              </option>
-            ))}
+            {chambers.map((chamber) => {
+              const isActiveInRegime =
+                chamber.id === activePoliticalSystem?.lowerChamberId ||
+                chamber.id === activePoliticalSystem?.upperChamberId
+              return (
+                <option key={chamber.id} value={chamber.id}>
+                  {isActiveInRegime ? '★ ' : ''}
+                  {chamberLabel(chamber)} · {labelChamberRole(chamber.role)}
+                  {isActiveInRegime ? ' (당시 정체 의회)' : ''}
+                </option>
+              )
+            })}
           </FormSelectNative>
-          <EventFormS.Hint>원은 정체·헌정 탭의 「의회 — 원」에서 관리합니다. 고르면 투표 연도의 정원을 총 의석으로 채웁니다(비어 있을 때만).</EventFormS.Hint>
+          {(() => {
+            const pickedChamber = chambers.find((ch) => ch.id === chamberId)
+            if (
+              pickedChamber?.composition &&
+              (pickedChamber.composition === 'APPOINTED' ||
+                pickedChamber.composition === 'HEREDITARY' ||
+                pickedChamber.composition === 'CORPORATIST')
+            ) {
+              return (
+                <EventFormS.Hint>
+                  참고: 선택한 「{chamberLabel(pickedChamber)}」은(는){' '}
+                  <strong>
+                    {labelChamberComposition(pickedChamber.composition)}
+                  </strong>{' '}
+                  구성입니다. 직선 선거 대상 원이 맞는지 확인하세요.
+                </EventFormS.Hint>
+              )
+            }
+            if (
+              isParliamentaryElectionType &&
+              activePoliticalSystem?.legislatureType === 'BICAMERAL' &&
+              !chamberId
+            ) {
+              return (
+                <EventFormS.Hint>
+                  당시 헌정 체제는 <strong>양원제</strong>입니다. 하원·상원 회차와
+                  전회차 비교가 섞이지 않도록 위에서 어느 원의 선거인지 선택하세요.
+                </EventFormS.Hint>
+              )
+            }
+            return (
+              <EventFormS.Hint>
+                원은 정체·헌정 탭의 「의회 — 원」에서 관리합니다. 고르면 투표 연도의
+                정원(없으면 정체 기본 의석)을 총 의석으로 채웁니다.
+              </EventFormS.Hint>
+            )
+          })()}
         </EventFormS.FormField>
       </EventFormS.FormRow>
       <EventFormS.FormRow>
@@ -8162,6 +9003,27 @@ export function ElectionFormModal({
                   시작 = 투표일
                 </FormS.TitleSuggestionButton>
               ) : null}
+              {(() => {
+                const constitutionalYears =
+                  electionType === 'PRESIDENTIAL_OR_HEAD'
+                    ? (activePoliticalSystem?.headOfStateTermYears ?? null)
+                    : chamberId &&
+                        chamberId === activePoliticalSystem?.upperChamberId
+                      ? (activePoliticalSystem?.upperHouseTermYears ?? null)
+                      : (activePoliticalSystem?.lowerHouseTermYears ?? null)
+                if (!constitutionalYears) return null
+                return (
+                  <FormS.TitleSuggestionButton
+                    type="button"
+                    onClick={() =>
+                      handleApplyTermDurationYears(constitutionalYears)
+                    }
+                    title={`당시 헌정 체제의 법정 임기(${constitutionalYears}년)를 적용합니다`}
+                  >
+                    ★ 헌법 임기 +{constitutionalYears}년
+                  </FormS.TitleSuggestionButton>
+                )
+              })()}
               {[3, 4, 5].map((years) => (
                 <FormS.TitleSuggestionButton
                   key={years}
@@ -8209,6 +9071,12 @@ export function ElectionFormModal({
           <EventFormS.Hint>
             이 선거로 꾸려진 의회가 어떻게 끝났는지 — 고른 유형을 다시 누르면
             해제됩니다.
+            {activePoliticalSystem?.governmentForm === 'PARLIAMENTARY' ||
+            activePoliticalSystem?.governmentForm === 'CONSTITUTIONAL_MONARCHY'
+              ? ' (의원내각제·입헌군주제에서는 내각 불신임·조기 해산이 자주 쓰입니다)'
+              : activePoliticalSystem?.governmentForm === 'SEMI_PRESIDENTIAL'
+                ? ' (이원집정부제에서는 대통령 해산령·조기 해산을 구분해 기록할 수 있습니다)'
+                : ''}
           </EventFormS.Hint>
         </EventFormS.FormField>
       </EventFormS.FormRow>
@@ -8370,6 +9238,7 @@ function CandidacyFormModal({
   parties,
   districts,
   existingCandidacies = [],
+  activePoliticalSystem = null,
   mode,
   electionId,
   initial,
@@ -8381,6 +9250,7 @@ function CandidacyFormModal({
   parties: { id: string; name: string; shortName?: string | null }[]
   districts: { id: string; name: string; code?: string | null }[]
   existingCandidacies?: ElectionCandidacyDto[]
+  activePoliticalSystem?: PoliticalSystem | null
   mode: 'create' | 'edit'
   electionId: string
   initial?: ElectionCandidacyDto
@@ -8397,13 +9267,31 @@ function CandidacyFormModal({
 }) {
   const playClickSound = useClickSound()
   const [personId, setPersonId] = useState(initial?.personId ?? '')
-  const [partyId, setPartyId] = useState(initial?.partyId ?? '')
+  const [partyId, setPartyId] = useState(() => {
+    if (initial?.partyId) return initial.partyId
+    if (
+      mode === 'create' &&
+      (activePoliticalSystem?.partySystem === 'ONE_PARTY' ||
+        activePoliticalSystem?.governmentForm === 'ONE_PARTY') &&
+      parties.length === 1
+    ) {
+      return parties[0].id
+    }
+    return ''
+  })
   const [districtId, setDistrictId] = useState(
     initial?.electoralDistrictId ?? '',
   )
-  const [nominationType, setNominationType] = useState(
-    initial?.nominationType ?? 'PARTY_NOMINATION',
-  )
+  const [nominationType, setNominationType] = useState(() => {
+    if (initial?.nominationType) return initial.nominationType
+    if (
+      mode === 'create' &&
+      activePoliticalSystem?.partySystem === 'NON_PARTISAN'
+    ) {
+      return 'INDEPENDENT'
+    }
+    return 'PARTY_NOMINATION'
+  })
   const [ballotOrder, setBallotOrder] = useState(
     initial?.ballotOrder != null ? String(initial.ballotOrder) : '',
   )
@@ -8760,6 +9648,17 @@ function CandidacyFormModal({
                   </option>
                 ))}
               </FormSelectNative>
+              {activePoliticalSystem?.partySystem ? (
+                <PartyFormHint>
+                  당시 정당제:{' '}
+                  {PARTY_SYSTEM_LABEL[activePoliticalSystem.partySystem]}
+                  {activePoliticalSystem.partySystem === 'NON_PARTISAN'
+                    ? ' — 무정당 체제에 맞춰 기본 지명 방식이 무소속으로 설정되었습니다.'
+                    : activePoliticalSystem.partySystem === 'ONE_PARTY'
+                      ? ' — 일당제·단일전선 지명 후보 여부를 확인하세요.'
+                      : ''}
+                </PartyFormHint>
+              ) : null}
             </ModalFieldNarrow>
           </FieldRow>
           <FieldRow>

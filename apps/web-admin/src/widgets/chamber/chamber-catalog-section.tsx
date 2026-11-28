@@ -10,10 +10,12 @@
 import React, { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiCornerDownRight, FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi'
+import { FiArrowUpRight, FiCornerDownRight, FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { DIGIT_DISPLAY, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
+import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
 import * as EventFormS from '@/pages/events/create/event-create.styles'
 import {
@@ -40,6 +42,7 @@ import {
   structuredInputOf,
 } from '@/shared/lib/party-dates'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
 import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
@@ -91,9 +94,13 @@ function chamberYearSpan(chamber: ChamberDto): { start: string | null; end: stri
 export function ChamberCatalogSection({
   countryId,
   historicalCountryId,
+  countryName,
+  defaultLegislatureType,
 }: {
   countryId?: string | null
   historicalCountryId?: string | null
+  countryName?: string
+  defaultLegislatureType?: 'UNICAMERAL' | 'BICAMERAL' | 'NONE' | null
 }) {
   const queryClient = useQueryClient()
   const scope = { countryId: historicalCountryId ? null : countryId, historicalCountryId }
@@ -180,19 +187,43 @@ export function ChamberCatalogSection({
       ) : (
         <ChamberList aria-label="의회 원 목록">
           {sorted.map((chamber) => {
-            const uses = (chamber._count?.elections ?? 0) + (chamber._count?.observations ?? 0)
+            const electionCount = chamber._count?.elections ?? 0
+            const tenureCount = chamber._count?.tenures ?? 0
+            const passedLawCount = chamber._count?.passedLaws ?? 0
+            const ratifiedTreatyCount =
+              chamber._count?.ratifiedTreatySignatories ?? 0
+            const observationCount = chamber._count?.observations ?? 0
+            const uses =
+              electionCount +
+              tenureCount +
+              passedLawCount +
+              ratifiedTreatyCount +
+              observationCount
+            const jumpCountryId =
+              chamber.historicalCountryId ??
+              chamber.countryId ??
+              historicalCountryId ??
+              countryId ??
+              null
             const span = chamberYearSpan(chamber)
             const subParts = [
               chamber.localName,
               chamber.composition ? labelChamberComposition(chamber.composition) : null,
               showPolity ? (chamber.historicalCountry?.name ?? chamber.country?.name ?? null) : null,
             ].filter((part): part is string => Boolean(part))
+            const usageSummaryLabels = [
+              electionCount > 0 ? `선거 ${electionCount}건` : null,
+              tenureCount > 0 ? `의원 재임 ${tenureCount}건` : null,
+              passedLawCount > 0 ? `가결 법령 ${passedLawCount}건` : null,
+              ratifiedTreatyCount > 0 ? `비준 조약 ${ratifiedTreatyCount}건` : null,
+              observationCount > 0 ? `의석 기록 ${observationCount}건` : null,
+            ].filter((part): part is string => Boolean(part))
             const confirmRemove = async () => {
               const approved = await confirm({
                 title: '원 지우기',
                 message:
                   uses > 0
-                    ? `「${chamber.name}」을 지울까요? 이 원을 가리키는 선거 ${chamber._count?.elections ?? 0}건·의석 기록 ${chamber._count?.observations ?? 0}건은 원 연결이 비워집니다.`
+                    ? `「${chamber.name}」을 지울까요? 이 원을 가리키는 ${usageSummaryLabels.join(' · ')}은 원 연결이 비워집니다.`
                     : `「${chamber.name}」을 지울까요? 정원 이력도 함께 지워집니다.`,
                 confirmLabel: '지우기',
                 danger: true,
@@ -239,9 +270,78 @@ export function ChamberCatalogSection({
                       <span className="muted">정원 이력 없음</span>
                     )}
                     {uses > 0 ? (
-                      <span className="muted">
-                        선거 {chamber._count?.elections ?? 0} · 의석 기록 {chamber._count?.observations ?? 0}
-                      </span>
+                      <UsageLine aria-label="연결된 기록 바로가기">
+                        {electionCount > 0 &&
+                          (jumpCountryId ? (
+                            <UsageLinkChip
+                              to={`${pathKeys.countryElections(jumpCountryId)}?chamberId=${encodeURIComponent(chamber.id)}`}
+                              title={`${chamber.name} 선거 원장 보기`}
+                            >
+                              선거 <strong>{electionCount}</strong>
+                              <FiArrowUpRight size={11} aria-hidden />
+                            </UsageLinkChip>
+                          ) : (
+                            <UsageStaticChip>
+                              선거 <strong>{electionCount}</strong>
+                            </UsageStaticChip>
+                          ))}
+                        {tenureCount > 0 &&
+                          (jumpCountryId ? (
+                            <UsageLinkChip
+                              to={pathKeys.countryPersons(jumpCountryId)}
+                              title="소속 의원 인물 목록 보기"
+                            >
+                              의원 <strong>{tenureCount}명</strong>
+                              <FiArrowUpRight size={11} aria-hidden />
+                            </UsageLinkChip>
+                          ) : (
+                            <UsageStaticChip>
+                              의원 <strong>{tenureCount}명</strong>
+                            </UsageStaticChip>
+                          ))}
+                        {passedLawCount > 0 &&
+                          (jumpCountryId ? (
+                            <UsageLinkChip
+                              to={pathKeys.countryLaws(jumpCountryId)}
+                              title="가결 법령 목록 보기"
+                            >
+                              가결 법령 <strong>{passedLawCount}</strong>
+                              <FiArrowUpRight size={11} aria-hidden />
+                            </UsageLinkChip>
+                          ) : (
+                            <UsageStaticChip>
+                              가결 법령 <strong>{passedLawCount}</strong>
+                            </UsageStaticChip>
+                          ))}
+                        {ratifiedTreatyCount > 0 &&
+                          (jumpCountryId ? (
+                            <UsageLinkChip
+                              to={pathKeys.countryTreaty(jumpCountryId)}
+                              title="비준 조약 목록 보기"
+                            >
+                              비준 조약 <strong>{ratifiedTreatyCount}</strong>
+                              <FiArrowUpRight size={11} aria-hidden />
+                            </UsageLinkChip>
+                          ) : (
+                            <UsageStaticChip>
+                              비준 조약 <strong>{ratifiedTreatyCount}</strong>
+                            </UsageStaticChip>
+                          ))}
+                        {observationCount > 0 &&
+                          (jumpCountryId ? (
+                            <UsageLinkChip
+                              to={`${pathKeys.countryElections(jumpCountryId)}?subtab=parties`}
+                              title="정당 의석 기록 보기"
+                            >
+                              의석 기록 <strong>{observationCount}</strong>
+                              <FiArrowUpRight size={11} aria-hidden />
+                            </UsageLinkChip>
+                          ) : (
+                            <UsageStaticChip>
+                              의석 기록 <strong>{observationCount}</strong>
+                            </UsageStaticChip>
+                          ))}
+                      </UsageLine>
                     ) : null}
                     {chamber.note ? <FactNote>{chamber.note}</FactNote> : null}
                   </ChamberSide>
@@ -287,6 +387,10 @@ export function ChamberCatalogSection({
           key={chamberModal.mode === 'edit' ? chamberModal.chamber.id : 'new'}
           initial={chamberModal.mode === 'edit' ? chamberModal.chamber : undefined}
           candidates={chambers}
+          countryId={countryId}
+          historicalCountryId={historicalCountryId}
+          countryName={countryName}
+          defaultRole={defaultLegislatureType === 'UNICAMERAL' ? 'UNICAMERAL' : 'LOWER'}
           saving={saveChamber.isPending}
           onClose={() => setChamberModal(null)}
           onSubmit={(body) =>
@@ -295,7 +399,19 @@ export function ChamberCatalogSection({
               body:
                 chamberModal.mode === 'edit'
                   ? body
-                  : { ...body, countryId: historicalCountryId ? null : (countryId ?? null), historicalCountryId: historicalCountryId ?? null },
+                  : {
+                      ...body,
+                      countryId:
+                        body.countryId !== undefined
+                          ? body.countryId
+                          : historicalCountryId
+                            ? null
+                            : (countryId ?? null),
+                      historicalCountryId:
+                        body.historicalCountryId !== undefined
+                          ? body.historicalCountryId
+                          : (historicalCountryId ?? null),
+                    },
             })
           }
         />
@@ -322,6 +438,10 @@ export function ChamberCatalogSection({
 export function ChamberFormModal({
   initial,
   candidates,
+  countryId,
+  historicalCountryId,
+  countryName,
+  defaultRole = 'LOWER',
   saving,
   onClose,
   onSubmit,
@@ -329,6 +449,10 @@ export function ChamberFormModal({
   initial?: ChamberDto
   /** 전신으로 고를 수 있는 원 — 같은 화면의 원들(자기 자신 제외) */
   candidates: ChamberDto[]
+  countryId?: string | null
+  historicalCountryId?: string | null
+  countryName?: string
+  defaultRole?: ChamberRole
   saving: boolean
   onClose: () => void
   onSubmit: (body: ChamberInput) => void
@@ -336,8 +460,15 @@ export function ChamberFormModal({
   const [name, setName] = useState(initial?.name ?? '')
   const [localName, setLocalName] = useState(initial?.localName ?? '')
   const [shortName, setShortName] = useState(initial?.shortName ?? '')
-  const [role, setRole] = useState<ChamberRole>(initial?.role ?? 'LOWER')
+  const [role, setRole] = useState<ChamberRole>(initial?.role ?? defaultRole)
   const [composition, setComposition] = useState<ChamberComposition | ''>(initial?.composition ?? '')
+  const [selectedHistoricalId, setSelectedHistoricalId] = useState(
+    initial?.historicalCountryId ?? '',
+  )
+  const { data: linkedHistoricalCountries = [] } =
+    useHistoricalCountriesByModernCountry(
+      !historicalCountryId && countryId ? countryId : '',
+    )
   const [start, setStart] = useState<PeriodDateFormValue>(() =>
     initial ? periodDateFormValue(initial.startEra, initial.startYear, initial.startMonth, initial.startDay) : { ...EMPTY_PERIOD_DATE },
   )
@@ -394,6 +525,32 @@ export function ChamberFormModal({
               <EventFormS.Input id="chamber-short" value={shortName} onChange={(event) => setShortName(event.target.value)} />
             </EventFormS.FormField>
           </EventFormS.FormRow>
+          {!historicalCountryId && linkedHistoricalCountries.length > 0 ? (
+            <EventFormS.FormRow>
+              <EventFormS.FormLabel htmlFor="chamber-polity">
+                소속 시대 · 국가
+              </EventFormS.FormLabel>
+              <EventFormS.FormField>
+                <FormSelectNative
+                  id="chamber-polity"
+                  value={selectedHistoricalId}
+                  onChange={(event) => setSelectedHistoricalId(event.target.value)}
+                >
+                  <option value="">
+                    {countryName ? `${countryName} (현대 본국)` : '현대 본국'}
+                  </option>
+                  {linkedHistoricalCountries.map((hc) => (
+                    <option key={hc.id} value={hc.id}>
+                      {hc.name}
+                    </option>
+                  ))}
+                </FormSelectNative>
+                <EventFormS.Hint>
+                  과거 제국·왕국 시기의 의회(예: 귀족원, 제국의회)라면 해당 역사 국가를 골라 구분합니다.
+                </EventFormS.Hint>
+              </EventFormS.FormField>
+            </EventFormS.FormRow>
+          ) : null}
           <EventFormS.FormRow>
             <EventFormS.FormLabel htmlFor="chamber-role">
               자리 <EventFormS.Required>*</EventFormS.Required>
@@ -481,6 +638,12 @@ export function ChamberFormModal({
             shortName: shortName.trim() || null,
             role,
             composition: composition || null,
+            ...(!historicalCountryId && countryId
+              ? {
+                  countryId,
+                  historicalCountryId: selectedHistoricalId || null,
+                }
+              : {}),
             start: structuredInputOf(start),
             end: structuredInputOf(end),
             predecessorId: predecessorId || null,
@@ -827,4 +990,53 @@ const DeleteLink = styled.button`
   color: ${({ theme }) => theme.colors.error};
   cursor: pointer;
   text-decoration: underline;
+`
+
+const UsageLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+`
+
+const UsageLinkChip = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  text-decoration: none;
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const UsageStaticChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `

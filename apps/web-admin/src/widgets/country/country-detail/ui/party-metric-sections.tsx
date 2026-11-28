@@ -7,7 +7,8 @@
 import React, { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi'
+import { FiArrowUpRight, FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { ESTIMATE_METHOD_LABEL, ESTIMATE_ROLE_LABEL } from '@/entities/evidence/lib/evidence-labels'
@@ -35,6 +36,11 @@ import {
   structuredInputOf,
 } from '@/shared/lib/party-dates'
 import { partialDateFromStructured } from '@/shared/lib/partial-date-string'
+import {
+  type PartyElectionResultRow,
+  politicalPartyApi,
+} from '@/shared/api/political-party'
+import { pathKeys } from '@/shared/router'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
@@ -91,21 +97,76 @@ const pointKey = (observation: Observation) =>
 /** 원 후보를 어느 나라에서 찾나 — 현대 국가면 연결된 역사 국가의 원까지(왕국 대의원·파시스트 시기 원) */
 export type ChamberScope = { countryId?: string | null; historicalCountryId?: string | null }
 
-/** '400석 / 400석 · 대의원' — 측정 시점의 정원이 있으면 분모로 */
+/** '400석 / 400석 · 대의원' — 측정 시점의 정원이 있으면 분모로 + 의석 점유율·과반 판정 */
+export function observationSeatShareMeta(observation: Observation): {
+  totalSeats: number | null
+  sharePercent: number | null
+  isMajority: boolean
+} {
+  if (!observation.chamber) {
+    return { totalSeats: null, sharePercent: null, isMajority: false }
+  }
+  const year = observation.start
+    ? observation.start.era === 'BC'
+      ? -observation.start.year
+      : observation.start.year
+    : null
+  const totalSeats = chamberSeatsAt(observation.chamber.sizes, year)
+  const seatsNum =
+    observation.value != null ? Number(observation.value) : Number.NaN
+  if (
+    totalSeats == null ||
+    totalSeats <= 0 ||
+    !Number.isFinite(seatsNum) ||
+    seatsNum < 0
+  ) {
+    return { totalSeats, sharePercent: null, isMajority: false }
+  }
+  const sharePercent = (seatsNum / totalSeats) * 100
+  const majorityThreshold = Math.floor(totalSeats / 2) + 1
+  return {
+    totalSeats,
+    sharePercent,
+    isMajority: seatsNum >= majorityThreshold,
+  }
+}
+
 export function seatsOfLabel(observation: Observation): string | null {
   if (!observation.chamber) return null
-  const year = observation.start ? (observation.start.era === 'BC' ? -observation.start.year : observation.start.year) : null
-  const total = chamberSeatsAt(observation.chamber.sizes, year)
-  return `${total != null ? `정원 ${total.toLocaleString('ko-KR')}석 · ` : ''}${observation.chamber.name}`
+  const { totalSeats, sharePercent } = observationSeatShareMeta(observation)
+  const pctPart =
+    sharePercent != null ? ` (${sharePercent.toFixed(1)}%)` : ''
+  return `${totalSeats != null ? `정원 ${totalSeats.toLocaleString('ko-KR')}석${pctPart} · ` : ''}${observation.chamber.name}`
+}
+
+function pollDateSortKey(iso: string | null | undefined): number {
+  if (!iso) return Number.POSITIVE_INFINITY
+  const matched = /^(-?\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/.exec(iso.trim())
+  if (!matched) return Number.POSITIVE_INFINITY
+  const year = Number(matched[1])
+  if (!Number.isFinite(year)) return Number.POSITIVE_INFINITY
+  const month = matched[2] ? Number(matched[2]) : 1
+  const day = matched[3] ? Number(matched[3]) : 1
+  return year * 10000 + month * 100 + day
 }
 
 export function PartyMetricsBlock({ partyId, chamberScope }: { partyId: string; chamberScope: ChamberScope }) {
   const queryClient = useQueryClient()
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; row: Observation } | null>(null)
+  const [mergeElectionSeats, setMergeElectionSeats] = useState(true)
   const { data = [], isLoading } = useQuery({
     queryKey: observationsKey(partyId),
     queryFn: () => listSubjectObservations('POLITICAL_PARTY', partyId),
   })
+  const { data: electionResults = [] } = useQuery({
+    queryKey: ['political-parties', partyId, 'election-results'],
+    queryFn: () => politicalPartyApi.getElectionResults(partyId),
+    enabled: Boolean(partyId),
+  })
+  const seatElectionRows = useMemo(
+    () => electionResults.filter((row) => row.seatsWon != null),
+    [electionResults],
+  )
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteObservation(id),
     onSuccess: () => {
@@ -115,10 +176,45 @@ export function PartyMetricsBlock({ partyId, chamberScope }: { partyId: string; 
     onError: (err: Error) => notify.error(err.message),
   })
 
-  /** 지표별 — 시점 순 */
+  /** 선거 개표 결과 + 수기 의석 관측 통합 시계열 */
+  const mergedSeatTimeline = useMemo(() => {
+    type TimelineItem =
+      | { kind: 'observation'; sortKey: number; observation: Observation }
+      | { kind: 'election'; sortKey: number; row: PartyElectionResultRow }
+
+    const items: TimelineItem[] = []
+    if (mergeElectionSeats && seatElectionRows.length > 0) {
+      for (const observation of data) {
+        if (observation.chamber != null || observation.metric.dimension === 'CHAMBER') {
+          items.push({
+            kind: 'observation',
+            sortKey: pointKey(observation),
+            observation,
+          })
+        }
+      }
+      for (const row of seatElectionRows) {
+        items.push({
+          kind: 'election',
+          sortKey: pollDateSortKey(row.election?.pollDate),
+          row,
+        })
+      }
+    }
+    return items.sort((left, right) => left.sortKey - right.sortKey)
+  }, [data, mergeElectionSeats, seatElectionRows])
+
+  /** 지표별 — 시점 순 (통합 시계열이 켜져 있으면 의석 관측은 위 통합 그룹에서 함께 표시) */
   const groups = useMemo(() => {
     const byMetric = new Map<string, { name: string; rows: Observation[] }>()
+    const omitChamberRows = mergeElectionSeats && seatElectionRows.length > 0
     for (const observation of data) {
+      if (
+        omitChamberRows &&
+        (observation.chamber != null || observation.metric.dimension === 'CHAMBER')
+      ) {
+        continue
+      }
       const group = byMetric.get(observation.metric.key) ?? { name: observation.metric.name, rows: [] }
       group.rows.push(observation)
       byMetric.set(observation.metric.key, group)
@@ -128,33 +224,178 @@ export function PartyMetricsBlock({ partyId, chamberScope }: { partyId: string; 
       name: group.name,
       rows: [...group.rows].sort((left, right) => pointKey(left) - pointKey(right)),
     }))
-  }, [data])
+  }, [data, mergeElectionSeats, seatElectionRows.length])
+
+  const defaultCountryJumpId =
+    chamberScope.historicalCountryId ?? chamberScope.countryId ?? null
 
   return (
     <PartyDetailDescSection aria-label="수치">
       <PartyDescSectionLabelRow style={{ marginBottom: 10 }}>
         <PartyDescSectionLabel>수치</PartyDescSectionLabel>
-        <PartyDescOutlineBtn type="button" onClick={() => setModal({ mode: 'create' })}>
-          <FiPlus size={14} />
-          수치 추가
-        </PartyDescOutlineBtn>
+        <HeaderBtnRow>
+          {seatElectionRows.length > 0 ? (
+            <MergeToggleBtn
+              type="button"
+              $active={mergeElectionSeats}
+              aria-pressed={mergeElectionSeats}
+              onClick={() => setMergeElectionSeats((prev) => !prev)}
+              title="선거 원장(ElectionPartyResult)에 기록된 의석과 수기 의석 관측을 한 시계열로 병합해 봅니다"
+            >
+              선거 의석 병합 ({seatElectionRows.length})
+            </MergeToggleBtn>
+          ) : null}
+          <PartyDescOutlineBtn type="button" onClick={() => setModal({ mode: 'create' })}>
+            <FiPlus size={14} />
+            수치 추가
+          </PartyDescOutlineBtn>
+        </HeaderBtnRow>
       </PartyDescSectionLabelRow>
       {isLoading ? (
         <ChartSkeleton variant="text" lines={2} />
-      ) : groups.length === 0 ? (
+      ) : groups.length === 0 && mergedSeatTimeline.length === 0 ? (
         <PartyDescEmptyHint>
           당원 수·지부 수·재정을 시점별로 출처와 함께 남깁니다. 공식 발표와 연구자 추산이 갈리면 두 줄을 채택·대안으로 나란히.
         </PartyDescEmptyHint>
       ) : (
         <FactList>
+          {mergedSeatTimeline.length > 0 ? (
+            <FactGroup key="__merged-seats__">
+              <FactGroupLabel>의회 의석 시계열 (선거 원장 · 관측 통합)</FactGroupLabel>
+              {mergedSeatTimeline.map((entry) => {
+                if (entry.kind === 'observation') {
+                  const observation = entry.observation
+                  const seatMeta = observationSeatShareMeta(observation)
+                  return (
+                    <FactRow key={`obs-${observation.id}`}>
+                      <FactMain>
+                        <span className="title">{formatObservationExact(observation)}</span>
+                        {seatsOfLabel(observation) ? (
+                          <span className="period">{seatsOfLabel(observation)}</span>
+                        ) : null}
+                        {seatMeta.isMajority ? (
+                          <MajorityBadge>과반</MajorityBadge>
+                        ) : null}
+                        <span className="period strong">{pointLabel(observation)}</span>
+                        {observation.estimateRole ? (
+                          <FactBadge>{ESTIMATE_ROLE_LABEL[observation.estimateRole]}</FactBadge>
+                        ) : null}
+                        {isUnverified(observation) ? (
+                          <UnverifiedBadge>출처 미검증</UnverifiedBadge>
+                        ) : (
+                          <span className="period">출처 {observation.citations.length}</span>
+                        )}
+                      </FactMain>
+                      {observation.qualifier ? <FactNote>{observation.qualifier}</FactNote> : null}
+                      {observation.note ? <FactNote>{observation.note}</FactNote> : null}
+                      <FactActions>
+                        <IconBtn
+                          type="button"
+                          aria-label="의석 수치 고치기"
+                          onClick={() => setModal({ mode: 'edit', row: observation })}
+                        >
+                          <FiEdit2 size={13} />
+                        </IconBtn>
+                        <IconBtn
+                          type="button"
+                          aria-label="의석 수치 지우기"
+                          disabled={deleteMut.isPending}
+                          onClick={async () => {
+                            const approved = await confirm({
+                              title: '수치 지우기',
+                              message: `${observation.metric.name} ${formatObservationExact(observation)}(${pointLabel(observation)})을 지울까요? 출처 인용도 함께 지워집니다.`,
+                              confirmLabel: '지우기',
+                              danger: true,
+                            })
+                            if (approved) deleteMut.mutate(observation.id)
+                          }}
+                        >
+                          <FiTrash2 size={13} />
+                        </IconBtn>
+                      </FactActions>
+                    </FactRow>
+                  )
+                }
+
+                const er = entry.row
+                const el = er.election
+                const seatsWon = er.seatsWon ?? 0
+                const pollYearMatch = el?.pollDate
+                  ? /^(-?\d{1,6})/.exec(el.pollDate.trim())
+                  : null
+                const pollSignedYear = pollYearMatch ? Number(pollYearMatch[1]) : null
+                const resolvedTotalSeats =
+                  (el?.totalSeats && el.totalSeats > 0 ? el.totalSeats : null) ??
+                  (el?.chamber?.sizes
+                    ? chamberSeatsAt(el.chamber.sizes, pollSignedYear)
+                    : null)
+                const sharePct =
+                  resolvedTotalSeats != null && resolvedTotalSeats > 0
+                    ? (seatsWon / resolvedTotalSeats) * 100
+                    : null
+                const isMajority =
+                  resolvedTotalSeats != null &&
+                  resolvedTotalSeats > 0 &&
+                  seatsWon >= Math.floor(resolvedTotalSeats / 2) + 1
+                const votePct =
+                  er.voteSharePercent != null ? Number(er.voteSharePercent) : Number.NaN
+                const jumpId =
+                  el?.historicalCountryId ?? el?.countryId ?? defaultCountryJumpId
+                const electionTitle = el
+                  ? el.convocationOrdinal != null
+                    ? `제${el.convocationOrdinal}대 ${el.shortName ?? el.name}`
+                    : (el.shortName ?? el.name)
+                  : '선거 결과'
+                const pollDateText = el?.pollDate ? el.pollDate.slice(0, 10) : '시점 미상'
+
+                return (
+                  <FactRow key={`el-${er.id}`}>
+                    <FactMain>
+                      <span className="title">
+                        {seatsWon.toLocaleString('ko-KR')}석
+                      </span>
+                      <span className="period">
+                        {[
+                          resolvedTotalSeats != null
+                            ? `정원 ${resolvedTotalSeats.toLocaleString('ko-KR')}석${sharePct != null ? ` (${sharePct.toFixed(1)}%)` : ''}`
+                            : null,
+                          Number.isFinite(votePct) ? `득표 ${votePct.toFixed(1)}%` : null,
+                          el?.chamber?.name ?? null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                      {isMajority ? <MajorityBadge>과반</MajorityBadge> : null}
+                      <span className="period strong">{pollDateText}</span>
+                      {jumpId && el?.id ? (
+                        <ElectionSourceLink
+                          to={`${pathKeys.countryElections(jumpId)}?electionId=${encodeURIComponent(el.id)}`}
+                          title={`${electionTitle} 개표 원장 상세 보기`}
+                        >
+                          선거 원장 · {electionTitle}
+                          <FiArrowUpRight size={11} aria-hidden />
+                        </ElectionSourceLink>
+                      ) : (
+                        <FactBadge>선거 원장 · {electionTitle}</FactBadge>
+                      )}
+                    </FactMain>
+                    {er.notes ? <FactNote>{er.notes}</FactNote> : null}
+                  </FactRow>
+                )
+              })}
+            </FactGroup>
+          ) : null}
           {groups.map((group) => (
             <FactGroup key={group.key}>
               <FactGroupLabel>{group.name}</FactGroupLabel>
-              {group.rows.map((observation) => (
+              {group.rows.map((observation) => {
+                const seatMeta = observationSeatShareMeta(observation)
+                return (
                 <FactRow key={observation.id}>
                   <FactMain>
                     <span className="title">{formatObservationExact(observation)}</span>
                     {seatsOfLabel(observation) ? <span className="period">{seatsOfLabel(observation)}</span> : null}
+                    {seatMeta.isMajority ? <MajorityBadge>과반</MajorityBadge> : null}
                     <span className="period strong">{pointLabel(observation)}</span>
                     {observation.estimateRole ? <FactBadge>{ESTIMATE_ROLE_LABEL[observation.estimateRole]}</FactBadge> : null}
                     {observation.method ? <span className="period">{ESTIMATE_METHOD_LABEL[observation.method]}</span> : null}
@@ -188,7 +429,8 @@ export function PartyMetricsBlock({ partyId, chamberScope }: { partyId: string; 
                     </IconBtn>
                   </FactActions>
                 </FactRow>
-              ))}
+                )
+              })}
             </FactGroup>
           ))}
         </FactList>
@@ -198,6 +440,7 @@ export function PartyMetricsBlock({ partyId, chamberScope }: { partyId: string; 
           key={modal.mode === 'edit' ? modal.row.id : 'new'}
           partyId={partyId}
           chamberScope={chamberScope}
+          electionSeatRows={seatElectionRows}
           initial={modal.mode === 'edit' ? modal.row : undefined}
           onClose={() => setModal(null)}
           onSaved={() => {
@@ -216,12 +459,14 @@ const cleanNumber = (raw: string) => raw.replace(/[,\s]/g, '')
 export function PartyObservationFormModal({
   partyId,
   chamberScope,
+  electionSeatRows = [],
   initial,
   onClose,
   onSaved,
 }: {
   partyId: string
   chamberScope: ChamberScope
+  electionSeatRows?: PartyElectionResultRow[]
   initial?: Observation
   onClose: () => void
   onSaved: () => void
@@ -343,6 +588,57 @@ export function PartyObservationFormModal({
               </CheckLine>
               {needsChamber ? (
                 <>
+                  {!initial && electionSeatRows.length > 0 ? (
+                    <FormSelectNative
+                      aria-label="선거 개표 결과에서 자동 채우기"
+                      defaultValue=""
+                      onChange={(event) => {
+                        const chosen = electionSeatRows.find(
+                          (item) => item.id === event.target.value,
+                        )
+                        if (!chosen) return
+                        if (chosen.seatsWon != null) {
+                          setValue(String(chosen.seatsWon))
+                        }
+                        if (chosen.election?.chamberId) {
+                          setChamberId(chosen.election.chamberId)
+                        }
+                        if (chosen.election?.pollDate) {
+                          const matched =
+                            /^(-?\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/.exec(
+                              chosen.election.pollDate.trim(),
+                            )
+                          if (matched) {
+                            const rawY = Number(matched[1])
+                            setPoint(
+                              periodDateFormValue(
+                                rawY < 0 ? 'BC' : 'AD',
+                                Math.abs(rawY),
+                                matched[2] ? Number(matched[2]) : null,
+                                matched[3] ? Number(matched[3]) : null,
+                              ),
+                            )
+                          }
+                        }
+                        if (chosen.election?.name) {
+                          setQualifier(`${chosen.election.name} 개표 확정 의석`)
+                        }
+                      }}
+                      style={{ marginTop: 8 }}
+                    >
+                      <option value="">선거 개표 결과에서 값·시점·원 자동 채우기 (선택)…</option>
+                      {electionSeatRows.map((er) => (
+                        <option key={er.id} value={er.id}>
+                          {er.election?.pollDate?.slice(0, 10) ?? '시점 미상'} ·{' '}
+                          {er.election?.shortName ?? er.election?.name ?? '선거'} —{' '}
+                          {(er.seatsWon ?? 0).toLocaleString('ko-KR')}석
+                          {er.election?.chamber?.name
+                            ? ` (${er.election.chamber.name})`
+                            : ''}
+                        </option>
+                      ))}
+                    </FormSelectNative>
+                  ) : null}
                   <FormSelectNative aria-label="원(院)" value={chamberId} onChange={(event) => setChamberId(event.target.value)} style={{ marginTop: 8 }}>
                     <option value="">원 선택 *</option>
                     {chambers.map((chamber) => (
@@ -445,4 +741,57 @@ const UnverifiedBadge = styled.span`
   font-weight: 600;
   line-height: 18px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HeaderBtnRow = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const MergeToggleBtn = styled.button<{ $active: boolean }>`
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ theme, $active }) =>
+    $active ? `${theme.colors.primary}14` : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+`
+
+const MajorityBadge = styled.span`
+  padding: 0 7px;
+  border-radius: 999px;
+  background: ${({ theme }) => `${theme.colors.primary}1a`};
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+`
+
+const ElectionSourceLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
 `

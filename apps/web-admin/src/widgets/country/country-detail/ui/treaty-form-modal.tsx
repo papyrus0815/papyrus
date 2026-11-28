@@ -65,14 +65,27 @@ import {
   type CreateTreatySignatoryNested,
   TREATY_EVENT_LINK_LABELS,
   TREATY_PARTICIPATION_LABELS,
+  TREATY_RATIFICATION_STATUS_LABELS,
   TREATY_TYPE_LABELS,
   type TreatyDto,
   type TreatyEventLinkType,
   type TreatyParticipationType,
+  type TreatyRatificationStatus,
   type TreatySignatoryDto,
   type TreatyType,
   treatyApi,
 } from '@/shared/api/treaty'
+import {
+  chamberApi,
+  chamberKeys,
+  chamberLabel,
+  labelChamberRole,
+} from '@/shared/api/chamber'
+import {
+  defaultTreatyRatifiedChamberIdFromSystem,
+  findPoliticalSystemAtDate,
+} from '@/entities/political-system/model/political-system'
+import { listPoliticalSystems } from '@/shared/api/political-system'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
@@ -2741,6 +2754,14 @@ export const TreatySignatoryFormModal: React.FC<{
   const [role, setRole] = useState(() =>
     mode === 'edit' ? (signatory?.role ?? '') : '',
   )
+  const [positionDefinitionId, setPositionDefinitionId] = useState(() =>
+    mode === 'edit'
+      ? (signatory?.positionDefinitionId ??
+        (signatory as { positionDefinition?: { id?: string } } | null)
+          ?.positionDefinition?.id ??
+        '')
+      : '',
+  )
   const [participationType, setParticipationType] =
     useState<TreatyParticipationType>(() =>
       mode === 'edit'
@@ -2751,6 +2772,31 @@ export const TreatySignatoryFormModal: React.FC<{
     mode === 'edit' ? toTreatyDateIso(signatory?.signedAt) : '',
   )
   const [signedAtError, setSignedAtError] = useState<string | null>(null)
+  const [ratifiedChamberId, setRatifiedChamberId] = useState(() =>
+    mode === 'edit'
+      ? (signatory?.ratifiedChamberId ?? signatory?.ratifiedChamber?.id ?? '')
+      : '',
+  )
+  const ratifiedChamberManuallyTouchedRef = useRef(
+    Boolean(signatory?.ratifiedChamberId ?? signatory?.ratifiedChamber?.id),
+  )
+  const [ratificationStatus, setRatificationStatus] = useState<string>(() =>
+    mode === 'edit' ? (signatory?.ratificationStatus ?? '') : '',
+  )
+  const [ratifiedAt, setRatifiedAt] = useState(() =>
+    mode === 'edit' ? toTreatyDateIso(signatory?.ratifiedAt) : '',
+  )
+  const [ratifiedAtError, setRatifiedAtError] = useState<string | null>(null)
+  const [ratificationYeas, setRatificationYeas] = useState(() =>
+    mode === 'edit' && signatory?.ratificationYeas != null
+      ? String(signatory.ratificationYeas)
+      : '',
+  )
+  const [ratificationNays, setRatificationNays] = useState(() =>
+    mode === 'edit' && signatory?.ratificationNays != null
+      ? String(signatory.ratificationNays)
+      : '',
+  )
   const [note, setNote] = useState(() =>
     mode === 'edit' ? (signatory?.note ?? '') : '',
   )
@@ -2789,6 +2835,109 @@ export const TreatySignatoryFormModal: React.FC<{
     enabled: Boolean(countryId || historicalCountryId),
     staleTime: 60_000,
   })
+  const { data: signatoryPositionDefs = [] } = useQuery({
+    queryKey: [
+      'position-defs-for-signatory',
+      countryId ?? '',
+      historicalCountryId ?? '',
+    ],
+    queryFn: async () => {
+      const rows = await personCareerApi.getPositionDefinitions({
+        ...(countryId ? { countryId } : {}),
+        ...(historicalCountryId ? { historicalCountryId } : {}),
+      })
+      return (Array.isArray(rows) ? rows : []).filter(
+        (d: { isGeneric?: boolean }) => !d.isGeneric,
+      ) as Array<{ id: string; title: string; positionType: string }>
+    },
+    staleTime: 60_000,
+  })
+  const { data: signatoryChambersRaw = [] } = useQuery({
+    queryKey: chamberKeys.list({
+      countryId: countryId ?? null,
+      historicalCountryId: historicalCountryId ?? null,
+    }),
+    queryFn: () =>
+      chamberApi
+        .list({
+          countryId: countryId ?? null,
+          historicalCountryId: historicalCountryId ?? null,
+        })
+        .catch(() => []),
+    enabled: Boolean(countryId || historicalCountryId),
+    staleTime: 60_000,
+  })
+  const { data: signatoryPoliticalSystems = [] } = useQuery({
+    queryKey: [
+      'treaty-signatory-political-systems',
+      countryId ?? null,
+      historicalCountryId ?? null,
+    ],
+    queryFn: () =>
+      listPoliticalSystems({
+        ...(countryId ? { countryId } : {}),
+        ...(historicalCountryId ? { historicalCountryId } : {}),
+      }).catch(() => []),
+    enabled: Boolean(countryId || historicalCountryId),
+    staleTime: 60_000,
+  })
+
+  const activeSignatorySystem = useMemo(
+    () =>
+      findPoliticalSystemAtDate(signatoryPoliticalSystems, {
+        countryId: countryId ?? null,
+        historicalCountryId: historicalCountryId ?? null,
+        isoDate: ratifiedAt || signedAt || treatySignDate || null,
+        fallbackToCurrent: !(ratifiedAt || signedAt || treatySignDate),
+      }),
+    [
+      signatoryPoliticalSystems,
+      countryId,
+      historicalCountryId,
+      ratifiedAt,
+      signedAt,
+      treatySignDate,
+    ],
+  )
+
+  const signatoryChambers = useMemo(() => {
+    const activeIds = new Set(
+      [
+        activeSignatorySystem?.lowerChamberId,
+        activeSignatorySystem?.upperChamberId,
+      ].filter((id): id is string => Boolean(id)),
+    )
+    return [...signatoryChambersRaw].sort((left, right) => {
+      const leftActive = activeIds.has(left.id) ? 0 : 1
+      const rightActive = activeIds.has(right.id) ? 0 : 1
+      if (leftActive !== rightActive) return leftActive - rightActive
+      return left.name.localeCompare(right.name, 'ko')
+    })
+  }, [signatoryChambersRaw, activeSignatorySystem])
+
+  useEffect(() => {
+    if (
+      !ratificationStatus ||
+      ratifiedChamberManuallyTouchedRef.current ||
+      ratifiedChamberId ||
+      signatoryChambers.length === 0
+    ) {
+      return
+    }
+    const suggestedChamberId =
+      defaultTreatyRatifiedChamberIdFromSystem(activeSignatorySystem)
+    if (
+      suggestedChamberId &&
+      signatoryChambers.some((chamber) => chamber.id === suggestedChamberId)
+    ) {
+      setRatifiedChamberId(suggestedChamberId)
+    }
+  }, [
+    ratificationStatus,
+    ratifiedChamberId,
+    signatoryChambers,
+    activeSignatorySystem,
+  ])
 
   const selectedPerson = persons.find((item) => item.id === personId)
   const selectedPersonLabel = selectedPerson
@@ -2860,7 +3009,8 @@ export const TreatySignatoryFormModal: React.FC<{
 
   const hasCountry = Boolean(countryId || historicalCountryId)
   const missing = hasCountry ? [] : ['당사국']
-  const canSubmit = !submitting && hasCountry && !signedAtError
+  const canSubmit =
+    !submitting && hasCountry && !signedAtError && !ratifiedAtError
 
   const handleSubmit = useCallback(async () => {
     if (!hasCountry) {
@@ -2872,8 +3022,18 @@ export const TreatySignatoryFormModal: React.FC<{
       notify.error(signedAtError)
       return
     }
+    if (ratifiedAtError) {
+      notify.error(ratifiedAtError)
+      return
+    }
     setSubmitting(true)
     try {
+      const parseVoteInt = (raw: string): number | null => {
+        const trimmed = raw.trim()
+        if (!trimmed) return null
+        const num = Number(trimmed)
+        return Number.isInteger(num) && num >= 0 ? num : null
+      }
       const payload = {
         countryId,
         historicalCountryId,
@@ -2886,9 +3046,16 @@ export const TreatySignatoryFormModal: React.FC<{
               ? null
               : tenureChoice,
         cabinetId: cabinetId || null,
+        positionDefinitionId: positionDefinitionId || null,
         role: role.trim() || null,
         participationType,
         signedAt: signedAt || null,
+        ratifiedChamberId: ratifiedChamberId || null,
+        ratificationStatus: (ratificationStatus ||
+          null) as TreatyRatificationStatus | null,
+        ratifiedAt: ratifiedAt || null,
+        ratificationYeas: parseVoteInt(ratificationYeas),
+        ratificationNays: parseVoteInt(ratificationNays),
         note: note.trim() || null,
       }
       if (mode === 'create' && treatyId) {
@@ -2917,9 +3084,16 @@ export const TreatySignatoryFormModal: React.FC<{
     personId,
     tenureChoice,
     cabinetId,
+    positionDefinitionId,
     role,
     participationType,
     signedAt,
+    ratifiedAtError,
+    ratifiedChamberId,
+    ratificationStatus,
+    ratifiedAt,
+    ratificationYeas,
+    ratificationNays,
     note,
     mode,
     treatyId,
@@ -2974,6 +3148,8 @@ export const TreatySignatoryFormModal: React.FC<{
                           setHistoricalCountryId(null)
                           setCountryLabel('')
                           setCabinetId('')
+                          ratifiedChamberManuallyTouchedRef.current = false
+                          setRatifiedChamberId('')
                         }}
                       >
                         선택 해제
@@ -3012,16 +3188,77 @@ export const TreatySignatoryFormModal: React.FC<{
                         ))}
                       </FormSelectNative>
                     </FormS.SubTitleField>
-                    <FormS.SubTitleField htmlFor="sig-role-input">
-                      <FormS.SubTitleLabel>대표 직책 (선택)</FormS.SubTitleLabel>
-                      <EventFormS.Input
-                        id="sig-role-input"
-                        value={role}
-                        onChange={(evt) => setRole(evt.target.value)}
-                        placeholder="예: 외무장관, 전권대사, 외무인민위원"
-                      />
+                    <FormS.SubTitleField htmlFor="sig-position-def-select">
+                      <FormS.SubTitleLabel>대표 직책 정본 (DB)</FormS.SubTitleLabel>
+                      <FormSelectNative
+                        id="sig-position-def-select"
+                        value={positionDefinitionId}
+                        onChange={(evt) => {
+                          const nextId = evt.target.value
+                          setPositionDefinitionId(nextId)
+                          const chosenDef = signatoryPositionDefs.find(
+                            (d) => d.id === nextId,
+                          )
+                          if (chosenDef && !role.trim()) {
+                            setRole(chosenDef.title)
+                          }
+                        }}
+                      >
+                        <option value="">직책 정본 선택 (선택)</option>
+                        <optgroup label="외교 사절 · 전권대표">
+                          {signatoryPositionDefs
+                            .filter((d) => d.positionType === 'DIPLOMATIC_POST')
+                            .map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.title}
+                              </option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="국가원수 · 정부수반 · 각료">
+                          {signatoryPositionDefs
+                            .filter((d) =>
+                              [
+                                'HEAD_OF_STATE',
+                                'HEAD_OF_GOVERNMENT',
+                                'CABINET_MINISTER',
+                                'REGENT',
+                              ].includes(d.positionType),
+                            )
+                            .map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.title}
+                              </option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="군 지휘 · 기타 공직">
+                          {signatoryPositionDefs
+                            .filter(
+                              (d) =>
+                                ![
+                                  'DIPLOMATIC_POST',
+                                  'HEAD_OF_STATE',
+                                  'HEAD_OF_GOVERNMENT',
+                                  'CABINET_MINISTER',
+                                  'REGENT',
+                                ].includes(d.positionType),
+                            )
+                            .map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.title}
+                              </option>
+                            ))}
+                        </optgroup>
+                      </FormSelectNative>
                     </FormS.SubTitleField>
                   </FormS.SubTitleGrid>
+                  <div style={{ marginTop: 8 }}>
+                    <EventFormS.Input
+                      id="sig-role-input"
+                      value={role}
+                      onChange={(evt) => setRole(evt.target.value)}
+                      placeholder="세부 서명 표기 (선택, 예: 전권대사 사이온지 긴모치 · 주영공사)"
+                    />
+                  </div>
                 </EventFormS.FormField>
               </EventFormS.FormRow>
 
@@ -3069,6 +3306,11 @@ export const TreatySignatoryFormModal: React.FC<{
                             sortedTenures.find((cand) => cand.id === nextVal) ??
                             null
                           if (pickedTenure) {
+                            if (pickedTenure.positionDefinition?.id) {
+                              setPositionDefinitionId(
+                                pickedTenure.positionDefinition.id,
+                              )
+                            }
                             const suggestedRole =
                               pickedTenure.title ??
                               pickedTenure.positionDefinition?.title ??
@@ -3168,6 +3410,110 @@ export const TreatySignatoryFormModal: React.FC<{
                   />
                   <EventFormS.Hint>
                     조약 공통 서명일과 다른 날짜에 서명·가입한 경우에만 입력합니다.
+                  </EventFormS.Hint>
+                </EventFormS.FormField>
+              </EventFormS.FormRow>
+
+              <EventFormS.FormRow>
+                <EventFormS.FormLabel htmlFor="sig-ratification-status">
+                  국내 의회 비준<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+                </EventFormS.FormLabel>
+                <EventFormS.FormField>
+                  <FormS.SubTitleGrid>
+                    <FormS.SubTitleField htmlFor="sig-ratification-status">
+                      <FormS.SubTitleLabel>비준 결과</FormS.SubTitleLabel>
+                      <FormSelectNative
+                        id="sig-ratification-status"
+                        value={ratificationStatus}
+                        onChange={(evt) =>
+                          setRatificationStatus(evt.target.value)
+                        }
+                      >
+                        <option value="">기록 안 함</option>
+                        {(
+                          Object.entries(TREATY_RATIFICATION_STATUS_LABELS) as [
+                            TreatyRatificationStatus,
+                            string,
+                          ][]
+                        ).map(([statusKey, statusLabel]) => (
+                          <option key={statusKey} value={statusKey}>
+                            {statusLabel}
+                          </option>
+                        ))}
+                      </FormSelectNative>
+                    </FormS.SubTitleField>
+                    <FormS.SubTitleField htmlFor="sig-ratified-chamber">
+                      <FormS.SubTitleLabel>비준 심의 원(院)</FormS.SubTitleLabel>
+                      <FormSelectNative
+                        id="sig-ratified-chamber"
+                        value={ratifiedChamberId}
+                        disabled={!hasCountry || signatoryChambers.length === 0}
+                        onChange={(evt) => {
+                          ratifiedChamberManuallyTouchedRef.current = true
+                          setRatifiedChamberId(evt.target.value)
+                        }}
+                      >
+                        <option value="">
+                          {!hasCountry
+                            ? '당사국 먼저 선택'
+                            : signatoryChambers.length === 0
+                              ? '등록된 원 없음'
+                              : '선택 안 함'}
+                        </option>
+                        {signatoryChambers.map((chamber) => (
+                          <option key={chamber.id} value={chamber.id}>
+                            {chamberLabel(chamber)} ·{' '}
+                            {labelChamberRole(chamber.role)}
+                          </option>
+                        ))}
+                      </FormSelectNative>
+                    </FormS.SubTitleField>
+                  </FormS.SubTitleGrid>
+                  {ratificationStatus || ratifiedChamberId ? (
+                    <FormS.SubTitleGrid style={{ marginTop: 8 }}>
+                      <FormS.SubTitleField htmlFor="sig-ratification-yeas">
+                        <FormS.SubTitleLabel>찬성(석)</FormS.SubTitleLabel>
+                        <EventFormS.Input
+                          id="sig-ratification-yeas"
+                          inputMode="numeric"
+                          value={ratificationYeas}
+                          onChange={(evt) =>
+                            setRatificationYeas(
+                              evt.target.value.replace(/\D/g, ''),
+                            )
+                          }
+                          placeholder="예: 49"
+                        />
+                      </FormS.SubTitleField>
+                      <FormS.SubTitleField htmlFor="sig-ratification-nays">
+                        <FormS.SubTitleLabel>반대(석)</FormS.SubTitleLabel>
+                        <EventFormS.Input
+                          id="sig-ratification-nays"
+                          inputMode="numeric"
+                          value={ratificationNays}
+                          onChange={(evt) =>
+                            setRatificationNays(
+                              evt.target.value.replace(/\D/g, ''),
+                            )
+                          }
+                          placeholder="예: 35"
+                        />
+                      </FormS.SubTitleField>
+                    </FormS.SubTitleGrid>
+                  ) : null}
+                  {ratificationStatus || ratifiedChamberId ? (
+                    <div style={{ marginTop: 8 }}>
+                      <TreatyDateField
+                        ariaLabel="비준·부결 의결일"
+                        pickerTitle="비준·부결 의결일 선택"
+                        value={ratifiedAt}
+                        onChange={setRatifiedAt}
+                        onErrorChange={setRatifiedAtError}
+                      />
+                    </div>
+                  ) : null}
+                  <EventFormS.Hint>
+                    예: 미국 상원(Senate)의 베르사유 조약 비준 부결(49:35), 국회 비준 동의안 가결 등 국내 입법부 표결을 연결합니다.
                   </EventFormS.Hint>
                 </EventFormS.FormField>
               </EventFormS.FormRow>

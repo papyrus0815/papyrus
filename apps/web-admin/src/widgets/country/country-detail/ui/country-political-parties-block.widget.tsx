@@ -51,6 +51,11 @@ import {
   ledgerSubtleFill,
 } from '@/entities/event/ui/ledger-tokens'
 import * as EventFormS from '@/pages/events/create/event-create.styles'
+import { usePoliticalSystems } from '@/entities/political-system/api'
+import {
+  findPoliticalSystemAtDate,
+  formatPoliticalSystemContextSummary,
+} from '@/entities/political-system/model/political-system'
 import {
   addPartyLaw,
   getLaws,
@@ -97,6 +102,7 @@ import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { pathKeys } from '@/shared/router'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PeriodDateField } from '@/shared/ui/period-date-field/period-date-field'
 import { notify } from '@/shared/ui/toast'
@@ -2778,7 +2784,12 @@ export function CountryPoliticalPartiesBlock({
           )
         ) : isLoading ? (
           <PartyListAreaBody>
-            <ChartSkeleton variant="bars" rows={5} />
+            <LedgerTableSkeleton
+              rows={6}
+              columns={4}
+              showToolbar={false}
+              label="정당 목록을 불러오는 중"
+            />
           </PartyListAreaBody>
         ) : parties.length === 0 ? (
           <PartyListAreaBody>
@@ -3612,6 +3623,32 @@ export function PartyFormModal({
     (option) => option.value === position,
   )?.label
 
+  const { data: politicalSystems = [] } = usePoliticalSystems(
+    countryId || historicalCountryId ? { countryId, historicalCountryId } : {},
+  )
+  const activeSystemForParty = useMemo(
+    () =>
+      findPoliticalSystemAtDate(politicalSystems, {
+        countryId: countryId ?? null,
+        historicalCountryId: historicalCountryId ?? null,
+        era: founded.era,
+        year: founded.year ?? null,
+        month: founded.month ?? null,
+        day: founded.day ?? null,
+        fallbackToCurrent: founded.year == null,
+      }),
+    [politicalSystems, countryId, historicalCountryId, founded],
+  )
+  const suggestsFactionKind =
+    mode === 'create' &&
+    kind === 'PARTY' &&
+    Boolean(
+      activeSystemForParty &&
+        (activeSystemForParty.partySystem === 'NON_PARTISAN' ||
+          activeSystemForParty.legislatureType === 'NONE' ||
+          activeSystemForParty.governmentForm === 'ABSOLUTE_MONARCHY'),
+    )
+
   const basicSectionNode = (
     <FormS.FormGroupSection
       id={PARTY_FORM_SECTION_ID.basic}
@@ -3676,6 +3713,43 @@ export function PartyFormModal({
           <EventFormS.Hint>
             {POLITICAL_PARTY_KIND_OPTIONS.find((option) => option.value === kind)?.hint ?? ''}
           </EventFormS.Hint>
+          {suggestsFactionKind && activeSystemForParty ? (
+            <EventFormS.Hint>
+              참고: 당시 헌정 체제({formatPoliticalSystemContextSummary(activeSystemForParty)})는 전근대·무정당·비의회 시기입니다 — 근대 정당이 아니라 붕당·정파·운동 단체라면{' '}
+              <button
+                type="button"
+                onClick={() => setKind('FACTION')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  color: 'inherit',
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                }}
+              >
+                붕당·파벌
+              </button>
+              {' 또는 '}
+              <button
+                type="button"
+                onClick={() => setKind('MOVEMENT')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  color: 'inherit',
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                }}
+              >
+                정치 운동
+              </button>
+              으로 구분할 수 있습니다.
+            </EventFormS.Hint>
+          ) : null}
         </EventFormS.FormField>
       </EventFormS.FormRow>
       <EventFormS.FormRow>

@@ -20,6 +20,7 @@ import { ElectoralDistrictController } from './electoral-district.controller'
 import { LawController } from './law.controller'
 import { LawTypeController } from './law-type.controller'
 import { PersonElectionController } from './person-election.controller'
+import { CabinetPoliticalPartyController } from './cabinet-political-party.controller'
 import { findPreviousComparableElection } from '../domain/find-previous-election.util'
 
 describe('Election & Political Party Domain Integrity (Round 9)', () => {
@@ -510,6 +511,153 @@ describe('Election & Political Party Domain Integrity (Round 9)', () => {
       }
       const controller = new LawTypeController(prisma)
       await expect(controller.create({ name: '헌법' })).rejects.toThrow(ConflictException)
+    })
+
+    it('scopes findPreviousComparableElection by chamberId, clears chamberId on presidential election, rejects foreign chamber, and allows reshuffle cabinets to share electionPartyResultId', async () => {
+      const findFirst = jest.fn().mockResolvedValue(null)
+      await findPreviousComparableElection(
+        { election: { findFirst } } as any,
+        {
+          id: 'el-upper-2',
+          electionType: 'PARLIAMENTARY_CONSTITUENCY',
+          pollDate: new Date('1960-07-29T00:00:00.000Z'),
+          countryId: 'c-kr',
+          historicalCountryId: null,
+          scopeAdministrativeDivisionId: null,
+          chamberId: 'ch-upper',
+          convocationOrdinal: 5,
+          accountId: 'acc-1',
+        },
+      )
+      expect(findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            chamberId: 'ch-upper',
+          }),
+        }),
+      )
+
+      const electionCreate = jest.fn().mockImplementation(async ({ data }: any) => ({
+        id: 'el-pres',
+        ...data,
+        candidacies: [],
+        ballotOptions: [],
+        partyResults: [],
+        alliances: [],
+      }))
+      const electionPrisma: any = {
+        country: { findUnique: jest.fn().mockResolvedValue({ id: 'c-kr' }) },
+        historicalCountryModernCountry: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        chamber: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'ch-fr',
+            name: '국민의회',
+            countryId: 'c-fr',
+            historicalCountryId: null,
+          }),
+        },
+        election: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: electionCreate,
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            id: 'el-pres',
+            chamberId: null,
+            candidacies: [],
+            ballotOptions: [],
+            partyResults: [],
+            alliances: [],
+          }),
+        },
+      }
+      const electionController = new ElectionController(
+        electionPrisma,
+        { notifyElection: jest.fn().mockResolvedValue(undefined) } as any,
+      )
+
+      // 1) 타국 원(프랑스 국민의회) 연결 시 거부
+      await expect(
+        electionController.create(
+          { user: { id: 'acc-1' } } as any,
+          {
+            name: '제5대 민의원 총선',
+            electionType: 'PARLIAMENTARY_CONSTITUENCY',
+            pollDate: '1960-07-29',
+            countryId: 'c-kr',
+            chamberId: 'ch-fr',
+          },
+        ),
+      ).rejects.toThrow(BadRequestException)
+
+      // 2) 대통령 선거에 chamberId가 실수로 전달되면 비워져(undefined/null) 타국 원 검증 없이 정리
+      await electionController.create(
+        { user: { id: 'acc-1' } } as any,
+        {
+          name: '제14대 대통령 선거',
+          electionType: 'PRESIDENTIAL_OR_HEAD',
+          pollDate: '1992-12-18',
+          countryId: 'c-kr',
+          chamberId: 'ch-fr',
+        },
+      )
+      expect(electionCreate.mock.calls[0][0].data.chamberId).toBeUndefined()
+
+      // 3) 동일 총선 정당 결과(epr-1)를 개각 후속 내각에서도 공유 연결 가능
+      const cabinetPartyCreate = jest
+        .fn()
+        .mockImplementation(async ({ data }: any) => ({ id: 'cpp-2', ...data }))
+      const cabinetPartyPrisma: any = {
+        cabinet: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'cab-2',
+            accountId: 'acc-1',
+            headTenure: { countryId: 'c-jp', historicalCountryId: null },
+          }),
+        },
+        politicalParty: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'party-ldp',
+            countryId: 'c-jp',
+            historicalCountryId: null,
+          }),
+        },
+        electionPartyResult: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'epr-1',
+            partyId: 'party-ldp',
+            election: {
+              id: 'el-jp',
+              accountId: 'acc-1',
+              electionType: 'PARLIAMENTARY_CONSTITUENCY',
+              countryId: 'c-jp',
+              historicalCountryId: null,
+            },
+          }),
+        },
+        cabinetPoliticalParty: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: cabinetPartyCreate,
+        },
+      }
+      const cabinetPartyController = new CabinetPoliticalPartyController(
+        cabinetPartyPrisma,
+      )
+      await cabinetPartyController.create('cab-2', { user: { id: 'acc-1' } } as any, {
+        partyId: 'party-ldp',
+        role: 'SENIOR_COALITION',
+        electionPartyResultId: 'epr-1',
+      })
+      expect(cabinetPartyCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            cabinetId: 'cab-2',
+            partyId: 'party-ldp',
+            electionPartyResultId: 'epr-1',
+          }),
+        }),
+      )
     })
   })
 })

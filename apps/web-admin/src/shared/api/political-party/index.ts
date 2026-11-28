@@ -657,6 +657,23 @@ export type PartyElectionResultRow = {
     pollDate?: string | null
     convocationOrdinal?: number | null
     totalSeats?: number | null
+    chamberId?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+    chamber?: {
+      id: string
+      name: string
+      localName?: string | null
+      role: string
+      sizes?: Array<{
+        id: string
+        seats: number
+        startEra?: string | null
+        startYear?: number | null
+        endEra?: string | null
+        endYear?: number | null
+      }>
+    } | null
   } | null
 }
 

@@ -1,6 +1,6 @@
 import { CountryTabEmptyState } from './country-tab-empty-state'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -42,9 +42,12 @@ import {
   getLaws,
   updateLaw,
 } from '@/shared/api/election'
-import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { chamberApi, chamberKeys } from '@/shared/api/chamber'
+import { listPoliticalSystems } from '@/shared/api/political-system'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
+import { pathKeys } from '@/shared/router'
 import { Input } from '@/shared/ui/register-form-layout'
 import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { notify } from '@/shared/ui/toast'
@@ -126,7 +129,9 @@ export function CountryLawsSection({
   historicalCountryId?: string
   linkedHistoricalCountries?: ReadonlyArray<{ id: string; name: string }>
 }) {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const routeCountryId = countryId ?? historicalCountryId ?? ''
   const scopeKey = lawsScopeKey({ countryId, historicalCountryId })
   const params = listParams({ countryId, historicalCountryId })
 
@@ -187,6 +192,37 @@ export function CountryLawsSection({
 
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
+
+  const { data: chambers = [] } = useQuery({
+    queryKey: chamberKeys.list({
+      countryId: countryId ?? null,
+      historicalCountryId: historicalCountryId ?? null,
+    }),
+    queryFn: () =>
+      chamberApi
+        .list({
+          countryId: countryId ?? null,
+          historicalCountryId: historicalCountryId ?? null,
+        })
+        .catch(() => []),
+    enabled: Boolean(countryId || historicalCountryId),
+    staleTime: 60_000,
+  })
+
+  const { data: politicalSystems = [] } = useQuery({
+    queryKey: [
+      'laws-political-systems',
+      countryId ?? null,
+      historicalCountryId ?? null,
+    ],
+    queryFn: () =>
+      listPoliticalSystems({
+        ...(countryId ? { countryId } : {}),
+        ...(historicalCountryId ? { historicalCountryId } : {}),
+      }).catch(() => []),
+    enabled: Boolean(countryId || historicalCountryId),
+    staleTime: 60_000,
+  })
 
   const distinctTypeCount = useMemo(() => {
     const typeSet = new Set<string>()
@@ -653,7 +689,12 @@ export function CountryLawsSection({
 
         <LawPanelBody>
           {isLoading ? (
-            <ChartSkeleton variant="bars" rows={5} />
+            <LedgerTableSkeleton
+              rows={6}
+              columns={4}
+              showToolbar={false}
+              label="법령 목록을 불러오는 중"
+            />
           ) : sorted.length === 0 ? (
             <CountryTabEmptyState
               Icon={FiBookOpen}
@@ -775,6 +816,49 @@ export function CountryLawsSection({
                             {clauseLabel && (
                               <ClauseBadge>{clauseLabel}</ClauseBadge>
                             )}
+                            {(row.politicalSystemsAsConstitution ?? []).map(
+                              (sys) => (
+                                <ConstitutionalRegimeBadge
+                                  key={sys.id}
+                                  type="button"
+                                  onClick={() => {
+                                    if (!routeCountryId) return
+                                    navigate(
+                                      pathKeys.countryPoliticalSystem(
+                                        routeCountryId,
+                                      ),
+                                    )
+                                  }}
+                                  title="정체·헌정 탭에서 이 헌법을 근거로 하는 체제 보기"
+                                >
+                                  헌정 체제:{' '}
+                                  {sys.name?.trim() || '정체 연결됨'}
+                                </ConstitutionalRegimeBadge>
+                              ),
+                            )}
+                            {row.passedChamber ||
+                            row.yeas != null ||
+                            row.nays != null ? (
+                              <ConstitutionalRegimeBadge
+                                type="button"
+                                onClick={() => {
+                                  if (!routeCountryId) return
+                                  navigate(
+                                    pathKeys.countryPoliticalSystem(
+                                      routeCountryId,
+                                    ),
+                                  )
+                                }}
+                                title="의결 의회 및 표결 기록 (정체·헌정 탭의 의회 원 사전 보기)"
+                              >
+                                {row.passedChamber
+                                  ? `의결: ${row.passedChamber.shortName || row.passedChamber.name}`
+                                  : '표결'}
+                                {row.yeas != null || row.nays != null
+                                  ? ` (${row.yeas ?? '—'}찬 · ${row.nays ?? '—'}반${row.abstentions != null ? ` · ${row.abstentions}기` : ''})`
+                                  : ''}
+                              </ConstitutionalRegimeBadge>
+                            ) : null}
                           </LawsTitleLine>
                           <LawSummaryText $muted={!summaryText}>
                             {summaryText || '등록된 법령 요약 설명이 없습니다.'}
@@ -827,6 +911,8 @@ export function CountryLawsSection({
             initial={editorState.editing}
             lawScope={{ countryId, historicalCountryId }}
             historicalCountryOptions={linkedHistoricalCountries}
+            chambers={chambers}
+            politicalSystems={politicalSystems}
             lawTypes={lawTypes}
             saving={savingLaw}
             creatingLawType={lawTypeCreateMut.isPending}
@@ -1268,5 +1354,30 @@ const LawHistEmpty = styled.div`
   padding: 16px 0;
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ConstitutionalRegimeBadge = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(16, 185, 129, 0.35)'
+        : 'rgba(16, 185, 129, 0.28)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(16, 185, 129, 0.14)' : '#ecfdf5'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 `
 

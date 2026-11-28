@@ -244,6 +244,16 @@ export type ElectionListRow = {
   voterTurnoutPercent?: string | number | null
   /** 선거로 선출되는 의회 총 의석 */
   totalSeats?: number | null
+  /** 어느 원의 선거인가(양원제 하원·상원 구분) */
+  chamberId?: string | null
+  chamber?: {
+    id: string
+    name: string
+    localName?: string | null
+    shortName?: string | null
+    role: string
+    composition?: string | null
+  } | null
   /** 회차(대수) */
   convocationOrdinal?: number | null
   candidacies?: { id: string }[]
@@ -271,6 +281,7 @@ export const CABINET_PARTY_LINK_ELECTION_TYPES = [
 export async function getElections(params?: {
   countryId?: string
   historicalCountryId?: string
+  chamberId?: string
   /** 정당 집계가 1건 이상 있는 선거만 */
   hasPartyResults?: boolean
   /** `CABINET_PARTY_LINK_ELECTION_TYPES` 등 — 콤마 구분은 클라이언트에서 join */
@@ -280,6 +291,7 @@ export async function getElections(params?: {
   if (params?.countryId) queryParams.set('countryId', params.countryId)
   if (params?.historicalCountryId)
     queryParams.set('historicalCountryId', params.historicalCountryId)
+  if (params?.chamberId) queryParams.set('chamberId', params.chamberId)
   if (params?.hasPartyResults) queryParams.set('hasPartyResults', 'true')
   if (params?.electionTypes?.length)
     queryParams.set('electionTypes', params.electionTypes.join(','))
@@ -290,12 +302,15 @@ export async function getElections(params?: {
 export async function getScopedElections(params?: {
   countryId?: string | null
   historicalCountryId?: string | null
+  chamberId?: string | null
   hasPartyResults?: boolean
   electionTypes?: readonly string[]
 }): Promise<ElectionListRow[]> {
   const cleanCountryId = params?.countryId?.trim() || undefined
   const cleanHistoricalId = params?.historicalCountryId?.trim() || undefined
+  const cleanChamberId = params?.chamberId?.trim() || undefined
   const sharedFilter = {
+    chamberId: cleanChamberId,
     hasPartyResults: params?.hasPartyResults,
     electionTypes: params?.electionTypes,
   }
@@ -365,6 +380,18 @@ export type ElectionCandidacyDto = {
   } | null
   electoralDistrict?: { id: string; name: string; code?: string | null } | null
   result?: ElectionResultDto | null
+  /** 당선 후 연결된 공직 재임(대통령·의원·지자체장 등) */
+  resultingTenure?: {
+    id: string
+    title?: string | null
+    positionType: string
+    ordinal?: number | null
+    startEra?: string | null
+    startYear?: number | null
+    endEra?: string | null
+    endYear?: number | null
+    positionDefinition?: { id: string; title: string } | null
+  } | null
 }
 
 export type ElectionBallotOptionDto = {
@@ -454,9 +481,31 @@ export type LawRow = {
   lawTypeId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
+  passedChamberId?: string | null
+  yeas?: number | null
+  nays?: number | null
+  abstentions?: number | null
   lawType?: LawTypeRow | null
   country?: { id: string; name: string } | null
   historicalCountry?: { id: string; name: string } | null
+  passedChamber?: {
+    id: string
+    name: string
+    shortName?: string | null
+    localName?: string | null
+    role: string
+  } | null
+  /** 이 법률(헌법·기본법)을 근거 헌법으로 삼는 정체 목록 */
+  politicalSystemsAsConstitution?: Array<{
+    id: string
+    name?: string | null
+    governmentForm?: string | null
+    startEra?: 'BC' | 'AD' | null
+    startYear?: number | null
+    endEra?: 'BC' | 'AD' | null
+    endYear?: number | null
+    isCurrent: boolean
+  }>
 }
 
 export async function getLawTypes() {
@@ -588,6 +637,10 @@ export async function createLaw(body: {
   lawTypeId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
+  passedChamberId?: string | null
+  yeas?: number | null
+  nays?: number | null
+  abstentions?: number | null
 }) {
   return requestJson<LawRow>(`/laws`, {
     method: 'POST',
@@ -608,6 +661,10 @@ export async function updateLaw(
     lawTypeId: string | null
     countryId: string | null
     historicalCountryId: string | null
+    passedChamberId: string | null
+    yeas: number | null
+    nays: number | null
+    abstentions: number | null
   }>,
 ) {
   return requestJson<LawRow>(`/laws/${encodeURIComponent(lawId)}`, {
