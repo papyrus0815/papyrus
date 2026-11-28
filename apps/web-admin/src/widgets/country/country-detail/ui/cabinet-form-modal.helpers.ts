@@ -1335,7 +1335,8 @@ export function formatPeriodDurationSummary(
     return null
   }
   if (!endParts.year.trim()) {
-    return '현직 · 존속 중 (종료일 비움)'
+    // 104px 라벨 열 알약 — '(종료일 비움)'까지 넣으면 '(종\n료일 비움)'으로 끊겼다. 종료 칸 머리에 '(비우면 현직)'이 이미 있다
+    return '현직 · 존속 중'
   }
   const endNumYear = Number(endParts.year.trim())
   if (!Number.isInteger(endNumYear) || endNumYear <= 0) {

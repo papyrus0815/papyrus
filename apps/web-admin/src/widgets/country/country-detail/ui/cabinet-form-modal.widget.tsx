@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiAlertCircle,
   FiArrowRight,
+  FiArrowUpRight,
   FiAward,
   FiBookmark,
   FiCheck,
@@ -72,6 +73,8 @@ import {
   parsePartialDateString,
 } from '@/shared/lib/partial-date-string'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { personBirthSignedYear } from '@/shared/ui/person-register-modal/relation-search-options'
+import { pathKeys } from '@/shared/router'
 import {
   InlineSearchSelect,
   type SearchOption,
@@ -1748,6 +1751,62 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
    * 묶음: 이 시기에 살았던 이 국가 인물 → 이 국가의 다른 인물 → 서버 검색으로 찾은 다른 국가 인물.
    * 예전엔 검색 칸 아래 추천 칩 5~8개만 깔려, 나머지 인물은 이름을 알아야 찾을 수 있었다.
    */
+  /**
+   * 이 정치체에서 이미 수반을 지낸 인물 → 직함·횟수·첫 해 — 후보 목록과 고른 카드에 '총리 2회'로 보인다.
+   * 수반 피커는 "누가 이 자리에 앉았나"를 고르는 곳이라 경력이 이름 다음으로 중요한 단서다.
+   */
+  const headTenureStatsByPerson = useMemo(() => {
+    const statsMap = new Map<
+      string,
+      { count: number; title: string; firstYear: number | null; lastYear: number | null }
+    >()
+    for (const tenureItem of effectiveExistingHeadTenures) {
+      const tenurePersonId = tenureItem.personId ?? tenureItem.person?.id
+      if (!tenurePersonId) continue
+      const title =
+        tenureItem.title ?? tenureItem.positionDefinition?.title ?? '수반'
+      const startYearValue = tenureItem.startYear ?? null
+      const endYearValue = tenureItem.endYear ?? null
+      const previous = statsMap.get(tenurePersonId)
+      statsMap.set(tenurePersonId, {
+        count: (previous?.count ?? 0) + 1,
+        title: previous?.title ?? title,
+        firstYear:
+          previous?.firstYear != null && startYearValue != null
+            ? Math.min(previous.firstYear, startYearValue)
+            : (previous?.firstYear ?? startYearValue),
+        lastYear:
+          previous?.lastYear != null && endYearValue != null
+            ? Math.max(previous.lastYear, endYearValue)
+            : (endYearValue ?? previous?.lastYear ?? null),
+      })
+    }
+    return statsMap
+  }, [effectiveExistingHeadTenures])
+
+  /** 출범 연도 기준 나이 — '취임 시 54세'. 출생·출범 중 하나라도 모르면 null */
+  const ageAtCabinetStart = useCallback(
+    (personItem: PersonLifespanCandidate): number | null => {
+      if (signedStartYear == null) return null
+      const birth = personBirthSignedYear(
+        personItem as unknown as PersonResponseDto,
+      )
+      if (birth == null) return null
+      // 출범 전에 죽은 사람에겐 나이를 붙이지 않는다(1901년 사망 빅토리아에 '취임 시 83세'가 붙었다)
+      const deathMagnitude = personItem.deathYear
+      if (deathMagnitude != null) {
+        const death =
+          personItem.deathEra === 'BC'
+            ? -Math.abs(deathMagnitude)
+            : Math.abs(deathMagnitude)
+        if (death < signedStartYear) return null
+      }
+      const age = signedStartYear - birth
+      return age >= 0 && age <= 120 ? age : null
+    },
+    [signedStartYear],
+  )
+
   const personSelectOptions = useMemo<SearchOption[]>(() => {
     const seen = new Set<string>()
     const contemporary: SearchOption[] = []
@@ -1758,10 +1817,26 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       const isContemporary =
         signedStartYear != null &&
         isPersonPlausibleForYear(personItem, signedStartYear)
+      const label = getPersonDisplayName(personItem)
+      const age = ageAtCabinetStart(personItem)
+      const stats = headTenureStatsByPerson.get(personItem.id)
       const option: SearchOption = {
         value: personItem.id,
-        label: getPersonDisplayName(personItem),
-        meta: formatPersonLifespanTag(personItem) ?? undefined,
+        label,
+        // 프로필처럼 — 얼굴 · 이름 / 생몰 · 취임 시 나이 · 원어명 / 오른쪽에 이 자리 경력
+        avatar: {
+          src: (personItem as PersonResponseDto).profileImageUrl ?? null,
+          initial: label.trim().charAt(0),
+        },
+        sub:
+          [
+            formatPersonLifespanTag(personItem),
+            age != null ? `취임 시 ${age}세` : null,
+            personItem.originalName,
+          ]
+            .filter(Boolean)
+            .join(' · ') || undefined,
+        meta: stats ? `${stats.title} ${stats.count}회` : undefined,
         keywords: [personItem.originalName, personItem.name, personItem.surname]
           .filter(Boolean)
           .join(' '),
@@ -1774,10 +1849,12 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     for (const personItem of searchedPersons as PersonSearchItem[]) {
       if (seen.has(personItem.id)) continue
       seen.add(personItem.id)
+      const searchedLabel = getPersonDisplayName(personItem)
       searched.push({
         value: personItem.id,
-        label: getPersonDisplayName(personItem),
-        meta: personItem.originalName ?? undefined,
+        label: searchedLabel,
+        avatar: { initial: searchedLabel.trim().charAt(0) },
+        sub: personItem.originalName ?? undefined,
         keywords: [personItem.originalName, personItem.name, personItem.surname]
           .filter(Boolean)
           .join(' '),
@@ -1785,7 +1862,13 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       })
     }
     return [...contemporary, ...others, ...searched]
-  }, [mergedCountryPersons, searchedPersons, signedStartYear])
+  }, [
+    mergedCountryPersons,
+    searchedPersons,
+    signedStartYear,
+    ageAtCabinetStart,
+    headTenureStatsByPerson,
+  ])
 
   const selectedPersonRecord = useMemo<PersonLifespanCandidate | null>(() => {
     if (!selectedPersonId) return null
@@ -1810,18 +1893,42 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     const lifespanTag = countryRecord
       ? formatPersonLifespanTag(countryRecord)
       : null
-    const detailParts = [originalName, lifespanTag].filter(
-      (part): part is string => Boolean(part && part.trim()),
-    )
+    const age = countryRecord ? ageAtCabinetStart(countryRecord) : null
+    const personCountry = (countryRecord as PersonResponseDto | undefined)
+      ?.country as { name?: string | null; flagEmoji?: string | null } | null | undefined
+    const stats = headTenureStatsByPerson.get(selectedPersonId)
+    const statsRange =
+      stats && (stats.firstYear != null || stats.lastYear != null)
+        ? ` (${stats.firstYear ?? '?'}–${stats.lastYear ?? '현직'})`
+        : ''
     return {
       imageUrl: countryRecord?.profileImageUrl ?? null,
-      detail: detailParts.length > 0 ? detailParts.join(' · ') : null,
+      originalName,
+      /** 이름 아래 — 생몰 · 취임 시 나이 (짧은 것만 — 긴 국명은 눈썹 줄로, 줄바꿈 시 '·'로 시작하던 문제) */
+      facts: [lifespanTag, age != null ? `취임 시 ${age}세` : null].filter(
+        (part): part is string => Boolean(part && part.trim()),
+      ),
+      /** 눈썹 줄 꼬리 — 국기 + 국적(길면 말줄임) */
+      countryText: personCountry?.name
+        ? `${personCountry.flagEmoji ? `${personCountry.flagEmoji} ` : ''}${personCountry.name}`
+        : null,
+      /** 이 정치체 수반 경력 — 재집권·개각 판단의 단서 */
+      careerLine: stats
+        ? `이 정치체 ${stats.title} 재임 ${stats.count}회${statsRange}`
+        : null,
       isContemporary:
         countryRecord != null &&
         signedStartYear != null &&
         isPersonPlausibleForYear(countryRecord, signedStartYear),
     }
-  }, [selectedPersonId, mergedCountryPersons, searchedPersons, signedStartYear])
+  }, [
+    selectedPersonId,
+    mergedCountryPersons,
+    searchedPersons,
+    signedStartYear,
+    ageAtCabinetStart,
+    headTenureStatsByPerson,
+  ])
 
   /** 검색칸 아래 바로 고르기 — 출범 연도에 활동한 이 국가 인물 앞쪽 몇 명 */
   const contemporaryQuickPicks = useMemo(
@@ -3962,28 +4069,34 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                     </FieldLabel>
                     <FieldControl>
                       {selectedPersonId ? (
+                        /* 고른 수반 = 프로필 카드: 큰 얼굴 · 이름 · 원어명 / 생몰·취임 시 나이·국적 / 이 자리 경력 */
                         <SelectedPersonBox>
                           <PersonAvatar aria-hidden="true">
                             {selectedPersonView?.imageUrl ? (
                               <img src={selectedPersonView.imageUrl} alt="" />
+                            ) : selectedPersonLabel.trim() ? (
+                              <span className="initial">
+                                {selectedPersonLabel.trim().charAt(0)}
+                              </span>
                             ) : (
-                              <FiUser size={16} />
+                              <FiUser size={20} />
                             )}
                           </PersonAvatar>
                           <div className="person-body">
-                            <div className="person-name">
-                              {selectedPersonLabel}
-                            </div>
-                            <div className="person-sub">
-                              {selectedPersonView?.detail ? (
-                                <span>{selectedPersonView.detail}</span>
-                              ) : (
-                                <span>
-                                  {mode === 'monarch'
-                                    ? '군주 · 원수로 선택됨'
-                                    : '행정부 수반으로 선택됨'}
+                            <div className="person-role">
+                              <span>
+                                {mode === 'monarch' ? '군주 · 원수' : '행정부 수반'}
+                              </span>
+                              {selectedPersonView?.countryText ? (
+                                <span className="person-country">
+                                  {selectedPersonView.countryText}
                                 </span>
-                              )}
+                              ) : null}
+                            </div>
+                            <div className="person-name-line">
+                              <span className="person-name">
+                                {selectedPersonLabel}
+                              </span>
                               {selectedPersonView?.isContemporary ? (
                                 <span className="person-flag">
                                   <FiCheck size={11} aria-hidden />이 시기에
@@ -3991,18 +4104,48 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                                 </span>
                               ) : null}
                             </div>
+                            {selectedPersonView?.originalName ? (
+                              <div className="person-original">
+                                {selectedPersonView.originalName}
+                              </div>
+                            ) : null}
+                            {selectedPersonView?.facts.length ? (
+                              <div className="person-sub">
+                                {selectedPersonView.facts.map((fact) => (
+                                  <span key={fact}>{fact}</span>
+                                ))}
+                              </div>
+                            ) : null}
+                            {selectedPersonView?.careerLine ? (
+                              <div className="person-career">
+                                <FiAward size={11} aria-hidden />
+                                {selectedPersonView.careerLine}
+                              </div>
+                            ) : null}
                           </div>
-                          <SmallGhostBtn
-                            type="button"
-                            onClick={() => {
-                              setSelectedPersonId('')
-                              setSelectedPersonLabel('')
-                              setSelectedExistingTenureId(null)
-                            }}
-                          >
-                            <FiRefreshCw size={12} aria-hidden />
-                            인물 변경
-                          </SmallGhostBtn>
+                          <div className="person-actions">
+                            <SmallGhostBtn
+                              as="a"
+                              href={pathKeys.personsTimelineDetail(selectedPersonId)}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="인물 상세를 새 탭에서 열기"
+                            >
+                              인물 상세
+                              <FiArrowUpRight size={12} aria-hidden />
+                            </SmallGhostBtn>
+                            <SmallGhostBtn
+                              type="button"
+                              onClick={() => {
+                                setSelectedPersonId('')
+                                setSelectedPersonLabel('')
+                                setSelectedExistingTenureId(null)
+                              }}
+                            >
+                              <FiRefreshCw size={12} aria-hidden />
+                              인물 변경
+                            </SmallGhostBtn>
+                          </div>
                         </SelectedPersonBox>
                       ) : showQuickCreatePerson ? (
                         <QuickPersonCard>
@@ -4134,24 +4277,33 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                               <KitGroupLabel>이 시기에 활동한 인물</KitGroupLabel>
                               <KitChipGroup>
                                 {contemporaryQuickPicks.map((option) => (
-                                  <KitChoiceChip
+                                  <QuickPickChip
                                     key={option.value}
                                     type="button"
                                     $selected={false}
                                     title={
-                                      option.meta
-                                        ? `${option.label} (${option.meta})`
+                                      option.sub
+                                        ? `${option.label} (${option.sub})`
                                         : option.label
                                     }
                                     onClick={() =>
                                       pickLeaderPerson(option.value, option.label)
                                     }
                                   >
+                                    <QuickPickAvatar aria-hidden>
+                                      {option.avatar?.src ? (
+                                        <img src={option.avatar.src} alt="" />
+                                      ) : (
+                                        option.avatar?.initial
+                                      )}
+                                    </QuickPickAvatar>
                                     <span>{option.label}</span>
-                                    {option.meta ? (
-                                      <QuickPickMeta>{option.meta}</QuickPickMeta>
+                                    {option.sub ? (
+                                      <QuickPickMeta>
+                                        {option.sub.split(' · ')[0]}
+                                      </QuickPickMeta>
                                     ) : null}
-                                  </KitChoiceChip>
+                                  </QuickPickChip>
                                 ))}
                                 <KitChoiceChip
                                   type="button"
@@ -4317,7 +4469,18 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                             {visibleRoleChips.length + overflowRoleChips.length > 0 ? (
                               <PresetChipWrap>
                                 {/* 예전엔 6개 넘는 프리셋을 ⋯ 메뉴에 숨겼다 — 모두 펼친다 */}
-                                {[...visibleRoleChips, ...overflowRoleChips].map((presetItem) => {
+                                {/*
+                                  * 제목으로 한 번 더 거른다 — 고른 직책이 앞 5개 밖이면 visible 끝에 끼워 넣는데 overflow에도
+                                  * 그대로 남아 '총리 · 총리'가 나란히 떴다(같은 key 두 개라 React 배치도 어긋났다).
+                                  */}
+                                {[...visibleRoleChips, ...overflowRoleChips]
+                                  .filter(
+                                    (chipItem, chipIndex, chipList) =>
+                                      chipList.findIndex(
+                                        (other) => other.title === chipItem.title,
+                                      ) === chipIndex,
+                                  )
+                                  .map((presetItem) => {
                                   const isChipActive =
                                     roleTitle.trim() === presetItem.title
                                   return (
@@ -5453,13 +5616,21 @@ const DurationPill = styled.span`
   margin-top: 6px;
   padding: 3px 10px;
   border-radius: 999px;
+  max-width: 100%;
+  box-sizing: border-box;
   font-size: 11.5px;
   font-weight: 600;
+  line-height: 1.35;
+  word-break: keep-all;
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(16, 185, 129, 0.14)'
       : 'rgba(16, 185, 129, 0.09)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
+
+  svg {
+    flex: none;
+  }
 `
 
 const SmartSuggestionCard = styled.div<{ $tone: 'warning' | 'info' }>`
@@ -5678,12 +5849,15 @@ const SmallGhostBtn = styled.button`
   }
 `
 
-/** 고른 수반 — 사건 폼 고른 항목(KitSelectedItem)처럼 중립 테 카드: 얼굴 · 이름 · 원어명/생몰 · 변경 */
+/**
+ * 고른 수반 — 프로필 카드(인물 등록 모달 프로필 머리와 같은 문법): 64px 얼굴 · 역할 눈썹 · 이름 · 원어명 /
+ * 생몰·취임 시 나이·국적 / 이 정치체 수반 경력 · 오른쪽 위 '인물 상세'·'인물 변경'. 중립 테 카드는 유지.
+ */
 const SelectedPersonBox = styled.div`
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 14px 14px 14px;
   border-radius: 10px;
   border: 1px solid ${({ theme }) => kitC(theme).border};
   background: ${({ theme }) => kitC(theme).content};
@@ -5698,22 +5872,116 @@ const SelectedPersonBox = styled.div`
     gap: 3px;
   }
 
+  .person-role {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: ${({ theme }) => kitC(theme).textMuted};
+
+    > span {
+      flex: none;
+    }
+
+    .person-country {
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 500;
+      letter-spacing: 0;
+    }
+
+    .person-country::before {
+      content: '·';
+      margin-right: 6px;
+    }
+  }
+
+  .person-name-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
   .person-name {
-    font-size: 14.5px;
+    min-width: 0;
+    font-size: 16px;
     font-weight: 700;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
+    line-height: 1.3;
     color: ${({ theme }) => kitC(theme).textPrimary};
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
+  .person-original {
+    font-size: 12.5px;
+    color: ${({ theme }) => kitC(theme).textSecondary};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .person-sub {
+    margin-top: 2px;
+  }
+
+  .person-sub > span + span::before {
+    content: '·';
+    margin-right: 8px;
+    color: ${({ theme }) => kitC(theme).textMuted};
+  }
+
+  .person-career {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => kitC(theme).textSecondary};
+
+    svg {
+      color: ${({ theme }) => kitC(theme).textMuted};
+    }
+  }
+
+  .person-actions {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .person-actions > a {
+    text-decoration: none;
+  }
+
+  @media (max-width: 560px) {
+    flex-wrap: wrap;
+
+    .person-actions {
+      flex-direction: row;
+      flex-basis: 100%;
+      justify-content: flex-end;
+    }
+  }
+
   .person-sub {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 4px 8px;
+    gap: 2px 8px;
     font-size: 12px;
+    font-variant-numeric: tabular-nums;
     color: ${({ theme }) => kitC(theme).textSecondary};
   }
 
@@ -5742,8 +6010,10 @@ const PersonAvatar = styled.span`
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 64px;
+  height: 64px;
+  font-size: 24px;
+  font-weight: 700;
   border-radius: 50%;
   overflow: hidden;
   background: ${({ theme }) => kitC(theme).section};
@@ -5763,6 +6033,34 @@ const QuickPickBlock = styled.div`
   flex-direction: column;
   gap: 6px;
   margin-top: 2px;
+`
+
+/** '이 시기에 활동한 인물' 칩 — 얼굴을 앞에 단 프로필 칩(왼쪽 여백을 얼굴 몫만큼 줄인다) */
+const QuickPickChip = styled(KitChoiceChip)`
+  padding-left: 4px;
+  gap: 6px;
+`
+
+const QuickPickAvatar = styled.span`
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => kitC(theme).textMuted};
+  background: ${({ theme }) => kitC(theme).section};
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 `
 
 const QuickPickMeta = styled.span`
