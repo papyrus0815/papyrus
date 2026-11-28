@@ -40,6 +40,22 @@ describe('RegisterModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('열린 콤보박스 안의 Esc는 모달을 닫지 않는다(목록만 닫히게)', () => {
+    const { onClose } = setup({
+      children: <input role="combobox" aria-expanded="true" aria-controls="list" aria-label="수반 인물" />,
+    })
+    fireEvent.keyDown(screen.getByRole('combobox', { name: '수반 인물' }), { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('닫힌 콤보박스의 Esc는 그대로 모달을 닫는다', () => {
+    const { onClose } = setup({
+      children: <input role="combobox" aria-expanded="false" aria-controls="list" aria-label="수반 인물" />,
+    })
+    fireEvent.keyDown(screen.getByRole('combobox', { name: '수반 인물' }), { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('닫기 버튼 클릭 시 onClose', () => {
     const { onClose } = setup()
     fireEvent.click(screen.getByLabelText('닫기'))

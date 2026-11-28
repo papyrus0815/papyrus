@@ -119,6 +119,15 @@ export function useModalBehavior({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (closeOnEsc && event.key === 'Escape') {
+        /*
+         * 열린 콤보박스(검색 드롭다운)의 Esc는 그 목록만 닫게 둔다. 이 리스너는 모달 루트에 직접 걸려
+         * React 위임(포털 컨테이너)보다 먼저 받기 때문에, 칸이 stopPropagation해도 늦어 모달이 통째로
+         * 닫히려 했다(내각 등록 모달의 수반 인물 칸).
+         */
+        const target = event.target as HTMLElement | null
+        if (target?.getAttribute?.('role') === 'combobox' && target.getAttribute('aria-expanded') === 'true') {
+          return
+        }
         event.stopPropagation()
         onCloseRef.current()
         return
