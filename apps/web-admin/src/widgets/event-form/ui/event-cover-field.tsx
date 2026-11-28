@@ -13,7 +13,7 @@
 import React, { useState } from 'react'
 
 import { FiCamera, FiImage, FiTrash2 } from 'react-icons/fi'
-import styled, { css } from 'styled-components'
+import styled, { css, keyframes } from 'styled-components'
 
 import { kitC } from '@/shared/ui/register-form-kit/register-form-kit'
 
@@ -26,6 +26,8 @@ export interface EventCoverFieldProps {
   onFile: (file: File) => void
   onRemove: () => void
   onImageError?: () => void
+  /** 머리 카드 안에 박힌 표지 — 테·모서리는 카드가 가지고, 빈 표지는 얇은 띠로 */
+  embedded?: boolean
 }
 
 export function EventCoverField({
@@ -35,6 +37,7 @@ export function EventCoverField({
   onFile,
   onRemove,
   onImageError,
+  embedded = false,
 }: EventCoverFieldProps) {
   const [dragOver, setDragOver] = useState(false)
   const hasImage = Boolean(src)
@@ -63,6 +66,7 @@ export function EventCoverField({
         type="button"
         data-testid="event-cover-field"
         $dragOver={dragOver}
+        $embedded={embedded}
         onClick={onPick}
         aria-label="대표 이미지 올리기"
         aria-describedby="event-cover-hint"
@@ -82,7 +86,7 @@ export function EventCoverField({
   }
 
   return (
-    <FilledCover data-testid="event-cover-field" $dragOver={dragOver} {...dragHandlers}>
+    <FilledCover data-testid="event-cover-field" $dragOver={dragOver} $embedded={embedded} {...dragHandlers}>
       <CoverImageButton
         type="button"
         onClick={onPick}
@@ -115,6 +119,20 @@ export function EventCoverField({
 
 /* ───────────────────────── 조판 ───────────────────────── */
 
+/* 표지 그림이 들어설 때 — 살짝 크게에서 제자리로, 흐리게에서 또렷하게 */
+const coverReveal = keyframes`
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+`
+
 /* 표지 높이 — 판 폭을 따르되 너무 납작/높지 않게(2단 왼쪽 판 ≈ 660px → 150px) */
 const coverBox = css`
   position: relative;
@@ -127,7 +145,7 @@ const coverBox = css`
   overflow: hidden;
 `
 
-const EmptyCover = styled.button<{ $dragOver: boolean }>`
+const EmptyCover = styled.button<{ $dragOver: boolean; $embedded: boolean }>`
   ${coverBox}
   display: flex;
   align-items: center;
@@ -168,6 +186,38 @@ const EmptyCover = styled.button<{ $dragOver: boolean }>`
   @media (max-width: 560px) {
     padding: 0 16px;
   }
+
+  /* 카드 윗면의 빈 표지 — 큰 점선 상자 대신 얇은 띠(끌어 오거나 올라가면 그때 점선) */
+  ${({ $embedded, $dragOver, theme }) =>
+    $embedded &&
+    css`
+      aspect-ratio: auto;
+      min-height: 0;
+      height: ${$dragOver ? '120px' : '68px'};
+      justify-content: flex-start;
+      padding: 0 18px;
+      border: none;
+      border-bottom: 1px solid ${kitC(theme).border};
+      border-radius: 0;
+      outline: 1.5px dashed ${$dragOver ? kitC(theme).focus : 'transparent'};
+      outline-offset: -6px;
+      transition:
+        height 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+        outline-color 0.15s ease,
+        background-color 0.15s ease;
+
+      &:hover {
+        outline-color: ${kitC(theme).borderHover};
+      }
+      ${EmptyIcon} {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+      }
+      ${EmptyText} strong {
+        font-size: 13px;
+      }
+    `}
 `
 
 const EmptyIcon = styled.span`
@@ -204,9 +254,15 @@ const EmptyText = styled.span`
   }
 `
 
-const FilledCover = styled.div<{ $dragOver: boolean }>`
+const FilledCover = styled.div<{ $dragOver: boolean; $embedded: boolean }>`
   ${coverBox}
   border: 1px solid ${({ theme }) => kitC(theme).border};
+  ${({ $embedded }) =>
+    $embedded &&
+    css`
+      border: none;
+      border-radius: 0;
+    `}
   background: ${({ theme }) => kitC(theme).section};
   box-shadow: ${({ $dragOver, theme }) =>
     $dragOver ? `0 0 0 2px ${kitC(theme).focus}, 0 0 0 6px ${kitC(theme).focusHalo}` : 'none'};
@@ -226,6 +282,7 @@ const CoverImageButton = styled.button`
     width: 100%;
     height: 100%;
     object-fit: cover;
+    animation: ${coverReveal} 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
   &:focus-visible {
     outline: none;

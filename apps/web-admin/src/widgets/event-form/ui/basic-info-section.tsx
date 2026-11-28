@@ -13,7 +13,7 @@ import {
   FiRepeat,
   FiX,
 } from 'react-icons/fi'
-import styled, { type DefaultTheme, useTheme } from 'styled-components'
+import styled, { css, type DefaultTheme, keyframes, useTheme } from 'styled-components'
 
 import {
   EVENT_COUNTRY_ROLE_OPTIONS,
@@ -78,6 +78,38 @@ import { EventCoverField } from './event-cover-field'
 import { CountryTile, IdentityMeta, IdentityText } from './participant-identity'
 import { EventDateField } from './event-date-field'
 import { PlaceMiniMap } from './place-mini-map'
+
+/*
+ * 움직임 — 더해진 것이 '어디에 생겼는지' 눈이 따라가게. 새 행·카드·칩은 살짝 위에서 내려앉고,
+ * 모달이 열리면 묶음이 차례로 떠오른다. 움직임 줄이기 설정이면 모두 끈다.
+ */
+const rowEnter = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+`
+
+const groupEnter = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+`
+
+const enterMotion = (delay = 0) => css`
+  @media (prefers-reduced-motion: no-preference) {
+    animation: ${rowEnter} 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) ${delay}s both;
+  }
+`
 
 export interface SimilarEventCandidate {
   id: string
@@ -1350,245 +1382,252 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         id="event-form-group-basic"
         aria-labelledby="event-form-group-basic-title"
       >
-        {/* 표지(대표 이미지) — 왼쪽 판 맨 위, 판 폭 그대로 */}
-        <CoverSlot>
-          <EventCoverField
-            src={thumbnail ? getImageUrl(thumbnail) : ''}
-            uploading={thumbnail.startsWith('blob:')}
-            onPick={() => {
-              playClickSound()
-              thumbnailInputRef.current?.click()
-            }}
-            onFile={(file) => {
-              playClickSound()
-              void handleThumbnailUpload(file)
-            }}
-            onRemove={() => {
-              playClickSound()
-              if (thumbnail.startsWith('blob:')) {
-                URL.revokeObjectURL(thumbnail)
-              }
-              setThumbnail('')
-              setThumbnailFile(null)
-              if (thumbnailInputRef.current) {
-                thumbnailInputRef.current.value = ''
-              }
-            }}
-            onImageError={() => {
-              if (thumbnail.startsWith('blob:')) {
-                URL.revokeObjectURL(thumbnail)
-              }
-            }}
-          />
-          <input
-            ref={thumbnailInputRef}
-            type="file"
-            accept="image/*"
-            aria-label="대표 이미지 파일"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (!file) return
-              void handleThumbnailUpload(file)
-            }}
-          />
-        </CoverSlot>
         <FormGroupTitle id="event-form-group-basic-title">
           기본 정보
         </FormGroupTitle>
-        {/* 사건명 — 표지 아래 제목처럼(글의 머리) */}
-        <TitleBlock>
-          <TitleEyebrow htmlFor="event-form-title">
-            사건명 <S.Required>*</S.Required>
-          </TitleEyebrow>
-          <TitleInput
-            ref={titleInputRef}
-            id="event-form-title"
-            type="text"
-            /* 모달이 열리면 닫기(✕)가 아니라 여기로 — 등록의 첫 동작은 이름 쓰기다 */
-            data-autofocus=""
-            placeholder="예: 제2차 세계 대전"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            aria-invalid={Boolean(titleError)}
-            aria-describedby={
-              titleError ? 'event-form-title-error' : undefined
-            }
-          />
-          {titleError && (
-            <S.ErrorMessage id="event-form-title-error" role="alert">
-              {titleError}
-            </S.ErrorMessage>
-          )}
-          {setSubtitle && (
-            <SubtitleFieldGroup>
-              <SubtitleAssistRow>
-                <SubtitleFieldLabel htmlFor="event-form-subtitle">
-                  부제 · 이칭 <span>(선택 · 통칭·작전명·핵심 성격)</span>
-                </SubtitleFieldLabel>
-                {detachableSubtitle && (
-                  <SubtitleSplitBtn
+        {/*
+          머리 카드 = 표지 + 사건명 + 부제. 예전엔 표지가 '기본 정보' 머리글 위에 따로 떠서
+          사건과 무관한 배너처럼 보였다 — 이제 표지는 제목 카드의 윗면이다.
+        */}
+        <HeaderCard>
+          {/* 표지 — 머리 카드의 윗면(사건명과 한 몸) */}
+          <CoverSlot>
+            <EventCoverField
+              embedded
+              src={thumbnail ? getImageUrl(thumbnail) : ''}
+              uploading={thumbnail.startsWith('blob:')}
+              onPick={() => {
+                playClickSound()
+                thumbnailInputRef.current?.click()
+              }}
+              onFile={(file) => {
+                playClickSound()
+                void handleThumbnailUpload(file)
+              }}
+              onRemove={() => {
+                playClickSound()
+                if (thumbnail.startsWith('blob:')) {
+                  URL.revokeObjectURL(thumbnail)
+                }
+                setThumbnail('')
+                setThumbnailFile(null)
+                if (thumbnailInputRef.current) {
+                  thumbnailInputRef.current.value = ''
+                }
+              }}
+              onImageError={() => {
+                if (thumbnail.startsWith('blob:')) {
+                  URL.revokeObjectURL(thumbnail)
+                }
+              }}
+            />
+            <input
+              ref={thumbnailInputRef}
+              type="file"
+              accept="image/*"
+              aria-label="대표 이미지 파일"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                void handleThumbnailUpload(file)
+              }}
+            />
+          </CoverSlot>
+          {/* 사건명 — 표지 아래 제목처럼(글의 머리) */}
+          <TitleBlock>
+            <TitleEyebrow htmlFor="event-form-title">
+              사건명 <S.Required>*</S.Required>
+            </TitleEyebrow>
+            <TitleInput
+              ref={titleInputRef}
+              id="event-form-title"
+              type="text"
+              /* 모달이 열리면 닫기(✕)가 아니라 여기로 — 등록의 첫 동작은 이름 쓰기다 */
+              data-autofocus=""
+              placeholder="예: 제2차 세계 대전"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              aria-invalid={Boolean(titleError)}
+              aria-describedby={
+                titleError ? 'event-form-title-error' : undefined
+              }
+            />
+            {titleError && (
+              <S.ErrorMessage id="event-form-title-error" role="alert">
+                {titleError}
+              </S.ErrorMessage>
+            )}
+            {setSubtitle && (
+              <SubtitleFieldGroup>
+                <SubtitleAssistRow>
+                  <SubtitleFieldLabel htmlFor="event-form-subtitle">
+                    부제 · 이칭 <span>(선택 · 통칭·작전명·핵심 성격)</span>
+                  </SubtitleFieldLabel>
+                  {detachableSubtitle && (
+                    <SubtitleSplitBtn
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setTitle(detachableSubtitle.mainTitle)
+                        setSubtitle(detachableSubtitle.detachedSubtitle)
+                        requestAnimationFrame(() => subtitleInputRef.current?.focus())
+                      }}
+                    >
+                      ‘{detachableSubtitle.detachedSubtitle}’을(를) 부제로 분리
+                    </SubtitleSplitBtn>
+                  )}
+                </SubtitleAssistRow>
+                <SubtitleInputRow>
+                  <SubtitleInput
+                    ref={subtitleInputRef}
+                    id="event-form-subtitle"
+                    type="text"
+                    maxLength={150}
+                    placeholder="예: 바르바로사 작전 — 나치 독일의 소련 침공 지시"
+                    aria-label="부제 · 이칭·작전명"
+                    value={subtitle}
+                    onChange={(changeEvent) => setSubtitle(changeEvent.target.value)}
+                  />
+                  {subtitle && (
+                    <SubtitleClearBtn
+                      type="button"
+                      aria-label="부제 지우기"
+                      title="부제 지우기"
+                      onClick={() => {
+                        setSubtitle('')
+                        requestAnimationFrame(() => subtitleInputRef.current?.focus())
+                      }}
+                    >
+                      <FiX size={13} aria-hidden />
+                    </SubtitleClearBtn>
+                  )}
+                </SubtitleInputRow>
+              </SubtitleFieldGroup>
+            )}
+            {(titleSuggestionSlot ||
+              titleYearSuggestion ||
+              titleLocationSuggestion ||
+              (onOpenCountryModal && titleSuggestedCountries.length > 0)) && (
+              <TitleSuggestionRow aria-label="사건명 자동 감지 추천">
+                {titleYearSuggestion && (
+                  <TitleSuggestionButton
+                    type="button"
+                    onClick={applyTitleYearSuggestion}
+                  >
+                    추천 기간 적용: {titleYearSuggestion.label}
+                  </TitleSuggestionButton>
+                )}
+                {titleSuggestionSlot && (
+                  <TitleSuggestionButton
                     type="button"
                     onClick={() => {
                       playClickSound()
-                      setTitle(detachableSubtitle.mainTitle)
-                      setSubtitle(detachableSubtitle.detachedSubtitle)
-                      requestAnimationFrame(() => subtitleInputRef.current?.focus())
+                      titleSuggestionSlot.onApply()
                     }}
                   >
-                    ‘{detachableSubtitle.detachedSubtitle}’을(를) 부제로 분리
-                  </SubtitleSplitBtn>
+                    추천 분류 적용: {titleSuggestionSlot.label}
+                  </TitleSuggestionButton>
                 )}
-              </SubtitleAssistRow>
-              <SubtitleInputRow>
-                <SubtitleInput
-                  ref={subtitleInputRef}
-                  id="event-form-subtitle"
-                  type="text"
-                  maxLength={150}
-                  placeholder="예: 바르바로사 작전 — 나치 독일의 소련 침공 지시"
-                  aria-label="부제 · 이칭·작전명"
-                  value={subtitle}
-                  onChange={(changeEvent) => setSubtitle(changeEvent.target.value)}
-                />
-                {subtitle && (
-                  <SubtitleClearBtn
+                {onOpenCountryModal && titleSuggestedCountries.length > 0 && (
+                  <TitleSuggestionButton
                     type="button"
-                    aria-label="부제 지우기"
-                    title="부제 지우기"
+                    onClick={() => addBatchParticipants(titleSuggestedCountries)}
+                  >
+                    추천 참여국 적용:{' '}
+                    {titleSuggestedCountries
+                      .map((candidate) => candidate.label)
+                      .join(' · ')}
+                  </TitleSuggestionButton>
+                )}
+                {titleLocationSuggestion && locationSlot && (
+                  <TitleSuggestionButton
+                    type="button"
                     onClick={() => {
-                      setSubtitle('')
-                      requestAnimationFrame(() => subtitleInputRef.current?.focus())
+                      playClickSound()
+                      locationSlot.setLocation(titleLocationSuggestion)
                     }}
                   >
-                    <FiX size={13} aria-hidden />
-                  </SubtitleClearBtn>
+                    추천 위치 적용: {titleLocationSuggestion}
+                  </TitleSuggestionButton>
                 )}
-              </SubtitleInputRow>
-            </SubtitleFieldGroup>
-          )}
-          {(titleSuggestionSlot ||
-            titleYearSuggestion ||
-            titleLocationSuggestion ||
-            (onOpenCountryModal && titleSuggestedCountries.length > 0)) && (
-            <TitleSuggestionRow aria-label="사건명 자동 감지 추천">
-              {titleYearSuggestion && (
-                <TitleSuggestionButton
-                  type="button"
-                  onClick={applyTitleYearSuggestion}
-                >
-                  추천 기간 적용: {titleYearSuggestion.label}
-                </TitleSuggestionButton>
-              )}
-              {titleSuggestionSlot && (
-                <TitleSuggestionButton
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    titleSuggestionSlot.onApply()
-                  }}
-                >
-                  추천 분류 적용: {titleSuggestionSlot.label}
-                </TitleSuggestionButton>
-              )}
-              {onOpenCountryModal && titleSuggestedCountries.length > 0 && (
-                <TitleSuggestionButton
-                  type="button"
-                  onClick={() => addBatchParticipants(titleSuggestedCountries)}
-                >
-                  추천 참여국 적용:{' '}
-                  {titleSuggestedCountries
-                    .map((candidate) => candidate.label)
-                    .join(' · ')}
-                </TitleSuggestionButton>
-              )}
-              {titleLocationSuggestion && locationSlot && (
-                <TitleSuggestionButton
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    locationSlot.setLocation(titleLocationSuggestion)
-                  }}
-                >
-                  추천 위치 적용: {titleLocationSuggestion}
-                </TitleSuggestionButton>
-              )}
-              {[
-                Boolean(titleSuggestionSlot),
-                Boolean(titleYearSuggestion),
-                Boolean(titleLocationSuggestion),
-                Boolean(onOpenCountryModal && titleSuggestedCountries.length > 0),
-              ].filter(Boolean).length >= 2 && (
-                <TitleApplyAllButton
-                  type="button"
-                  aria-label="사건명 추천 모두 적용"
-                  onClick={() => {
-                    playClickSound()
-                    titleSuggestionSlot?.onApply()
-                    if (titleYearSuggestion) {
-                      const nextPrecision =
-                        titleYearSuggestion.precision ?? 'year'
-                      setStartDate(titleYearSuggestion.startIso)
-                      setStartDatePrecision?.(nextPrecision)
-                      setStartTime('')
-                      if (!endDate) {
-                        setEndDate(titleYearSuggestion.endIso)
-                        setEndDatePrecision?.(nextPrecision)
-                        setEndTime('')
+                {[
+                  Boolean(titleSuggestionSlot),
+                  Boolean(titleYearSuggestion),
+                  Boolean(titleLocationSuggestion),
+                  Boolean(onOpenCountryModal && titleSuggestedCountries.length > 0),
+                ].filter(Boolean).length >= 2 && (
+                  <TitleApplyAllButton
+                    type="button"
+                    aria-label="사건명 추천 모두 적용"
+                    onClick={() => {
+                      playClickSound()
+                      titleSuggestionSlot?.onApply()
+                      if (titleYearSuggestion) {
+                        const nextPrecision =
+                          titleYearSuggestion.precision ?? 'year'
+                        setStartDate(titleYearSuggestion.startIso)
+                        setStartDatePrecision?.(nextPrecision)
+                        setStartTime('')
+                        if (!endDate) {
+                          setEndDate(titleYearSuggestion.endIso)
+                          setEndDatePrecision?.(nextPrecision)
+                          setEndTime('')
+                        }
                       }
-                    }
-                    if (onOpenCountryModal && titleSuggestedCountries.length > 0) {
-                      addBatchParticipants(titleSuggestedCountries)
-                    }
-                    if (titleLocationSuggestion && locationSlot) {
-                      locationSlot.setLocation(titleLocationSuggestion)
-                    }
-                  }}
-                >
-                  한 번에 채우기
-                </TitleApplyAllButton>
-              )}
-            </TitleSuggestionRow>
-          )}
-          {similarEventsSlot && similarEventsSlot.candidates.length > 0 && (
-            <SimilarEventsBar role="region" aria-label="유사·중복 사건 안내">
-              <SimilarEventsLabel>유사 사건</SimilarEventsLabel>
-              {similarEventsSlot.candidates.map((candidate) => (
-                <SimilarEventItem key={candidate.id}>
-                  <SimilarEventTitle>
-                    {candidate.title}
-                    {candidate.dateLabel ? ` (${candidate.dateLabel})` : ''}
-                  </SimilarEventTitle>
-                  {candidate.kind === 'COLLECTION' &&
-                    similarEventsSlot.onSelectAsParent && (
+                      if (onOpenCountryModal && titleSuggestedCountries.length > 0) {
+                        addBatchParticipants(titleSuggestedCountries)
+                      }
+                      if (titleLocationSuggestion && locationSlot) {
+                        locationSlot.setLocation(titleLocationSuggestion)
+                      }
+                    }}
+                  >
+                    한 번에 채우기
+                  </TitleApplyAllButton>
+                )}
+              </TitleSuggestionRow>
+            )}
+            {similarEventsSlot && similarEventsSlot.candidates.length > 0 && (
+              <SimilarEventsBar role="region" aria-label="유사·중복 사건 안내">
+                <SimilarEventsLabel>유사 사건</SimilarEventsLabel>
+                {similarEventsSlot.candidates.map((candidate) => (
+                  <SimilarEventItem key={candidate.id}>
+                    <SimilarEventTitle>
+                      {candidate.title}
+                      {candidate.dateLabel ? ` (${candidate.dateLabel})` : ''}
+                    </SimilarEventTitle>
+                    {candidate.kind === 'COLLECTION' &&
+                      similarEventsSlot.onSelectAsParent && (
+                        <SimilarEventActionBtn
+                          type="button"
+                          aria-label={`'${candidate.title}' 상위 사건으로 지정`}
+                          onClick={() => {
+                            playClickSound()
+                            similarEventsSlot.onSelectAsParent?.(candidate)
+                          }}
+                        >
+                          상위 사건으로 지정
+                        </SimilarEventActionBtn>
+                      )}
+                    {similarEventsSlot.onAddAsRelated && (
                       <SimilarEventActionBtn
                         type="button"
-                        aria-label={`'${candidate.title}' 상위 사건으로 지정`}
+                        aria-label={`'${candidate.title}' 연관 사건으로 추가`}
                         onClick={() => {
                           playClickSound()
-                          similarEventsSlot.onSelectAsParent?.(candidate)
+                          similarEventsSlot.onAddAsRelated?.(candidate)
                         }}
                       >
-                        상위 사건으로 지정
+                        연관 사건으로 추가
                       </SimilarEventActionBtn>
                     )}
-                  {similarEventsSlot.onAddAsRelated && (
-                    <SimilarEventActionBtn
-                      type="button"
-                      aria-label={`'${candidate.title}' 연관 사건으로 추가`}
-                      onClick={() => {
-                        playClickSound()
-                        similarEventsSlot.onAddAsRelated?.(candidate)
-                      }}
-                    >
-                      연관 사건으로 추가
-                    </SimilarEventActionBtn>
-                  )}
-                </SimilarEventItem>
-              ))}
-            </SimilarEventsBar>
-          )}
-        </TitleBlock>
+                  </SimilarEventItem>
+                ))}
+              </SimilarEventsBar>
+            )}
+          </TitleBlock>
+        </HeaderCard>
 
         {/* 기간 — 사건명 바로 다음에 배치하여 시대 기준(역사국가·동시대 사건/인물)을 먼저 잡는다 */}
         <S.FormRow>
@@ -2700,7 +2739,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       </CountryQuickResultBox>
                     )}
                   </CountryQuickSearchAnchor>
-                  <RowAddButton
+                  <LinkPickButton
                     type="button"
                     onClick={() => {
                       playClickSound()
@@ -2709,7 +2748,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   >
                     <FiPlus size={15} />
                     {relatedCountries.length > 0 ? '국가 더 추가' : '국가 추가'}
-                  </RowAddButton>
+                  </LinkPickButton>
                   {relatedCountries.length === 2 && (
                     <S.AddButton
                       type="button"
@@ -5008,6 +5047,7 @@ const ParticipantRow = styled.div<{
   /** 연관 사건 — 카드 대신 RelatedList 안의 한 줄(테·그림자·굵은 왼쪽 띠 없음, 구분선은 목록이 긋는다) */
   $flat?: boolean
 }>`
+  ${enterMotion()}
   display: flex;
   flex-direction: column;
   gap: ${({ $causalLane }) => ($causalLane ? '8px' : '6px')};
@@ -5798,6 +5838,17 @@ const FormGroup = styled.section`
   gap: 4px;
   padding: 0 0 8px;
 
+  @media (prefers-reduced-motion: no-preference) {
+    animation: ${groupEnter} 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+    &#event-form-group-participants {
+      animation-delay: 0.07s;
+    }
+    &#event-form-group-context {
+      animation-delay: 0.14s;
+    }
+  }
+
   & + & {
     margin-top: 20px;
     padding-top: 4px;
@@ -5939,6 +5990,7 @@ const DateTimeLine = styled.div`
 
 /* ─── 키워드 칩 ─── (인라인 스타일·하드코딩 색 → 폼 토큰) */
 const KeywordChip = styled.span`
+  ${enterMotion()}
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -6233,6 +6285,7 @@ const LocationClearBtn = styled.button`
 `
 
 const LocationCoordBar = styled.div`
+  ${enterMotion()}
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
@@ -6474,18 +6527,14 @@ const SplitEditModeHint = styled.p`
 `
 
 /* 실선 — 점선 테는 끌어 놓는 자리(썸네일 업로드·인과 레인·미배정 띠) 전용으로 남긴다 */
+/* 빠른 열기 안내 — 상자(테+면) 대신 위 실선 하나. 상자 안 칩 줄이 또 하나의 '버튼 판'처럼 보였다 */
 const SplitRecordsGuideBox = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 8px;
-  padding: 9px 12px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.02)'
-      : 'rgba(248, 250, 252, 0.8)'};
+  margin-top: 10px;
+  padding: 10px 0 0;
+  border-top: 1px solid ${({ theme }) => S.getC(theme).border.light};
 `
 
 const SplitQuickTypeRow = styled.div`
@@ -6592,6 +6641,7 @@ const linkToneText = (tone: LinkTone, theme: DefaultTheme) =>
       : '#4f46e5'
 
 const LinkedCard = styled.div<{ $tone: LinkTone }>`
+  ${enterMotion()}
   --link-rgb: ${({ $tone }) => LINK_TONE_RGB[$tone]};
   --link-text: ${({ $tone, theme }) => linkToneText($tone, theme)};
   display: grid;
@@ -6811,6 +6861,14 @@ const LinkSearchInput = styled(CountryQuickSearchInput)`
 
 /** 검색 칸 옆 '목록에서 고르기' — 테 없는 보조 버튼(칸 하나 + 버튼 하나였던 상자 두 개를 하나로) */
 const LinkPickButton = styled(RowAddButton)`
+  transition:
+    background 0.14s ease,
+    color 0.14s ease,
+    transform 0.1s ease;
+
+  &:active {
+    transform: scale(0.97);
+  }
   border-color: transparent;
   background: transparent;
   box-shadow: none;
@@ -6892,7 +6950,7 @@ const RelatedMemoRow = styled.div`
 
 /** 표지 — 왼쪽 판 맨 위, 판 폭 그대로(라벨 열에 끼우지 않는다) */
 const CoverSlot = styled.div`
-  margin: 0 0 18px;
+  margin: 0;
   min-width: 0;
 `
 
@@ -7318,5 +7376,30 @@ const SelfNode = styled.div<{ $empty: boolean }>`
   small {
     font-size: 12px;
     color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+/** 머리 카드 — 표지(윗면) + 사건명 + 부제를 한 몸으로 */
+const HeaderCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 2px 0 10px;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) => S.getC(theme).background.content};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.12)'};
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.2s ease;
+
+  &:focus-within {
+    border-color: ${({ theme }) => S.getC(theme).border.hover};
+  }
+
+  > ${TitleBlock} {
+    padding: 14px 18px 16px;
   }
 `

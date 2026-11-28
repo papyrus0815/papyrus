@@ -11,8 +11,8 @@
 import { Fragment, lazy, Suspense, useEffect, useMemo, useState } from 'react'
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { FiPlus, FiUser, FiX } from 'react-icons/fi'
-import styled from 'styled-components'
+import { FiPlus, FiUser, FiUserPlus, FiX } from 'react-icons/fi'
+import styled, { keyframes } from 'styled-components'
 
 import {
   type EventFacetKey,
@@ -90,6 +90,18 @@ import { OrganizationQuickCreateModal } from '@/widgets/organization/organizatio
 import { PersonGroupCreateModal } from '@/widgets/person/person-group-create-modal/person-group-create-modal'
 
 import { IdentityMeta, IdentityText, PersonFace } from './participant-identity'
+
+/* 새로 더해진 행·칩이 내려앉는 움직임(움직임 줄이기 설정이면 끔) — basic-info-section과 같은 곡선 */
+const rowEnter = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+`
 
 const LazyCompanyRegisterModal = lazy(() =>
   import('@/widgets/company-form').then((m) => ({
@@ -1046,13 +1058,13 @@ export function CoreRecordsGroup({
                 )}
               </QuickSearchAnchor>
               {!drafts.election && (
-                <KitAddButton
+                <GhostAddButton
                   type="button"
                   onClick={() => setPicker('election')}
                 >
                   <FiPlus size={15} />
                   선거 고르기
-                </KitAddButton>
+                </GhostAddButton>
               )}
             </OrgActionRow>
             {suggestedElections.length > 0 && (
@@ -1606,7 +1618,7 @@ export function CoreRecordsGroup({
                   </QuickResultBox>
                 )}
               </QuickSearchAnchor>
-              <KitAddButton type="button" onClick={() => setPicker('organizations')}>
+              <GhostAddButton type="button" onClick={() => setPicker('organizations')}>
                 <FiPlus size={15} />
                 {orgScopeFilter === 'parties'
                   ? (drafts.politicalParties?.length ?? 0) > 0
@@ -1619,8 +1631,8 @@ export function CoreRecordsGroup({
                     : orgScopeFilter === 'companies'
                       ? '기업 고르기'
                       : '기구·조직 고르기'}
-              </KitAddButton>
-              <KitAddButton
+              </GhostAddButton>
+              <GhostAddButton
                 type="button"
                 aria-label={
                   orgScopeFilter === 'companies'
@@ -1648,7 +1660,7 @@ export function CoreRecordsGroup({
                   : orgScopeFilter === 'parties'
                     ? '새 정당 등록'
                     : '새 기구·조직 등록'}
-              </KitAddButton>
+              </GhostAddButton>
             </OrgActionRow>
             {suggestedOrganizations.length > 0 && (
               <PersonSuggestionBar role="group" aria-label="참여국 추천 조직">
@@ -4514,21 +4526,22 @@ function PersonListField({
               </QuickResultBox>
             )}
           </QuickSearchAnchor>
-          <KitAddButton type="button" onClick={onAdd}>
+          <GhostAddButton type="button" onClick={onAdd}>
             <FiPlus size={15} />
             {addLabel}
-          </KitAddButton>
+          </GhostAddButton>
           {onQuickCreate && (
-            <KitAddButton
+            <GhostIconButton
               type="button"
               aria-label={`${label} 새 인물 등록`}
+              title="새 인물 등록 — 검색 목록 맨 아래 '새 인물로 빠른 등록'과 같다"
               onClick={() => {
                 playClickSound?.()
                 onQuickCreate('')
               }}
             >
-              <FiPlus size={15} />새 인물 등록
-            </KitAddButton>
+              <FiUserPlus size={16} />
+            </GhostIconButton>
           )}
           {onImportContemporaryLeaders && (
             <KitAddButton
@@ -4927,6 +4940,9 @@ const OrgRoleChipBtn = styled.button<{ $active: boolean }>`
 `
 
 const Row = styled.div<{ $role?: string; $dragOver?: boolean }>`
+  @media (prefers-reduced-motion: no-preference) {
+    animation: ${rowEnter} 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -5841,6 +5857,9 @@ const SideEmptyHint = styled.span`
 `
 
 const SideMemberChip = styled.span`
+  @media (prefers-reduced-motion: no-preference) {
+    animation: ${rowEnter} 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -6112,4 +6131,56 @@ const SearchLeadIcon = styled.span`
 
 const IconQuickSearchInput = styled(QuickSearchInput)`
   padding-left: 32px;
+`
+
+/*
+ * 검색 칸 옆 보조 버튼 — 테 없는 고스트. 같은 무게의 테 두른 버튼이 줄마다 2~3개씩 늘어서
+ * '어느 게 주 동작이냐'가 안 보였다. 주 동작은 검색 칸(Enter)이고, 이 버튼들은 목록 창·새로 등록 같은 곁길.
+ */
+const GhostAddButton = styled(KitAddButton)`
+  && {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  &&:hover:not(:disabled) {
+    border-color: transparent;
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)')};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &&:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+`
+
+const GhostIconButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease,
+    transform 0.1s ease;
+
+  &:hover {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)')};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+  &:active {
+    transform: scale(0.94);
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
 `
