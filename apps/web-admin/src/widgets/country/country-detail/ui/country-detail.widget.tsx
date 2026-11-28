@@ -51,7 +51,7 @@ import { EthnicitySection } from './ethnicity-section.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
 import { HistoricalCountryDetail } from './historical-country-detail.widget'
 import { LinkedHistoricalCountriesSection } from './linked-historical-countries-section.widget'
-import { LoadingOverlay } from './loading-overlay'
+import { CountryDetailSkeleton } from './country-detail-skeleton'
 import { MapRegionSection } from './map-region-section.widget'
 import {
   type OverviewSubTab,
@@ -183,18 +183,25 @@ function CountryDetailInner({
 
   const modernCountry = country?.type === 'modern' ? country : null
   const dashboardStats = useCountryDashboardStats(modernCountry)
-  const { data: economicRows = [] } = useEconomicIndicators(modernCountry?.id)
-  const { data: demographicRows = [] } = useDemographicIndicators(modernCountry?.id)
-  const { data: developmentRows = [] } = useDevelopmentIndicators(modernCountry?.id)
-  const { data: bondRows = [] } = useBondYields(modernCountry?.id)
-  const { data: tradeRows = [] } = useExportImports(modernCountry?.id)
+  const { data: economicRows = [], isLoading: economicLoading } =
+    useEconomicIndicators(modernCountry?.id)
+  const { data: demographicRows = [], isLoading: demographicLoading } =
+    useDemographicIndicators(modernCountry?.id)
+  const { data: developmentRows = [], isLoading: developmentLoading } =
+    useDevelopmentIndicators(modernCountry?.id)
+  const { data: bondRows = [], isLoading: bondLoading } = useBondYields(
+    modernCountry?.id,
+  )
+  const { data: tradeRows = [], isLoading: tradeLoading } = useExportImports(
+    modernCountry?.id,
+  )
   const { data: adminDivisionRoots = [], isLoading: adminDivisionsLoading } =
     useAdministrativeDivisions(modernCountry?.id, null)
   const { data: naturalFeatureItems = [], isLoading: naturalFeaturesLoading } =
     useNaturalFeatures(modernCountry?.id)
   const { data: infrastructureItems = [], isLoading: infrastructuresLoading } =
     useInfrastructures(modernCountry?.id)
-  const { data: allCompanies = [] } = useQuery({
+  const { data: allCompanies = [], isLoading: companiesLoading } = useQuery({
     queryKey: ['companies', 'all'],
     queryFn: () => companyApi.getAll(),
     staleTime: 60_000,
@@ -278,20 +285,32 @@ function CountryDetailInner({
       treaty: dashboardStats.loading.treaties
         ? undefined
         : dashboardStats.treatyCount,
-      trade: tradeRows.length,
-      companies: companyCount,
-      statistics: statYearCount,
+      trade: tradeLoading ? undefined : tradeRows.length,
+      companies: companiesLoading ? undefined : companyCount,
+      statistics:
+        economicLoading &&
+        demographicLoading &&
+        developmentLoading &&
+        bondLoading
+          ? undefined
+          : statYearCount,
     }
   }, [
     modernCountry,
     allCompanies,
+    companiesLoading,
     politicalParties.length,
     partiesLoading,
     economicRows,
     demographicRows,
     developmentRows,
     bondRows,
+    economicLoading,
+    demographicLoading,
+    developmentLoading,
+    bondLoading,
     tradeRows.length,
+    tradeLoading,
     adminDivisionRoots,
     naturalFeatureItems.length,
     infrastructureItems.length,
@@ -305,7 +324,7 @@ function CountryDetailInner({
   if (isLoading && !country) {
     return (
       <S.DetailPaneRelative>
-        <LoadingOverlay message="국가 정보를 불러오는 중..." />
+        <CountryDetailSkeleton activeTab={activeSubTab} />
       </S.DetailPaneRelative>
     )
   }

@@ -83,7 +83,7 @@ import {
   updateHistoricalCountryTransition,
 } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
-import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountryPicker, CountryPickerField } from '@/shared/ui/country-picker'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
@@ -626,7 +626,12 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
         )}
 
         {isLoading ? (
-          <ChartSkeleton variant="bars" rows={3} />
+          <LedgerTableSkeleton
+            rows={4}
+            columns={3}
+            showToolbar={false}
+            label="관계 기록을 불러오는 중"
+          />
         ) : transitions.length === 0 ? (
           <CountryTabEmptyState
             Icon={FiGitBranch}
@@ -1216,7 +1221,12 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
         )}
 
         {isLoading ? (
-          <ChartSkeleton variant="bars" rows={3} />
+          <LedgerTableSkeleton
+            rows={4}
+            columns={3}
+            showToolbar={false}
+            label="관계 기록을 불러오는 중"
+          />
         ) : memberships.length === 0 ? (
           <CountryTabEmptyState
             Icon={FiLayers}
@@ -1855,7 +1865,12 @@ export function RelationSection({ country }: { country: UnifiedCountry }) {
         )}
 
         {isLoading ? (
-          <ChartSkeleton variant="bars" rows={3} />
+          <LedgerTableSkeleton
+            rows={4}
+            columns={3}
+            showToolbar={false}
+            label="관계 기록을 불러오는 중"
+          />
         ) : relations.length === 0 ? (
           <CountryTabEmptyState
             Icon={FiFlag}

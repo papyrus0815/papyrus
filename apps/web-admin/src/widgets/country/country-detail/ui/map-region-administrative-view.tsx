@@ -35,7 +35,7 @@ import type { SegmentSlice } from '@/entities/event/ui/bento-primitives'
 import type { City } from '@/shared/api/city'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { dateSortKey } from '@/shared/lib/iso-date'
-import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
@@ -1252,7 +1252,14 @@ export function MapRegionAdministrativeView({
       return <ListEmptyState palette={palette} message="검색 중…" />
     }
     if (isLoading) {
-      return <ChartSkeleton variant="bars" rows={5} />
+      return (
+        <LedgerTableSkeleton
+          rows={6}
+          columns={3}
+          showToolbar={false}
+          label="행정구역 목록을 불러오는 중"
+        />
+      )
     }
     if (mode === 'drill' && breadcrumb.length === 0 && divisions.length === 0) {
       return (

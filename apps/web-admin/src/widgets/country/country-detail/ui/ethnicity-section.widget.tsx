@@ -44,7 +44,7 @@ import type { Ethnicity } from '@/shared/api/ethnicity'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
-import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
@@ -350,7 +350,12 @@ export function EthnicitySection({
       />
 
       {isLoading ? (
-        <ChartSkeleton variant="bars" rows={4} />
+        <LedgerTableSkeleton
+          rows={5}
+          columns={3}
+          showToolbar={false}
+          label="구성 민족 목록을 불러오는 중"
+        />
       ) : list.length === 0 ? (
         <CountryTabEmptyState
           Icon={FiUsers}

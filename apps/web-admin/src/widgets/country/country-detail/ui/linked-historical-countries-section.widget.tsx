@@ -91,7 +91,7 @@ import {
 import { useLinkedHistoricalData } from '../model/use-linked-historical-data.hook'
 import * as DashboardStyles from './country-detail-dashboard.styles'
 import { LedgerFilterChip } from './country-ledger-primitives'
-import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 
 export interface LinkedHistoricalCountriesSectionProps {
@@ -1039,7 +1039,12 @@ export function LinkedHistoricalCountriesSection({
         )}
 
         {isLinkedDataLoading ? (
-          <ChartSkeleton variant="bars" rows={5} />
+          <LedgerTableSkeleton
+            rows={6}
+            columns={4}
+            showToolbar={false}
+            label="연결된 과거 국가 목록을 불러오는 중"
+          />
         ) : count === 0 ? (
           <CountryTabEmptyState
             Icon={FiClock}

@@ -75,7 +75,7 @@ import {
   LedgerViewSwitchItem,
 } from './country-ledger-primitives'
 import { CountryPersonGroupsBlock } from './country-person-groups-block.widget'
-import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { PersonCard } from './person/person-card'
 
 export interface CountryPersonsSectionProps {
@@ -1298,7 +1298,12 @@ export function CountryPersonsSection({
         />
 
         {isLoading ? (
-          <ChartSkeleton variant="bars" rows={5} />
+          <LedgerTableSkeleton
+            rows={7}
+            columns={4}
+            showToolbar={false}
+            label="인물 목록을 불러오는 중"
+          />
         ) : isError ? (
           <ErrorRow role="alert">
             <span>인물 목록을 불러오지 못했습니다.</span>

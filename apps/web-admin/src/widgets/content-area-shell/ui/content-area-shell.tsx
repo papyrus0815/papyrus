@@ -14,11 +14,12 @@
  * - 현재 지면의 목록 사이드바 폭을 `--list-sidebar-width`로 내려준다. 레일 밖에 fixed로 떠
  *   있는 하단 계정 패널이 자기 폭을 이 값으로 잡는다(사이드바 없으면 0 → 아바타만 남음).
  */
-import React from 'react'
+import React, { Suspense } from 'react'
 
 import { Outlet, useLocation } from 'react-router-dom'
 import { createGlobalStyle } from 'styled-components'
 
+import { LedgerPaneSuspenseFallback } from '@/shared/ui/ledger-skeleton'
 import { ContentShell } from '@/widgets/content-shell'
 import { CountrySidebar } from '@/widgets/country/country-list/ui/country-sidebar'
 import {
@@ -236,11 +237,17 @@ export function ContentAreaShell() {
   const { pathname } = useLocation()
   const spec = specFor(pathname)
 
+  const outletWithSuspense = (
+    <Suspense fallback={<LedgerPaneSuspenseFallback />}>
+      <Outlet />
+    </Suspense>
+  )
+
   if (!spec) {
     return (
       <>
         <SidebarWidthVar $width="0px" />
-        <ContentShell fullScreen right={<Outlet />} />
+        <ContentShell fullScreen right={outletWithSuspense} />
       </>
     )
   }
@@ -266,7 +273,7 @@ export function ContentAreaShell() {
           })}
         </>
       )}
-      right={<Outlet />}
+      right={outletWithSuspense}
     />
   )
 }

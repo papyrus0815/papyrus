@@ -51,7 +51,7 @@ import { EthnicitySection } from './ethnicity-section.widget'
 import { EventsTimelineSection } from './events-timeline-section.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
 import { TreatySectionWidget } from './treaty-section.widget'
-import { LoadingOverlay } from './loading-overlay'
+import { CountryDetailSkeleton } from './country-detail-skeleton'
 import { MapRegionAdministrativeView } from './map-region-administrative-view'
 import {
   MembershipSection,
@@ -391,7 +391,11 @@ export function HistoricalCountryDetail({
     <CountryStyles.DetailPaneRelative>
       <AnimatePresence mode="wait">
         {isLoading ? (
-          <LoadingOverlay key="loading" message="국가 정보를 불러오는 중..." />
+          <CountryDetailSkeleton
+            key="loading"
+            activeTab={activeTab}
+            isHistorical
+          />
         ) : (
           <motion.div
             key={`content-${country.id}`}

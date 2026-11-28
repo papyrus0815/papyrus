@@ -16,6 +16,7 @@ import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { companyApi } from '@/shared/api/company'
 import { politicalPartyApi } from '@/shared/api/political-party'
 import { pathKeys } from '@/shared/router'
+import { LedgerBentoCardSkeleton } from '@/shared/ui/ledger-skeleton'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 
@@ -79,27 +80,23 @@ export function CountryDetailDashboard({
       ? country.description
       : fullCountryQuery.data?.description
 
-  const { data: economicIndicators = [] } = useEconomicIndicators(
+  const { data: economicIndicators = [], isLoading: economicLoading } =
+    useEconomicIndicators(isModern ? country.id : undefined)
+  const { data: demographicIndicators = [], isLoading: demographicLoading } =
+    useDemographicIndicators(isModern ? country.id : undefined)
+  const { data: developmentIndicators = [], isLoading: developmentLoading } =
+    useDevelopmentIndicators(isModern ? country.id : undefined)
+  const { data: bondYields = [], isLoading: bondLoading } = useBondYields(
     isModern ? country.id : undefined,
   )
-  const { data: demographicIndicators = [] } = useDemographicIndicators(
-    isModern ? country.id : undefined,
-  )
-  const { data: developmentIndicators = [] } = useDevelopmentIndicators(
-    isModern ? country.id : undefined,
-  )
-  const { data: bondYields = [] } = useBondYields(
-    isModern ? country.id : undefined,
-  )
-  const { data: exportImports = [] } = useExportImports(
-    isModern ? country.id : undefined,
-  )
-  const { data: allCompanies = [] } = useQuery({
+  const { data: exportImports = [], isLoading: tradeLoading } =
+    useExportImports(isModern ? country.id : undefined)
+  const { data: allCompanies = [], isLoading: companiesLoading } = useQuery({
     queryKey: ['companies', 'all'],
     queryFn: () => companyApi.getAll(),
     staleTime: 60_000,
   })
-  const { data: politicalParties = [] } = useQuery({
+  const { data: politicalParties = [], isLoading: partiesLoading } = useQuery({
     queryKey: ['political-parties', `c:${country.id}`],
     queryFn: () => politicalPartyApi.getAll({ countryId: country.id }),
     enabled: isModern,
@@ -268,12 +265,37 @@ export function CountryDetailDashboard({
     }
   }
 
+  const isFieldStillLoading = (field: CompletenessField): boolean => {
+    switch (field.target) {
+      case 'government':
+        return stats.loading.administration || stats.loading.tenures
+      case 'persons':
+        return stats.loading.persons
+      case 'events':
+        return stats.loading.events
+      case 'elections':
+        return stats.loading.elections || partiesLoading
+      case 'regions':
+        return stats.loading.cities
+      case 'treaty':
+        return stats.loading.treaties
+      case 'laws':
+        return stats.loading.laws
+      case 'ethnicity':
+        return stats.loading.ethnicity
+      case 'historical':
+        return false
+    }
+  }
+
   const missingChips = useMemo<MissingAxisChip[]>(() => {
-    const list: MissingAxisChip[] = stats.completeness.missing.map((field) => ({
-      key: field.key,
-      label: field.label,
-      onClick: () => goFillTarget(field),
-    }))
+    const list: MissingAxisChip[] = stats.completeness.missing
+      .filter((field) => !isFieldStillLoading(field))
+      .map((field) => ({
+        key: field.key,
+        label: field.label,
+        onClick: () => goFillTarget(field),
+      }))
     const seen = new Set(list.map((chip) => chip.key))
     const pushChip = (chip: MissingAxisChip) => {
       if (!seen.has(chip.key)) {
@@ -283,6 +305,9 @@ export function CountryDetailDashboard({
     }
 
     if (
+      !economicLoading &&
+      !developmentLoading &&
+      !bondLoading &&
       economicIndicators.length === 0 &&
       developmentIndicators.length === 0 &&
       bondYields.length === 0
@@ -293,21 +318,21 @@ export function CountryDetailDashboard({
         onClick: () => setDataManagerTab('indicators'),
       })
     }
-    if (demographicIndicators.length === 0) {
+    if (!demographicLoading && demographicIndicators.length === 0) {
       pushChip({
         key: 'demographics',
         label: '인구 구조',
         onClick: () => setDataManagerTab('pyramid'),
       })
     }
-    if (exportImports.length === 0) {
+    if (!tradeLoading && exportImports.length === 0) {
       pushChip({
         key: 'trade',
         label: '수출입 교역',
         onClick: goTrade,
       })
     }
-    if (countryCompanyCount === 0) {
+    if (!companiesLoading && countryCompanyCount === 0) {
       pushChip({
         key: 'companies',
         label: '기업',
@@ -315,6 +340,8 @@ export function CountryDetailDashboard({
       })
     }
     if (
+      !stats.loading.military &&
+      !stats.loading.events &&
       stats.militaryCount === 0 &&
       stats.warSummary.totalMilitaryEvents === 0
     ) {
@@ -328,8 +355,16 @@ export function CountryDetailDashboard({
     return list
   }, [
     stats.completeness.missing,
+    stats.loading,
     stats.militaryCount,
     stats.warSummary.totalMilitaryEvents,
+    economicLoading,
+    developmentLoading,
+    bondLoading,
+    demographicLoading,
+    tradeLoading,
+    companiesLoading,
+    partiesLoading,
     economicIndicators.length,
     developmentIndicators.length,
     bondYields.length,
@@ -427,6 +462,17 @@ export function CountryDetailDashboard({
   }
 
   /* ─── 핵심 국정·민생 축 (의회·정당·선거 → 헌법·법령·조약 → 교역·주력산업 → 인구구조) ─── */
+  const parliamentLoading =
+    !hasParliamentCard &&
+    (stats.loading.elections || partiesLoading || stats.loading.administration)
+  const diplomacyLoading =
+    !hasDiplomacyCard &&
+    (stats.loading.treaties || stats.loading.laws || stats.loading.ethnicity)
+  const tradeDomainLoading =
+    !hasTradeCard && (tradeLoading || companiesLoading)
+  const demographicsDomainLoading = !hasDemographicsCard && demographicLoading
+  const militaryDomainLoading = !hasMilitaryCard && stats.loading.military
+
   const coreDomainCards: Array<{ key: string; node: ReactNode }> = []
   if (hasParliamentCard) {
     coreDomainCards.push({
@@ -449,6 +495,11 @@ export function CountryDetailDashboard({
         />
       ),
     })
+  } else if (parliamentLoading) {
+    coreDomainCards.push({
+      key: 'parliament-skel',
+      node: <LedgerBentoCardSkeleton rows={3} minHeight={172} />,
+    })
   }
   if (hasDiplomacyCard) {
     coreDomainCards.push({
@@ -466,6 +517,11 @@ export function CountryDetailDashboard({
         />
       ),
     })
+  } else if (diplomacyLoading) {
+    coreDomainCards.push({
+      key: 'diplomacy-skel',
+      node: <LedgerBentoCardSkeleton rows={3} minHeight={172} />,
+    })
   }
   if (hasTradeCard) {
     coreDomainCards.push({
@@ -480,6 +536,11 @@ export function CountryDetailDashboard({
         />
       ),
     })
+  } else if (tradeDomainLoading) {
+    coreDomainCards.push({
+      key: 'trade-skel',
+      node: <LedgerBentoCardSkeleton rows={3} minHeight={172} />,
+    })
   }
   if (hasDemographicsCard) {
     coreDomainCards.push({
@@ -493,6 +554,11 @@ export function CountryDetailDashboard({
           onOpenDataManager={() => setDataManagerTab('pyramid')}
         />
       ),
+    })
+  } else if (demographicsDomainLoading) {
+    coreDomainCards.push({
+      key: 'demographics-skel',
+      node: <LedgerBentoCardSkeleton rows={3} minHeight={172} />,
     })
   }
 
@@ -525,6 +591,11 @@ export function CountryDetailDashboard({
           onOpenMilitary={goMilitary}
         />
       ),
+    })
+  } else if (militaryDomainLoading) {
+    appendixDomainCards.push({
+      key: 'military-skel',
+      node: <LedgerBentoCardSkeleton rows={3} minHeight={164} />,
     })
   }
 
@@ -619,20 +690,28 @@ export function CountryDetailDashboard({
           {coreDomainRows}
 
           {/* 5단: 국가 핵심 역사 흐름 (역사 연표 · 핵심 전환점) */}
-          <ModernEventsCard
-            eventCount={stats.eventCount}
-            centuryBuckets={stats.eventCenturyDomainCounts}
-            domainBreakdown={stats.eventDomainBreakdown}
-            milestoneEvents={stats.milestoneEvents}
-            warSummary={
-              !hasMilitaryCard ? stats.warSummary : undefined
-            }
-            onSelectCentury={(cent) => goEventsCentury(cent)}
-            onSelectCell={(cent, dom) => goEventsCentury(cent, dom)}
-            onSelectEvent={(eid) => setPreviewEventId(eid)}
-            onOpenEvents={goEvents}
-            onOpenMilitary={goMilitary}
-          />
+          {stats.loading.events && stats.eventCount === 0 ? (
+            <LedgerBentoCardSkeleton
+              rows={4}
+              showMetric={false}
+              minHeight={184}
+            />
+          ) : (
+            <ModernEventsCard
+              eventCount={stats.eventCount}
+              centuryBuckets={stats.eventCenturyDomainCounts}
+              domainBreakdown={stats.eventDomainBreakdown}
+              milestoneEvents={stats.milestoneEvents}
+              warSummary={
+                !hasMilitaryCard ? stats.warSummary : undefined
+              }
+              onSelectCentury={(cent) => goEventsCentury(cent)}
+              onSelectCell={(cent, dom) => goEventsCentury(cent, dom)}
+              onSelectEvent={(eid) => setPreviewEventId(eid)}
+              onOpenEvents={goEvents}
+              onOpenMilitary={goMilitary}
+            />
+          )}
 
           {/* 6단: 보조 도메인 ([국가 계보 · 과거 정치체 | 군사 · 전적]) */}
           {appendixDomainRows}

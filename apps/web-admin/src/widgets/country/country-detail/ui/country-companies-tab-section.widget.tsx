@@ -56,7 +56,7 @@ import {
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
-import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
@@ -551,7 +551,12 @@ export function CountryCompaniesTabSection({
       />
 
       {isLoading ? (
-        <ChartSkeleton variant="bars" rows={5} />
+        <LedgerTableSkeleton
+          rows={6}
+          columns={4}
+          showToolbar={false}
+          label="기업 목록을 불러오는 중"
+        />
       ) : countryCompanies.length === 0 ? (
         <CountryTabEmptyState
           Icon={FiBriefcase}
