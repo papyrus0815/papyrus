@@ -2016,43 +2016,45 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             개요 설명<OptionalTag>(선택)</OptionalTag>
           </S.FormLabel>
           <S.FormField>
-            <OverviewTextarea
-              placeholder="사건의 개요 설명을 입력하세요."
-              value={description}
-              onChange={(changeEvent) =>
-                setDescription(changeEvent.target.value)
-              }
-              rows={Math.max(
-                3,
-                Math.min(
-                  12,
-                  description
-                    .split('\n')
-                    .reduce(
-                      (acc, line) =>
-                        acc + Math.max(1, Math.ceil(line.length / 54)),
-                      0,
-                    ),
-                ),
+            <OverviewSheet>
+              <OverviewTextarea
+                placeholder="사건의 개요 설명을 입력하세요."
+                value={description}
+                onChange={(changeEvent) =>
+                  setDescription(changeEvent.target.value)
+                }
+                rows={Math.max(
+                  3,
+                  Math.min(
+                    12,
+                    description
+                      .split('\n')
+                      .reduce(
+                        (acc, line) =>
+                          acc + Math.max(1, Math.ceil(line.length / 54)),
+                        0,
+                      ),
+                  ),
+                )}
+              />
+              {Boolean(description.trim()) && (
+                <OverviewFooterRow>
+                  <OverviewCharCount aria-label="개요 설명 글자 수">
+                    {description.length.toLocaleString()}자
+                  </OverviewCharCount>
+                  <ParticipantDescClearBtn
+                    type="button"
+                    aria-label="개요 설명 비우기"
+                    onClick={() => {
+                      playClickSound()
+                      setDescription('')
+                    }}
+                  >
+                    비우기
+                  </ParticipantDescClearBtn>
+                </OverviewFooterRow>
               )}
-            />
-            {Boolean(description.trim()) && (
-              <OverviewFooterRow>
-                <OverviewCharCount aria-label="개요 설명 글자 수">
-                  {description.length.toLocaleString()}자
-                </OverviewCharCount>
-                <ParticipantDescClearBtn
-                  type="button"
-                  aria-label="개요 설명 비우기"
-                  onClick={() => {
-                    playClickSound()
-                    setDescription('')
-                  }}
-                >
-                  비우기
-                </ParticipantDescClearBtn>
-              </OverviewFooterRow>
-            )}
+            </OverviewSheet>
           </S.FormField>
         </S.FormRow>
       </FormGroup>
@@ -2883,9 +2885,14 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           )}
         </FormGroupTitle>
 
+        {/*
+          사건 연결 — 정기 시리즈 · 상위 사건 · (이 사건) · 연관 사건을 한 계보 선 위에 둔다.
+          줄마다 따로 노는 '검색 칸 + 버튼'이 아니라 이 사건이 어디에 속하고 무엇과 이어지는지의 사슬.
+        */}
+        <LinkTree aria-label="사건 연결 계보">
         {/* 정기 회의·행사 시리즈 */}
         {eventSeriesSlot && (
-          <S.FormRow>
+          <S.FormRow data-link="series">
             <S.FormLabel>
               정기 시리즈<OptionalTag>(선택)</OptionalTag>
             </S.FormLabel>
@@ -2980,7 +2987,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
 
         {/* 상위 사건 */}
         {parentEventSlot && (
-          <S.FormRow>
+          <S.FormRow data-link="parent">
             <S.FormLabel>
               상위 사건<OptionalTag>(선택)</OptionalTag>
             </S.FormLabel>
@@ -3335,9 +3342,24 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormRow>
         )}
 
+        {/* 이 사건 — 위(소속)와 아래(연관) 사이의 기준점 */}
+        {(parentEventSlot || relatedEventsSlot) && (
+          <S.FormRow data-link="self">
+            <S.FormLabel as="div">이 사건</S.FormLabel>
+            <S.FormField>
+              <SelfNode $empty={!title.trim()}>
+                <span>{title.trim() || '작성 중인 사건'}</span>
+                {parentEventSlot?.parent && (
+                  <small>‘{parentEventSlot.parent.title}’의 하위</small>
+                )}
+              </SelfNode>
+            </S.FormField>
+          </S.FormRow>
+        )}
+
         {/* 연관 사건 */}
         {relatedEventsSlot && (
-          <S.FormRow>
+          <S.FormRow data-link="related">
             <S.FormLabel>
               연관 사건<OptionalTag>(선택)</OptionalTag>
             </S.FormLabel>
@@ -4081,6 +4103,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.FormField>
           </S.FormRow>
         )}
+        </LinkTree>
 
         {/* 위치 — 글자 칸이 아니라 '지도 위의 한 점': 왼쪽 작은 지도 + 장소 이름·좌표·메모 */}
         {locationSlot && (
@@ -7110,4 +7133,141 @@ const KeywordHash = styled.span`
   font-weight: 700;
   color: ${({ theme }) => theme.colors.primary};
   opacity: 0.7;
+`
+
+/* ─── 개요 설명 · 사건 연결 계보 ───────────────────────────────────────────── */
+
+/** 개요 — 서류 칸이 아니라 글을 쓰는 면: 테 하나 안에 줄 공책 · 아래 글자 수 */
+const OverviewSheet = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  border-radius: 12px;
+  background: ${({ theme }) => S.getC(theme).background.content};
+  overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:hover:not(:focus-within) {
+    border-color: ${({ theme }) => S.getC(theme).border.hover};
+  }
+  &:focus-within {
+    border-color: ${({ theme }) => S.getC(theme).border.focus};
+    box-shadow: 0 0 0 3px ${({ theme }) => S.getC(theme).border.focusHalo};
+  }
+
+  && ${OverviewTextarea} {
+    min-height: 104px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    resize: none;
+    font-size: 14px;
+    line-height: 26px;
+    color: ${({ theme }) => theme.colors.text.primary};
+    background-color: transparent;
+    background-image: linear-gradient(
+      transparent calc(100% - 1px),
+      ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.06)')} 1px
+    );
+    background-size: 100% 26px;
+    background-origin: content-box;
+    background-clip: content-box;
+    background-attachment: local;
+  }
+
+  ${OverviewFooterRow} {
+    margin: 0;
+    padding: 6px 10px 6px 16px;
+    border-top: 1px solid ${({ theme }) => S.getC(theme).border.light};
+    background: ${({ theme }) => S.getC(theme).background.section};
+  }
+`
+
+/*
+ * 사건 연결 계보 — 라벨 열과 필드 열 사이 틈에 세로 선을 긋고, 줄마다 종류 점을 찍는다.
+ * 정기 시리즈(청록 고리) · 상위(남색 점) · 이 사건(큰 점) · 연관(회색 고리). 모바일 1열에선 선 없음.
+ */
+const LinkTree = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+
+  > ${S.FormRow} {
+    padding: 10px 0;
+    border-bottom: none;
+  }
+
+  > ${S.FormRow} > ${S.FormField} {
+    position: relative;
+  }
+
+  @media (min-width: 769px) {
+    > ${S.FormRow} > ${S.FormField}::before {
+      content: '';
+      position: absolute;
+      left: -13px;
+      top: 13px;
+      box-sizing: border-box;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid ${({ theme }) => S.getC(theme).text.muted};
+      background: ${({ theme }) => S.getC(theme).background.content};
+      z-index: 1;
+    }
+    > ${S.FormRow}:not(:last-child) > ${S.FormField}::after {
+      content: '';
+      position: absolute;
+      left: -9px;
+      top: 23px;
+      bottom: -37px;
+      width: 2px;
+      background: ${({ theme }) => S.getC(theme).border.default};
+    }
+
+    > ${S.FormRow}[data-link='series'] > ${S.FormField}::before {
+      border-color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0d9488')};
+    }
+    > ${S.FormRow}[data-link='parent'] > ${S.FormField}::before {
+      border-color: ${({ theme }) => theme.colors.primary};
+      background: ${({ theme }) => theme.colors.primary};
+    }
+    > ${S.FormRow}[data-link='self'] > ${S.FormField}::before {
+      left: -15px;
+      top: 9px;
+      width: 14px;
+      height: 14px;
+      border: 3px solid ${({ theme }) => S.getC(theme).background.content};
+      background: ${({ theme }) => theme.colors.text.primary};
+      box-shadow: 0 0 0 1.5px ${({ theme }) => theme.colors.text.primary};
+    }
+  }
+`
+
+/** 계보의 기준점 — 지금 쓰는 사건 이름(없으면 '작성 중인 사건') */
+const SelfNode = styled.div<{ $empty: boolean }>`
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-height: 32px;
+  padding: 6px 0 0 6px;
+  min-width: 0;
+
+  span {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: ${({ $empty, theme }) => ($empty ? S.getC(theme).text.muted : theme.colors.text.primary)};
+    overflow-wrap: anywhere;
+  }
+  small {
+    font-size: 12px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 `
