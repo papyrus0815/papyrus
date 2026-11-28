@@ -1,35 +1,44 @@
 import React, { useMemo, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
-import { FiPlus, FiUser, FiX } from 'react-icons/fi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { FiAward, FiPlus, FiUser, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import * as S from '@/pages/events/create/event-create.styles'
-import type { MilitaryUnitType } from '@/shared/api/military-unit'
+import {
+  MILITARY_RANK_CATEGORY_LABELS,
+  type MilitaryBranchCode,
+  type MilitaryRankCategory,
+  type MilitaryRankDto,
+  militaryRankApi,
+} from '@/shared/api/military-rank'
+import type {
+  MilitaryUnitRoleKind,
+  MilitaryUnitType,
+} from '@/shared/api/military-unit'
 import {
   type CreateGovernmentPositionTenureDto,
   personCareerApi,
   type UpdateGovernmentPositionTenureDto,
 } from '@/shared/api/person-career'
-import { getAllPersons } from '@/shared/api/persons'
+import { searchPersons } from '@/shared/api/persons'
+import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { ensureOwnedPositionDefinition } from '@/shared/lib/government-position/ensure-owned-position-definition'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   PersonPickerModal,
   type PersonPickerContext,
 } from '@/shared/ui/person-picker'
-import {
-  comparePersons,
-  lifeSpanLabel,
-  matchesQuery,
-  searchHaystack,
-} from '@/shared/ui/person-picker/person-picker.lib'
+import { notify } from '@/shared/ui/toast'
 
-import { defaultCommanderTitleForUnitType } from './constants'
+import {
+  defaultCommanderTitleForUnitType,
+  MILITARY_ROLE_KIND_LABELS,
+} from './constants'
 import { StructuredPartsDateField } from './structured-parts-date-field'
 import * as FormS from './styles'
 
-export type UnitPersonRoleKind = 'COMMANDER' | 'STAFF' | 'MEMBER'
+export type UnitPersonRoleKind = MilitaryUnitRoleKind
 
 export interface UnitPersonLinkDraft {
   localId: string
@@ -37,6 +46,7 @@ export interface UnitPersonLinkDraft {
   personId: string
   personName: string
   roleKind: UnitPersonRoleKind
+  militaryRankId: string
   rankTitle: string
   title: string
   ordinal: string
@@ -67,6 +77,7 @@ export function createPersonLinkDraft(params: {
     personId: params.personId,
     personName: params.personName,
     roleKind,
+    militaryRankId: '',
     rankTitle: '',
     title: defaultCommanderTitleForUnitType(params.unitType, roleKind),
     ordinal: '',
@@ -86,6 +97,13 @@ export interface HydratableUnitTenure {
   id: string
   personId?: string | null
   positionType?: string | null
+  militaryRankId?: string | null
+  militaryRoleKind?: MilitaryUnitRoleKind | string | null
+  militaryRank?: {
+    id: string
+    name: string
+    nameLocal?: string | null
+  } | null
   rankTitle?: string | null
   title?: string | null
   ordinal?: number | null
@@ -104,12 +122,40 @@ export interface HydratableUnitTenure {
     name?: string | null
     surname?: string | null
     middleName?: string | null
+    nameDisplayOrder?: string | null
     country?: {
       name?: string | null
       defaultNameDisplayOrder?: string | null
       isoCode?: string | null
     } | null
   } | null
+}
+
+function resolveHydratedRoleKind(
+  tenureRow: HydratableUnitTenure,
+  titleText: string,
+): UnitPersonRoleKind {
+  const explicit = tenureRow.militaryRoleKind
+  if (
+    explicit === 'COMMANDER' ||
+    explicit === 'DEPUTY_COMMANDER' ||
+    explicit === 'CHIEF_OF_STAFF' ||
+    explicit === 'STAFF' ||
+    explicit === 'COMMISSAR' ||
+    explicit === 'FOUNDER_MEMBER'
+  ) {
+    return explicit
+  }
+  if (tenureRow.positionType === 'OTHER') return 'FOUNDER_MEMBER'
+  if (/정치위원|군사위원|군사회의/.test(titleText)) return 'COMMISSAR'
+  if (/참모총장|총참모장|참모장|참모본부장/.test(titleText)) {
+    return 'CHIEF_OF_STAFF'
+  }
+  if (/부사령관|부군단장|부사단장|부여단장|차장/.test(titleText)) {
+    return 'DEPUTY_COMMANDER'
+  }
+  if (/참모|처장|부장|국장/.test(titleText)) return 'STAFF'
+  return 'COMMANDER'
 }
 
 export function hydrateUnitPersonDrafts(
@@ -119,12 +165,7 @@ export function hydrateUnitPersonDrafts(
   return tenures.map((tenureRow) => {
     const personObj = tenureRow.person
     const personName = personObj
-      ? getPersonDisplayName({
-          name: personObj.name ?? '',
-          surname: personObj.surname ?? undefined,
-          middleName: personObj.middleName ?? undefined,
-          country: personObj.country ?? undefined,
-        }) ||
+      ? getPersonDisplayName({ ...personObj, name: personObj.name ?? '' }) ||
         personObj.name ||
         '연결된 인물'
       : '연결된 인물'
@@ -132,12 +173,7 @@ export function hydrateUnitPersonDrafts(
     const titleText = String(
       tenureRow.title ?? tenureRow.positionDefinition?.title ?? '사령관',
     )
-    const roleKind: UnitPersonRoleKind =
-      tenureRow.positionType === 'OTHER'
-        ? 'MEMBER'
-        : /참모|부장|차장/.test(titleText)
-          ? 'STAFF'
-          : 'COMMANDER'
+    const roleKind = resolveHydratedRoleKind(tenureRow, titleText)
 
     return {
       localId: `hydrated-tenure-${tenureRow.id}`,
@@ -145,7 +181,10 @@ export function hydrateUnitPersonDrafts(
       personId: String(personObj?.id ?? tenureRow.personId ?? ''),
       personName,
       roleKind,
-      rankTitle: tenureRow.rankTitle ?? '',
+      militaryRankId:
+        tenureRow.militaryRankId ?? tenureRow.militaryRank?.id ?? '',
+      rankTitle:
+        tenureRow.militaryRank?.name ?? tenureRow.rankTitle ?? '',
       title: titleText,
       ordinal: tenureRow.ordinal != null ? String(tenureRow.ordinal) : '',
       startEra: tenureRow.startEra === 'BC' ? 'BC' : 'AD',
@@ -257,6 +296,8 @@ export async function syncUnitPersonDrafts(params: {
   unitType?: MilitaryUnitType | '' | null
   countryId?: string | null
   historicalCountryId?: string | null
+  fallbackStartEra?: 'AD' | 'BC'
+  fallbackStartYear?: string
   drafts: ReadonlyArray<UnitPersonLinkDraft>
   initialTenureIds: ReadonlyArray<string>
 }): Promise<{ affectedPersonIds: string[] }> {
@@ -265,6 +306,8 @@ export async function syncUnitPersonDrafts(params: {
     unitType,
     countryId,
     historicalCountryId,
+    fallbackStartEra = 'AD',
+    fallbackStartYear = '',
     drafts,
     initialTenureIds,
   } = params
@@ -281,6 +324,11 @@ export async function syncUnitPersonDrafts(params: {
     administrationDepartmentId?: string | null
     isGeneric?: boolean | null
   }> = drafts.length > 0 ? [...(await personCareerApi.getPositionDefinitions({}))] : []
+  const parsedFallbackYear = Number.parseInt(fallbackStartYear.trim(), 10)
+  const defaultYearNum =
+    Number.isInteger(parsedFallbackYear) && parsedFallbackYear > 0
+      ? parsedFallbackYear
+      : new Date().getFullYear()
 
   for (const draft of drafts) {
     affectedPersonIds.add(draft.personId)
@@ -298,11 +346,15 @@ export async function syncUnitPersonDrafts(params: {
       draft.endDay,
       '종료일',
     )
-    const startInfo = startRes.ok ? startRes.info : null
+    const startInfo =
+      (startRes.ok ? startRes.info : null) ?? {
+        era: fallbackStartEra,
+        year: defaultYearNum,
+      }
     const endInfo = endRes.ok ? endRes.info : null
 
     const positionType: CreateGovernmentPositionTenureDto['positionType'] =
-      draft.roleKind === 'MEMBER' ? 'OTHER' : 'MILITARY_COMMANDER'
+      draft.roleKind === 'FOUNDER_MEMBER' ? 'OTHER' : 'MILITARY_COMMANDER'
     const resolvedTitle =
       draft.title.trim() ||
       defaultCommanderTitleForUnitType(unitType, draft.roleKind)
@@ -326,6 +378,8 @@ export async function syncUnitPersonDrafts(params: {
         positionType,
         positionDefinitionId,
         title: resolvedTitle,
+        militaryRankId: draft.militaryRankId || null,
+        militaryRoleKind: draft.roleKind,
         rankTitle: draft.rankTitle.trim() || null,
         ordinal: parsedOrdinal,
         countryId: historicalCountryId ? undefined : countryId || undefined,
@@ -345,6 +399,8 @@ export async function syncUnitPersonDrafts(params: {
         positionType,
         positionDefinitionId,
         title: resolvedTitle,
+        militaryRankId: draft.militaryRankId || undefined,
+        militaryRoleKind: draft.roleKind,
         rankTitle: draft.rankTitle.trim() || undefined,
         ordinal: parsedOrdinal ?? undefined,
         countryId: historicalCountryId ? undefined : countryId || undefined,
@@ -367,10 +423,298 @@ export async function syncUnitPersonDrafts(params: {
   return { affectedPersonIds: [...affectedPersonIds] }
 }
 
+interface RankSelectorFieldProps {
+  selectedRankId: string
+  rankTitle: string
+  ranks: MilitaryRankDto[]
+  countryId: string
+  historicalCountryId: string
+  countryName: string
+  branch: string
+  onSelectRank: (rank: MilitaryRankDto | null) => void
+  onRankCreated: (rank: MilitaryRankDto) => void
+}
+
+const RankSelectorField: React.FC<RankSelectorFieldProps> = ({
+  selectedRankId,
+  rankTitle,
+  ranks,
+  countryId,
+  historicalCountryId,
+  countryName,
+  branch,
+  onSelectRank,
+  onRankCreated,
+}) => {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [creatingOpen, setCreatingOpen] = useState(false)
+  const [newRankName, setNewRankName] = useState('')
+  const [newRankLocal, setNewRankLocal] = useState('')
+  const [newRankCategory, setNewRankCategory] =
+    useState<MilitaryRankCategory>('GENERAL')
+  const [newRankScopedToPolity, setNewRankScopedToPolity] = useState(
+    Boolean(historicalCountryId),
+  )
+  const [creatingSubmitting, setCreatingSubmitting] = useState(false)
+
+  const selectedRank = useMemo(
+    () => ranks.find((r) => r.id === selectedRankId) ?? null,
+    [ranks, selectedRankId],
+  )
+
+  const filteredRanks = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return ranks.slice(0, 18)
+    return ranks
+      .filter((r) =>
+        [r.name, r.nameLocal, r.nameEn, r.abbreviation, r.natoCode]
+          .filter(Boolean)
+          .some((val) => String(val).toLowerCase().includes(q)),
+      )
+      .slice(0, 18)
+  }, [ranks, query])
+
+  const quickRanks = useMemo(() => {
+    const scoped = ranks
+      .filter(
+        (r) =>
+          (historicalCountryId &&
+            r.historicalCountryId === historicalCountryId) ||
+          (countryId && r.countryId === countryId),
+      )
+      .slice(0, 3)
+    const standardNames = ['원수', '대장', '중장', '소장', '준장', '대령']
+    const standards = standardNames
+      .map((n) => ranks.find((r) => r.isUniversal && r.name === n) ?? null)
+      .filter((r): r is MilitaryRankDto => r !== null)
+    const seen = new Set<string>()
+    const merged: MilitaryRankDto[] = []
+    for (const item of [...scoped, ...standards]) {
+      if (seen.has(item.id)) continue
+      seen.add(item.id)
+      merged.push(item)
+    }
+    return merged.slice(0, 7)
+  }, [ranks, countryId, historicalCountryId])
+
+  const handleCreateRank = async () => {
+    const trimmed = newRankName.trim()
+    if (!trimmed) {
+      notify.error('새로 등록할 계급명을 입력해 주세요.')
+      return
+    }
+    setCreatingSubmitting(true)
+    try {
+      const created = await militaryRankApi.createOrResolve({
+        name: trimmed,
+        nameLocal: newRankLocal.trim() || null,
+        category: newRankCategory,
+        branch: (branch as MilitaryBranchCode) || null,
+        countryId:
+          newRankScopedToPolity && !historicalCountryId
+            ? countryId || null
+            : null,
+        historicalCountryId: newRankScopedToPolity
+          ? historicalCountryId || null
+          : null,
+      })
+      onRankCreated(created)
+      onSelectRank(created)
+      setCreatingOpen(false)
+      setNewRankName('')
+      setNewRankLocal('')
+      setQuery('')
+      notify.success(`군 계급 「${created.name}」을(를) 카탈로그에 등록했습니다.`)
+    } catch (err) {
+      notify.error(getApiErrorMessage(err, '군 계급 등록에 실패했습니다.'))
+    } finally {
+      setCreatingSubmitting(false)
+    }
+  }
+
+  return (
+    <RankBox>
+      {selectedRank || rankTitle.trim() ? (
+        <SelectedRankChip>
+          <FiAward size={12} />
+          <strong>{selectedRank?.name ?? rankTitle}</strong>
+          {selectedRank?.nameLocal ? (
+            <RankLocalMeta>{selectedRank.nameLocal}</RankLocalMeta>
+          ) : null}
+          {selectedRank?.natoCode ? (
+            <RankCodeBadge>{selectedRank.natoCode}</RankCodeBadge>
+          ) : null}
+          <RankClearBtn
+            type="button"
+            aria-label="선택된 계급 해제"
+            onClick={() => onSelectRank(null)}
+          >
+            <FiX size={12} />
+          </RankClearBtn>
+        </SelectedRankChip>
+      ) : (
+        <FormS.QuickSearchBox>
+          <S.Input
+            type="text"
+            aria-label="군 계급 검색 및 선택"
+            placeholder="계급 검색·선택 (원수, 상급대장, 중장…)"
+            value={query}
+            onFocus={() => setOpen(true)}
+            onBlur={() => window.setTimeout(() => setOpen(false), 180)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setOpen(true)
+            }}
+          />
+          {open ? (
+            <FormS.QuickSuggestionList role="listbox" aria-label="군 계급 카탈로그">
+              {filteredRanks.map((rk) => (
+                <FormS.QuickSuggestionItem
+                  key={rk.id}
+                  type="button"
+                  role="option"
+                  aria-selected={rk.id === selectedRankId}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    onSelectRank(rk)
+                    setQuery('')
+                    setOpen(false)
+                  }}
+                >
+                  <span>
+                    <strong>{rk.name}</strong>
+                    {rk.nameLocal ? ` (${rk.nameLocal})` : ''}
+                  </span>
+                  <FormS.ContextCardMeta>
+                    {[
+                      rk.historicalCountry?.name ?? rk.country?.name,
+                      MILITARY_RANK_CATEGORY_LABELS[rk.category],
+                      rk.natoCode,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </FormS.ContextCardMeta>
+                </FormS.QuickSuggestionItem>
+              ))}
+              <FormS.QuickSuggestionItem
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  setNewRankName(query.trim())
+                  setCreatingOpen(true)
+                  setOpen(false)
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>
+                  + {query.trim() ? `‘${query.trim()}’ ` : ''}새 계급을 DB 카탈로그에 등록
+                </span>
+              </FormS.QuickSuggestionItem>
+            </FormS.QuickSuggestionList>
+          ) : null}
+        </FormS.QuickSearchBox>
+      )}
+
+      {!selectedRank && !rankTitle.trim() && quickRanks.length > 0 ? (
+        <QuickRankChipsRow>
+          {quickRanks.map((rk) => (
+            <QuickRankChip
+              key={rk.id}
+              type="button"
+              onClick={() => onSelectRank(rk)}
+              title={rk.nameLocal ? `${rk.name} (${rk.nameLocal})` : rk.name}
+            >
+              {rk.name}
+            </QuickRankChip>
+          ))}
+        </QuickRankChipsRow>
+      ) : null}
+
+      {creatingOpen ? (
+        <InlineCreateRankBox>
+          <InlineCreateHead>
+            <span>새 군 계급 정본 등록</span>
+            <RankClearBtn
+              type="button"
+              aria-label="계급 등록 닫기"
+              onClick={() => setCreatingOpen(false)}
+            >
+              <FiX size={12} />
+            </RankClearBtn>
+          </InlineCreateHead>
+          <InlineCreateGrid>
+            <S.Input
+              type="text"
+              placeholder="계급명 (예: 상급대장, 기갑대장)"
+              value={newRankName}
+              onChange={(e) => setNewRankName(e.target.value)}
+            />
+            <S.Input
+              type="text"
+              placeholder="원어 표기 (선택, 예: Generaloberst)"
+              value={newRankLocal}
+              onChange={(e) => setNewRankLocal(e.target.value)}
+            />
+          </InlineCreateGrid>
+          <InlineCreateFooter>
+            <CategorySelect
+              aria-label="계급군 분류"
+              value={newRankCategory}
+              onChange={(e) =>
+                setNewRankCategory(e.target.value as MilitaryRankCategory)
+              }
+            >
+              {(
+                Object.entries(MILITARY_RANK_CATEGORY_LABELS) as Array<
+                  [MilitaryRankCategory, string]
+                >
+              ).map(([catKey, catLabel]) => (
+                <option key={catKey} value={catKey}>
+                  {catLabel}
+                </option>
+              ))}
+            </CategorySelect>
+            {countryName ? (
+              <ScopeToggleLabel>
+                <input
+                  type="checkbox"
+                  checked={newRankScopedToPolity}
+                  onChange={(e) => setNewRankScopedToPolity(e.target.checked)}
+                />
+                <span>{countryName} 고유 계급으로 귀속</span>
+              </ScopeToggleLabel>
+            ) : null}
+            <InlineSaveBtn
+              type="button"
+              disabled={creatingSubmitting}
+              onClick={() => void handleCreateRank()}
+            >
+              {creatingSubmitting ? '등록 중…' : '계급 등록 · 선택'}
+            </InlineSaveBtn>
+          </InlineCreateFooter>
+        </InlineCreateRankBox>
+      ) : null}
+    </RankBox>
+  )
+}
+
+const ROLE_KIND_OPTIONS: ReadonlyArray<{
+  value: UnitPersonRoleKind
+  label: string
+}> = [
+  { value: 'COMMANDER', label: MILITARY_ROLE_KIND_LABELS.COMMANDER },
+  { value: 'DEPUTY_COMMANDER', label: MILITARY_ROLE_KIND_LABELS.DEPUTY_COMMANDER },
+  { value: 'CHIEF_OF_STAFF', label: MILITARY_ROLE_KIND_LABELS.CHIEF_OF_STAFF },
+  { value: 'STAFF', label: MILITARY_ROLE_KIND_LABELS.STAFF },
+  { value: 'COMMISSAR', label: MILITARY_ROLE_KIND_LABELS.COMMISSAR },
+  { value: 'FOUNDER_MEMBER', label: MILITARY_ROLE_KIND_LABELS.FOUNDER_MEMBER },
+]
+
 export interface UnitPersonLinksEditorProps {
   drafts: UnitPersonLinkDraft[]
   onChange: (next: UnitPersonLinkDraft[]) => void
   unitType: MilitaryUnitType | ''
+  branch?: string
   countryId: string
   historicalCountryId: string
   countryName: string
@@ -384,6 +728,7 @@ export const UnitPersonLinksEditor: React.FC<UnitPersonLinksEditorProps> = ({
   drafts,
   onChange,
   unitType,
+  branch = '',
   countryId,
   historicalCountryId,
   countryName,
@@ -392,15 +737,38 @@ export const UnitPersonLinksEditor: React.FC<UnitPersonLinksEditorProps> = ({
   disbandedEra,
   disbandedYear,
 }) => {
+  const queryClient = useQueryClient()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerCreateMode, setPickerCreateMode] = useState(false)
   const [quickQuery, setQuickQuery] = useState('')
   const [quickFocused, setQuickFocused] = useState(false)
 
-  const { data: allPersons = [] } = useQuery({
-    queryKey: ['persons', 'all'],
-    queryFn: getAllPersons,
-    enabled: quickFocused || pickerOpen,
+  const trimmedPersonQuery = quickQuery.trim()
+  const { data: quickSuggestions = [] } = useQuery({
+    queryKey: ['persons', 'search', trimmedPersonQuery],
+    queryFn: () => searchPersons(trimmedPersonQuery, 8),
+    enabled: quickFocused && trimmedPersonQuery.length >= 1,
+    staleTime: 60_000,
+  })
+
+  const rankQueryKey = useMemo(
+    () => [
+      'military-ranks',
+      countryId || '',
+      historicalCountryId || '',
+      branch || '',
+    ],
+    [countryId, historicalCountryId, branch],
+  )
+
+  const { data: availableRanks = [] } = useQuery({
+    queryKey: rankQueryKey,
+    queryFn: () =>
+      militaryRankApi.list({
+        countryId: countryId || null,
+        historicalCountryId: historicalCountryId || null,
+        branch: branch || null,
+      }),
     staleTime: 5 * 60_000,
   })
 
@@ -433,15 +801,6 @@ export const UnitPersonLinksEditor: React.FC<UnitPersonLinksEditorProps> = ({
     countryName,
   ])
 
-  const quickSuggestions = useMemo(() => {
-    const queryText = quickQuery.trim()
-    if (!queryText) return []
-    return allPersons
-      .filter((personItem) => matchesQuery(searchHaystack(personItem), queryText))
-      .sort(comparePersons('relevance', personContext))
-      .slice(0, 7)
-  }, [allPersons, quickQuery, personContext])
-
   const handleAppendPerson = (personId: string, personName: string) => {
     const nextDraft = createPersonLinkDraft({
       personId,
@@ -469,24 +828,19 @@ export const UnitPersonLinksEditor: React.FC<UnitPersonLinksEditorProps> = ({
         <FormS.QuickSearchBox style={{ flex: 1 }}>
           <S.Input
             type="text"
-            placeholder="사령관 · 참모 · 주요 인물 이름 빠른 검색…"
+            placeholder="사령관 · 참모장 · 주요 인물 이름 빠른 검색…"
             aria-label="연결할 인물 검색"
             value={quickQuery}
             onFocus={() => setQuickFocused(true)}
             onBlur={() => window.setTimeout(() => setQuickFocused(false), 180)}
             onChange={(e) => setQuickQuery(e.target.value)}
           />
-          {quickFocused && quickQuery.trim() ? (
+          {quickFocused && trimmedPersonQuery ? (
             <FormS.QuickSuggestionList role="listbox" aria-label="인물 검색 결과">
               {quickSuggestions.map((person) => {
                 const displayName =
-                  getPersonDisplayName({
-                    name: person.name ?? '',
-                    surname: person.surname ?? undefined,
-                    middleName: person.middleName ?? undefined,
-                    country: person.country ?? undefined,
-                  }) || person.name
-                const spanText = lifeSpanLabel(person)
+                  getPersonDisplayName({ ...person, name: person.name ?? '' }) ||
+                  person.name
                 return (
                   <FormS.QuickSuggestionItem
                     key={person.id}
@@ -505,7 +859,9 @@ export const UnitPersonLinksEditor: React.FC<UnitPersonLinksEditorProps> = ({
                       />
                       {displayName}
                     </span>
-                    <FormS.ContextCardMeta>{spanText}</FormS.ContextCardMeta>
+                    <FormS.ContextCardMeta>
+                      {person.originalName ?? ''}
+                    </FormS.ContextCardMeta>
                   </FormS.QuickSuggestionItem>
                 )
               })}
@@ -518,7 +874,7 @@ export const UnitPersonLinksEditor: React.FC<UnitPersonLinksEditorProps> = ({
                 }}
               >
                 <span style={{ fontWeight: 600 }}>
-                  + ‘{quickQuery.trim()}’ 새 인물로 즉석 등록 후 연결
+                  + ‘{trimmedPersonQuery}’ 새 인물로 즉석 등록 후 연결
                 </span>
               </FormS.QuickSuggestionItem>
             </FormS.QuickSuggestionList>
@@ -548,13 +904,7 @@ export const UnitPersonLinksEditor: React.FC<UnitPersonLinksEditorProps> = ({
                 </PersonIdentity>
 
                 <RoleKindSwitch role="group" aria-label="인물 역할 구분">
-                  {(
-                    [
-                      { value: 'COMMANDER', label: '사령관·지휘관' },
-                      { value: 'STAFF', label: '참모장·참모' },
-                      { value: 'MEMBER', label: '창설·주요 인물' },
-                    ] as const
-                  ).map((opt) => (
+                  {ROLE_KIND_OPTIONS.map((opt) => (
                     <RoleChip
                       key={opt.value}
                       type="button"
@@ -594,17 +944,37 @@ export const UnitPersonLinksEditor: React.FC<UnitPersonLinksEditorProps> = ({
               </PersonCardTop>
 
               <RoleFieldsGrid>
-                <SmallField>
-                  <SmallLabel>계급 (선택)</SmallLabel>
-                  <S.Input
-                    type="text"
-                    placeholder="예: 원수, 상급대장, 중장"
-                    value={row.rankTitle}
-                    onChange={(changeEvent) =>
+                <SmallField as="div">
+                  <SmallLabel>군 계급 정본 (선택)</SmallLabel>
+                  <RankSelectorField
+                    selectedRankId={row.militaryRankId}
+                    rankTitle={row.rankTitle}
+                    ranks={availableRanks}
+                    countryId={countryId}
+                    historicalCountryId={historicalCountryId}
+                    countryName={countryName}
+                    branch={branch}
+                    onSelectRank={(pickedRank) => {
                       updateRow(row.localId, {
-                        rankTitle: changeEvent.target.value,
+                        militaryRankId: pickedRank?.id ?? '',
+                        rankTitle: pickedRank?.name ?? '',
                       })
-                    }
+                    }}
+                    onRankCreated={(createdRank) => {
+                      queryClient.setQueryData<MilitaryRankDto[]>(
+                        rankQueryKey,
+                        (prev) => {
+                          const list = prev ?? []
+                          if (list.some((item) => item.id === createdRank.id)) {
+                            return list
+                          }
+                          return [createdRank, ...list]
+                        },
+                      )
+                      void queryClient.invalidateQueries({
+                        queryKey: ['military-ranks'],
+                      })
+                    }}
                   />
                 </SmallField>
                 <SmallField>
@@ -636,7 +1006,9 @@ export const UnitPersonLinksEditor: React.FC<UnitPersonLinksEditorProps> = ({
 
               <PeriodGrid>
                 <SmallField as="div">
-                  <SmallLabel>부임 · 시작 시점</SmallLabel>
+                  <SmallLabel>
+                    부임 · 시작 시점 <S.Required>*</S.Required>
+                  </SmallLabel>
                   <StructuredPartsDateField
                     era={row.startEra}
                     year={row.startYear}
@@ -688,7 +1060,7 @@ export const UnitPersonLinksEditor: React.FC<UnitPersonLinksEditorProps> = ({
           defaultCountryId={countryId || undefined}
           defaultHistoricalCountryId={historicalCountryId || undefined}
           context={personContext}
-          initialQuery={quickQuery.trim() || undefined}
+          initialQuery={trimmedPersonQuery || undefined}
           initialCreateMode={pickerCreateMode}
           onSelect={(personId, personName) => {
             handleAppendPerson(personId, personName)
@@ -726,7 +1098,7 @@ const PersonList = styled.div`
 const PersonCard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
   padding: 12px 2px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
@@ -757,22 +1129,22 @@ const RoleKindSwitch = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-const RoleChip = styled.button<{ $active: boolean }>`
+const RoleChip = styled.button<{ $active?: boolean }>`
   height: 23px;
-  padding: 0 8px;
+  padding: 0 7px;
   border-radius: 5px;
   border: none;
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.22)'
-        : 'rgba(99, 102, 241, 0.1)'
+        ? 'rgba(99, 102, 241, 0.24)'
+        : 'rgba(99, 102, 241, 0.12)'
       : 'transparent'};
   color: ${({ $active, theme }) =>
     $active ? theme.colors.primary : theme.colors.text.secondary};
-  font: inherit;
+  font-family: inherit;
   font-size: 11px;
-  font-weight: ${({ $active }) => ($active ? 700 : 550)};
+  font-weight: 600;
   cursor: pointer;
 `
 
@@ -789,18 +1161,15 @@ const RemoveRowBtn = styled.button`
   cursor: pointer;
 
   &:hover {
-    color: #dc2626;
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(239, 68, 68, 0.14)'
-        : 'rgba(239, 68, 68, 0.08)'};
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
   }
 `
 
 const RoleFieldsGrid = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 76px;
-  gap: 7px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.1fr) 84px;
+  gap: 8px;
 
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
@@ -810,9 +1179,9 @@ const RoleFieldsGrid = styled.div`
 const PeriodGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  gap: 8px;
 
-  @media (max-width: 680px) {
+  @media (max-width: 640px) {
     grid-template-columns: 1fr;
   }
 `
@@ -827,5 +1196,167 @@ const SmallField = styled.label`
 const SmallLabel = styled.span`
   font-size: 11px;
   font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RankBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+`
+
+const SelectedRankChip = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.35)'
+        : 'rgba(79, 70, 229, 0.25)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.12)'
+      : 'rgba(79, 70, 229, 0.05)'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12.5px;
+`
+
+const RankLocalMeta = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const RankCodeBadge = styled.span`
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RankClearBtn = styled.button`
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const QuickRankChipsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const QuickRankChip = styled.button`
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const InlineCreateRankBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const InlineCreateHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const InlineCreateGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const InlineCreateFooter = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
+const CategorySelect = styled.select`
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 11.5px;
+`
+
+const ScopeToggleLabel = styled.label`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+`
+
+const InlineSaveBtn = styled.button`
+  margin-left: auto;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: none;
+  background: ${({ theme }) => theme.colors.primary};
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `

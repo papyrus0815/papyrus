@@ -15,9 +15,21 @@ export interface MilitaryUnitDetailResponse {
   abbreviation?: string | null
   unitType?: string | null
   branch?: string | null
+  combatArm?: string | null
   isActive?: boolean | null
   nickname?: string | null
   motto?: string | null
+  garrisonPlaceId?: string | null
+  garrisonPlace?: {
+    id: string
+    kind: string
+    name: string
+    localName?: string | null
+    modernAddress?: string | null
+    latitude?: number | null
+    longitude?: number | null
+    defaultZoom?: number | null
+  } | null
   garrison?: string | null
   garrisonLatitude?: number | null
   garrisonLongitude?: number | null
@@ -25,7 +37,6 @@ export interface MilitaryUnitDetailResponse {
   primaryMission?: string | null
   jurisdiction?: string | null
   jurisdictionGeometry?: MilitaryUnitJurisdictionGeometryDto | null
-  notableBattles?: string | null
   honors?: string | null
   insigniaUrl?: string | null
   description?: string | null

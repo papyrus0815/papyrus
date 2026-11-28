@@ -46,7 +46,7 @@ import type { MilitaryUnitType } from '@/shared/api/military-unit'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
-import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerSplitPaneSkeleton } from '@/shared/ui/ledger-skeleton'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import {
   PopoverMenu,
@@ -218,12 +218,7 @@ function resolveUnitLeadCommanderInfo(unitItem: ExtendedMilitaryUnit): {
   const firstTenure = unitItem.tenures?.[0]
   if (firstTenure?.person) {
     const nameStr =
-      getPersonDisplayName({
-        name: firstTenure.person.name ?? '',
-        surname: firstTenure.person.surname ?? undefined,
-        middleName: firstTenure.person.middleName ?? undefined,
-        country: firstTenure.person.country ?? undefined,
-      }) || firstTenure.person.name
+      getPersonDisplayName({ ...firstTenure.person, name: firstTenure.person.name ?? '' }) || firstTenure.person.name
     if (nameStr) {
       return {
         label: firstTenure.rankTitle
@@ -238,10 +233,7 @@ function resolveUnitLeadCommanderInfo(unitItem: ExtendedMilitaryUnit): {
   const leadCmd = unitItem.commanders?.[0]
   if (leadCmd?.person) {
     const nameStr =
-      getPersonDisplayName({
-        name: leadCmd.person.name ?? '',
-        surname: leadCmd.person.surname ?? undefined,
-      }) || leadCmd.person.name
+      getPersonDisplayName({ ...leadCmd.person, name: leadCmd.person.name ?? '' }) || leadCmd.person.name
     if (nameStr) {
       return {
         label: leadCmd.rank ? `${leadCmd.rank} ${nameStr}` : nameStr,
@@ -1697,7 +1689,10 @@ export function GovernmentMilitaryTab({
 
         {unitsQuery.isLoading ? (
           <SkeletonPad>
-            <ChartSkeleton variant="bars" rows={5} />
+            <LedgerSplitPaneSkeleton
+              rows={7}
+              label="군사 사령부·부대 편제를 불러오는 중"
+            />
           </SkeletonPad>
         ) : countryUnits.length === 0 ? (
           <EmptyStateSpotlight

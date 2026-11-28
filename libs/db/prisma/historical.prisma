@@ -270,6 +270,8 @@ model HistoricalCountry {
   positionDefinitionScopes  GovernmentPositionDefinitionScope[] @relation("HistoricalCountryPositionDefinitionScopes")
   /// 이 역사적 국가 소속 군부대 (독일 제국 제1군, 조선 훈련도감 등)
   militaryUnits             MilitaryUnit[]                @relation("MilitaryUnitHistoricalCountry")
+  militaryRanks             MilitaryRank[]                @relation("HistoricalCountryMilitaryRanks")
+  personPromotions          PersonPromotion[]             @relation("HistoricalCountryPersonPromotions")
   /// 이 역사적 국가 소속 무기·장비·함선
   weapons                   Weapon[]                      @relation("WeaponHistoricalCountry")
   groundVehicles            GroundVehicle[]               @relation("GroundVehicleHistoricalCountry")

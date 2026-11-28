@@ -105,6 +105,10 @@ import {
   LedgerCompactAction,
   LedgerPrimaryButton,
 } from '@/widgets/country/country-detail/ui/country-ledger-primitives'
+import {
+  COMBAT_ARM_LABELS,
+  MILITARY_ROLE_KIND_LABELS,
+} from '@/widgets/country/country-detail/ui/military-unit-form/constants'
 import { hydrateStrengthSnapshots } from '@/widgets/country/country-detail/ui/military-unit-form/strength-snapshots-editor'
 import { StructuredPartsDateField } from '@/widgets/country/country-detail/ui/military-unit-form/structured-parts-date-field'
 import {
@@ -952,12 +956,7 @@ export const MilitaryUnitDetailContent = forwardRef<
   const filteredTenures = normalizedCmdQuery
     ? sortedTenures.filter((tenureItem) => {
         const personLabel = tenureItem.person
-          ? getPersonDisplayName({
-              name: tenureItem.person.name ?? '',
-              surname: tenureItem.person.surname ?? undefined,
-              middleName: tenureItem.person.middleName ?? undefined,
-              country: tenureItem.person.country ?? undefined,
-            }) || tenureItem.person.name
+          ? getPersonDisplayName({ ...tenureItem.person, name: tenureItem.person.name ?? '' }) || tenureItem.person.name
           : ''
         const roleLabel =
           tenureItem.title ?? tenureItem.positionDefinition?.title ?? ''
@@ -1068,18 +1067,24 @@ export const MilitaryUnitDetailContent = forwardRef<
       body: unit.jurisdiction.trim(),
     })
   }
-  if (unit.notableBattles?.trim()) {
-    contextMetaCards.push({
-      label: '주요 참전 전투 · 작전',
-      body: unit.notableBattles.trim(),
-    })
-  }
   if (unit.honors?.trim()) {
     contextMetaCards.push({
       label: '부대 표창 · 수훈',
       body: unit.honors.trim(),
     })
   }
+
+  const combatArmLabel =
+    unit.combatArm && unit.combatArm in COMBAT_ARM_LABELS
+      ? COMBAT_ARM_LABELS[unit.combatArm as keyof typeof COMBAT_ARM_LABELS]
+      : null
+
+  const effectiveGarrisonText =
+    unit.garrison?.trim() || unit.garrisonPlace?.name?.trim() || ''
+  const effectiveGarrisonLat =
+    unit.garrisonLatitude ?? unit.garrisonPlace?.latitude ?? null
+  const effectiveGarrisonLng =
+    unit.garrisonLongitude ?? unit.garrisonPlace?.longitude ?? null
 
   const handleOpenSubUnitCreate = () => {
     onCreateSubUnit?.({
@@ -1103,8 +1108,8 @@ export const MilitaryUnitDetailContent = forwardRef<
   }
 
   const hasSpatialData = Boolean(
-    unit.garrison?.trim() ||
-      (unit.garrisonLatitude != null && unit.garrisonLongitude != null) ||
+    effectiveGarrisonText ||
+      (effectiveGarrisonLat != null && effectiveGarrisonLng != null) ||
       unit.jurisdictionGeometry ||
       subUnitPins.length > 0,
   )
@@ -1245,6 +1250,12 @@ export const MilitaryUnitDetailContent = forwardRef<
                   <span>{branchLabel}</span>
                 </>
               ) : null}
+              {combatArmLabel ? (
+                <>
+                  <S.EyebrowDot aria-hidden>·</S.EyebrowDot>
+                  <span>{combatArmLabel}</span>
+                </>
+              ) : null}
               <S.EyebrowDot aria-hidden>·</S.EyebrowDot>
               <S.LifecycleIndicator $disbanded={isDisbanded}>
                 {isDisbanded ? '해체·종결' : '존속·현역'}
@@ -1365,9 +1376,9 @@ export const MilitaryUnitDetailContent = forwardRef<
               <UnitSpatialMapCard
                 unitName={unit.name}
                 countryName={countryName}
-                garrison={unit.garrison}
-                garrisonLatitude={unit.garrisonLatitude}
-                garrisonLongitude={unit.garrisonLongitude}
+                garrison={effectiveGarrisonText || null}
+                garrisonLatitude={effectiveGarrisonLat}
+                garrisonLongitude={effectiveGarrisonLng}
                 jurisdictionGeometry={unit.jurisdictionGeometry}
                 subUnitPins={subUnitPins}
                 compact
@@ -1467,10 +1478,19 @@ export const MilitaryUnitDetailContent = forwardRef<
                   </S.FactDesc>
                 </S.FactRow>
 
-                {unit.garrison?.trim() ? (
+                {effectiveGarrisonText ? (
                   <S.FactRow>
                     <S.FactTerm>본영 · 주둔지</S.FactTerm>
-                    <S.FactDesc>{unit.garrison.trim()}</S.FactDesc>
+                    <S.FactDesc>
+                      <span>{effectiveGarrisonText}</span>
+                      {unit.garrisonPlace &&
+                      unit.garrisonPlace.name &&
+                      unit.garrisonPlace.name !== effectiveGarrisonText ? (
+                        <S.MutedSpan style={{ marginLeft: 6, fontSize: 11.5 }}>
+                          ({unit.garrisonPlace.name})
+                        </S.MutedSpan>
+                      ) : null}
+                    </S.FactDesc>
                   </S.FactRow>
                 ) : null}
 
@@ -2560,21 +2580,38 @@ export const MilitaryUnitDetailContent = forwardRef<
                           const targetPersonId =
                             tenureItem.person?.id ?? tenureItem.personId
                           const personName = tenureItem.person
-                            ? getPersonDisplayName({
-                                name: tenureItem.person.name ?? '',
-                                surname:
-                                  tenureItem.person.surname ?? undefined,
-                                middleName:
-                                  tenureItem.person.middleName ?? undefined,
-                                country:
-                                  tenureItem.person.country ?? undefined,
-                              }) || tenureItem.person.name
+                            ? getPersonDisplayName({ ...tenureItem.person, name: tenureItem.person.name ?? '' }) || tenureItem.person.name
                             : '인물 미상'
+                          const canonicalRank =
+                            (tenureItem as {
+                              militaryRank?: {
+                                name: string
+                                nameLocal?: string | null
+                                natoCode?: string | null
+                              } | null
+                              militaryRoleKind?: string | null
+                            }).militaryRank ?? null
+                          const rawRoleKind = (tenureItem as {
+                            militaryRoleKind?: string | null
+                          }).militaryRoleKind
+                          const roleKindLabel =
+                            rawRoleKind && rawRoleKind in MILITARY_ROLE_KIND_LABELS
+                              ? MILITARY_ROLE_KIND_LABELS[
+                                  rawRoleKind as keyof typeof MILITARY_ROLE_KIND_LABELS
+                                ]
+                              : null
+                          const rankDisplay = canonicalRank
+                            ? canonicalRank.nameLocal &&
+                              canonicalRank.nameLocal !== canonicalRank.name
+                              ? `${canonicalRank.name} (${canonicalRank.nameLocal})`
+                              : canonicalRank.name
+                            : tenureItem.rankTitle
                           const roleLabel =
                             [
-                              tenureItem.rankTitle,
+                              rankDisplay,
                               tenureItem.title ??
-                                tenureItem.positionDefinition?.title,
+                                tenureItem.positionDefinition?.title ??
+                                roleKindLabel,
                             ]
                               .filter(Boolean)
                               .join(' · ') || '지휘관'
@@ -2683,6 +2720,10 @@ export const MilitaryUnitDetailContent = forwardRef<
                                             tenureItem.positionDefinitionId ??
                                             null,
                                           title: tenureItem.title ?? null,
+                                          militaryRankId:
+                                            (tenureItem as {
+                                              militaryRankId?: string | null
+                                            }).militaryRankId ?? null,
                                           rankTitle:
                                             tenureItem.rankTitle ?? null,
                                           ordinal: tenureItem.ordinal ?? null,

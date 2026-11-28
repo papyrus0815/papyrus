@@ -311,10 +311,11 @@ model Place {
   administrativeDivision AdministrativeDivision? @relation("AdminDivPlaces", fields: [administrativeDivisionId], references: [id], onDelete: SetNull)
   names                  PlaceName[]
   personPlaces           PersonPlace[]           @relation("PlaceToPersonPlaces")
-  personsBornHere        Person[]                @relation("PersonBirthPlace")
-  personsDiedHere        Person[]                @relation("PersonDeathPlace")
-  personsBuriedHere      Person[]                @relation("PersonBurialPlace")
-  personLifeEvents       PersonLifeEvent[]       @relation("PersonLifeEventPlace")
+  personsBornHere         Person[]                @relation("PersonBirthPlace")
+  personsDiedHere         Person[]                @relation("PersonDeathPlace")
+  personsBuriedHere       Person[]                @relation("PersonBurialPlace")
+  personLifeEvents        PersonLifeEvent[]       @relation("PersonLifeEventPlace")
+  garrisonedMilitaryUnits MilitaryUnit[]          @relation("PlaceMilitaryUnits")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

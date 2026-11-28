@@ -42,11 +42,13 @@ import {
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import {
   type CreateMilitaryUnitInput,
+  type MilitaryCombatArm,
   type MilitaryUnit,
   militaryUnitApi,
   type MilitaryUnitObservationDto,
   type MilitaryUnitType,
 } from '@/shared/api/military-unit'
+import { placeApi } from '@/shared/api/place'
 import {
   getUploadImageUrl,
   toUploadStoragePath,
@@ -68,6 +70,10 @@ import {
   type JurisdictionGeometry,
   JurisdictionMapField,
 } from '@/shared/ui/jurisdiction-map-field'
+import {
+  type PlaceResult,
+  PlaceSelect,
+} from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
   KitChipGroup,
   KitChoiceChip,
@@ -107,6 +113,7 @@ import { notify } from '@/shared/ui/toast'
 
 import {
   collectDescendantUnitIds,
+  COMBAT_ARM_LABELS,
   CREATE_LEAVE_MESSAGE,
   EDIT_LEAVE_MESSAGE,
   FORM_SECTION_META,
@@ -116,6 +123,8 @@ import {
   inferMilitaryUnitMetaFromName,
   LAYOUT_STORAGE_KEY,
   MILITARY_BRANCHES,
+  MILITARY_COMBAT_ARMS,
+  MILITARY_ROLE_KIND_LABELS,
   readInitialLayoutMode,
   RESET_CONFIRM_MESSAGE,
   toSignedComparableYear,
@@ -135,11 +144,18 @@ import { StructuredPartsDateField } from './military-unit-form/structured-parts-
 import * as FormS from './military-unit-form/styles'
 import { UnitCountryField } from './military-unit-form/unit-country-field'
 import {
+  type CommanderCandidateOption,
   hydrateUnitEventDrafts,
   syncUnitEventDrafts,
   type UnitEventLinkDraft,
   UnitEventLinksEditor,
 } from './military-unit-form/unit-event-links-editor'
+import {
+  buildTransitionsSyncPayload,
+  hydrateUnitLineageDrafts,
+  type UnitLineageDraft,
+  UnitLineageEditor,
+} from './military-unit-form/unit-lineage-editor'
 import {
   hydrateUnitPersonDrafts,
   syncUnitPersonDrafts,
@@ -229,11 +245,12 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   // 자식 모달
   const [countryModalOpen, setCountryModalOpen] = useState(false)
 
-  // 기본 정보 내 보조 토글 (원어·별칭 / 사령부 프리셋 / 전체 제대)
+  // 기본 정보 내 보조 토글 (원어·별칭 / 사령부 프리셋 / 전체 제대 / 전체 병과)
   const [showHighCommandPresets, setShowHighCommandPresets] = useState(false)
   const [showForeignAndMottoFields, setShowForeignAndMottoFields] =
     useState(false)
   const [showAllUnitTypes, setShowAllUnitTypes] = useState(false)
+  const [showAllCombatArms, setShowAllCombatArms] = useState(false)
 
   // 빠른 검색 입력
   const [parentUnitQuickQuery, setParentUnitQuickQuery] = useState('')
@@ -248,6 +265,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [nameEn, setNameEn] = useState('')
   const [unitType, setUnitType] = useState<MilitaryUnitType | ''>('')
   const [branch, setBranch] = useState('')
+  const branchRef = useRef(branch)
+  branchRef.current = branch
+  const [combatArm, setCombatArm] = useState<MilitaryCombatArm | ''>('')
   const [nickname, setNickname] = useState('')
   const [motto, setMotto] = useState('')
   const [isActive, setIsActive] = useState(true)
@@ -262,6 +282,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [disbandedYear, setDisbandedYear] = useState('')
   const [disbandedMonth, setDisbandedMonth] = useState('')
   const [disbandedDay, setDisbandedDay] = useState('')
+  const [garrisonPlaceId, setGarrisonPlaceId] = useState('')
+  const [garrisonPlaceValue, setGarrisonPlaceValue] =
+    useState<PlaceResult | null>(null)
   const [garrison, setGarrison] = useState('')
   const [garrisonLatitude, setGarrisonLatitude] = useState<number | null>(null)
   const [garrisonLongitude, setGarrisonLongitude] = useState<number | null>(null)
@@ -278,7 +301,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   >([])
   const [strength, setStrength] = useState('')
 
-  // 4. 소속 · 인물 · 사건 연결
+  // 4. 소속 · 계보 · 인물 · 사건 연결
   const [countryId, setCountryId] = useState('')
   const [historicalCountryId, setHistoricalCountryId] = useState('')
   const [countryName, setCountryName] = useState('')
@@ -286,6 +309,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [parentUnitId, setParentUnitId] = useState('')
   const [administrationDepartmentId, setAdministrationDepartmentId] =
     useState('')
+  const [lineageDrafts, setLineageDrafts] = useState<UnitLineageDraft[]>([])
   const [personDrafts, setPersonDrafts] = useState<UnitPersonLinkDraft[]>([])
   const [initialTenureIds, setInitialTenureIds] = useState<string[]>([])
   const [eventDrafts, setEventDrafts] = useState<UnitEventLinkDraft[]>([])
@@ -296,11 +320,15 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     Array<{ relationId: string; eventId: string }>
   >([])
 
-  // 5. 임무 · 전투 · 수훈 · 연혁 (전부 상시 노출 Textarea)
+  // 5. 임무 · 수훈 · 연혁 (전부 상시 노출 Textarea)
   const [primaryMission, setPrimaryMission] = useState('')
-  const [notableBattles, setNotableBattles] = useState('')
   const [honors, setHonors] = useState('')
   const [description, setDescription] = useState('')
+
+  // 모달 열림 전환 감지 및 부분 저장 재시도 중복 생성 방지용 Ref
+  const wasOpenRef = useRef(false)
+  const hydratedUnitIdRef = useRef<string | null>(null)
+  const persistedUnitIdRef = useRef<string | null>(null)
 
   const markDirty = useCallback((nextVal = true) => {
     isDirtyRef.current = nextVal
@@ -459,12 +487,16 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const resetCreateFields = useCallback(
     (opts?: { keepContext?: boolean }) => {
       const keepCtx = Boolean(opts?.keepContext)
-      const effectiveBranch = keepCtx ? branch : (defaultBranch ?? '')
+      const effectiveBranch = keepCtx
+        ? branchRef.current
+        : (defaultBranch ?? '')
+      persistedUnitIdRef.current = null
       setName('')
       setAbbreviation('')
       setNameLocal('')
       setNameEn('')
       setUnitType('')
+      setCombatArm('')
       setNickname('')
       setMotto('')
       setIsActive(true)
@@ -477,6 +509,8 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       setDisbandedYear('')
       setDisbandedMonth('')
       setDisbandedDay('')
+      setGarrisonPlaceId('')
+      setGarrisonPlaceValue(null)
       setGarrison('')
       setGarrisonLatitude(null)
       setGarrisonLongitude(null)
@@ -487,17 +521,18 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       ])
       setInitialObservations([])
       setStrength('')
+      setLineageDrafts([])
       setPersonDrafts([])
       setInitialTenureIds([])
       setEventDrafts([])
       setInitialDeployments([])
       setInitialRelations([])
       setPrimaryMission('')
-      setNotableBattles('')
       setHonors('')
       setDescription('')
       setShowForeignAndMottoFields(false)
       setShowHighCommandPresets(false)
+      setShowAllCombatArms(false)
       setActiveSection('basic')
       if (!keepCtx) {
         setBranch(defaultBranch ?? '')
@@ -511,7 +546,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       markDirty(false)
     },
     [
-      branch,
       defaultBranch,
       defaultCountryId,
       defaultHistoricalCountryId,
@@ -521,14 +555,32 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     ],
   )
 
-  // 모달 열릴 때 초기 데이터 바인딩 (신규 / 수정)
+  // 모달 열릴 때 초기 데이터 바인딩 (신규 / 수정) — 열림 전환 및 대상 ID 변경 시에만 1회 실행
   useEffect(() => {
-    if (!isOpen) return
-    setSavedUnit(null)
-    if (!isEdit || !editingUnitId) {
-      resetCreateFields({ keepContext: false })
+    if (!isOpen) {
+      wasOpenRef.current = false
+      hydratedUnitIdRef.current = null
+      persistedUnitIdRef.current = null
       return
     }
+    const justOpened = !wasOpenRef.current
+    wasOpenRef.current = true
+
+    if (!isEdit || !editingUnitId) {
+      if (justOpened || hydratedUnitIdRef.current !== '__create__') {
+        hydratedUnitIdRef.current = '__create__'
+        setSavedUnit(null)
+        resetCreateFields({ keepContext: false })
+      }
+      return
+    }
+
+    if (!justOpened && hydratedUnitIdRef.current === editingUnitId) {
+      return
+    }
+    hydratedUnitIdRef.current = editingUnitId
+    persistedUnitIdRef.current = editingUnitId
+    setSavedUnit(null)
 
     let cancelled = false
     setHydratingUnit(true)
@@ -542,6 +594,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         setNameEn(unitData.nameEn ?? '')
         setUnitType((unitData.unitType as MilitaryUnitType) ?? '')
         setBranch(unitData.branch ?? '')
+        setCombatArm((unitData.combatArm as MilitaryCombatArm) ?? '')
         setNickname(unitData.nickname ?? '')
         setMotto(unitData.motto ?? '')
         setIsActive(unitData.isActive !== false)
@@ -573,18 +626,44 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         setDisbandedMonth(disParts.month)
         setDisbandedDay(disParts.day)
 
-        setGarrison(unitData.garrison ?? '')
+        const gp = unitData.garrisonPlace ?? null
+        setGarrisonPlaceId(unitData.garrisonPlaceId ?? gp?.id ?? '')
+        setGarrisonPlaceValue(
+          gp
+            ? {
+                placeId: gp.id,
+                displayName: gp.name,
+                shortName: gp.name,
+                modernAddress: gp.modernAddress ?? null,
+                latitude: gp.latitude ?? null,
+                longitude: gp.longitude ?? null,
+              }
+            : unitData.garrison
+              ? {
+                  displayName: unitData.garrison,
+                  shortName: unitData.garrison,
+                  latitude: unitData.garrisonLatitude ?? null,
+                  longitude: unitData.garrisonLongitude ?? null,
+                  isManual: true,
+                }
+              : null,
+        )
+        setGarrison(unitData.garrison ?? gp?.name ?? '')
         setGarrisonLatitude(
           unitData.garrisonLatitude != null &&
             unitData.garrisonLongitude != null
             ? Number(unitData.garrisonLatitude)
-            : null,
+            : gp?.latitude != null && gp?.longitude != null
+              ? Number(gp.latitude)
+              : null,
         )
         setGarrisonLongitude(
           unitData.garrisonLatitude != null &&
             unitData.garrisonLongitude != null
             ? Number(unitData.garrisonLongitude)
-            : null,
+            : gp?.latitude != null && gp?.longitude != null
+              ? Number(gp.longitude)
+              : null,
         )
         setJurisdiction(unitData.jurisdiction ?? '')
         setJurisdictionGeometry(unitData.jurisdictionGeometry ?? null)
@@ -595,6 +674,13 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           hydrateStrengthSnapshots(unitObs, unitData.branch ?? ''),
         )
         setStrength(unitData.strength ?? '')
+
+        setLineageDrafts(
+          hydrateUnitLineageDrafts({
+            predecessors: unitData.predecessors,
+            successors: unitData.successors,
+          }),
+        )
 
         const tenures = unitData.tenures ?? []
         setPersonDrafts(hydrateUnitPersonDrafts(tenures))
@@ -655,7 +741,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         )
 
         setPrimaryMission(unitData.primaryMission ?? '')
-        setNotableBattles(unitData.notableBattles ?? '')
         setHonors(unitData.honors ?? '')
         setDescription(unitData.description ?? '')
 
@@ -706,7 +791,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     }
   }, [isOpen, countryId, historicalCountryId, modernCountries, historicalCountries])
 
-  // 이름 기반 자동 제대/군종/연도 추론
+  // 이름 기반 자동 제대/군종/병과/연도 추론
   const nameInference = useMemo(
     () => inferMilitaryUnitMetaFromName(name, abbreviation),
     [name, abbreviation],
@@ -715,6 +800,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const hasInferenceSuggestion = Boolean(
     (nameInference.inferredUnitType && !unitType) ||
       (nameInference.inferredBranch && !branch) ||
+      (nameInference.inferredCombatArm && !combatArm) ||
       (nameInference.inferredYear && !establishedYear.trim()),
   )
 
@@ -830,6 +916,34 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     )
     return primary.length > 0 ? primary : UNIT_TYPES.slice(0, 10)
   }, [showAllUnitTypes, branch, unitType])
+
+  const visibleCombatArms = useMemo(() => {
+    if (showAllCombatArms) return MILITARY_COMBAT_ARMS
+    const primary = MILITARY_COMBAT_ARMS.filter(
+      (opt) =>
+        opt.value === combatArm || opt.primaryForBranches.includes(branch),
+    )
+    return primary.length > 0 ? primary : MILITARY_COMBAT_ARMS.slice(0, 9)
+  }, [showAllCombatArms, branch, combatArm])
+
+  const commanderCandidates = useMemo<CommanderCandidateOption[]>(() => {
+    const seen = new Set<string>()
+    const list: CommanderCandidateOption[] = []
+    for (const row of personDrafts) {
+      if (!row.personId || seen.has(row.personId)) continue
+      seen.add(row.personId)
+      const roleLabel = MILITARY_ROLE_KIND_LABELS[row.roleKind] ?? ''
+      const meta = [row.rankTitle.trim(), row.title.trim() || roleLabel]
+        .filter(Boolean)
+        .join(' · ')
+      list.push({
+        personId: row.personId,
+        personName: row.personName,
+        label: meta ? `${row.personName} (${meta})` : row.personName,
+      })
+    }
+    return list
+  }, [personDrafts])
 
   const selectedBranchDef = useMemo(
     () => MILITARY_BRANCHES.find((item) => item.value === branch) ?? null,
@@ -1041,48 +1155,91 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       Number.isFinite(garrisonLatitude) &&
       Number.isFinite(garrisonLongitude)
 
-    const payload: CreateMilitaryUnitInput = {
-      name: name.trim(),
-      abbreviation: abbreviation.trim() || null,
-      nameLocal: nameLocal.trim() || null,
-      nameEn: nameEn.trim() || null,
-      unitType: unitType || null,
-      branch: branch
-        ? (branch as NonNullable<CreateMilitaryUnitInput['branch']>)
-        : null,
-      countryId: countryId || null,
-      historicalCountryId: historicalCountryId || null,
-      parentUnitId: parentUnitId || null,
-      administrationDepartmentId: administrationDepartmentId || null,
-      isActive: effectiveIsActive,
-      establishedDate: null,
-      establishedInfo: establishedPayload.info,
-      disbandedDate: null,
-      disbandedInfo: disbandedPayload.info,
-      nickname: nickname.trim() || null,
-      motto: motto.trim() || null,
-      garrison: garrison.trim() || null,
-      garrisonLatitude: hasValidCoordPair ? garrisonLatitude : null,
-      garrisonLongitude: hasValidCoordPair ? garrisonLongitude : null,
-      strength: strength.trim() || null,
-      insigniaUrl: toUploadStoragePath(insigniaUrl) || null,
-      primaryMission: primaryMission.trim() || null,
-      jurisdiction: jurisdiction.trim() || null,
-      jurisdictionGeometry: jurisdictionGeometry ?? null,
-      notableBattles: notableBattles.trim() || null,
-      honors: honors.trim() || null,
-      description: description.trim() || null,
-    }
-
     try {
       setLoading(true)
-      let savedId: string | null = editingUnitId
+
+      let resolvedGarrisonPlaceId = garrisonPlaceId.trim()
+      if (
+        !resolvedGarrisonPlaceId &&
+        garrisonPlaceValue &&
+        !garrisonPlaceValue.isManual &&
+        (garrisonPlaceValue.googlePlaceId ||
+          garrisonPlaceValue.externalKey ||
+          garrisonPlaceValue.cityId ||
+          hasValidCoordPair)
+      ) {
+        try {
+          const resolvedPlace = await placeApi.resolve({
+            kind: 'SITE',
+            name:
+              garrisonPlaceValue.shortName ||
+              garrisonPlaceValue.displayName ||
+              garrison.trim(),
+            modernAddress: garrisonPlaceValue.modernAddress ?? null,
+            latitude: hasValidCoordPair
+              ? garrisonLatitude
+              : (garrisonPlaceValue.latitude ?? null),
+            longitude: hasValidCoordPair
+              ? garrisonLongitude
+              : (garrisonPlaceValue.longitude ?? null),
+            googlePlaceId: garrisonPlaceValue.googlePlaceId ?? null,
+            externalKey: garrisonPlaceValue.externalKey ?? null,
+            countryId: countryId || null,
+            historicalCountryId: historicalCountryId || null,
+          })
+          if (resolvedPlace?.id) {
+            resolvedGarrisonPlaceId = resolvedPlace.id
+            setGarrisonPlaceId(resolvedPlace.id)
+          }
+        } catch {
+          // 장소 정본 승격 실패 시에도 부대 저장 자체는 막지 않음
+        }
+      }
+
+      const payload: CreateMilitaryUnitInput = {
+        name: name.trim(),
+        abbreviation: abbreviation.trim() || null,
+        nameLocal: nameLocal.trim() || null,
+        nameEn: nameEn.trim() || null,
+        unitType: unitType || null,
+        branch: branch
+          ? (branch as NonNullable<CreateMilitaryUnitInput['branch']>)
+          : null,
+        combatArm: combatArm || null,
+        countryId: countryId || null,
+        historicalCountryId: historicalCountryId || null,
+        parentUnitId: parentUnitId || null,
+        administrationDepartmentId: administrationDepartmentId || null,
+        isActive: effectiveIsActive,
+        establishedDate: null,
+        establishedInfo: establishedPayload.info,
+        disbandedDate: null,
+        disbandedInfo: disbandedPayload.info,
+        nickname: nickname.trim() || null,
+        motto: motto.trim() || null,
+        garrisonPlaceId: resolvedGarrisonPlaceId || null,
+        garrison: garrison.trim() || null,
+        garrisonLatitude: hasValidCoordPair ? garrisonLatitude : null,
+        garrisonLongitude: hasValidCoordPair ? garrisonLongitude : null,
+        strength: strength.trim() || null,
+        insigniaUrl: toUploadStoragePath(insigniaUrl) || null,
+        primaryMission: primaryMission.trim() || null,
+        jurisdiction: jurisdiction.trim() || null,
+        jurisdictionGeometry: jurisdictionGeometry ?? null,
+        honors: honors.trim() || null,
+        description: description.trim() || null,
+        transitions: buildTransitionsSyncPayload(lineageDrafts),
+      }
+
+      const existingTargetId = editingUnitId || persistedUnitIdRef.current
+      let savedId: string | null = existingTargetId
       let savedName = payload.name
-      if (isEdit && editingUnitId) {
-        await militaryUnitApi.update(editingUnitId, payload)
+      if (existingTargetId) {
+        await militaryUnitApi.update(existingTargetId, payload)
       } else {
         const createdUnit = await militaryUnitApi.create(payload)
         savedId = createdUnit.id
+        persistedUnitIdRef.current = createdUnit.id
         savedName = createdUnit.name ?? savedName
       }
 
@@ -1106,6 +1263,8 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             unitType,
             countryId: countryId || null,
             historicalCountryId: historicalCountryId || null,
+            fallbackStartEra: establishedEra,
+            fallbackStartYear: establishedYear,
             drafts: personDrafts,
             initialTenureIds,
           })
@@ -1227,11 +1386,11 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const strengthFilledCount =
     countFilledStrengthFields(strengthSnapshots) + (strength.trim() ? 1 : 0)
 
-  const commandLinksCount = personDrafts.length + eventDrafts.length
+  const commandLinksCount =
+    lineageDrafts.length + personDrafts.length + eventDrafts.length
 
   const recordsCount = [
     primaryMission.trim(),
-    notableBattles.trim(),
     honors.trim(),
     description.trim(),
   ].filter(Boolean).length
@@ -1280,10 +1439,11 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     >
       <FormS.FormGroupTitle id="military-unit-section-basic-title">
         기본 정보
-        {unitType || selectedBranchDef ? (
+        {unitType || selectedBranchDef || combatArm ? (
           <FormS.FormGroupSummaryBadge>
             {[
               selectedBranchDef?.label,
+              combatArm ? COMBAT_ARM_LABELS[combatArm] : null,
               unitType
                 ? (UNIT_TYPES.find((item) => item.value === unitType)?.shortLabel ??
                   unitType)
@@ -1352,6 +1512,17 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                       (item) => item.value === nameInference.inferredBranch,
                     )?.label
                   }
+                </FormS.TitleSuggestionButton>
+              ) : null}
+              {nameInference.inferredCombatArm && !combatArm ? (
+                <FormS.TitleSuggestionButton
+                  type="button"
+                  onClick={() => {
+                    setCombatArm(nameInference.inferredCombatArm!)
+                    markDirty(true)
+                  }}
+                >
+                  병과: {COMBAT_ARM_LABELS[nameInference.inferredCombatArm]}
                 </FormS.TitleSuggestionButton>
               ) : null}
               {nameInference.inferredYear && !establishedYear.trim() ? (
@@ -1503,6 +1674,38 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
               onClick={() => setShowAllUnitTypes((prev) => !prev)}
             >
               {showAllUnitTypes ? '주요 제대만 보기' : '+ 전체 제대 보기'}
+            </FormS.InlineLinkBtn>
+          </div>
+        </S.FormField>
+      </S.FormRow>
+
+      <S.FormRow>
+        <S.FormLabel as="div">
+          병과 · 전투특기<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <KitChipGroup>
+            {visibleCombatArms.map((armOpt) => (
+              <KitChoiceChip
+                key={armOpt.value}
+                type="button"
+                aria-pressed={combatArm === armOpt.value}
+                $selected={combatArm === armOpt.value}
+                onClick={() => {
+                  setCombatArm(combatArm === armOpt.value ? '' : armOpt.value)
+                  markDirty(true)
+                }}
+              >
+                {armOpt.shortLabel}
+              </KitChoiceChip>
+            ))}
+          </KitChipGroup>
+          <div style={{ marginTop: 6 }}>
+            <FormS.InlineLinkBtn
+              type="button"
+              onClick={() => setShowAllCombatArms((prev) => !prev)}
+            >
+              {showAllCombatArms ? '군종 추천 병과만 보기' : '+ 전체 병과 보기'}
             </FormS.InlineLinkBtn>
           </div>
         </S.FormField>
@@ -1749,6 +1952,33 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           주둔지 · 본영<FormS.OptionalTag>(선택)</FormS.OptionalTag>
         </S.FormLabel>
         <S.FormField>
+          <div style={{ marginBottom: 8 }}>
+            <PlaceSelect
+              value={garrisonPlaceValue}
+              countryId={countryId || undefined}
+              placeholder="장소 정본·Google 지도 기지/도시 검색 (선택 시 아래 본영 주소·좌표 자동 연동)…"
+              onChange={(picked) => {
+                setGarrisonPlaceValue(picked)
+                if (!picked) {
+                  setGarrisonPlaceId('')
+                  markDirty(true)
+                  return
+                }
+                setGarrisonPlaceId(picked.placeId ?? '')
+                setGarrison(picked.displayName || picked.shortName)
+                if (
+                  picked.latitude != null &&
+                  picked.longitude != null &&
+                  Number.isFinite(picked.latitude) &&
+                  Number.isFinite(picked.longitude)
+                ) {
+                  setGarrisonLatitude(picked.latitude)
+                  setGarrisonLongitude(picked.longitude)
+                }
+                markDirty(true)
+              }}
+            />
+          </div>
           <HeadquartersLocationField
             headquarters={garrison}
             latitude={garrisonLatitude}
@@ -1761,6 +1991,13 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
               setGarrison(nextHq.headquarters)
               setGarrisonLatitude(nextHq.headquartersLatitude)
               setGarrisonLongitude(nextHq.headquartersLongitude)
+              if (
+                garrisonPlaceValue &&
+                nextHq.headquarters.trim() !==
+                  (garrisonPlaceValue.displayName || garrisonPlaceValue.shortName)
+              ) {
+                setGarrisonPlaceId('')
+              }
               markDirty(true)
             }}
           />
@@ -1953,6 +2190,18 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                       onMouseDown={(mouseEvent) => {
                         mouseEvent.preventDefault()
                         setParentUnitId(unitCandidate.id)
+                        if (!branch && unitCandidate.branch) {
+                          setBranch(unitCandidate.branch)
+                        }
+                        if (
+                          !administrationDepartmentId &&
+                          unitCandidate.administrationDepartmentId &&
+                          !lockCountryAndDepartment
+                        ) {
+                          setAdministrationDepartmentId(
+                            unitCandidate.administrationDepartmentId,
+                          )
+                        }
                         setParentUnitQuickQuery('')
                         markDirty(true)
                       }}
@@ -2048,6 +2297,27 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
 
       <S.FormRow>
         <S.FormLabel as="div">
+          개편 계보<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <UnitLineageEditor
+            drafts={lineageDrafts}
+            onChange={(nextLineage) => {
+              setLineageDrafts(nextLineage)
+              markDirty(true)
+            }}
+            currentUnitId={editingUnitId}
+            currentUnitName={name}
+            candidateUnits={scopedUnits}
+            candidateDepartments={adminDepartments}
+            defaultEra={establishedEra}
+            defaultYear={establishedYear}
+          />
+        </S.FormField>
+      </S.FormRow>
+
+      <S.FormRow>
+        <S.FormLabel as="div">
           인물 연결<FormS.OptionalTag>(선택)</FormS.OptionalTag>
         </S.FormLabel>
         <S.FormField>
@@ -2058,6 +2328,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
               markDirty(true)
             }}
             unitType={unitType}
+            branch={branch}
             countryId={countryId}
             historicalCountryId={historicalCountryId}
             countryName={countryName}
@@ -2071,7 +2342,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
 
       <S.FormRow>
         <S.FormLabel as="div">
-          사건 연결<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+          참전 전투 · 사건<FormS.OptionalTag>(선택)</FormS.OptionalTag>
         </S.FormLabel>
         <S.FormField>
           <UnitEventLinksEditor
@@ -2084,20 +2355,23 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             countryId={countryId}
             historicalCountryId={historicalCountryId}
             countryName={countryName}
+            defaultEra={establishedEra}
+            defaultYear={establishedYear}
+            commanderCandidates={commanderCandidates}
           />
         </S.FormField>
       </S.FormRow>
     </FormS.FormGroupSection>
   )
 
-  /* ─────────────── 5. 임무 · 전투 · 수훈 · 연혁 (전부 Textarea 상시 노출) ─────────────── */
+  /* ─────────────── 5. 임무 · 수훈 · 연혁 (전부 Textarea 상시 노출) ─────────────── */
   const recordsSectionNode = (
     <FormS.FormGroupSection
       id={sectionIdOf('records')}
       aria-labelledby="military-unit-section-records-title"
     >
       <FormS.FormGroupTitle id="military-unit-section-records-title">
-        임무 · 전투 · 수훈 · 연혁
+        임무 · 수훈 · 연혁
         {recordsCount > 0 ? (
           <FormS.FormGroupSummaryBadge>
             {recordsCount}개 입력
@@ -2116,21 +2390,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             placeholder="평시 경계·억제 임무, 전시 작전계획상 기동·돌파·상륙·방공 등 핵심 임무를 서술하세요"
             value={primaryMission}
             onChange={updateTextField(setPrimaryMission)}
-          />
-        </S.FormField>
-      </S.FormRow>
-
-      <S.FormRow>
-        <S.FormLabel htmlFor="military-unit-form-notable-battles">
-          주요 참전 전투<FormS.OptionalTag>(선택)</FormS.OptionalTag>
-        </S.FormLabel>
-        <S.FormField>
-          <S.TextArea
-            id="military-unit-form-notable-battles"
-            rows={3}
-            placeholder="위 ‘사건 연결’로 정본 전투·작전을 연결하고, 세부 교전 일지·전역 경과 요약을 함께 서술하세요"
-            value={notableBattles}
-            onChange={updateTextField(setNotableBattles)}
           />
         </S.FormField>
       </S.FormRow>

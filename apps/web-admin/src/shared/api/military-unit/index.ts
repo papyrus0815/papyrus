@@ -12,6 +12,17 @@ export type UpdateMilitaryUnitInput = Parameters<
 
 export type MilitaryUnitType = NonNullable<CreateMilitaryUnitInput['unitType']>
 export type MilitaryBranch = NonNullable<CreateMilitaryUnitInput['branch']>
+export type MilitaryCombatArm = NonNullable<CreateMilitaryUnitInput['combatArm']>
+export type MilitaryUnitRoleKind =
+  | 'COMMANDER'
+  | 'DEPUTY_COMMANDER'
+  | 'CHIEF_OF_STAFF'
+  | 'STAFF'
+  | 'COMMISSAR'
+  | 'FOUNDER_MEMBER'
+export type MilitaryUnitTransitionSyncInput = NonNullable<
+  CreateMilitaryUnitInput['transitions']
+>[number]
 export type MilitaryUnitJurisdictionGeometryDto = NonNullable<
   CreateMilitaryUnitInput['jurisdictionGeometry']
 >
@@ -78,6 +89,12 @@ export interface MilitaryUnitEventLinkDto {
     startDatePrecision?: string | null
     type?: string | null
     kind?: string | null
+    parentEventId?: string | null
+    parentEvent?: {
+      id: string
+      title: string
+      kind?: string | null
+    } | null
   }
 }
 
@@ -108,6 +125,7 @@ export interface MilitaryUnitDto {
   abbreviation?: string | null
   unitType?: MilitaryUnitType | null
   branch?: MilitaryBranch | null
+  combatArm?: MilitaryCombatArm | null
   countryId?: string | null
   historicalCountryId?: string | null
   isActive?: boolean | null
@@ -119,6 +137,17 @@ export interface MilitaryUnitDto {
   administrationDepartmentId?: string | null
   nickname?: string | null
   motto?: string | null
+  garrisonPlaceId?: string | null
+  garrisonPlace?: {
+    id: string
+    kind: string
+    name: string
+    localName?: string | null
+    modernAddress?: string | null
+    latitude?: number | null
+    longitude?: number | null
+    defaultZoom?: number | null
+  } | null
   garrison?: string | null
   garrisonLatitude?: number | null
   garrisonLongitude?: number | null
@@ -127,7 +156,6 @@ export interface MilitaryUnitDto {
   primaryMission?: string | null
   jurisdiction?: string | null
   jurisdictionGeometry?: MilitaryUnitJurisdictionGeometryDto | null
-  notableBattles?: string | null
   honors?: string | null
   description?: string | null
   predecessors?: MilitaryUnitLineageDto[]
@@ -217,8 +245,18 @@ export interface MilitaryUnitDto {
         title: string
         startDate?: string | null
         endDate?: string | null
+        startEra?: string | null
+        startYear?: number | null
+        startMonth?: number | null
+        startDay?: number | null
         kind?: string | null
         type?: string | null
+        parentEventId?: string | null
+        parentEvent?: {
+          id: string
+          title: string
+          kind?: string | null
+        } | null
       }
     }
   }>
@@ -238,6 +276,19 @@ export type MilitaryUnitTenureItem = Omit<
   'person'
 > & {
   militaryUnitId?: string | null
+  militaryRankId?: string | null
+  militaryRoleKind?: MilitaryUnitRoleKind | null
+  militaryRank?: {
+    id: string
+    name: string
+    nameLocal?: string | null
+    nameEn?: string | null
+    abbreviation?: string | null
+    category?: string | null
+    rankOrder?: number | null
+    natoCode?: string | null
+    branch?: string | null
+  } | null
   person?:
     | (NonNullable<AdministrationDepartmentTenureItem['person']> & {
         profileImageUrl?: string | null
@@ -268,6 +319,7 @@ export const militaryUnitApi = {
     search?: string
     unitType?: string
     branch?: string
+    combatArm?: string
     summary?: boolean
   }): Promise<MilitaryUnit[]> => {
     if (params?.summary) {
@@ -279,6 +331,7 @@ export const militaryUnitApi = {
       if (params.search) query.set('search', params.search)
       if (params.unitType) query.set('unitType', params.unitType)
       if (params.branch) query.set('branch', params.branch)
+      if (params.combatArm) query.set('combatArm', params.combatArm)
       query.set('summary', '1')
       return fetchMilitaryJsonList<MilitaryUnit>(
         `/military-units?${query.toString()}`,
@@ -291,6 +344,7 @@ export const militaryUnitApi = {
       params?.search,
       params?.unitType,
       params?.branch,
+      params?.combatArm,
     )
     if (result && typeof result === 'object' && 'data' in result) {
       const nested = (result as { data?: unknown }).data

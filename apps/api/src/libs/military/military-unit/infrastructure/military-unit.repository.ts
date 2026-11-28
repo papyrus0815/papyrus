@@ -9,6 +9,7 @@ import { PrismaService } from '@prisma/prisma.service'
 import {
   CitationTargetType,
   MilitaryBranch as PrismaMilitaryBranch,
+  MilitaryCombatArm as PrismaMilitaryCombatArm,
   MilitaryUnitType as PrismaMilitaryUnitType,
   ObservationSubjectType,
   Prisma as PrismaRuntime,
@@ -33,6 +34,7 @@ import type {
   MilitaryUnitLineageDto,
   MilitaryUnitObservationDto,
   MilitaryUnitTransitionKind,
+  MilitaryUnitTransitionSyncInput,
   MilitaryUnitType,
   UpdateMilitaryUnitDto,
   UpdateMilitaryUnitTransitionDto,
@@ -647,7 +649,11 @@ export class MilitaryUnitRepository {
       endMonth: tenureRow.endMonth ?? null,
       endDay: tenureRow.endDay ?? null,
       title: tenureRow.title ?? tenureRow.positionDefinition?.title ?? null,
-      rankTitle: tenureRow.rankTitle ?? null,
+      militaryRankId: tenureRow.militaryRankId ?? null,
+      militaryRoleKind: tenureRow.militaryRoleKind ?? null,
+      militaryRank: tenureRow.militaryRank ?? null,
+      rankTitle:
+        tenureRow.rankTitle ?? tenureRow.militaryRank?.name ?? null,
       partyId: tenureRow.partyId ?? null,
       party: tenureRow.party ?? null,
       militaryUnitId: tenureRow.militaryUnitId ?? unitRecord.id,
@@ -676,13 +682,9 @@ export class MilitaryUnitRepository {
         startDate: tenureItem.startDate,
         endDate: tenureItem.endDate,
         termNumber: tenureItem.ordinal ?? null,
-        person: tenureItem.person
-          ? {
-              id: tenureItem.person.id,
-              name: tenureItem.person.name,
-              surname: tenureItem.person.surname ?? null,
-            }
-          : undefined,
+        /* 인물 전체를 넘긴다 — 이름·성만 골라 담으면 표시 순서(개인·국가)와 초상이 빠져
+           지휘관 이름이 성-우선으로 떨어지고 사진이 안 나온다 */
+        person: tenureItem.person ?? undefined,
       })
     }
     for (const legacyItem of legacyCommanders) {
@@ -729,6 +731,8 @@ export class MilitaryUnitRepository {
           startYear: relation.event.startYear ?? null,
           startMonth: relation.event.startMonth ?? null,
           startDay: relation.event.startDay ?? null,
+          parentEventId: relation.event.parentEventId ?? null,
+          parentEvent: relation.event.parentEvent ?? null,
         },
       }))
 
@@ -746,16 +750,31 @@ export class MilitaryUnitRepository {
         }))
       : unitRecord.subUnits
 
+    const mappedGarrisonPlace = unitRecord.garrisonPlace
+      ? {
+          ...unitRecord.garrisonPlace,
+          latitude:
+            unitRecord.garrisonPlace.latitude != null
+              ? Number(unitRecord.garrisonPlace.latitude)
+              : null,
+          longitude:
+            unitRecord.garrisonPlace.longitude != null
+              ? Number(unitRecord.garrisonPlace.longitude)
+              : null,
+        }
+      : null
+
     return {
       ...unitRecord,
+      garrisonPlace: mappedGarrisonPlace,
       garrisonLatitude:
         unitRecord.garrisonLatitude != null
           ? Number(unitRecord.garrisonLatitude)
-          : null,
+          : (mappedGarrisonPlace?.latitude ?? null),
       garrisonLongitude:
         unitRecord.garrisonLongitude != null
           ? Number(unitRecord.garrisonLongitude)
-          : null,
+          : (mappedGarrisonPlace?.longitude ?? null),
       jurisdictionGeometry: normalizeJurisdictionGeometry(
         unitRecord.jurisdictionGeometry,
         false,
@@ -779,6 +798,7 @@ export class MilitaryUnitRepository {
     search?: string
     unitType?: string
     branch?: string
+    combatArm?: string
     summary?: boolean
   }) {
     const search = filters?.search?.trim()
@@ -834,9 +854,17 @@ export class MilitaryUnitRepository {
       )
         ? (filters.branch as PrismaMilitaryBranch)
         : undefined
+    const validCombatArm =
+      filters?.combatArm &&
+      Object.values(PrismaMilitaryCombatArm).includes(
+        filters.combatArm as PrismaMilitaryCombatArm,
+      )
+        ? (filters.combatArm as PrismaMilitaryCombatArm)
+        : undefined
     if (
       (filters?.unitType && !validUnitType) ||
-      (filters?.branch && !validBranch)
+      (filters?.branch && !validBranch) ||
+      (filters?.combatArm && !validCombatArm)
     ) {
       return []
     }
@@ -849,6 +877,7 @@ export class MilitaryUnitRepository {
           : {}),
       ...(validUnitType ? { unitType: validUnitType } : {}),
       ...(validBranch ? { branch: validBranch } : {}),
+      ...(validCombatArm ? { combatArm: validCombatArm } : {}),
       ...(countryOrClause && searchOrClause
         ? { AND: [countryOrClause, searchOrClause] }
         : countryOrClause
@@ -954,6 +983,18 @@ export class MilitaryUnitRepository {
             kind: true,
           },
         },
+        garrisonPlace: {
+          select: {
+            id: true,
+            kind: true,
+            name: true,
+            localName: true,
+            modernAddress: true,
+            latitude: true,
+            longitude: true,
+            defaultZoom: true,
+          },
+        },
         predecessorTransitions: {
           include: {
             predecessorUnit: {
@@ -983,6 +1024,19 @@ export class MilitaryUnitRepository {
                 isMonarchical: true,
               },
             },
+            militaryRank: {
+              select: {
+                id: true,
+                name: true,
+                nameLocal: true,
+                nameEn: true,
+                abbreviation: true,
+                category: true,
+                rankOrder: true,
+                natoCode: true,
+                branch: true,
+              },
+            },
             party: { select: { id: true, name: true, shortName: true, brandColor: true } },
             country: { select: { id: true, name: true } },
             historicalCountry: { select: { id: true, name: true } },
@@ -1008,6 +1062,10 @@ export class MilitaryUnitRepository {
                 id: true,
                 name: true,
                 surname: true,
+                middleName: true,
+                /* 표시 순서 — 빠지면 지휘관 이름이 국가와 상관없이 성-우선으로 떨어진다 */
+                nameDisplayOrder: true,
+                country: { select: { defaultNameDisplayOrder: true } },
                 profileImageUrl: true,
               },
             },
@@ -1024,6 +1082,14 @@ export class MilitaryUnitRepository {
                 startYear: true,
                 startMonth: true,
                 startDay: true,
+                parentEventId: true,
+                parentEvent: {
+                  select: {
+                    id: true,
+                    title: true,
+                    kind: true,
+                  },
+                },
               },
             },
           },
@@ -1140,6 +1206,18 @@ export class MilitaryUnitRepository {
             kind: true,
           },
         },
+        garrisonPlace: {
+          select: {
+            id: true,
+            kind: true,
+            name: true,
+            localName: true,
+            modernAddress: true,
+            latitude: true,
+            longitude: true,
+            defaultZoom: true,
+          },
+        },
         predecessorTransitions: {
           include: {
             predecessorUnit: {
@@ -1169,6 +1247,19 @@ export class MilitaryUnitRepository {
                 isMonarchical: true,
               },
             },
+            militaryRank: {
+              select: {
+                id: true,
+                name: true,
+                nameLocal: true,
+                nameEn: true,
+                abbreviation: true,
+                category: true,
+                rankOrder: true,
+                natoCode: true,
+                branch: true,
+              },
+            },
             party: { select: { id: true, name: true, shortName: true, brandColor: true } },
             country: { select: { id: true, name: true } },
             historicalCountry: { select: { id: true, name: true } },
@@ -1189,6 +1280,10 @@ export class MilitaryUnitRepository {
                 id: true,
                 name: true,
                 surname: true,
+                middleName: true,
+                /* 표시 순서 — 빠지면 지휘관 이름이 국가와 상관없이 성-우선으로 떨어진다 */
+                nameDisplayOrder: true,
+                country: { select: { defaultNameDisplayOrder: true } },
                 profileImageUrl: true,
               },
             },
@@ -1206,6 +1301,14 @@ export class MilitaryUnitRepository {
                 startYear: true,
                 startMonth: true,
                 startDay: true,
+                parentEventId: true,
+                parentEvent: {
+                  select: {
+                    id: true,
+                    title: true,
+                    kind: true,
+                  },
+                },
               },
             },
           },
@@ -1478,9 +1581,33 @@ export class MilitaryUnitRepository {
       data.administrationDepartmentId,
     )
 
+    const resolvedGarrisonPlace =
+      data.garrisonPlaceId && this.prisma.place?.findUnique
+        ? await this.prisma.place.findUnique({
+            where: { id: data.garrisonPlaceId },
+            select: { id: true, name: true, latitude: true, longitude: true },
+          })
+        : null
+    if (data.garrisonPlaceId && !resolvedGarrisonPlace) {
+      throw new NotFoundException(
+        `주둔지·본영 장소(Place)를 찾을 수 없습니다: ${data.garrisonPlaceId}`,
+      )
+    }
+
+    const rawGarrisonLat =
+      data.garrisonLatitude ??
+      (resolvedGarrisonPlace?.latitude != null
+        ? Number(resolvedGarrisonPlace.latitude)
+        : null)
+    const rawGarrisonLng =
+      data.garrisonLongitude ??
+      (resolvedGarrisonPlace?.longitude != null
+        ? Number(resolvedGarrisonPlace.longitude)
+        : null)
+
     const garrisonCoords = normalizeGarrisonCoordinates(
-      data.garrisonLatitude,
-      data.garrisonLongitude,
+      rawGarrisonLat,
+      rawGarrisonLng,
     )
     const jurisdictionGeom = normalizeJurisdictionGeometry(
       data.jurisdictionGeometry,
@@ -1496,6 +1623,7 @@ export class MilitaryUnitRepository {
           abbreviation: data.abbreviation?.trim() || null,
           unitType: data.unitType,
           branch: data.branch ?? null,
+          combatArm: data.combatArm ?? null,
           countryId: axis.countryId,
           historicalCountryId: axis.historicalCountryId,
           isActive: data.isActive ?? (disbanded.year == null && !disbanded.date),
@@ -1517,7 +1645,9 @@ export class MilitaryUnitRepository {
             : {}),
           nickname: data.nickname ?? null,
           motto: data.motto ?? null,
-          garrison: data.garrison ?? null,
+          garrisonPlaceId: resolvedGarrisonPlace?.id ?? data.garrisonPlaceId ?? null,
+          garrison:
+            data.garrison?.trim() || resolvedGarrisonPlace?.name || null,
           garrisonLatitude: garrisonCoords.lat,
           garrisonLongitude: garrisonCoords.lng,
           strength: data.strength ?? null,
@@ -1528,7 +1658,6 @@ export class MilitaryUnitRepository {
             jurisdictionGeom != null
               ? (jurisdictionGeom as unknown as Prisma.InputJsonValue)
               : PrismaRuntime.DbNull,
-          notableBattles: data.notableBattles ?? null,
           honors: data.honors ?? null,
           description: data.description,
         },
@@ -1537,6 +1666,9 @@ export class MilitaryUnitRepository {
         await tx.militaryUnitCommander.createMany({
           data: this.commanderRowsForUnit(created.id, data.commanders),
         })
+      }
+      if (data.transitions !== undefined && data.transitions !== null) {
+        await this.syncTransitionsInTx(tx, created.id, data.transitions)
       }
       return created.id
     })
@@ -1590,6 +1722,7 @@ export class MilitaryUnitRepository {
       updateData.abbreviation = data.abbreviation?.trim() || null
     if (data.unitType !== undefined) updateData.unitType = data.unitType
     if (data.branch !== undefined) updateData.branch = data.branch
+    if (data.combatArm !== undefined) updateData.combatArm = data.combatArm
     if (data.countryId !== undefined || data.historicalCountryId !== undefined) {
       const nextCid =
         data.countryId !== undefined ? data.countryId : existing.countryId
@@ -1683,6 +1816,41 @@ export class MilitaryUnitRepository {
 
     if (data.nickname !== undefined) updateData.nickname = data.nickname
     if (data.motto !== undefined) updateData.motto = data.motto
+    if (data.garrisonPlaceId !== undefined) {
+      if (data.garrisonPlaceId) {
+        const placeRow = this.prisma.place?.findUnique
+          ? await this.prisma.place.findUnique({
+              where: { id: data.garrisonPlaceId },
+              select: { id: true, name: true, latitude: true, longitude: true },
+            })
+          : {
+              id: data.garrisonPlaceId,
+              name: '',
+              latitude: null,
+              longitude: null,
+            }
+        if (!placeRow) {
+          throw new NotFoundException(
+            `주둔지·본영 장소(Place)를 찾을 수 없습니다: ${data.garrisonPlaceId}`,
+          )
+        }
+        updateData.garrisonPlaceId = placeRow.id
+        if (data.garrison === undefined && placeRow.name) {
+          updateData.garrison = placeRow.name
+        }
+        if (
+          data.garrisonLatitude === undefined &&
+          data.garrisonLongitude === undefined &&
+          placeRow.latitude != null &&
+          placeRow.longitude != null
+        ) {
+          updateData.garrisonLatitude = Number(placeRow.latitude)
+          updateData.garrisonLongitude = Number(placeRow.longitude)
+        }
+      } else {
+        updateData.garrisonPlaceId = null
+      }
+    }
     if (data.garrison !== undefined) updateData.garrison = data.garrison
     if (
       data.garrisonLatitude !== undefined ||
@@ -1719,35 +1887,45 @@ export class MilitaryUnitRepository {
           ? (geom as unknown as Prisma.InputJsonValue)
           : PrismaRuntime.DbNull
     }
-    if (data.notableBattles !== undefined)
-      updateData.notableBattles = data.notableBattles
     if (data.honors !== undefined) updateData.honors = data.honors
     if (data.description !== undefined) updateData.description = data.description
 
-    if (data.commanders === undefined && Object.keys(updateData).length === 0) {
+    const hasTransitionsSync =
+      data.transitions !== undefined && data.transitions !== null
+
+    if (
+      data.commanders === undefined &&
+      !hasTransitionsSync &&
+      Object.keys(updateData).length === 0
+    ) {
       const unchanged = await this.findById(id)
       if (!unchanged) throw new NotFoundException(`MilitaryUnit not found: ${id}`)
       return unchanged
     }
 
-    if (data.commanders !== undefined) {
+    if (data.commanders !== undefined || hasTransitionsSync) {
       const commandersList = data.commanders ?? []
       const commanderRows =
-        commandersList.length > 0
+        data.commanders !== undefined && commandersList.length > 0
           ? this.commanderRowsForUnit(id, commandersList)
           : []
       await this.prisma.$transaction(async (tx) => {
-        await tx.militaryUnitCommander.deleteMany({ where: { unitId: id } })
-        if (commanderRows.length > 0) {
-          await tx.militaryUnitCommander.createMany({
-            data: commanderRows,
-          })
+        if (data.commanders !== undefined) {
+          await tx.militaryUnitCommander.deleteMany({ where: { unitId: id } })
+          if (commanderRows.length > 0) {
+            await tx.militaryUnitCommander.createMany({
+              data: commanderRows,
+            })
+          }
         }
         if (Object.keys(updateData).length > 0) {
           await tx.militaryUnit.update({
             where: { id },
             data: updateData,
           })
+        }
+        if (hasTransitionsSync) {
+          await this.syncTransitionsInTx(tx, id, data.transitions!)
         }
       })
       const updated = await this.findById(id)
@@ -2014,6 +2192,78 @@ export class MilitaryUnitRepository {
           visited.add(edge.successorUnitId)
           queue.push(edge.successorUnitId)
         }
+      }
+    }
+  }
+
+  private async syncTransitionsInTx(
+    tx: Prisma.TransactionClient,
+    unitId: string,
+    items: ReadonlyArray<MilitaryUnitTransitionSyncInput>,
+  ): Promise<void> {
+    if (!tx.militaryUnitTransition) return
+    await tx.militaryUnitTransition.deleteMany({
+      where: {
+        OR: [{ predecessorUnitId: unitId }, { successorUnitId: unitId }],
+      },
+    })
+    const seenPairs = new Set<string>()
+    for (const item of items) {
+      const targetId = item.targetId?.trim()
+      if (!targetId) continue
+      if (
+        (item.direction === 'PREDECESSOR_UNIT' ||
+          item.direction === 'SUCCESSOR_UNIT') &&
+        targetId === unitId
+      ) {
+        throw new BadRequestException(
+          '같은 부대를 자기 자신의 전신·후신으로 연결할 수 없습니다.',
+        )
+      }
+      const pairKey = `${item.direction}:${targetId}`
+      if (seenPairs.has(pairKey)) continue
+      seenPairs.add(pairKey)
+
+      const eraVal = (
+        item.year == null ? null : (item.era ?? 'AD')
+      ) as Era | null
+
+      if (item.direction === 'SUCCESSOR_UNIT') {
+        await tx.militaryUnitTransition.create({
+          data: {
+            predecessorUnitId: unitId,
+            successorUnitId: targetId,
+            kind: item.kind,
+            era: eraVal,
+            year: item.year ?? null,
+            month: item.month ?? null,
+            note: item.note?.trim() || null,
+          },
+        })
+      } else if (item.direction === 'PREDECESSOR_UNIT') {
+        await tx.militaryUnitTransition.create({
+          data: {
+            predecessorUnitId: targetId,
+            successorUnitId: unitId,
+            kind: item.kind,
+            era: eraVal,
+            year: item.year ?? null,
+            month: item.month ?? null,
+            note: item.note?.trim() || null,
+          },
+        })
+      } else if (item.direction === 'PREDECESSOR_DEPT') {
+        await tx.militaryUnitTransition.create({
+          data: {
+            predecessorDepartmentId: targetId,
+            successorUnitId: unitId,
+            kind: item.kind,
+            era: eraVal,
+            year: item.year ?? null,
+            month: item.month ?? null,
+            note: item.note?.trim() || null,
+          },
+        })
       }
     }
   }

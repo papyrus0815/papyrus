@@ -38,12 +38,57 @@ export type MilitaryBranch =
   | 'JOINT'
   | 'OTHER'
 
+/** 병과·전투특기 (Prisma `MilitaryCombatArm`과 동일) */
+export type MilitaryCombatArm =
+  | 'COMMAND_STAFF'
+  | 'INFANTRY'
+  | 'MECHANIZED'
+  | 'ARMORED'
+  | 'CAVALRY'
+  | 'ARTILLERY'
+  | 'AIR_DEFENSE'
+  | 'ENGINEER'
+  | 'SIGNALS'
+  | 'AIRBORNE'
+  | 'MOUNTAIN'
+  | 'AMPHIBIOUS'
+  | 'SPECIAL_OPS'
+  | 'LOGISTICS'
+  | 'STRATEGIC_MISSILE'
+  | 'SURFACE_FLEET'
+  | 'SUBMARINE'
+  | 'NAVAL_AVIATION'
+  | 'FIGHTER'
+  | 'BOMBER'
+  | 'RECON'
+  | 'TRANSPORT_AIR'
+  | 'PARAMILITARY'
+  | 'OTHER'
+
+export type MilitaryUnitRoleKind =
+  | 'COMMANDER'
+  | 'DEPUTY_COMMANDER'
+  | 'CHIEF_OF_STAFF'
+  | 'STAFF'
+  | 'COMMISSAR'
+  | 'FOUNDER_MEMBER'
+
 export type MilitaryUnitTransitionKind =
   | 'RENAME'
   | 'MERGE'
   | 'SPLIT'
   | 'REORGANIZE'
   | 'ABSORBED'
+
+export interface MilitaryUnitTransitionSyncInput {
+  direction: 'PREDECESSOR_UNIT' | 'PREDECESSOR_DEPT' | 'SUCCESSOR_UNIT'
+  targetId: string
+  kind: MilitaryUnitTransitionKind
+  era?: 'BC' | 'AD' | null
+  year?: number | null
+  month?: number | null
+  note?: string | null
+}
 
 export interface MilitaryUnitDatePartsDto {
   era: 'BC' | 'AD'
@@ -94,6 +139,12 @@ export interface MilitaryUnitEventLinkDto {
     startYear: number | null
     startMonth: number | null
     startDay: number | null
+    parentEventId?: string | null
+    parentEvent?: {
+      id: string
+      title: string
+      kind?: string | null
+    } | null
   }
 }
 
@@ -143,6 +194,7 @@ export interface MilitaryUnitDto {
   abbreviation?: string | null
   unitType?: MilitaryUnitType | null
   branch?: MilitaryBranch | null
+  combatArm?: MilitaryCombatArm | null
   /** 현대 소속 국가 — 표시/그룹핑 축 */
   countryId?: string | null
   /** 역사 소속 국가(독일 제국 등) — 소속 축. 현대와 듀얼, 표시는 역사 우선 */
@@ -157,6 +209,17 @@ export interface MilitaryUnitDto {
   administrationDepartmentId?: string | null
   nickname?: string | null
   motto?: string | null
+  garrisonPlaceId?: string | null
+  garrisonPlace?: {
+    id: string
+    kind: string
+    name: string
+    localName?: string | null
+    modernAddress?: string | null
+    latitude?: number | null
+    longitude?: number | null
+    defaultZoom?: number | null
+  } | null
   garrison?: string | null
   garrisonLatitude?: number | null
   garrisonLongitude?: number | null
@@ -165,7 +228,6 @@ export interface MilitaryUnitDto {
   primaryMission?: string | null
   jurisdiction?: string | null
   jurisdictionGeometry?: MilitaryUnitJurisdictionGeometryDto | null
-  notableBattles?: string | null
   honors?: string | null
   description?: string | null
   predecessors?: MilitaryUnitLineageDto[]
@@ -235,6 +297,10 @@ export interface MilitaryUnitDto {
       id: string
       name: string
       surname?: string | null
+      middleName?: string | null
+      nameDisplayOrder?: string | null
+      profileImageUrl?: string | null
+      country?: { defaultNameDisplayOrder?: string | null } | null
     }
   }>
   /** 이 부대가 참전·투입된 사건(전쟁·전투·작전) 목록 — 조회 전용 */
@@ -268,6 +334,7 @@ export interface CreateMilitaryUnitDto {
   abbreviation?: (string & tags.MaxLength<40>) | null
   unitType?: MilitaryUnitType | null
   branch?: MilitaryBranch | null
+  combatArm?: MilitaryCombatArm | null
   countryId?: (string & tags.Format<'uuid'>) | null
   /** 역사 소속 국가(독일 제국 등). countryId와 동시 설정 가능 — 표시는 역사 우선 */
   historicalCountryId?: (string & tags.Format<'uuid'>) | null
@@ -280,6 +347,7 @@ export interface CreateMilitaryUnitDto {
   administrationDepartmentId?: (string & tags.Format<'uuid'>) | null
   nickname?: (string & tags.MaxLength<200>) | null
   motto?: (string & tags.MaxLength<500>) | null
+  garrisonPlaceId?: (string & tags.Format<'uuid'>) | null
   garrison?: (string & tags.MaxLength<500>) | null
   garrisonLatitude?: number | null
   garrisonLongitude?: number | null
@@ -288,11 +356,12 @@ export interface CreateMilitaryUnitDto {
   primaryMission?: string | null
   jurisdiction?: string | null
   jurisdictionGeometry?: MilitaryUnitJurisdictionGeometryDto | null
-  notableBattles?: string | null
   honors?: string | null
   description?: string | null
   /** 함께 등록할 지휘관(인물 연결) */
   commanders?: MilitaryUnitCommanderInput[] | null
+  /** 전신·후신 개편 계보 원자 동기화 목록 */
+  transitions?: MilitaryUnitTransitionSyncInput[] | null
 }
 
 // Update DTO
@@ -303,6 +372,7 @@ export interface UpdateMilitaryUnitDto {
   abbreviation?: (string & tags.MaxLength<40>) | null
   unitType?: MilitaryUnitType | null
   branch?: MilitaryBranch | null
+  combatArm?: MilitaryCombatArm | null
   countryId?: (string & tags.Format<'uuid'>) | null
   /** 역사 소속 국가(독일 제국 등). countryId와 동시 설정 가능 — 표시는 역사 우선 */
   historicalCountryId?: (string & tags.Format<'uuid'>) | null
@@ -315,6 +385,7 @@ export interface UpdateMilitaryUnitDto {
   administrationDepartmentId?: (string & tags.Format<'uuid'>) | null
   nickname?: (string & tags.MaxLength<200>) | null
   motto?: (string & tags.MaxLength<500>) | null
+  garrisonPlaceId?: (string & tags.Format<'uuid'>) | null
   garrison?: (string & tags.MaxLength<500>) | null
   garrisonLatitude?: number | null
   garrisonLongitude?: number | null
@@ -323,11 +394,12 @@ export interface UpdateMilitaryUnitDto {
   primaryMission?: string | null
   jurisdiction?: string | null
   jurisdictionGeometry?: MilitaryUnitJurisdictionGeometryDto | null
-  notableBattles?: string | null
   honors?: string | null
   description?: string | null
   /** 전달 시 해당 부대의 지휘관 목록을 이 배열로 교체(빈 배열이면 전부 삭제) */
   commanders?: MilitaryUnitCommanderInput[] | null
+  /** 전달 시 해당 부대의 전신·후신 개편 계보 목록을 이 배열로 원자적 교체 */
+  transitions?: MilitaryUnitTransitionSyncInput[] | null
 }
 
 export interface CreateMilitaryUnitTransitionDto {

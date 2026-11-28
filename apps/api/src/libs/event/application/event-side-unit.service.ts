@@ -190,7 +190,10 @@ export class EventSideUnitService {
     await assertEventOwnership(this.prisma, eventId, actorId, { action: '수정', deleted: 'conflict' })
     const side = await this.prisma.eventSide.findUnique({ where: { id: sideId }, select: { eventId: true } })
     if (!side || side.eventId !== eventId) throw new NotFoundException('이 사건의 진영이 아닙니다')
-    const unit = await this.prisma.militaryUnit.findUnique({ where: { id: input.militaryUnitId }, select: { id: true } })
+    const unit = await this.prisma.militaryUnit.findUnique({
+      where: { id: input.militaryUnitId },
+      select: { id: true, countryId: true, historicalCountryId: true },
+    })
     if (!unit) throw new NotFoundException('부대를 찾을 수 없습니다')
     if (input.parentUnitId) {
       if (input.parentUnitId === input.militaryUnitId) {
@@ -231,6 +234,42 @@ export class EventSideUnitService {
         sortOrder: (last._max.sortOrder ?? -1) + 1,
       },
     })
+
+    // 부대 소속 국가가 아직 이 사건의 참여국(EventCountryRelation)이나 진영에 귀속되어 있지 않으면 자동 귀속해
+    // 같은 국가의 다음 부대 투입 시 진영 자동 매칭이 깨지지 않도록 보장한다.
+    if (
+      (unit.historicalCountryId || unit.countryId) &&
+      this.prisma.eventCountryRelation?.findFirst
+    ) {
+      const existingCountryRel = await this.prisma.eventCountryRelation.findFirst({
+        where: {
+          eventId,
+          ...(unit.historicalCountryId
+            ? { historicalCountryId: unit.historicalCountryId }
+            : { countryId: unit.countryId }),
+        },
+        select: { id: true, sideId: true },
+      })
+      if (existingCountryRel) {
+        if (!existingCountryRel.sideId) {
+          await this.prisma.eventCountryRelation.update({
+            where: { id: existingCountryRel.id },
+            data: { sideId },
+          })
+        }
+      } else {
+        await this.prisma.eventCountryRelation.create({
+          data: {
+            eventId,
+            countryId: unit.countryId ?? null,
+            historicalCountryId: unit.historicalCountryId ?? null,
+            sideId,
+            role: 'PARTICIPANT',
+          },
+        })
+      }
+    }
+
     return this.list(eventId)
   }
 

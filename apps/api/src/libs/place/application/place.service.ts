@@ -228,6 +228,24 @@ export class PlaceService {
           },
           take: 50,
         },
+        garrisonedMilitaryUnits: {
+          select: {
+            id: true,
+            name: true,
+            abbreviation: true,
+            unitType: true,
+            branch: true,
+            combatArm: true,
+            isActive: true,
+            establishedEra: true,
+            establishedYear: true,
+            disbandedEra: true,
+            disbandedYear: true,
+            country: { select: { id: true, name: true, flagEmoji: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+          take: 50,
+        },
       },
     })
     if (!row) {
@@ -245,6 +263,7 @@ export class PlaceService {
         .filter(Boolean),
       names: row.names,
       personPlaces: row.personPlaces,
+      garrisonedMilitaryUnits: row.garrisonedMilitaryUnits,
     }
   }
 

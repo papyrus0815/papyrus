@@ -106,6 +106,8 @@ model Country {
   aircraft                  Aircraft[]
   navalVessels              NavalVessel[]
   militaryUnits             MilitaryUnit[]
+  militaryRanks             MilitaryRank[]                   @relation("CountryMilitaryRanks")
+  personPromotions          PersonPromotion[]                @relation("CountryPersonPromotions")
   socialPhenomena           SocialPhenomenon[]
   Organizations             Organization[]                   @relation("OrganizationCountry")
   organizationMemberships   OrganizationCountryMembership[]  @relation("OrgMembershipCountry")

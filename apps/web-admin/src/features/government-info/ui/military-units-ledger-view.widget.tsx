@@ -184,12 +184,7 @@ function resolveLeadCommanderMeta(unitItem: LedgerMilitaryUnitItem): {
   const firstTenure = unitItem.tenures?.[0]
   if (firstTenure?.person) {
     const nameStr =
-      getPersonDisplayName({
-        name: firstTenure.person.name ?? '',
-        surname: firstTenure.person.surname ?? undefined,
-        middleName: firstTenure.person.middleName ?? undefined,
-        country: firstTenure.person.country ?? undefined,
-      }) || firstTenure.person.name
+      getPersonDisplayName({ ...firstTenure.person, name: firstTenure.person.name ?? '' }) || firstTenure.person.name
     if (nameStr) {
       return {
         label: firstTenure.rankTitle
@@ -204,10 +199,7 @@ function resolveLeadCommanderMeta(unitItem: LedgerMilitaryUnitItem): {
   const leadCmd = unitItem.commanders?.[0]
   if (leadCmd?.person) {
     const nameStr =
-      getPersonDisplayName({
-        name: leadCmd.person.name ?? '',
-        surname: leadCmd.person.surname ?? undefined,
-      }) || leadCmd.person.name
+      getPersonDisplayName({ ...leadCmd.person, name: leadCmd.person.name ?? '' }) || leadCmd.person.name
     if (nameStr) {
       return {
         label: leadCmd.rank ? `${leadCmd.rank} ${nameStr}` : nameStr,

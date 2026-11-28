@@ -382,6 +382,7 @@ model Person {
 
   PersonEvent              PersonEvent[]
   MilitaryUnitCommander    MilitaryUnitCommander[]
+  promotions               PersonPromotion[]          @relation("PersonPromotions")
   commandedDeployedUnits   SideDeployedUnit[]         @relation("SideDeployedUnitCommander")
   Book                     Book[]
   OrganizationPersonRole   OrganizationPersonRole[]   @relation("OrganizationPersonRoles")

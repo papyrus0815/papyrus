@@ -11,8 +11,10 @@ import {
 } from 'react-icons/fi'
 
 import type {
+  MilitaryCombatArm,
   MilitaryUnit,
   MilitaryUnitDatePartsDto,
+  MilitaryUnitRoleKind,
   MilitaryUnitType,
 } from '@/shared/api/military-unit'
 
@@ -398,6 +400,174 @@ export const MILITARY_BRANCHES: ReadonlyArray<{
   },
 ]
 
+export interface CombatArmOptionDef {
+  value: MilitaryCombatArm
+  label: string
+  shortLabel: string
+  primaryForBranches: string[]
+}
+
+export const MILITARY_COMBAT_ARMS: ReadonlyArray<CombatArmOptionDef> = [
+  {
+    value: 'COMMAND_STAFF',
+    label: '지휘 · 참모 · 통합기구',
+    shortLabel: '지휘·참모',
+    primaryForBranches: ['JOINT', 'ARMY', 'NAVY', 'AIR_FORCE', ''],
+  },
+  {
+    value: 'INFANTRY',
+    label: '보병 (Infantry)',
+    shortLabel: '보병',
+    primaryForBranches: ['ARMY', 'MARINE_CORPS', ''],
+  },
+  {
+    value: 'MECHANIZED',
+    label: '기계화보병 · 차량화',
+    shortLabel: '기계화보병',
+    primaryForBranches: ['ARMY', ''],
+  },
+  {
+    value: 'ARMORED',
+    label: '기갑 · 전차 (Armored)',
+    shortLabel: '기갑',
+    primaryForBranches: ['ARMY', 'MARINE_CORPS', ''],
+  },
+  {
+    value: 'ARTILLERY',
+    label: '포병 · 로켓포 (Artillery)',
+    shortLabel: '포병',
+    primaryForBranches: ['ARMY', 'MARINE_CORPS', ''],
+  },
+  {
+    value: 'AIRBORNE',
+    label: '공수 · 공정 · 강습 (Airborne)',
+    shortLabel: '공수·공정',
+    primaryForBranches: ['ARMY', 'AIR_FORCE', ''],
+  },
+  {
+    value: 'MOUNTAIN',
+    label: '산악 · 경보병',
+    shortLabel: '산악',
+    primaryForBranches: ['ARMY'],
+  },
+  {
+    value: 'CAVALRY',
+    label: '기병 · 수색 (Cavalry)',
+    shortLabel: '기병·수색',
+    primaryForBranches: ['ARMY'],
+  },
+  {
+    value: 'ENGINEER',
+    label: '공병 (Engineer)',
+    shortLabel: '공병',
+    primaryForBranches: ['ARMY'],
+  },
+  {
+    value: 'SIGNALS',
+    label: '통신 · 정보 · 전자전',
+    shortLabel: '통신·정보',
+    primaryForBranches: ['ARMY', 'JOINT', 'AIR_FORCE', 'NAVY'],
+  },
+  {
+    value: 'AIR_DEFENSE',
+    label: '방공 · 고샤포 (Air Defense)',
+    shortLabel: '방공',
+    primaryForBranches: ['ARMY', 'AIR_FORCE'],
+  },
+  {
+    value: 'AMPHIBIOUS',
+    label: '상륙 · 해병전투',
+    shortLabel: '상륙·해병',
+    primaryForBranches: ['MARINE_CORPS', 'NAVY'],
+  },
+  {
+    value: 'SPECIAL_OPS',
+    label: '특수전 · 코만도',
+    shortLabel: '특수전',
+    primaryForBranches: ['JOINT', 'ARMY', 'NAVY', 'MARINE_CORPS', 'OTHER', ''],
+  },
+  {
+    value: 'SURFACE_FLEET',
+    label: '수상함전력',
+    shortLabel: '수상함',
+    primaryForBranches: ['NAVY', 'COAST_GUARD'],
+  },
+  {
+    value: 'SUBMARINE',
+    label: '잠수함전력',
+    shortLabel: '잠수함',
+    primaryForBranches: ['NAVY'],
+  },
+  {
+    value: 'NAVAL_AVIATION',
+    label: '해군항공 · 항모전단',
+    shortLabel: '해군항공',
+    primaryForBranches: ['NAVY'],
+  },
+  {
+    value: 'FIGHTER',
+    label: '전투 · 요격비행',
+    shortLabel: '전투비행',
+    primaryForBranches: ['AIR_FORCE'],
+  },
+  {
+    value: 'BOMBER',
+    label: '폭격 · 전략타격',
+    shortLabel: '폭격·타격',
+    primaryForBranches: ['AIR_FORCE', 'SPACE_FORCE'],
+  },
+  {
+    value: 'RECON',
+    label: '정찰 · 감시비행',
+    shortLabel: '정찰·감시',
+    primaryForBranches: ['AIR_FORCE', 'SPACE_FORCE'],
+  },
+  {
+    value: 'TRANSPORT_AIR',
+    label: '항공수송 · 공중급유',
+    shortLabel: '항공수송',
+    primaryForBranches: ['AIR_FORCE'],
+  },
+  {
+    value: 'STRATEGIC_MISSILE',
+    label: '전략미사일 · 로켓',
+    shortLabel: '전략미사일',
+    primaryForBranches: ['SPACE_FORCE', 'JOINT', 'ARMY'],
+  },
+  {
+    value: 'LOGISTICS',
+    label: '군수 · 수송 · 병참 · 의무',
+    shortLabel: '군수·병참',
+    primaryForBranches: ['JOINT', 'ARMY', 'NAVY', 'AIR_FORCE'],
+  },
+  {
+    value: 'PARAMILITARY',
+    label: '근위 · 친위 · 헌병 · 준군사',
+    shortLabel: '근위·준군사',
+    primaryForBranches: ['OTHER', 'ARMY'],
+  },
+  {
+    value: 'OTHER',
+    label: '기타 병과',
+    shortLabel: '기타',
+    primaryForBranches: ['OTHER', 'COAST_GUARD', 'SPACE_FORCE'],
+  },
+]
+
+export const COMBAT_ARM_LABELS: Record<MilitaryCombatArm, string> =
+  Object.fromEntries(
+    MILITARY_COMBAT_ARMS.map((item) => [item.value, item.shortLabel]),
+  ) as Record<MilitaryCombatArm, string>
+
+export const MILITARY_ROLE_KIND_LABELS: Record<MilitaryUnitRoleKind, string> = {
+  COMMANDER: '사령관·지휘관',
+  DEPUTY_COMMANDER: '부지휘관',
+  CHIEF_OF_STAFF: '참모장',
+  STAFF: '참모·처장',
+  COMMISSAR: '정치·군사위원',
+  FOUNDER_MEMBER: '창설·주요 인물',
+}
+
 export type FormSectionKey =
   | 'basic'
   | 'spatial'
@@ -424,24 +594,41 @@ export const FORM_SECTION_META: ReadonlyArray<{
   {
     key: 'command',
     id: 'military-unit-section-command',
-    label: '소속 · 인물 · 사건',
+    label: '소속 · 인물 · 참전',
   },
   {
     key: 'records',
     id: 'military-unit-section-records',
-    label: '임무 · 전투 · 수훈',
+    label: '임무 · 수훈 · 연혁',
   },
 ]
 
 export function defaultCommanderTitleForUnitType(
   unitType: MilitaryUnitType | '' | null | undefined,
-  roleKind: 'COMMANDER' | 'STAFF' | 'MEMBER' = 'COMMANDER',
+  roleKind: MilitaryUnitRoleKind | 'MEMBER' = 'COMMANDER',
 ): string {
-  if (roleKind === 'STAFF') {
-    if (unitType === 'GENERAL_STAFF') return '차장 · 작전부장'
+  if (roleKind === 'CHIEF_OF_STAFF') {
+    if (unitType === 'SUPREME_COMMAND') return '총참모장'
+    if (unitType === 'GENERAL_STAFF') return '참모차장'
     return '참모장'
   }
-  if (roleKind === 'MEMBER') {
+  if (roleKind === 'DEPUTY_COMMANDER') {
+    if (unitType === 'DIVISION') return '부사단장'
+    if (unitType === 'CORPS' || unitType === 'AIR_CORPS') return '부군단장'
+    if (unitType === 'BRIGADE') return '부여단장'
+    if (unitType === 'REGIMENT') return '부연대장'
+    if (unitType === 'FLEET') return '부사령관'
+    return '부사령관'
+  }
+  if (roleKind === 'STAFF') {
+    if (unitType === 'GENERAL_STAFF') return '작전부장'
+    return '작전참모'
+  }
+  if (roleKind === 'COMMISSAR') {
+    if (unitType === 'FRONT' || unitType === 'FIELD_ARMY') return '군사회의 위원'
+    return '정치위원'
+  }
+  if (roleKind === 'FOUNDER_MEMBER' || roleKind === 'MEMBER') {
     return '주요 복무 · 창설 참여'
   }
   switch (unitType) {
@@ -503,6 +690,7 @@ export function inferMilitaryUnitMetaFromName(
 ): {
   inferredUnitType: MilitaryUnitType | null
   inferredBranch: string | null
+  inferredCombatArm: MilitaryCombatArm | null
   inferredYear: { era: 'AD' | 'BC'; year: string } | null
 } {
   const combined = `${nameValue.trim()} ${abbrValue.trim()}`.trim()
@@ -510,6 +698,7 @@ export function inferMilitaryUnitMetaFromName(
     return {
       inferredUnitType: null,
       inferredBranch: null,
+      inferredCombatArm: null,
       inferredYear: null,
     }
   }
@@ -613,7 +802,42 @@ export function inferMilitaryUnitMetaFromName(
     inferredBranch = 'ARMY'
   }
 
-  return { inferredUnitType, inferredBranch, inferredYear }
+  let inferredCombatArm: MilitaryCombatArm | null = null
+  if (/기갑|전차|\bPanzer|\bArmored|\bTank/i.test(combined)) {
+    inferredCombatArm = 'ARMORED'
+  } else if (/기계화|차량화|\bMechanized|\bMotorized/i.test(combined)) {
+    inferredCombatArm = 'MECHANIZED'
+  } else if (/공수|공정|강습|\bAirborne|\bParachute/i.test(combined)) {
+    inferredCombatArm = 'AIRBORNE'
+  } else if (/산악|경보병|\bMountain|\bGebirgs/i.test(combined)) {
+    inferredCombatArm = 'MOUNTAIN'
+  } else if (/포병|방사포|\bArtillery/i.test(combined)) {
+    inferredCombatArm = 'ARTILLERY'
+  } else if (/방공|고샤포|\bFlak/i.test(combined)) {
+    inferredCombatArm = 'AIR_DEFENSE'
+  } else if (/기병|수색|\bCavalry/i.test(combined)) {
+    inferredCombatArm = 'CAVALRY'
+  } else if (/공병|\bEngineer/i.test(combined)) {
+    inferredCombatArm = 'ENGINEER'
+  } else if (/통신|정보|사이버|\bSignals/i.test(combined)) {
+    inferredCombatArm = 'SIGNALS'
+  } else if (/특수전|특전사|특수부대|코만도|\bSAS\b|\bSEAL/i.test(combined)) {
+    inferredCombatArm = 'SPECIAL_OPS'
+  } else if (/해병|상륙|\bMarine/i.test(combined)) {
+    inferredCombatArm = 'AMPHIBIOUS'
+  } else if (/잠수함|\bU-Boat|\bSubmarine/i.test(combined)) {
+    inferredCombatArm = 'SUBMARINE'
+  } else if (/전투비행|요격|\bFighter/i.test(combined)) {
+    inferredCombatArm = 'FIGHTER'
+  } else if (/폭격|전략공군|\bBomber/i.test(combined)) {
+    inferredCombatArm = 'BOMBER'
+  } else if (/보병|소총|\bInfantry|\bRifle/i.test(combined)) {
+    inferredCombatArm = 'INFANTRY'
+  } else if (/합동참모본부|참모본부|총참모부|최고사령부|대본영/i.test(combined)) {
+    inferredCombatArm = 'COMMAND_STAFF'
+  }
+
+  return { inferredUnitType, inferredBranch, inferredCombatArm, inferredYear }
 }
 
 export function parseIsoPartsFallback(isoDate: string | null | undefined): {

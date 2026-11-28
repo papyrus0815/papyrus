@@ -17,6 +17,7 @@ export class MilitaryUnitService {
     search?: string
     unitType?: string
     branch?: string
+    combatArm?: string
     summary?: boolean
   }) {
     return this.repository.findAll(filters)

@@ -553,7 +553,13 @@ model GovernmentPositionTenure {
   /// 소속 군사 사령부·부대 ID — 군령 기관·야전부대 인스턴스 (예: OKW, OKH, 중부집단군, 제1군)
   militaryUnitId String? @map("military_unit_id") @db.Char(36)
 
-  /// 재임 당시 계급·품계 (예: 원수, 상급대장, 대장, 정1품) — 군직·관직 공통 표시용
+  /// 재임 당시 정규화된 군 계급 정본 FK (MilitaryRank 카탈로그 — 원수, 상급대장, 대장, 소위 등)
+  militaryRankId String? @map("military_rank_id") @db.Char(36)
+
+  /// 사령부·부대 보직의 구조적 역할 구분 (지휘관 / 부지휘관 / 참모장 / 참모 / 정치위원 / 창설·주요 인물)
+  militaryRoleKind MilitaryUnitRoleKind? @map("military_role_kind")
+
+  /// 재임 당시 계급·품계 표시 캐시 및 당대 특수 표기 (예: 원수, 상급대장, 정1품) — 군직·관직 공통 표시용
   rankTitle String? @map("rank_title") @db.VarChar(100)
 
   /// 재임 당시 소속·집권 정당 FK (예: 민주당, 보수당, 나치당)
@@ -576,6 +582,7 @@ model GovernmentPositionTenure {
   achievements             TenureAchievement[]          @relation("TenureAchievements")
   administrationDepartment AdministrationDepartment?    @relation("TenureDepartment", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
   militaryUnit             MilitaryUnit?                @relation("TenureMilitaryUnit", fields: [militaryUnitId], references: [id], onDelete: SetNull)
+  militaryRank             MilitaryRank?                @relation("TenureMilitaryRank", fields: [militaryRankId], references: [id], onDelete: SetNull)
   party                    PoliticalParty?              @relation("TenurePoliticalParty", fields: [partyId], references: [id], onDelete: SetNull)
   treatySignatories        TreatySignatory[]            @relation("TreatySignatoryTenure")
   warDeclarations          WarDeclaration[]             @relation("WarDeclarationDecidedByTenure")
@@ -602,6 +609,7 @@ model GovernmentPositionTenure {
   @@index([cabinetId], name: "idx_gov_tenure_cabinetId")
   @@index([administrationDepartmentId], name: "idx_gov_tenure_adminDeptId")
   @@index([militaryUnitId], name: "idx_gov_tenure_militaryUnitId")
+  @@index([militaryRankId], name: "idx_gov_tenure_militaryRankId")
   @@index([partyId], name: "idx_gov_tenure_partyId")
   @@index([accessionEventId], name: "idx_gov_tenure_accessionEventId")
   @@index([chamberId], name: "idx_gov_tenure_chamberId")
