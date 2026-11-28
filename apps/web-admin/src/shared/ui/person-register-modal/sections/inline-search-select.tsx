@@ -31,12 +31,22 @@ export interface SearchOption {
   label: string
   /** 우측 보조 텍스트/배지 (예: '현대', '역사 · 1392–1897') */
   meta?: string
+  /**
+   * 이름 아래 둘째 줄(예: 인물의 '1868–1918 · 러시아 제국') — 길어서 우측 열에 두면 이름을 밀어내는 정보.
+   * 검색 대상에도 들어간다.
+   */
+  sub?: string
   /** 추가 검색 키워드 (ISO 코드·영문명·수도 등) */
   keywords?: string
   /** 묶음 머리 — 이어지는 옵션이 같은 group이면 한 묶음(예: '현대 국가' · '역사 국가') */
   group?: string
   /** 앞 칸(국기 등) — 칸 폭은 비어 있어도 지켜 이름 열이 한 줄로 선다 */
   leading?: string
+  /**
+   * 인물 얼굴(앞 칸을 둥근 사진으로) — 사진이 없으면 이름 첫 글자. 목록에 하나라도 있으면 모든 행이
+   * 같은 폭의 얼굴 칸을 갖는다(이름 열이 한 줄로 선다). leading보다 우선.
+   */
+  avatar?: { src?: string | null; initial: string }
 }
 
 interface InlineSearchSelectProps {
@@ -49,8 +59,14 @@ interface InlineSearchSelectProps {
   /** 드롭다운에 보일 최대 결과 수(긴 목록 캡). 미지정 시 전체. */
   limit?: number
   /** 지정 시 드롭다운 하단에 "+ 새로 만들기" 액션 노출 — 목록에 없으면 생성 분기. */
-  onCreateNew?: () => void
-  createLabel?: string
+  onCreateNew?: (query: string) => void
+  /** 문자열, 또는 검색어로 만드는 라벨('로마노프' 가문 새로 등록) */
+  createLabel?: string | ((query: string) => string)
+  /**
+   * 검색어가 있을 때만 '새로 만들기' 행을 보인다 — 검색어가 곧 새 항목 이름인 곳(가문).
+   * 이름이 똑같은 항목이 이미 있으면 행을 숨겨 중복 등록을 막는다.
+   */
+  createRequiresQuery?: boolean
   /** 필수/검증 에러 상태 */
   error?: boolean
   ariaInvalid?: boolean
@@ -68,6 +84,11 @@ interface InlineSearchSelectProps {
    * 칸이 걸러 보이는 것은 그대로 이 컴포넌트가 한다.
    */
   onQueryChange?: (query: string) => void
+  /**
+   * 고른 뒤 닫힌 칸에도 그 항목의 meta(생몰년·존속기간 등)를 옅게 붙인다 — 동명이인을 고른 뒤에도
+   * 누구를 골랐는지 칸만 보고 알 수 있게. 기본 꺼짐(국가 칸처럼 이름만으로 충분한 곳).
+   */
+  showSelectedMeta?: boolean
 }
 
 export function InlineSearchSelect({
@@ -80,6 +101,7 @@ export function InlineSearchSelect({
   limit,
   onCreateNew,
   createLabel = '새로 만들기',
+  createRequiresQuery = false,
   error,
   ariaInvalid,
   ariaDescribedBy,
@@ -87,6 +109,7 @@ export function InlineSearchSelect({
   clearable = true,
   selectedLabelFallback,
   onQueryChange,
+  showSelectedMeta = false,
 }: InlineSearchSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -107,6 +130,12 @@ export function InlineSearchSelect({
     [options, value],
   )
   const anyLeading = useMemo(() => options.some((option) => option.leading), [options])
+  const anyAvatar = useMemo(() => options.some((option) => option.avatar), [options])
+  /*
+   * 닫힌 칸 보조 정보 — meta, 없으면 둘째 줄의 첫 마디만(인물이면 생몰년). 둘째 줄 전체
+   * ('1857–1921 · 러시아 제국')를 붙이면 칸이 좁아 이름이 '알렉산드르 바실리예비…'로 잘렸다.
+   */
+  const selectedMetaText = selectedOption?.meta || selectedOption?.sub?.split(' · ')[0] || ''
   const selectedLabel = useMemo(
     // value '' 은 '선택 안 함'이 아니라 미선택 — placeholder가 보이도록 빈 라벨
     () =>
@@ -124,6 +153,7 @@ export function InlineSearchSelect({
           (option) =>
             option.label.toLowerCase().includes(text) ||
             (option.meta && option.meta.toLowerCase().includes(text)) ||
+            (option.sub && option.sub.toLowerCase().includes(text)) ||
             (option.keywords && option.keywords.toLowerCase().includes(text)),
         )
       : list
@@ -145,7 +175,13 @@ export function InlineSearchSelect({
   }, [open])
 
   // '새로 만들기' 행이 있으면 filtered.length가 그 행 인덱스 → 방향키로 도달 가능한 최대 인덱스.
-  const hasCreateRow = Boolean(onCreateNew)
+  const trimmedQuery = query.trim()
+  const hasCreateRow =
+    Boolean(onCreateNew) &&
+    (!createRequiresQuery ||
+      (trimmedQuery !== '' &&
+        !options.some((option) => option.value && option.label.trim().toLowerCase() === trimmedQuery.toLowerCase())))
+  const createLabelText = typeof createLabel === 'function' ? createLabel(trimmedQuery) : createLabel
   const maxActive = hasCreateRow ? filtered.length : filtered.length - 1
 
   // 목록이 줄어들면 active가 범위를 벗어나 dangling activedescendant가 남는다 → 클램프.
@@ -168,7 +204,7 @@ export function InlineSearchSelect({
   }
 
   const triggerCreate = () => {
-    onCreateNew?.()
+    onCreateNew?.(query.trim())
     setOpen(false)
     setQuery('')
   }
@@ -214,7 +250,21 @@ export function InlineSearchSelect({
   }
 
   return (
-    <Wrap ref={wrapRef}>
+    <Wrap
+      ref={wrapRef}
+      /*
+       * 포커스가 칸 밖으로 나가면 닫는다. 예전엔 바깥 '마우스다운'과 Tab에서만 닫혀서, 프로그램이
+       * 포커스를 옮기면(행 추가 후 새 칸으로 이동 등) 앞 목록이 열린 채 남아 아래 칸을 덮었다.
+       * 항목·꺾쇠는 mousedown preventDefault라 고르는 동안엔 blur가 일어나지 않는다.
+       */
+      onBlur={(event) => {
+        if (!open) return
+        const next = event.relatedTarget as Node | null
+        if (next && wrapRef.current?.contains(next)) return
+        setOpen(false)
+        setQuery('')
+      }}
+    >
       <InputBox
         $open={open}
         $error={error}
@@ -261,6 +311,9 @@ export function InlineSearchSelect({
           }}
           onKeyDown={onKeyDown}
         />
+        {showSelectedMeta && !open && selectedMetaText && (
+          <SelectedMeta aria-hidden>{selectedMetaText}</SelectedMeta>
+        )}
         {clearable && value && !open ? (
           <IconBtn
             type="button"
@@ -298,7 +351,7 @@ export function InlineSearchSelect({
       </InputBox>
       {open && (
         <DropdownSurface id={listId} role="listbox" aria-label={ariaLabel}>
-          {filtered.length === 0 && !onCreateNew && (
+          {filtered.length === 0 && !hasCreateRow && (
             <DropdownEmpty>
               {query.trim() ? `'${query.trim()}'와 맞는 항목이 없습니다` : '고를 항목이 없습니다'}
             </DropdownEmpty>
@@ -319,11 +372,26 @@ export function InlineSearchSelect({
                   onMouseEnter={() => setActive(index)}
                   onClick={() => choose(option.value)}
                 >
-                  {anyLeading && <OptionLeading aria-hidden>{option.leading}</OptionLeading>}
+                  {anyAvatar ? (
+                    <OptionAvatar aria-hidden>
+                      {option.avatar?.src ? (
+                        <img src={option.avatar.src} alt="" loading="lazy" />
+                      ) : (
+                        (option.avatar?.initial ?? option.label.trim().charAt(0))
+                      )}
+                    </OptionAvatar>
+                  ) : (
+                    anyLeading && <OptionLeading aria-hidden>{option.leading}</OptionLeading>
+                  )}
                   <OptionBody>
                     <span className="label">
                       <HighlightedText text={option.label} query={query} />
                     </span>
+                    {option.sub && (
+                      <span className="sub">
+                        <HighlightedText text={option.sub} query={query} />
+                      </span>
+                    )}
                   </OptionBody>
                   {option.meta && (
                     <OptionMeta>
@@ -337,7 +405,7 @@ export function InlineSearchSelect({
               </React.Fragment>
             )
           })}
-          {onCreateNew && (
+          {hasCreateRow && (
             <CreateRow
               id={`${listId}-opt-${filtered.length}`}
               type="button"
@@ -347,7 +415,7 @@ export function InlineSearchSelect({
               onClick={triggerCreate}
             >
               <FiPlus size={14} />
-              {createLabel}
+              {createLabelText}
             </CreateRow>
           )}
           {filtered.length > 0 && (
@@ -399,6 +467,29 @@ const InputBox = styled.div<{ $open?: boolean; $error?: boolean }>`
     box-shadow 0.15s ease;
 `
 
+/** 인물 얼굴 칸 — 32px 원, 사진 없으면 첫 글자(인물 등록 모달 프로필 머리와 같은 중립 면) */
+const OptionAvatar = styled.span`
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`
+
 const InputLeading = styled.span`
   flex-shrink: 0;
   padding-left: 12px;
@@ -420,12 +511,35 @@ const Input = styled.input`
   border: none;
   outline: none;
 
+  /* 전역 input:focus 테·링이 칸 안 입력에도 먹어 테가 이중으로 그려졌다 — 테는 InputBox 하나만 */
+  &&:focus,
+  &&:focus-visible {
+    border: none;
+    box-shadow: none;
+    outline: none;
+  }
+
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
   @media (max-width: 768px) {
     font-size: 16px;
   }
+`
+
+/* 닫힌 칸 안 보조 정보 — 이름 뒤 옅은 글씨, 좁으면 먼저 줄어든다 */
+const SelectedMeta = styled.span`
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 2px;
+  font-size: ${FONT.meta};
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  pointer-events: none;
 `
 
 const IconChevron = styled.button<{ $open?: boolean }>`

@@ -20,6 +20,7 @@ import {
   FiRotateCcw,
   FiX,
 } from 'react-icons/fi'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { getAllCountries } from '@/shared/api/countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
@@ -93,6 +94,11 @@ import {
   encodeCountryValue,
   signedYearOf,
 } from './country-search-options'
+import {
+  buildDynastySearchOptions,
+  estimateBirthAnchor,
+  type DynastyOptionSource,
+} from './relation-search-options'
 import { AffiliationSection } from './sections/affiliation-section'
 import {
   CountryAffiliationsSection,
@@ -426,6 +432,7 @@ export function PersonRegisterView({
   )
   const draftScopeId = editPersonId ?? 'new'
 
+  const queryClient = useQueryClient()
   const markDirty = useCallback(() => {
     if (dirtyTrackingEnabledRef.current) setIsDirty(true)
   }, [])
@@ -457,9 +464,8 @@ export function PersonRegisterView({
   const [historicalCountries, setHistoricalCountries] = useState<
     HistoricalCountryResponseDto[]
   >([])
-  const [dynasties, setDynasties] = useState<
-    Array<{ id: string; name: string }>
-  >([])
+  /* 기간·구성원 수까지 받아 둔다 — 가문 드롭다운이 동명 분가를 가르는 보조 정보로 쓴다 */
+  const [dynasties, setDynasties] = useState<DynastyOptionSource[]>([])
   const [religions, setReligions] = useState<
     Array<{ id: string; name: string }>
   >([])
@@ -611,10 +617,7 @@ export function PersonRegisterView({
 
   /** SelectModal 형식 — '선택 안 함' 옵션을 맨 위에 prepend. */
   const dynastySelectOptions = useMemo(
-    () => [
-      { value: '', label: '선택 안 함' },
-      ...dynasties.map((d) => ({ value: d.id, label: d.name })),
-    ],
+    () => [{ value: '', label: '선택 안 함' }, ...buildDynastySearchOptions(dynasties)],
     [dynasties],
   )
   const religionSelectOptions = useMemo(
@@ -640,7 +643,7 @@ export function PersonRegisterView({
       .then(([modern, historical, dyn, rel]) => {
         setModernCountries(Array.isArray(modern) ? modern : [])
         setHistoricalCountries(Array.isArray(historical) ? historical : [])
-        setDynasties(Array.isArray(dyn) ? dyn : [])
+        setDynasties(Array.isArray(dyn) ? (dyn as DynastyOptionSource[]) : [])
         setReligions(Array.isArray(rel) ? rel : [])
       })
       .catch(() => {})
@@ -1504,6 +1507,59 @@ export function PersonRegisterView({
   const nationalityOptions = useMemo(
     () => buildCountrySearchOptions(modernCountries, historicalCountries, lifespanHint),
     [modernCountries, historicalCountries, lifespanHint],
+  )
+
+  /**
+   * 가족 후보 묶음의 기준 출생연도 — 본인 생몰년, 없으면 이미 고른 부모(+30)·배우자(동갑)에서 어림.
+   * 생몰 미상 인물을 아버지부터 고를 때 어머니·배우자 후보가 이름순으로만 나열되던 틈.
+   */
+  const familyBirthAnchor = useMemo(
+    () =>
+      estimateBirthAnchor(lifespanHint.startYear, {
+        father: fatherId ? personById.get(fatherId) : null,
+        mother: motherId ? personById.get(motherId) : null,
+        spouses: spouseRows.map((row) => (row.spouseId ? personById.get(row.spouseId) : null)),
+      }),
+    [lifespanHint.startYear, fatherId, motherId, spouseRows, personById],
+  )
+
+  /**
+   * 가문이 비었고 아버지에게 가문이 있으면 그 가문을 제안 — 왕족 등록에서 가장 많이 되풀이되는 입력.
+   * 자동으로 채우지 않는다(외가 계승·분가 창설·서자 등 아버지와 다른 경우가 있다). 어머니 가문은 보통
+   * 친정 가문이라 제안하지 않는다.
+   */
+  const dynastySuggestion = useMemo(() => {
+    if (dynastyId || !fatherId) return null
+    const fatherDynastyId = personById.get(fatherId)?.dynastyId
+    if (!fatherDynastyId) return null
+    const option = dynastySelectOptions.find((candidate) => candidate.value === fatherDynastyId)
+    return option ? { value: option.value, label: option.label, meta: option.meta, basis: '아버지' } : null
+  }, [dynastyId, fatherId, personById, dynastySelectOptions])
+
+  /** 가문 칸 '새로 등록' — 검색어를 이름으로 최소 가문을 만들고 바로 지정(기간·문장은 가문 페이지에서) */
+  const handleCreateDynasty = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim()
+      if (!trimmed) return
+      const ok = await confirm({
+        title: '새 가문 등록',
+        message: `'${trimmed}' 가문을 새로 등록하고 이 인물에 지정할까요? 존속 기간·문장 등은 가문 페이지에서 채울 수 있습니다.`,
+        confirmLabel: '등록',
+      })
+      if (!ok) return
+      try {
+        const created = (await dynastyApi.create({ name: trimmed })) as unknown as DynastyOptionSource
+        if (!created?.id) throw new Error('no id')
+        setDynasties((prev) => [...prev, created])
+        setDynastyId(created.id)
+        markDirty()
+        queryClient.invalidateQueries({ queryKey: ['dynasties'] })
+        notify.success(`'${trimmed}' 가문을 등록했습니다.`)
+      } catch {
+        notify.error('가문을 등록하지 못했습니다.')
+      }
+    },
+    [markDirty, queryClient],
   )
 
   /**
@@ -3557,6 +3613,8 @@ export function PersonRegisterView({
         dynastyValue={dynastyId}
         religionValue={religionId}
         onDynastyChange={setDynastyId}
+        dynastySuggestion={dynastySuggestion}
+        onCreateDynasty={handleCreateDynasty}
         onReligionChange={setReligionId}
         markDirty={markDirty}
       />
@@ -3622,6 +3680,7 @@ export function PersonRegisterView({
         initialAncestorIds={editFamilyCache.ancestorIds}
         initialDescendantIds={editFamilyCache.descendantIds}
         initialSiblingIds={editFamilyCache.siblingIds}
+        subjectBirthAnchor={familyBirthAnchor}
         markDirty={markDirty}
         onDateModalOpenChange={setSpouseDateModalOpen}
       />

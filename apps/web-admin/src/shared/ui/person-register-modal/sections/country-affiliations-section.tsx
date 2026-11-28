@@ -1,6 +1,7 @@
 /**
  * 인물 등록/수정 폼의 "국가 소속(다중)" 입력.
  * - 주 국적(countryId)과 별개로 출생지·복무·망명·이중국적 등 여러 소속을 행 단위로 추가/삭제.
+ * - 추가는 아래 검색 칸에서 국가를 고르는 한 동작(고르면 그 국가로 행이 생긴다).
  * - 국가 선택은 칸 안에서 검색하는 드롭다운(InlineSearchSelect) — 주 국적 칸과 같은 옵션(country-search-options).
  *   예전엔 행마다 국가 피커 모달을 왕복했다. 행에 기간이 있으면 그 시기, 없으면 생몰년 시기의 역사국가가 앞에 온다.
  * - 시작/종료일은 폼 전역과 동일한 공용 DatePickerModal(era 인식)로 통일.
@@ -9,7 +10,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { FiPlus, FiTrash2, FiCalendar, FiAlertCircle, FiInfo } from 'react-icons/fi'
+import { FiTrash2, FiCalendar, FiAlertCircle, FiInfo } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
@@ -23,7 +24,6 @@ import {
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
 import {
-  AddRowBtn,
   FieldError,
   FONT,
   RADIUS,
@@ -249,12 +249,40 @@ export function CountryAffiliationsSection({
     setRows((previous) => previous.filter((row) => row.key !== key))
     markDirty()
   }
-  const addRow = () => {
-    const row = makeAffiliationRow()
+  /*
+   * 추가 = 국가를 고르는 것. 예전엔 '소속 추가'로 빈 행을 만든 뒤 그 행의 국가 칸이 저절로 열렸고,
+   * 열린 목록이 바로 아래 날짜·메모 칸을 덮었다(행을 둘 만들면 목록 둘이 겹쳤다).
+   * 이제 아래 검색 칸에서 국가를 고르면 그 국가로 행이 생기고, 칸은 비워져 다음 국가를 바로 받는다.
+   */
+  const addOptions = useMemo(
+    () =>
+      buildCountrySearchOptions(modernCountries, historicalCountries, lifespanHint, {
+        primaryValue: primaryCountryValue,
+      }),
+    [modernCountries, historicalCountries, lifespanHint, primaryCountryValue],
+  )
+  /**
+   * 방금 만든 행 — 그 행의 '유형' 칸으로 포커스를 넘긴다(칸이 포커스에서 열려 출생·복무·망명… 목록이 바로 뜬다).
+   * 국가를 고른 다음 할 일이 유형 고르기인데, 예전엔 커서가 아래 추가 칸에 남아 마우스로 올라가야 했다.
+   */
+  const [focusTypeRowKey, setFocusTypeRowKey] = useState<string | null>(null)
+  useEffect(() => {
+    if (!focusTypeRowKey) return
+    document.getElementById(fid(`aff-type-${focusTypeRowKey}`))?.focus()
+    setFocusTypeRowKey(null)
+  }, [focusTypeRowKey, fid])
+
+  const addRowWithCountry = (value: string) => {
+    const picked = addOptions.find((option) => option.value === value)
+    if (!picked) return
+    const row = makeAffiliationRow({
+      countryId: picked.isHistorical ? undefined : picked.id,
+      historicalCountryId: picked.isHistorical ? picked.id : undefined,
+      countryLabel: picked.name,
+    })
     setRows((prev) => [...prev, row])
+    setFocusTypeRowKey(row.key)
     markDirty()
-    /* 새 행의 국가 칸으로 바로 — 행을 더하는 이유가 국가를 적기 위해서다 */
-    requestAnimationFrame(() => document.getElementById(fid(`aff-country-${row.key}`))?.focus())
   }
 
   const openDateModal = (
@@ -300,15 +328,6 @@ export function CountryAffiliationsSection({
                 return (
                   <RowCard key={row.key} $invalid={!!err}>
                     <RowTop>
-                      <TypeCell>
-                        <InlineSearchSelect
-                          ariaLabel={`소속 유형 ${idx + 1}`}
-                          options={AFFILIATION_TYPE_SEARCH_OPTIONS}
-                          value={row.affiliationType}
-                          clearable={false}
-                          onChange={(next) => next && patchRow(row.key, { affiliationType: next })}
-                        />
-                      </TypeCell>
 
                       <CountryCell>
                         <AffiliationCountrySelect
@@ -334,6 +353,17 @@ export function CountryAffiliationsSection({
                           }
                         />
                       </CountryCell>
+
+                      <TypeCell>
+                        <InlineSearchSelect
+                          id={fid(`aff-type-${row.key}`)}
+                          ariaLabel={`소속 유형 ${idx + 1}`}
+                          options={AFFILIATION_TYPE_SEARCH_OPTIONS}
+                          value={row.affiliationType}
+                          clearable={false}
+                          onChange={(next) => next && patchRow(row.key, { affiliationType: next })}
+                        />
+                      </TypeCell>
 
                       <RemoveBtn
                         type="button"
@@ -424,10 +454,17 @@ export function CountryAffiliationsSection({
               출생지·거주지·복무·망명·이중국적처럼 주 국적 밖의 소속을 기간과 함께 적습니다.
             </EmptyHint>
           )}
-          <AddRowBtn type="button" onClick={addRow}>
-            <FiPlus size={16} />
-            소속 추가
-          </AddRowBtn>
+          <AddCountryBox>
+            <InlineSearchSelect
+              id={fid('countryAffiliations')}
+              ariaLabel="소속 추가 — 국가 검색"
+              placeholder={rows.length > 0 ? '+ 국가를 더 검색해 추가' : '+ 국가를 검색해 소속 추가 (현대·역사)'}
+              options={addOptions}
+              value=""
+              limit={COUNTRY_OPTION_LIMIT}
+              onChange={(next) => next && addRowWithCountry(next)}
+            />
+          </AddCountryBox>
         </ControlWide>
       </FieldRow>
 
@@ -447,6 +484,11 @@ export function CountryAffiliationsSection({
     </FormRows>
   )
 }
+
+/* 추가 검색 칸 — 행 카드와 같은 폭, 빈 칸이 행보다 튀지 않게 옅은 점선 대신 기본 칸 그대로 */
+const AddCountryBox = styled.div`
+  max-width: 100%;
+`
 
 const ControlWide = styled.div`
   display: flex;
@@ -474,11 +516,11 @@ const RowCard = styled.div<{ $invalid?: boolean }>`
     theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafafa'};
 `
 
-/* 유형 · 국가 · 삭제 — 좁은 폭에선 유형·삭제 한 줄, 국가는 아래 전체 폭 */
+/* 국가 · 유형 · 삭제 — 무엇(국가)이 먼저, 어떤 관계(유형)가 뒤. 좁은 폭에선 국가 전체 폭 위, 유형·삭제 아래 */
 const RowTop = styled.div`
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) auto;
-  grid-template-areas: 'type country remove';
+  grid-template-columns: minmax(0, 1fr) 150px auto;
+  grid-template-areas: 'country type remove';
   align-items: center;
   gap: 8px;
 
@@ -489,8 +531,8 @@ const RowTop = styled.div`
   @media (max-width: 560px) {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      'type remove'
-      'country country';
+      'country country'
+      'type remove';
   }
 `
 

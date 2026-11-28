@@ -45,6 +45,11 @@ import {
 } from '../_form-primitives'
 import { InlineDateField } from './inline-date-field'
 import {
+  buildPersonSearchOptions,
+  type BirthAnchor,
+  type RelationKind,
+} from '../relation-search-options'
+import {
   InlineSearchSelect,
   type SearchOption,
 } from './inline-search-select'
@@ -144,6 +149,11 @@ export interface FamilySectionProps {
   initialDescendantIds?: string[]
   /** 수정 모드 상세 응답에서 확보된 형제자매 ID 목록 */
   initialSiblingIds?: string[]
+  /**
+   * 이 인물의 출생 부호 연도(본인 생몰년, 없으면 고른 가족에서 추정 — estimateBirthAnchor) —
+   * 부모·배우자 후보를 시기가 맞는 순으로 앞에 묶는다(없으면 묶지 않음)
+   */
+  subjectBirthAnchor?: BirthAnchor | null
   // 부모 dirty 추적
   markDirty: () => void
   /**
@@ -191,6 +201,7 @@ export function FamilySection({
   initialAncestorIds,
   initialDescendantIds,
   initialSiblingIds,
+  subjectBirthAnchor = null,
   markDirty,
   onDateModalOpenChange,
 }: FamilySectionProps) {
@@ -471,21 +482,25 @@ export function FamilySection({
   ])
 
   /** 인물 풀 → 콤보 옵션(슬롯별 exclude 적용, 현재 선택값은 표시 유지를 위해 예외 허용). */
+  /**
+   * 인물 후보 — 국기·생몰년·국적을 붙이고, 출생연도를 알면 시기가 맞는 사람을 앞 묶음으로.
+   * (이름만 있던 시절엔 '니콜라이 로마노프' 둘을 가를 수 없었다)
+   */
   const personOptions = (
     excludeIds: string[],
     currentSelectedId?: string,
+    kind: RelationKind = 'parent',
+    /** 이 칸이 무엇인지('아버지') — 기준 연도를 바로 이 칸의 사람에게서 추정했으면 묶지 않는다(제자리 순환) */
+    slotBasis?: string,
   ): SearchOption[] => {
-    const excludeSet = new Set(excludeIds.filter(Boolean))
-    return knownPersons
-      .filter(
-        (person) =>
-          (currentSelectedId && person.id === currentSelectedId) ||
-          !excludeSet.has(person.id),
-      )
-      .map((person) => ({
-        value: person.id,
-        label: getPersonDisplayName(person),
-      }))
+    const anchor = subjectBirthAnchor && subjectBirthAnchor.basis !== slotBasis ? subjectBirthAnchor : null
+    return buildPersonSearchOptions(knownPersons, {
+      excludeIds,
+      currentSelectedId,
+      anchorBirthYear: anchor?.year ?? null,
+      anchorBasis: anchor?.basis ?? null,
+      kind,
+    })
   }
 
   /** "최근 등록" 칩의 슬롯 지정 버튼 — 성별·근친 불변식에 위배되는 슬롯은 숨긴다. */
@@ -711,6 +726,8 @@ export function FamilySection({
                 ...femaleIds,
               ],
               fatherId,
+              'parent',
+              '아버지',
             )}
             value={fatherId}
             onChange={(id) => {
@@ -719,6 +736,7 @@ export function FamilySection({
             }}
             onCreateNew={() => setShowFatherModal(true)}
             createLabel="새 인물 등록"
+                      showSelectedMeta
             limit={30}
           />
         </FamilySlot>
@@ -740,6 +758,8 @@ export function FamilySection({
                 ...maleIds,
               ],
               motherId,
+              'parent',
+              '어머니',
             )}
             value={motherId}
             onChange={(id) => {
@@ -748,6 +768,7 @@ export function FamilySection({
             }}
             onCreateNew={() => setShowMotherModal(true)}
             createLabel="새 인물 등록"
+                      showSelectedMeta
             limit={30}
           />
         </FamilySlot>
@@ -782,6 +803,7 @@ export function FamilySection({
                 setShowAdoptiveFatherModal ? () => setShowAdoptiveFatherModal(true) : undefined
               }
               createLabel="새 인물 등록"
+                      showSelectedMeta
               limit={30}
             />
           </FamilySlot>
@@ -813,6 +835,7 @@ export function FamilySection({
                 setShowAdoptiveMotherModal ? () => setShowAdoptiveMotherModal(true) : undefined
               }
               createLabel="새 인물 등록"
+                      showSelectedMeta
               limit={30}
             />
           </FamilySlot>
@@ -911,6 +934,8 @@ export function FamilySection({
                           ...usedSpouseIds.filter((id) => id !== row.spouseId),
                         ],
                         row.spouseId,
+                        'spouse',
+                        '배우자',
                       )}
                       value={row.spouseId}
                       onChange={(id) => {
@@ -925,6 +950,7 @@ export function FamilySection({
                         setShowSpouseModal(true)
                       }}
                       createLabel="새 인물 등록"
+                      showSelectedMeta
                       limit={30}
                     />
                   </SpouseRowSelect>

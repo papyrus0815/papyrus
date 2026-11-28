@@ -67,17 +67,24 @@ function Harness({ initial = [] as CountryAffiliationRow[], primary = '' }) {
 }
 
 describe('CountryAffiliationsSection — 국가 드롭다운', () => {
-  it('빈 상태 안내, 행을 더하면 국가 칸에서 검색해 고른다', () => {
+  it('빈 상태 안내, 아래 검색 칸에서 국가를 고르면 그 국가로 행이 생긴다', () => {
     renderWithTheme(<Harness />)
     expect(screen.getByText(/주 국적 밖의 소속/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /소속 추가/ }))
-    const input = screen.getByRole('combobox', { name: '소속 1 국가' })
-    fireEvent.focus(input)
-    fireEvent.change(input, { target: { value: 'prussia' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
+    const addInput = screen.getByRole('combobox', { name: '소속 추가 — 국가 검색' })
+    fireEvent.focus(addInput)
+    fireEvent.change(addInput, { target: { value: 'prussia' } })
+    fireEvent.keyDown(addInput, { key: 'Enter' })
     const saved = JSON.parse(screen.getByTestId('rows').textContent ?? '[]')
-    expect(saved[0]).toMatchObject({ historicalCountryId: 'prussia', countryLabel: '프로이센 왕국' })
+    expect(saved).toHaveLength(1)
+    expect(saved[0]).toMatchObject({
+      historicalCountryId: 'prussia',
+      countryLabel: '프로이센 왕국',
+      affiliationType: 'CITIZENSHIP',
+    })
     expect(saved[0].countryId).toBeUndefined()
+    // 행의 국가 칸에 고른 나라가 서고, 추가 칸은 다음 국가를 받도록 비어 있다
+    expect(screen.getByRole('combobox', { name: '소속 1 국가' })).toHaveValue('프로이센 왕국')
+    expect(screen.getByRole('combobox', { name: '소속 추가 — 국가 검색' })).toHaveValue('')
   })
 
   it('주 국적과 같은 국가를 국적/시민권으로 또 적으면 안내한다', () => {

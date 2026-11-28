@@ -44,3 +44,38 @@ describe('InlineSearchSelect — 국적 드롭다운', () => {
     expect(screen.getByText(/외 2개/)).toBeInTheDocument()
   })
 })
+
+describe('InlineSearchSelect — 검색어로 새로 만들기(가문)', () => {
+  const DYNASTIES = [{ value: 'd1', label: '로마노프 가' }]
+  const renderCreate = (onCreateNew: jest.Mock) =>
+    renderWithTheme(
+      <InlineSearchSelect
+        ariaLabel="가문"
+        options={DYNASTIES}
+        value=""
+        onChange={jest.fn()}
+        onCreateNew={onCreateNew}
+        createRequiresQuery
+        createLabel={(name) => `'${name}' 가문 새로 등록`}
+      />,
+    )
+
+  it('검색어가 없으면 만들기 행을 숨기고, 있으면 검색어를 넘긴다', () => {
+    const onCreateNew = jest.fn()
+    renderCreate(onCreateNew)
+    const input = screen.getByRole('combobox', { name: '가문' })
+    fireEvent.focus(input)
+    expect(screen.queryByText(/새로 등록/)).not.toBeInTheDocument()
+    fireEvent.change(input, { target: { value: '호엔촐레른 가' } })
+    fireEvent.click(screen.getByText("'호엔촐레른 가' 가문 새로 등록"))
+    expect(onCreateNew).toHaveBeenCalledWith('호엔촐레른 가')
+  })
+
+  it('이름이 똑같은 항목이 있으면 만들기 행을 숨긴다(중복 등록 방지)', () => {
+    renderCreate(jest.fn())
+    const input = screen.getByRole('combobox', { name: '가문' })
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '로마노프 가' } })
+    expect(screen.queryByText(/새로 등록/)).not.toBeInTheDocument()
+  })
+})
