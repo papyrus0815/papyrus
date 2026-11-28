@@ -30,7 +30,13 @@ import {
 import styled, { type DefaultTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { GOVERNMENT_FORM_LABEL } from '@/entities/political-system/model/political-system'
+import {
+  defaultAppointmentMethodFromSystem,
+  formatPeriod as formatPoliticalSystemPeriod,
+  GOVERNMENT_FORM_LABEL,
+  resolveEffectivePowerHolderRole,
+  resolveSystemHeadPositionSlots,
+} from '@/entities/political-system/model/political-system'
 import { useCountries } from '@/features/country/api'
 import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
 import {
@@ -73,8 +79,8 @@ import {
   parsePartialDateString,
 } from '@/shared/lib/partial-date-string'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { personBirthSignedYear } from '@/shared/ui/person-register-modal/relation-search-options'
 import { pathKeys } from '@/shared/router'
+import { personBirthSignedYear } from '@/shared/ui/person-register-modal/relation-search-options'
 import {
   InlineSearchSelect,
   type SearchOption,
@@ -148,10 +154,12 @@ import {
   canAutoClosePreviousOngoingCabinet,
   checkPersonTenureLifespanWarning,
   checkReshuffleTenureRangeWarning,
+  computeConstitutionalTermEndParts,
   type EnrichedPolityOption,
   type ExistingCabinetSummary,
   extractCanonicalRoleFromPoliticalSystem,
   findMatchingPoliticalSystem,
+  findOverlappingPoliticalSystems,
   formatPartyOptionLabel,
   formatPeriodDurationSummary,
   formatPersonLifespanTag,
@@ -167,6 +175,7 @@ import {
   resolveMatchingPartyFromMemberships,
   resolvePolityYearGuidance,
   resolveSmartDefaultExecutiveRole,
+  resolveSmartDefaultMonarchRole,
 } from './cabinet-form-modal.helpers'
 import { formatDate, getPersonName } from './cabinets-section.helpers'
 import { LinkedEventPickerField } from './linked-event-picker-field'
@@ -225,6 +234,7 @@ export interface EditableCabinetRecord {
   description?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
+  politicalSystemId?: string | null
   startDate?: string | null
   endDate?: string | null
   startEra?: string | null
@@ -270,6 +280,8 @@ export interface CabinetFormModalProps {
     endEra?: string | null
   }>
   defaultPolityFilterId?: string
+  /** 특정 헌정 체제 필터·정체 탭에서 바로 열 때 기본 귀속할 정체 ID */
+  initialPoliticalSystemId?: string | null
   /** 진입 시 기본 등록 방식 (예: 집단지도 필터 활성 상태에서 열 때 `'collective'`) */
   initialMode?: CabinetFormMode
   headPositionOptions?: ScopedPositionOption[]
@@ -530,6 +542,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
   initialPolityValue = '',
   constituentPolities = EMPTY_CONSTITUENT_POLITIES,
   defaultPolityFilterId = '',
+  initialPoliticalSystemId = null,
   initialMode,
   headPositionOptions = EMPTY_HEAD_POSITION_OPTIONS,
   existingHeadTenures = EMPTY_EXISTING_HEAD_TENURES,
@@ -714,6 +727,22 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
   const [selectedPositionDefId, setSelectedPositionDefId] = useState<
     string | null
   >(null)
+  const [createdLocalPositions, setCreatedLocalPositions] = useState<
+    ScopedPositionOption[]
+  >([])
+  const [showQuickCreatePosition, setShowQuickCreatePosition] =
+    useState<boolean>(false)
+  const [quickPositionTitle, setQuickPositionTitle] = useState<string>('')
+  const [quickPositionTitleLocal, setQuickPositionTitleLocal] =
+    useState<string>('')
+  const [quickPositionAxis, setQuickPositionAxis] = useState<
+    'HEAD_OF_GOVERNMENT' | 'HEAD_OF_STATE'
+  >('HEAD_OF_GOVERNMENT')
+  const [quickPositionMonarchical, setQuickPositionMonarchical] =
+    useState<boolean>(false)
+  const [quickPositionScopeMode, setQuickPositionScopeMode] = useState<
+    'polity' | 'universal'
+  >('polity')
   const [ordinalInput, setOrdinalInput] = useState<string>('')
   const [subTermInput, setSubTermInput] = useState<string>('')
   const [regnalNameInput, setRegnalNameInput] = useState<string>('')
@@ -763,6 +792,8 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
   const [endReason, setEndReason] = useState<string>('')
   const [endReasonDetail, setEndReasonDetail] = useState<string>('')
   const [notes, setNotes] = useState<string>('')
+  const [explicitPoliticalSystemId, setExplicitPoliticalSystemId] =
+    useState<string>('')
 
   // Post-create smart minister onboarding step
   const [onboardingCabinetId, setOnboardingCabinetId] = useState<string | null>(
@@ -780,6 +811,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
   const userTouchedRoleRef = useRef<boolean>(false)
   const userTouchedPartyRef = useRef<boolean>(false)
   const userTouchedOriginEventRef = useRef<boolean>(false)
+  const userTouchedAppointmentMethodRef = useRef<boolean>(false)
   const hydratedEditExtrasIdRef = useRef<string | null>(null)
   const initialOriginEventIdRef = useRef<string>('')
   const initialEditPartyIdRef = useRef<string>('')
@@ -949,17 +981,43 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     staleTime: 60_000,
   })
 
-  const activePoliticalSystem = useMemo(
+  const overlappingPoliticalSystems = useMemo(
+    () =>
+      findOverlappingPoliticalSystems(
+        politicalSystems,
+        resolvedPolityAxis,
+        signedStartYear,
+        startMonth.trim() ? Number(startMonth) : null,
+        startDay.trim() ? Number(startDay) : null,
+      ),
+    [politicalSystems, resolvedPolityAxis, signedStartYear, startMonth, startDay],
+  )
+
+  const dateMatchedPoliticalSystem = useMemo(
     () =>
       findMatchingPoliticalSystem(
         politicalSystems,
         resolvedPolityAxis,
         signedStartYear,
+        startMonth.trim() ? Number(startMonth) : null,
+        startDay.trim() ? Number(startDay) : null,
       ),
-    [politicalSystems, resolvedPolityAxis, signedStartYear],
+    [politicalSystems, resolvedPolityAxis, signedStartYear, startMonth, startDay],
   )
 
-  // Dynamically load position definitions & existing head tenures + cabinets for active polity
+  const activePoliticalSystem = useMemo(() => {
+    if (explicitPoliticalSystemId === '__NONE__') return null
+    if (explicitPoliticalSystemId) {
+      return (
+        politicalSystems.find(
+          (sysItem) => sysItem.id === explicitPoliticalSystemId,
+        ) ?? dateMatchedPoliticalSystem
+      )
+    }
+    return dateMatchedPoliticalSystem
+  }, [explicitPoliticalSystemId, politicalSystems, dateMatchedPoliticalSystem])
+
+  // Dynamically load DB position definitions for active polity (or global universal definitions when polity is not yet chosen)
   const { data: fetchedDefinitions = [] } = useQuery({
     queryKey: [
       'cabinet-form-pos-defs',
@@ -977,12 +1035,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       })
       return Array.isArray(defs) ? (defs as ScopedPositionOption[]) : []
     },
-    enabled:
-      isOpen &&
-      headPositionOptions.length === 0 &&
-      Boolean(
-        resolvedPolityAxis.countryId || resolvedPolityAxis.historicalCountryId,
-      ),
+    enabled: isOpen,
     staleTime: 60_000,
   })
 
@@ -1048,23 +1101,37 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
   })
 
   const effectiveHeadPositionOptions = useMemo(() => {
-    const sourceList =
-      headPositionOptions.length > 0 ? headPositionOptions : fetchedDefinitions
-    return sourceList.filter((defItem) => {
+    const deduped = new Map<string, ScopedPositionOption>()
+    for (const defItem of [
+      ...createdLocalPositions,
+      ...fetchedDefinitions,
+      ...headPositionOptions,
+    ]) {
+      if (!defItem?.id || deduped.has(defItem.id)) continue
+      if ((defItem as { isGeneric?: boolean }).isGeneric === true) continue
       const posType = defItem.positionType
       const isExec =
-        posType === 'HEAD_OF_STATE' || posType === 'HEAD_OF_GOVERNMENT'
-      if (!isExec) return false
-      return isDefinitionCompatibleWithAxis(defItem, resolvedPolityAxis)
-    })
-  }, [headPositionOptions, fetchedDefinitions, resolvedPolityAxis])
+        posType === 'HEAD_OF_STATE' ||
+        posType === 'HEAD_OF_GOVERNMENT' ||
+        posType === 'REGENT'
+      if (!isExec) continue
+      if (!isDefinitionCompatibleWithAxis(defItem, resolvedPolityAxis)) continue
+      deduped.set(defItem.id, defItem)
+    }
+    return Array.from(deduped.values())
+  }, [
+    createdLocalPositions,
+    headPositionOptions,
+    fetchedDefinitions,
+    resolvedPolityAxis,
+  ])
 
   const effectiveExistingHeadTenures = useMemo(() => {
     const sourceList =
       existingHeadTenures.length > 0
         ? existingHeadTenures
         : (fetchedPolityBundle?.tenures ?? [])
-    return sourceList.filter((tenureItem) => {
+    const filtered = sourceList.filter((tenureItem) => {
       if (resolvedPolityAxis.historicalCountryId) {
         return (
           tenureItem.historicalCountryId ===
@@ -1079,7 +1146,24 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       }
       return true
     })
-  }, [existingHeadTenures, fetchedPolityBundle, resolvedPolityAxis])
+    if (!activePoliticalSystem) return filtered
+    const preferredRole = resolveEffectivePowerHolderRole(activePoliticalSystem)
+    if (preferredRole === 'DUAL_EXECUTIVE') return filtered
+    return [...filtered].sort((left, right) => {
+      const leftType =
+        left.positionType ?? left.positionDefinition?.positionType ?? ''
+      const rightType =
+        right.positionType ?? right.positionDefinition?.positionType ?? ''
+      const leftPreferred = leftType === preferredRole ? 0 : 1
+      const rightPreferred = rightType === preferredRole ? 0 : 1
+      return leftPreferred - rightPreferred
+    })
+  }, [
+    existingHeadTenures,
+    fetchedPolityBundle,
+    resolvedPolityAxis,
+    activePoliticalSystem,
+  ])
 
   const activePolityCabinets = useMemo<ExistingCabinetSummary[]>(() => {
     if (countryScopeCabinets.length > 0) {
@@ -1102,7 +1186,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     return fetchedPolityBundle?.cabinets ?? []
   }, [countryScopeCabinets, fetchedPolityBundle, resolvedPolityAxis])
 
-  // Smart default executive role (excludes monarchical titles like 국왕!)
+  // Smart default executive role (excludes monarchical titles like 국왕 unless ABSOLUTE_MONARCHY)
   const smartRoleDefault = useMemo(
     () =>
       resolveSmartDefaultExecutiveRole({
@@ -1123,10 +1207,20 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     ],
   )
 
+  const smartMonarchDefault = useMemo(
+    () =>
+      resolveSmartDefaultMonarchRole({
+        headPositionOptions: effectiveHeadPositionOptions,
+        activePoliticalSystem,
+      }),
+    [effectiveHeadPositionOptions, activePoliticalSystem],
+  )
+
   const resetCreateFormFields = useCallback(() => {
     userTouchedRoleRef.current = false
     userTouchedPartyRef.current = false
     userTouchedOriginEventRef.current = false
+    userTouchedAppointmentMethodRef.current = false
     hydratedEditExtrasIdRef.current = null
     initialOriginEventIdRef.current = ''
     initialEditPartyIdRef.current = ''
@@ -1140,6 +1234,9 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     setShowQuickCreateParty(false)
     setQuickPartyName('')
     setQuickPartyShortName('')
+    setShowQuickCreatePosition(false)
+    setQuickPositionTitle('')
+    setQuickPositionTitleLocal('')
     setAutoSuggestedPartyLabel(null)
     setInitialOriginEventTitle(null)
 
@@ -1174,8 +1271,8 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     )
 
     if (nextInitialMode === 'monarch') {
-      setRoleTitle('국왕')
-      setSelectedPositionDefId(null)
+      setRoleTitle(smartMonarchDefault.title)
+      setSelectedPositionDefId(smartMonarchDefault.positionDefId)
       setPositionTypeOverride('HEAD_OF_STATE')
     } else {
       setRoleTitle(smartRoleDefault.title)
@@ -1199,18 +1296,31 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     setPartyId('')
     setAutoLinkRulingParty(true)
     setOriginEventId('')
-    setAppointmentMethod('')
+    setAppointmentMethod(
+      activePoliticalSystem
+        ? defaultAppointmentMethodFromSystem(
+            activePoliticalSystem,
+            nextInitialMode === 'monarch'
+              ? 'HEAD_OF_STATE'
+              : smartRoleDefault.positionType,
+          )
+        : '',
+    )
     setAppointmentDetail('')
     setEndReason('')
     setEndReasonDetail('')
     setNotes('')
+    setExplicitPoliticalSystemId(initialPoliticalSystemId ?? '')
   }, [
     initialMode,
+    initialPoliticalSystemId,
     isStandaloneCatalogMode,
     initialPolityValue,
     defaultPolityFilterId,
     country,
     smartRoleDefault,
+    smartMonarchDefault,
+    activePoliticalSystem,
   ])
 
   // Initialize state once per modal open session or when editingCabinet changes
@@ -1220,6 +1330,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       userTouchedRoleRef.current = false
       userTouchedPartyRef.current = false
       userTouchedOriginEventRef.current = false
+      userTouchedAppointmentMethodRef.current = false
       hydratedEditExtrasIdRef.current = null
       initialOriginEventIdRef.current = ''
       initialEditPartyIdRef.current = ''
@@ -1230,7 +1341,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       setActiveDatePicker(null)
       return
     }
-    const sessionKey = `${editingCabinet?.id ?? 'create'}:${country?.id ?? 'standalone'}:${initialPolityValue || ''}:${defaultPolityFilterId || ''}:${initialMode ?? ''}`
+    const sessionKey = `${editingCabinet?.id ?? 'create'}:${country?.id ?? 'standalone'}:${initialPolityValue || ''}:${defaultPolityFilterId || ''}:${initialPoliticalSystemId ?? ''}:${initialMode ?? ''}`
     if (initializedSessionKeyRef.current === sessionKey) {
       return
     }
@@ -1243,10 +1354,12 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       userTouchedRoleRef.current = true
       userTouchedPartyRef.current = false
       userTouchedOriginEventRef.current = false
+      userTouchedAppointmentMethodRef.current = true
       hydratedEditExtrasIdRef.current = null
       initialOriginEventIdRef.current = ''
       setInitialOriginEventTitle(null)
       setAutoSuggestedPartyLabel(null)
+      setExplicitPoliticalSystemId(editingCabinet.politicalSystemId ?? '')
       setShowQuickCreateParty(false)
       setQuickPartyName('')
       setQuickPartyShortName('')
@@ -1442,18 +1555,45 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       !isEditing && initializedSessionKeyRef.current === null
         ? (initialMode ?? mode)
         : mode
-    if (
-      !isOpen ||
-      isEditing ||
-      activeCreateMode === 'monarch' ||
-      userTouchedRoleRef.current
-    ) {
+    if (!isOpen || isEditing || userTouchedRoleRef.current) {
+      return
+    }
+    if (activeCreateMode === 'monarch') {
+      setRoleTitle(smartMonarchDefault.title)
+      setSelectedPositionDefId(smartMonarchDefault.positionDefId)
+      setPositionTypeOverride('HEAD_OF_STATE')
       return
     }
     setRoleTitle(smartRoleDefault.title)
     setSelectedPositionDefId(smartRoleDefault.positionDefId)
     setPositionTypeOverride(smartRoleDefault.positionType)
-  }, [isOpen, isEditing, mode, initialMode, smartRoleDefault])
+  }, [
+    isOpen,
+    isEditing,
+    mode,
+    initialMode,
+    smartRoleDefault,
+    smartMonarchDefault,
+  ])
+
+  // Keep appointmentMethod synced from activePoliticalSystem until user manually clicks a chip
+  useEffect(() => {
+    if (
+      !isOpen ||
+      isEditing ||
+      userTouchedAppointmentMethodRef.current ||
+      !activePoliticalSystem
+    ) {
+      return
+    }
+    const effectiveAxis =
+      mode === 'monarch' ? 'HEAD_OF_STATE' : positionTypeOverride
+    const nextMethod = defaultAppointmentMethodFromSystem(
+      activePoliticalSystem,
+      effectiveAxis,
+    )
+    setAppointmentMethod(nextMethod)
+  }, [isOpen, isEditing, mode, positionTypeOverride, activePoliticalSystem])
 
   // Keep quick-person nameDisplayOrder synced to country/polity default until touched
   useEffect(() => {
@@ -2048,18 +2188,20 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       }
     }
 
-    for (const presetItem of DEFAULT_EXECUTIVE_ROLE_PRESETS) {
-      if (seenTitles.has(presetItem.title)) continue
-      seenTitles.add(presetItem.title)
-      const targetEntry = {
-        title: presetItem.title,
-        positionType: presetItem.positionType,
-        positionDefId: null,
-      }
-      if (isMonarchicalExecutiveOption(presetItem)) {
-        monarchicalList.push(targetEntry)
-      } else {
-        primaryList.push(targetEntry)
+    if (effectiveHeadPositionOptions.length === 0) {
+      for (const presetItem of DEFAULT_EXECUTIVE_ROLE_PRESETS) {
+        if (seenTitles.has(presetItem.title)) continue
+        seenTitles.add(presetItem.title)
+        const targetEntry = {
+          title: presetItem.title,
+          positionType: presetItem.positionType,
+          positionDefId: null,
+        }
+        if (isMonarchicalExecutiveOption(presetItem)) {
+          monarchicalList.push(targetEntry)
+        } else {
+          primaryList.push(targetEntry)
+        }
       }
     }
 
@@ -2084,14 +2226,16 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         seenMonarch.add(scopedChip.title)
         monarchMerged.push(scopedChip)
       }
-      for (const presetTitle of MONARCH_ROLE_PRESETS) {
-        if (seenMonarch.has(presetTitle)) continue
-        seenMonarch.add(presetTitle)
-        monarchMerged.push({
-          title: presetTitle,
-          positionType: 'HEAD_OF_STATE',
-          positionDefId: null,
-        })
+      if (monarchMerged.length === 0) {
+        for (const presetTitle of MONARCH_ROLE_PRESETS) {
+          if (seenMonarch.has(presetTitle)) continue
+          seenMonarch.add(presetTitle)
+          monarchMerged.push({
+            title: presetTitle,
+            positionType: 'HEAD_OF_STATE',
+            positionDefId: null,
+          })
+        }
       }
       return {
         visibleRoleChips: monarchMerged.slice(0, 6),
@@ -2112,6 +2256,136 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       overflowRoleChips: remainingPrimary,
     }
   }, [mode, primaryRoleChips, monarchicalRoleChips, roleTitle])
+
+  const systemHeadSlots = useMemo(
+    () => resolveSystemHeadPositionSlots(activePoliticalSystem),
+    [activePoliticalSystem],
+  )
+
+  const { roleCatalogGroups, roleCatalogByTitle } = useMemo(() => {
+    type RoleCatalogItem = {
+      title: string
+      positionType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+      positionDefId: string | null
+    }
+    const seen = new Set<string>()
+    const byTitle = new Map<string, RoleCatalogItem>()
+    const systemItems: RoleCatalogItem[] = []
+    const catalogItems: RoleCatalogItem[] = []
+    const presetItems: RoleCatalogItem[] = []
+    const currentFallbackItems: RoleCatalogItem[] = []
+
+    const pushUnique = (target: RoleCatalogItem[], item: RoleCatalogItem) => {
+      const clean = item.title.trim()
+      if (!clean || seen.has(clean)) return
+      const normalized = { ...item, title: clean }
+      seen.add(clean)
+      byTitle.set(clean, normalized)
+      target.push(normalized)
+    }
+
+    const rawSystemSlots =
+      mode === 'monarch'
+        ? [systemHeadSlots.monarchSlot, systemHeadSlots.stateSlot]
+        : [
+            systemHeadSlots.primaryCabinetSlot,
+            systemHeadSlots.secondaryCabinetSlot,
+            systemHeadSlots.governmentSlot,
+            systemHeadSlots.stateSlot,
+          ]
+    for (const slot of rawSystemSlots) {
+      if (!slot || !slot.title.trim()) continue
+      if (mode === 'monarch' && slot.axis !== 'HEAD_OF_STATE') continue
+      const matchedDef = effectiveHeadPositionOptions.find(
+        (defOption) =>
+          (slot.positionId && defOption.id === slot.positionId) ||
+          defOption.title.trim() === slot.title.trim(),
+      )
+      pushUnique(systemItems, {
+        title: slot.title,
+        positionType: mode === 'monarch' ? 'HEAD_OF_STATE' : slot.axis,
+        positionDefId: matchedDef?.id ?? slot.positionId ?? null,
+      })
+    }
+
+    for (const defItem of effectiveHeadPositionOptions) {
+      const cleanTitle = defItem.title?.trim() ?? ''
+      if (!cleanTitle) continue
+      if (mode === 'monarch' && !isMonarchicalExecutiveOption(defItem)) {
+        continue
+      }
+      pushUnique(catalogItems, {
+        title: cleanTitle,
+        positionType:
+          mode === 'monarch'
+            ? 'HEAD_OF_STATE'
+            : inferExecutivePositionType(
+                cleanTitle,
+                defItem.positionType as
+                  | 'HEAD_OF_STATE'
+                  | 'HEAD_OF_GOVERNMENT'
+                  | null,
+              ),
+        positionDefId: defItem.id,
+      })
+    }
+
+    if (effectiveHeadPositionOptions.length === 0) {
+      if (mode === 'monarch') {
+        for (const presetTitle of MONARCH_ROLE_PRESETS) {
+          pushUnique(presetItems, {
+            title: presetTitle,
+            positionType: 'HEAD_OF_STATE',
+            positionDefId: null,
+          })
+        }
+      } else {
+        for (const chipItem of [...primaryRoleChips, ...monarchicalRoleChips]) {
+          pushUnique(presetItems, chipItem)
+        }
+      }
+    }
+
+    if (roleTitle.trim() && !seen.has(roleTitle.trim())) {
+      pushUnique(currentFallbackItems, {
+        title: roleTitle.trim(),
+        positionType:
+          mode === 'monarch' ? 'HEAD_OF_STATE' : positionTypeOverride,
+        positionDefId: selectedPositionDefId,
+      })
+    }
+
+    const groups: Array<{ label: string; items: RoleCatalogItem[] }> = []
+    if (currentFallbackItems.length > 0) {
+      groups.push({ label: '현재 직책', items: currentFallbackItems })
+    }
+    if (systemItems.length > 0) {
+      groups.push({
+        label: activePoliticalSystem?.name?.trim()
+          ? `헌정 체제 공식 직위 (${activePoliticalSystem.name.trim()})`
+          : '헌정 체제 공식 직위',
+        items: systemItems,
+      })
+    }
+    if (catalogItems.length > 0) {
+      groups.push({ label: '수반 직위 카탈로그', items: catalogItems })
+    }
+    if (presetItems.length > 0) {
+      groups.push({ label: '표준 수반 직함', items: presetItems })
+    }
+
+    return { roleCatalogGroups: groups, roleCatalogByTitle: byTitle }
+  }, [
+    mode,
+    systemHeadSlots,
+    effectiveHeadPositionOptions,
+    primaryRoleChips,
+    monarchicalRoleChips,
+    roleTitle,
+    positionTypeOverride,
+    selectedPositionDefId,
+    activePoliticalSystem,
+  ])
 
   const filledExtraCount = useMemo(() => {
     let count = 0
@@ -2185,6 +2459,33 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     () => ({ era: endEra, year: endYear, month: endMonth, day: endDay }),
     [endEra, endYear, endMonth, endDay],
   )
+
+  const constitutionalTermEndParts = useMemo(() => {
+    if (
+      isEditing ||
+      mode !== 'head' ||
+      headActionMode !== 'new_tenure' ||
+      positionTypeOverride !== 'HEAD_OF_STATE' ||
+      !activePoliticalSystem?.headOfStateTermYears ||
+      !startYear.trim() ||
+      Boolean(endYear.trim())
+    ) {
+      return null
+    }
+    return computeConstitutionalTermEndParts(
+      startDateParts,
+      activePoliticalSystem.headOfStateTermYears,
+    )
+  }, [
+    isEditing,
+    mode,
+    headActionMode,
+    positionTypeOverride,
+    activePoliticalSystem,
+    startYear,
+    endYear,
+    startDateParts,
+  ])
 
   const isDateInverted = useMemo(
     () => isPartialRangeInverted(startDateParts, endDateParts),
@@ -2421,6 +2722,11 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       if (cabinetName !== (editingCabinet.name ?? '')) return true
       if (cabinetDescription !== (editingCabinet.description ?? '')) return true
       if (
+        explicitPoliticalSystemId !== (editingCabinet.politicalSystemId ?? '')
+      ) {
+        return true
+      }
+      if (
         startEra !== initialStart.era ||
         startYear !== initialStart.year ||
         startMonth !== initialStart.month ||
@@ -2481,13 +2787,14 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         partyId ||
         originEventId ||
         notes.trim() ||
-        appointmentMethod ||
+        (userTouchedAppointmentMethodRef.current && appointmentMethod) ||
         appointmentDetail.trim() ||
         endReason ||
         endReasonDetail.trim() ||
         quickPersonGivenName.trim() ||
         quickPersonSurname.trim() ||
-        quickPartyName.trim(),
+        quickPartyName.trim() ||
+        quickPositionTitle.trim(),
     )
   }, [
     onboardingCabinetId,
@@ -2517,7 +2824,89 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     quickPersonGivenName,
     quickPersonSurname,
     quickPartyName,
+    quickPositionTitle,
   ])
+
+  const quickCreatePositionMutation = useMutation({
+    mutationFn: async () => {
+      const trimmedPosTitle = quickPositionTitle.trim()
+      if (!trimmedPosTitle) {
+        throw new Error('등록할 수반 직위명을 입력해주세요.')
+      }
+      const existingMatch = effectiveHeadPositionOptions.find(
+        (opt) =>
+          opt.title.trim().replace(/\s+/g, '') ===
+          trimmedPosTitle.replace(/\s+/g, ''),
+      )
+      if (existingMatch) {
+        return existingMatch
+      }
+      if (typeof personCareerApi.createPositionDefinition !== 'function') {
+        throw new Error('직위 카탈로그 생성 API를 사용할 수 없습니다.')
+      }
+      const effectivePosType =
+        mode === 'monarch' ? 'HEAD_OF_STATE' : quickPositionAxis
+      const createdDef = await personCareerApi.createPositionDefinition({
+        title: trimmedPosTitle,
+        titleLocal: quickPositionTitleLocal.trim() || undefined,
+        positionType: effectivePosType,
+        isMonarchical:
+          mode === 'monarch' ? true : Boolean(quickPositionMonarchical),
+      })
+      if (
+        quickPositionScopeMode === 'polity' &&
+        typeof personCareerApi.addPositionDefinitionScope === 'function' &&
+        (resolvedPolityAxis.historicalCountryId ||
+          resolvedPolityAxis.countryId)
+      ) {
+        try {
+          await personCareerApi.addPositionDefinitionScope(createdDef.id, {
+            localTitle: quickPositionTitleLocal.trim() || null,
+            ...(resolvedPolityAxis.historicalCountryId
+              ? { historicalCountryId: resolvedPolityAxis.historicalCountryId }
+              : resolvedPolityAxis.countryId
+                ? { countryId: resolvedPolityAxis.countryId }
+                : {}),
+          })
+        } catch {
+          // 스코프 연결 실패 시에도 직위 정본은 유지
+        }
+      }
+      return {
+        ...createdDef,
+        title: trimmedPosTitle,
+        positionType: effectivePosType,
+        isMonarchical:
+          mode === 'monarch' ? true : Boolean(quickPositionMonarchical),
+      } as ScopedPositionOption
+    },
+    onSuccess: (createdPos) => {
+      userTouchedRoleRef.current = true
+      setCreatedLocalPositions((prev) => [createdPos, ...prev])
+      setRoleTitle(createdPos.title)
+      setSelectedPositionDefId(createdPos.id)
+      setPositionTypeOverride(
+        mode === 'monarch'
+          ? 'HEAD_OF_STATE'
+          : (createdPos.positionType as 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'),
+      )
+      setShowQuickCreatePosition(false)
+      setQuickPositionTitle('')
+      setQuickPositionTitleLocal('')
+      notify.success(
+        `"${createdPos.title}" 직위가 수반 카탈로그에 등록되어 선택되었습니다.`,
+      )
+      void queryClient.invalidateQueries({
+        queryKey: ['cabinet-form-pos-defs'],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['position-definitions'],
+      })
+    },
+    onError: (mutationError) => {
+      setErrorMessage(getApiErrorMessage(mutationError))
+    },
+  })
 
   const quickCreatePartyMutation = useMutation({
     mutationFn: async () => {
@@ -2864,6 +3253,13 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         }
       }
 
+      const resolvedCabinetPoliticalSystemId =
+        explicitPoliticalSystemId === '__NONE__'
+          ? null
+          : explicitPoliticalSystemId ||
+            dateMatchedPoliticalSystem?.id ||
+            null
+
       // 1) Collective Leadership / Council Mode
       if (mode === 'collective') {
         const trimmedCollectiveName = cabinetName.trim()
@@ -2880,6 +3276,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
               description: cabinetDescription.trim() || null,
               countryId: resolvedPolityAxis.countryId,
               historicalCountryId: resolvedPolityAxis.historicalCountryId,
+              politicalSystemId: resolvedCabinetPoliticalSystemId,
               startDateInfo,
               endDateInfo,
             },
@@ -2894,6 +3291,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
           description: cabinetDescription.trim() || null,
           countryId: resolvedPolityAxis.countryId,
           historicalCountryId: resolvedPolityAxis.historicalCountryId,
+          politicalSystemId: resolvedCabinetPoliticalSystemId,
           startDateInfo,
           endDateInfo: endDateInfo ?? null,
         })) as { id?: string } | null
@@ -2920,6 +3318,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
           headTenureId: selectedExistingTenureId,
           name: trimmedReshuffleName || null,
           description: cabinetDescription.trim() || null,
+          politicalSystemId: resolvedCabinetPoliticalSystemId,
           startDateInfo,
           endDateInfo: endDateInfo ?? null,
           allowReshuffle: existingCabinetCount > 0,
@@ -2941,6 +3340,11 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         throw new Error('수반 직책명(예: 총리, 대통령, 각료평의회 의장)을 입력해주세요.')
       }
 
+      const resolvedPositionType = inferExecutivePositionType(
+        trimmedRoleTitle,
+        positionTypeOverride,
+      )
+
       const matchedDef =
         effectiveHeadPositionOptions.find(
           (defOption) =>
@@ -2951,11 +3355,48 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
           (defOption) => defOption.title.trim() === trimmedRoleTitle,
         ) ??
         null
+      let resolvedPositionDefId =
+        matchedDef?.id ?? selectedPositionDefId ?? null
 
-      const resolvedPositionType = inferExecutivePositionType(
-        trimmedRoleTitle,
-        positionTypeOverride,
-      )
+      // 직책은 반드시 DB 정본(GovernmentPositionDefinition)에 존재해야 함 — 미연결 직함일 경우 자동 정본 등록 후 연결
+      if (
+        !resolvedPositionDefId &&
+        typeof personCareerApi.createPositionDefinition === 'function'
+      ) {
+        const createdPosDef = await personCareerApi.createPositionDefinition({
+          title: trimmedRoleTitle,
+          positionType:
+            mode === 'monarch' ? 'HEAD_OF_STATE' : resolvedPositionType,
+          isMonarchical:
+            mode === 'monarch' ||
+            isMonarchicalExecutiveOption({ title: trimmedRoleTitle }),
+        })
+        if (
+          createdPosDef?.id &&
+          typeof personCareerApi.addPositionDefinitionScope === 'function' &&
+          (resolvedPolityAxis.historicalCountryId ||
+            resolvedPolityAxis.countryId)
+        ) {
+          try {
+            await personCareerApi.addPositionDefinitionScope(createdPosDef.id, {
+              ...(resolvedPolityAxis.historicalCountryId
+                ? { historicalCountryId: resolvedPolityAxis.historicalCountryId }
+                : resolvedPolityAxis.countryId
+                  ? { countryId: resolvedPolityAxis.countryId }
+                  : {}),
+            })
+          } catch {
+            // 스코프 보강 실패 시 전역 정본 유지
+          }
+        }
+        resolvedPositionDefId = createdPosDef?.id ?? null
+        void queryClient.invalidateQueries({
+          queryKey: ['position-definitions'],
+        })
+        void queryClient.invalidateQueries({
+          queryKey: ['cabinet-form-pos-defs'],
+        })
+      }
       const parsedOrdinal = ordinalInput.trim()
         ? Number(ordinalInput.trim())
         : null
@@ -2971,7 +3412,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
           >[1] = {
             personId: selectedPersonId,
             positionType: resolvedPositionType,
-            positionDefinitionId: matchedDef?.id ?? undefined,
+            positionDefinitionId: resolvedPositionDefId ?? undefined,
             title: trimmedRoleTitle,
             countryId: resolvedPolityAxis.countryId ?? undefined,
             historicalCountryId:
@@ -3005,6 +3446,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
             description: cabinetDescription.trim() || null,
             countryId: resolvedPolityAxis.countryId,
             historicalCountryId: resolvedPolityAxis.historicalCountryId,
+            politicalSystemId: resolvedCabinetPoliticalSystemId,
             startDateInfo,
             endDateInfo,
           },
@@ -3020,7 +3462,9 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         positionType:
           mode === 'monarch' ? 'HEAD_OF_STATE' : resolvedPositionType,
         title: trimmedRoleTitle,
-        ...(matchedDef?.id ? { positionDefinitionId: matchedDef.id } : {}),
+        ...(resolvedPositionDefId
+          ? { positionDefinitionId: resolvedPositionDefId }
+          : {}),
         ...(resolvedPolityAxis.countryId
           ? { countryId: resolvedPolityAxis.countryId }
           : {}),
@@ -3081,6 +3525,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         description: cabinetDescription.trim() || null,
         countryId: resolvedPolityAxis.countryId,
         historicalCountryId: resolvedPolityAxis.historicalCountryId,
+        politicalSystemId: resolvedCabinetPoliticalSystemId,
         startDateInfo,
         endDateInfo: endDateInfo ?? null,
       })) as { id?: string } | null
@@ -3137,9 +3582,17 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         setPartyId('')
         setAutoSuggestedPartyLabel(null)
         userTouchedOriginEventRef.current = false
+        userTouchedAppointmentMethodRef.current = false
         setOriginEventId('')
         setInitialOriginEventTitle(null)
-        setAppointmentMethod('')
+        setAppointmentMethod(
+          activePoliticalSystem
+            ? defaultAppointmentMethodFromSystem(
+                activePoliticalSystem,
+                mode === 'monarch' ? 'HEAD_OF_STATE' : positionTypeOverride,
+              )
+            : '',
+        )
         setAppointmentDetail('')
         setEndReason('')
         setEndReasonDetail('')
@@ -3338,11 +3791,8 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       setSelectedExistingTenureId(null)
       setPositionTypeOverride('HEAD_OF_STATE')
       if (!userTouchedRoleRef.current) {
-        const dbMonarch = monarchicalRoleChips.find((chipItem) =>
-          Boolean(chipItem.positionDefId),
-        )
-        setRoleTitle(dbMonarch?.title ?? '국왕')
-        setSelectedPositionDefId(dbMonarch?.positionDefId ?? null)
+        setRoleTitle(smartMonarchDefault.title)
+        setSelectedPositionDefId(smartMonarchDefault.positionDefId)
       }
       return
     }
@@ -3844,6 +4294,96 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                       </FieldRow>
                     ) : null}
 
+                    {mode !== 'monarch' && politicalSystems.length > 0 ? (
+                      <FieldRow>
+                        <FieldLabel>
+                          헌정 체제 <OptionalTag>(선택)</OptionalTag>
+                        </FieldLabel>
+                        <FieldControl>
+                          <SearchableSelect
+                            options={[
+                              {
+                                value: '',
+                                label: dateMatchedPoliticalSystem
+                                  ? `자동 판정 — ${dateMatchedPoliticalSystem.name || (dateMatchedPoliticalSystem.governmentForm ? GOVERNMENT_FORM_LABEL[dateMatchedPoliticalSystem.governmentForm] : '매칭 체제')} (${formatPoliticalSystemPeriod(dateMatchedPoliticalSystem)})`
+                                  : '자동 판정 (출범일·소속 국가 기준)',
+                              },
+                              {
+                                value: '__NONE__',
+                                label: '체제 미지정 (과도기·독립 기구)',
+                              },
+                              ...politicalSystems.map((sysItem) => ({
+                                value: sysItem.id,
+                                label:
+                                  sysItem.name ||
+                                  (sysItem.governmentForm
+                                    ? GOVERNMENT_FORM_LABEL[
+                                        sysItem.governmentForm
+                                      ]
+                                    : '헌정 체제'),
+                                meta: formatPoliticalSystemPeriod(sysItem),
+                              })),
+                            ]}
+                            value={explicitPoliticalSystemId}
+                            clearable
+                            onChange={(nextId) =>
+                              setExplicitPoliticalSystemId(nextId)
+                            }
+                            placeholder={
+                              dateMatchedPoliticalSystem
+                                ? `자동 — ${dateMatchedPoliticalSystem.name || '출범일 매칭'}`
+                                : '자동 판정 (과도내각·개헌기 수동 고정 시 선택)'
+                            }
+                            searchPlaceholder="공화국·헌정 체제명 검색…"
+                            ariaLabel="귀속 헌정 체제"
+                          />
+                          {overlappingPoliticalSystems.length > 1 ? (
+                            <SmartSuggestionCard $tone="warning">
+                              <div className="guide-text">
+                                <FiInfo size={14} />
+                                <span>
+                                  이 출범 시점에 헌정 체제{' '}
+                                  {overlappingPoliticalSystems.length}개가
+                                  교차합니다. 체제 전환기 내각이면 소속 정체를
+                                  직접 지정해 주세요.
+                                </span>
+                              </div>
+                              <div className="guide-actions">
+                                {overlappingPoliticalSystems.map((sysOpt) => {
+                                  const isPicked =
+                                    activePoliticalSystem?.id === sysOpt.id
+                                  const sysLabel =
+                                    sysOpt.name ||
+                                    (sysOpt.governmentForm
+                                      ? GOVERNMENT_FORM_LABEL[
+                                          sysOpt.governmentForm
+                                        ]
+                                      : '헌정 체제')
+                                  return (
+                                    <QuickSwitchChip
+                                      key={sysOpt.id}
+                                      type="button"
+                                      onClick={() =>
+                                        setExplicitPoliticalSystemId(sysOpt.id)
+                                      }
+                                      aria-pressed={isPicked}
+                                    >
+                                      <span>
+                                        {sysLabel} (
+                                        {formatPoliticalSystemPeriod(sysOpt)})
+                                        {isPicked ? ' · 선택됨' : ' 선택'}
+                                      </span>
+                                      <FiArrowRight size={12} />
+                                    </QuickSwitchChip>
+                                  )
+                                })}
+                              </div>
+                            </SmartSuggestionCard>
+                          ) : null}
+                        </FieldControl>
+                      </FieldRow>
+                    ) : null}
+
                     <FieldRow>
                       <FieldLabel>
                         <div>
@@ -3925,6 +4465,20 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                                   }}
                                 >
                                   비우기
+                                </InlineClearLink>
+                              ) : constitutionalTermEndParts ? (
+                                <InlineClearLink
+                                  type="button"
+                                  onClick={() => {
+                                    setEndEra(constitutionalTermEndParts.era)
+                                    setEndYear(constitutionalTermEndParts.year)
+                                    setEndMonth(constitutionalTermEndParts.month)
+                                    setEndDay(constitutionalTermEndParts.day)
+                                  }}
+                                >
+                                  법정 임기(
+                                  {activePoliticalSystem?.headOfStateTermYears}
+                                  년) 만료일 적용
                                 </InlineClearLink>
                               ) : null}
                             </SubFieldHeaderRow>
@@ -4444,27 +4998,232 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                             <Required>*</Required>
                           </FieldLabel>
                           <FieldControl>
-                            <RoleInputBar>
-                              <Input
-                                value={roleTitle}
-                                onChange={(changeEvent) => {
-                                  userTouchedRoleRef.current = true
-                                  const nextTitle = changeEvent.target.value
-                                  setRoleTitle(nextTitle)
-                                  setSelectedPositionDefId(null)
-                                  setPositionTypeOverride(
-                                    mode === 'monarch'
-                                      ? 'HEAD_OF_STATE'
-                                      : inferExecutivePositionType(nextTitle),
-                                  )
-                                }}
-                                placeholder={
-                                  mode === 'monarch'
-                                    ? '예: 국왕, 황제, 천황, 여왕, 술탄'
-                                    : '예: 총리, 대통령, 국무총리, 내각총리대신'
-                                }
-                              />
-                            </RoleInputBar>
+                            {showQuickCreatePosition ? (
+                              <QuickPersonCard>
+                                <QuickCardTopBar>
+                                  <strong>
+                                    {mode === 'monarch'
+                                      ? '새 군주·원수 직함 카탈로그 등록'
+                                      : '새 수반 직위 카탈로그 등록'}
+                                  </strong>
+                                  <InlineClearLink
+                                    type="button"
+                                    onClick={() =>
+                                      setShowQuickCreatePosition(false)
+                                    }
+                                  >
+                                    목록으로 돌아가기
+                                  </InlineClearLink>
+                                </QuickCardTopBar>
+
+                                {mode !== 'monarch' ? (
+                                  <NameOrderBar>
+                                    <span className="order-label">
+                                      수반 카테고리
+                                    </span>
+                                    <NameOrderSegment>
+                                      <NameOrderBtn
+                                        type="button"
+                                        $active={
+                                          quickPositionAxis ===
+                                          'HEAD_OF_GOVERNMENT'
+                                        }
+                                        onClick={() => {
+                                          setQuickPositionAxis(
+                                            'HEAD_OF_GOVERNMENT',
+                                          )
+                                          setQuickPositionMonarchical(false)
+                                        }}
+                                      >
+                                        정부수반 (내각)
+                                      </NameOrderBtn>
+                                      <NameOrderBtn
+                                        type="button"
+                                        $active={
+                                          quickPositionAxis === 'HEAD_OF_STATE'
+                                        }
+                                        onClick={() =>
+                                          setQuickPositionAxis('HEAD_OF_STATE')
+                                        }
+                                      >
+                                        국가원수 (행정부)
+                                      </NameOrderBtn>
+                                    </NameOrderSegment>
+                                  </NameOrderBar>
+                                ) : null}
+
+                                <NameOrderBar>
+                                  <span className="order-label">적용 범위</span>
+                                  <NameOrderSegment>
+                                    <NameOrderBtn
+                                      type="button"
+                                      $active={
+                                        quickPositionScopeMode === 'polity'
+                                      }
+                                      onClick={() =>
+                                        setQuickPositionScopeMode('polity')
+                                      }
+                                    >
+                                      이 국가·시대 고유
+                                    </NameOrderBtn>
+                                    <NameOrderBtn
+                                      type="button"
+                                      $active={
+                                        quickPositionScopeMode === 'universal'
+                                      }
+                                      onClick={() =>
+                                        setQuickPositionScopeMode('universal')
+                                      }
+                                    >
+                                      전역 보편 칭호
+                                    </NameOrderBtn>
+                                  </NameOrderSegment>
+                                </NameOrderBar>
+
+                                <SubFieldPair $cols={2}>
+                                  <SubField>
+                                    <SubFieldLabel>
+                                      직위명 <Required>*</Required>
+                                    </SubFieldLabel>
+                                    <Input
+                                      value={quickPositionTitle}
+                                      onChange={(changeEvent) =>
+                                        setQuickPositionTitle(
+                                          changeEvent.target.value,
+                                        )
+                                      }
+                                      placeholder={
+                                        mode === 'monarch'
+                                          ? '예: 천황, 황제, 술탄, 대공'
+                                          : '예: 연방총리, 국무총리, 제1집정관'
+                                      }
+                                    />
+                                  </SubField>
+                                  <SubField>
+                                    <SubFieldLabel>
+                                      원어 직위명 <OptionalTag>(선택)</OptionalTag>
+                                    </SubFieldLabel>
+                                    <Input
+                                      value={quickPositionTitleLocal}
+                                      onChange={(changeEvent) =>
+                                        setQuickPositionTitleLocal(
+                                          changeEvent.target.value,
+                                        )
+                                      }
+                                      placeholder="예: Bundeskanzler"
+                                    />
+                                  </SubField>
+                                </SubFieldPair>
+
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'flex-end',
+                                  }}
+                                >
+                                  <QuickCreateBtn
+                                    type="button"
+                                    disabled={
+                                      quickCreatePositionMutation.isPending
+                                    }
+                                    onClick={() =>
+                                      quickCreatePositionMutation.mutate()
+                                    }
+                                  >
+                                    {quickCreatePositionMutation.isPending
+                                      ? '등록 중...'
+                                      : '카탈로그 등록 후 선택'}
+                                  </QuickCreateBtn>
+                                </div>
+                              </QuickPersonCard>
+                            ) : (
+                              <RoleInputBar>
+                                <RoleCatalogSelect
+                                  aria-label={
+                                    mode === 'monarch' ? '군주 직함' : '수반 직책'
+                                  }
+                                  value={roleTitle}
+                                  onChange={(changeEvent) => {
+                                    userTouchedRoleRef.current = true
+                                    const nextTitle = changeEvent.target.value
+                                    const chosen =
+                                      roleCatalogByTitle.get(nextTitle)
+                                    setRoleTitle(nextTitle)
+                                    setSelectedPositionDefId(
+                                      chosen?.positionDefId ?? null,
+                                    )
+                                    setPositionTypeOverride(
+                                      mode === 'monarch'
+                                        ? 'HEAD_OF_STATE'
+                                        : (chosen?.positionType ??
+                                            inferExecutivePositionType(
+                                              nextTitle,
+                                            )),
+                                    )
+                                  }}
+                                >
+                                  {roleCatalogGroups.map((groupEntry) => (
+                                    <optgroup
+                                      key={groupEntry.label}
+                                      label={groupEntry.label}
+                                    >
+                                      {groupEntry.items.map((item) => (
+                                        <option
+                                          key={item.title}
+                                          value={item.title}
+                                        >
+                                          {item.title}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  ))}
+                                </RoleCatalogSelect>
+                                <KitAddButton
+                                  type="button"
+                                  onClick={() => {
+                                    setQuickPositionAxis(
+                                      mode === 'monarch'
+                                        ? 'HEAD_OF_STATE'
+                                        : positionTypeOverride,
+                                    )
+                                    setQuickPositionMonarchical(
+                                      mode === 'monarch',
+                                    )
+                                    setShowQuickCreatePosition(true)
+                                  }}
+                                >
+                                  <FiPlus size={13} />새 직위
+                                </KitAddButton>
+                                <KitAddButton
+                                  as="a"
+                                  href={pathKeys.government.positions({
+                                    polity: resolvedPolityAxis.historicalCountryId
+                                      ? `h:${resolvedPolityAxis.historicalCountryId}`
+                                      : resolvedPolityAxis.countryId
+                                        ? `m:${resolvedPolityAxis.countryId}`
+                                        : undefined,
+                                  })}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title="관직·직책 정본 관리 페이지 새 탭에서 열기"
+                                  style={{ textDecoration: 'none' }}
+                                >
+                                  정본 관리 <FiArrowUpRight size={12} />
+                                </KitAddButton>
+                              </RoleInputBar>
+                            )}
+
+                            {!isEditing &&
+                            (mode === 'monarch'
+                              ? smartMonarchDefault.reasonHint
+                              : smartRoleDefault.reasonHint) &&
+                            !userTouchedRoleRef.current ? (
+                              <FieldHint>
+                                {mode === 'monarch'
+                                  ? smartMonarchDefault.reasonHint
+                                  : smartRoleDefault.reasonHint}
+                              </FieldHint>
+                            ) : null}
 
                             {visibleRoleChips.length + overflowRoleChips.length > 0 ? (
                               <PresetChipWrap>
@@ -4530,11 +5289,24 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                                         positionTypeOverride ===
                                         'HEAD_OF_GOVERNMENT'
                                       }
-                                      onClick={() =>
+                                      onClick={() => {
+                                        userTouchedRoleRef.current = true
                                         setPositionTypeOverride(
                                           'HEAD_OF_GOVERNMENT',
                                         )
-                                      }
+                                        if (systemHeadSlots.governmentSlot) {
+                                          const slotTitle =
+                                            systemHeadSlots.governmentSlot.title
+                                          const matched =
+                                            roleCatalogByTitle.get(slotTitle)
+                                          setRoleTitle(slotTitle)
+                                          setSelectedPositionDefId(
+                                            matched?.positionDefId ??
+                                              systemHeadSlots.governmentSlot
+                                                .positionId,
+                                          )
+                                        }
+                                      }}
                                     >
                                       정부수반 (내각)
                                     </BranchPillBtn>
@@ -4543,9 +5315,28 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                                       $active={
                                         positionTypeOverride === 'HEAD_OF_STATE'
                                       }
-                                      onClick={() =>
+                                      onClick={() => {
+                                        userTouchedRoleRef.current = true
                                         setPositionTypeOverride('HEAD_OF_STATE')
-                                      }
+                                        if (
+                                          systemHeadSlots.stateSlot &&
+                                          (!systemHeadSlots.stateSlot
+                                            .isMonarchical ||
+                                            activePoliticalSystem?.governmentForm ===
+                                              'ABSOLUTE_MONARCHY')
+                                        ) {
+                                          const slotTitle =
+                                            systemHeadSlots.stateSlot.title
+                                          const matched =
+                                            roleCatalogByTitle.get(slotTitle)
+                                          setRoleTitle(slotTitle)
+                                          setSelectedPositionDefId(
+                                            matched?.positionDefId ??
+                                              systemHeadSlots.stateSlot
+                                                .positionId,
+                                          )
+                                        }
+                                      }}
                                     >
                                       국가원수 (행정부)
                                     </BranchPillBtn>
@@ -4927,9 +5718,10 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                                 ariaLabel={
                                   mode === 'monarch' ? '즉위 방식' : '취임 방식'
                                 }
-                                onChange={(nextMethod) =>
+                                onChange={(nextMethod) => {
+                                  userTouchedAppointmentMethodRef.current = true
                                   setAppointmentMethod(nextMethod)
-                                }
+                                }}
                               />
                               {mode === 'monarch' &&
                               !isEditing &&
@@ -5362,11 +6154,53 @@ const QuietModeCaption = styled.div`
   }
 `
 
+/* 직책 줄 = 고르기 · 새 직위 · 정본 관리. 예전엔 2칸 격자에 3개라 '정본 관리'가 혼자 다음 줄로 떨어졌다 */
 const RoleInputBar = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
+
+  ${KitAddButton} {
+    height: 40px;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr 1fr;
+
+    > select {
+      grid-column: 1 / -1;
+    }
+
+    ${KitAddButton} {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+`
+
+const RoleCatalogSelect = styled.select`
+  width: 100%;
+  height: 40px;
+  padding: 0 32px 0 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background-color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f9fafb'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+
+  &:focus {
+    border-color: ${({ theme }) => theme.colors.primary};
+    background-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#ffffff'};
+  }
 `
 
 /** 직책 칸 아래 — 예전 ⋯ 메뉴에 숨던 행정부 분류·군주 직위를 바로 펼친 줄 */

@@ -67,6 +67,9 @@ export function GovernmentStatisticsTab({
     specialExamples,
     organizationExamples,
     categoryStats,
+    governmentFormBreakdown,
+    regimeSummaries,
+    totalMeasuredRegimeYears,
     filteredEvents,
     eventCounts,
     selectedEventType,
@@ -238,6 +241,267 @@ export function GovernmentStatisticsTab({
           ) : null}
         </div>
       </section>
+
+      {/* 헌정사 · 정부형태 존속 분석 (등록된 헌정 체제가 있을 때 노출) */}
+      {regimeSummaries.length > 0 ? (
+        <section aria-label="헌정사 및 정부 형태 존속 분석">
+          <GovSectionEyebrow>헌정사 · 정부 형태 존속 분석</GovSectionEyebrow>
+          <div
+            style={{
+              background: palette.bgSubtle,
+              border: `1px solid ${palette.border}`,
+              borderRadius: 14,
+              padding: '16px 18px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+            }}
+          >
+            {governmentFormBreakdown.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12.5,
+                      color: palette.textMuted,
+                      fontWeight: 600,
+                    }}
+                  >
+                    정부 형태별 누적 존속 연수 비중
+                  </span>
+                  {totalMeasuredRegimeYears > 0 ? (
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        color: palette.textMuted,
+                        fontWeight: 600,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      누적 {totalMeasuredRegimeYears.toLocaleString('ko-KR')}년 ·{' '}
+                      {regimeSummaries.length}개 헌정 체제
+                    </span>
+                  ) : null}
+                </div>
+                <div
+                  role="img"
+                  aria-label={governmentFormBreakdown
+                    .map(
+                      (row) =>
+                        `${row.formLabel} ${row.totalYears > 0 ? `${row.totalYears}년` : `${row.regimeCount}개`} (${row.sharePercent}%)`,
+                    )
+                    .join(', ')}
+                  style={{
+                    display: 'flex',
+                    height: 11,
+                    borderRadius: 999,
+                    overflow: 'hidden',
+                    gap: 2,
+                    background: palette.cardBg,
+                  }}
+                >
+                  {governmentFormBreakdown.map((row, idx) => {
+                    const formColors = [
+                      '#6366f1',
+                      ACCENT.sky,
+                      ACCENT.emerald,
+                      ACCENT.amber,
+                      ACCENT.teal,
+                      '#ec4899',
+                      '#64748b',
+                    ]
+                    const barColor = formColors[idx % formColors.length]
+                    return (
+                      <div
+                        key={row.formKey}
+                        style={{
+                          flexGrow: Math.max(row.sharePercent, 2),
+                          flexBasis: 0,
+                          minWidth: 4,
+                          background: barColor,
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '6px 14px',
+                    fontSize: 12,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {governmentFormBreakdown.map((row, idx) => {
+                    const formColors = [
+                      '#6366f1',
+                      ACCENT.sky,
+                      ACCENT.emerald,
+                      ACCENT.amber,
+                      ACCENT.teal,
+                      '#ec4899',
+                      '#64748b',
+                    ]
+                    const barColor = formColors[idx % formColors.length]
+                    return (
+                      <span
+                        key={row.formKey}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          color: palette.text,
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 2,
+                            background: barColor,
+                          }}
+                        />
+                        <strong>{row.formLabel}</strong>
+                        <span style={{ color: palette.textMuted }}>
+                          {row.totalYears > 0
+                            ? `${row.totalYears.toLocaleString('ko-KR')}년 (${row.sharePercent}%)`
+                            : `${row.regimeCount}개 체제`}
+                          {row.cabinetCount > 0
+                            ? ` · 내각 ${row.cabinetCount}`
+                            : ''}
+                        </span>
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                overflowX: 'auto',
+                borderTop: `1px solid ${palette.borderHairline}`,
+                paddingTop: 10,
+              }}
+            >
+              <table
+                style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: 12.5,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      textAlign: 'left',
+                      color: palette.textMuted,
+                      fontSize: 11.5,
+                      borderBottom: `1px solid ${palette.borderHairline}`,
+                    }}
+                  >
+                    <th style={{ padding: '6px 8px' }}>헌정 체제</th>
+                    <th style={{ padding: '6px 8px' }}>정부 형태 · 의회</th>
+                    <th style={{ padding: '6px 8px' }}>존속 기간</th>
+                    <th style={{ padding: '6px 8px' }}>출범 내각 · 평균 수명</th>
+                    <th style={{ padding: '6px 8px' }}>근거 헌법</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {regimeSummaries.map((regime) => (
+                    <tr
+                      key={regime.id}
+                      onClick={
+                        onSelectTab ? () => onSelectTab('system') : undefined
+                      }
+                      style={{
+                        borderBottom: `1px solid ${palette.borderHairline}`,
+                        cursor: onSelectTab ? 'pointer' : 'default',
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding: '7px 8px',
+                          fontWeight: 700,
+                          color: palette.text,
+                        }}
+                      >
+                        <span>{regime.name}</span>
+                        {regime.isCurrent ? (
+                          <span
+                            style={{
+                              marginLeft: 6,
+                              padding: '1px 6px',
+                              borderRadius: 999,
+                              fontSize: 10.5,
+                              fontWeight: 700,
+                              background: 'rgba(99, 102, 241, 0.14)',
+                              color: '#6366f1',
+                            }}
+                          >
+                            현행
+                          </span>
+                        ) : null}
+                      </td>
+                      <td style={{ padding: '7px 8px', color: palette.textMuted }}>
+                        {regime.governmentFormLabel}
+                        {regime.legislatureLabel
+                          ? ` · ${regime.legislatureLabel}`
+                          : ''}
+                      </td>
+                      <td style={{ padding: '7px 8px', color: palette.text }}>
+                        {regime.periodLabel}
+                        {regime.durationYears != null ? (
+                          <span style={{ color: palette.textMuted }}>
+                            {' '}
+                            ({regime.durationYears.toLocaleString('ko-KR')}년)
+                          </span>
+                        ) : null}
+                      </td>
+                      <td style={{ padding: '7px 8px', color: palette.text }}>
+                        {regime.cabinetCount > 0 ? (
+                          <span
+                            onClick={(ev) => {
+                              if (!onSelectTab) return
+                              ev.stopPropagation()
+                              onSelectTab('cabinets')
+                            }}
+                            style={{
+                              textDecoration: onSelectTab ? 'underline' : 'none',
+                              textUnderlineOffset: 2,
+                            }}
+                          >
+                            {regime.cabinetCount}개 내각
+                            {regime.avgCabinetYears != null
+                              ? ` (평균 ${regime.avgCabinetYears}년)`
+                              : ''}
+                          </span>
+                        ) : (
+                          <span style={{ color: palette.textFaint }}>—</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '7px 8px', color: palette.textMuted }}>
+                        {regime.constitutionLawName ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {/* 분야별 부처 분포 차트 — 데이터가 있을 때만 노출 */}
       {categoryStats.length > 0 ? (

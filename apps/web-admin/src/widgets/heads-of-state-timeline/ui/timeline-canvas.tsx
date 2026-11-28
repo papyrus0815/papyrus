@@ -41,6 +41,10 @@ interface Props {
   onRemoveEvent?: (eventId: string) => void
   /** 카테고리 필터 */
   categoryFilter?: (c: TenureBar['positionCategory']) => boolean
+  /** 헌정 체제(PoliticalSystem) 구간 띠 노출 */
+  showRegimeBands?: boolean
+  /** 실권 수반만 보기 (`headOfStateHasPower` / `headOfGovernmentHasPower`) */
+  powerHoldersOnly?: boolean
 }
 
 const DEFAULT_LABEL_WIDTH = 220
@@ -67,6 +71,8 @@ export function TimelineCanvas({
   isApplyingUrlPins,
   onRemoveEvent,
   categoryFilter,
+  showRegimeBands = false,
+  powerHoldersOnly = false,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const theme = useTheme()
@@ -500,6 +506,8 @@ export function TimelineCanvas({
                 onSelectBar={onSelectBar}
                 onJumpToCountry={onJumpToCountry}
                 categoryFilter={categoryFilter}
+                showRegimeBands={showRegimeBands}
+                powerHoldersOnly={powerHoldersOnly}
               />
             )
           })}

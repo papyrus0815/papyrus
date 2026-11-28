@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import {
   FiArrowUpRight,
   FiCalendar,
@@ -300,6 +300,16 @@ export function GovernancePowerBentoCard({
             ))}
             {currentPolity ? (
               <PeriodSpan>{formatPeriod(currentPolity)}</PeriodSpan>
+            ) : null}
+            {currentPolity?.constitutionLaw ? (
+              <ArchBadge title="근거 헌법">
+                📜 {currentPolity.constitutionLaw.name}
+              </ArchBadge>
+            ) : null}
+            {currentPolity?.foundingEvent ? (
+              <ArchBadge title="체제 출범 사건">
+                ⚡ {currentPolity.foundingEvent.title}
+              </ArchBadge>
             ) : null}
           </BadgeCluster>
         ) : (
@@ -4967,15 +4977,50 @@ export function ParliamentAndPartyBentoCard({
 }) {
   const theme = useTheme()
   const seatsInfo = civicSnapshot.activePolitySeats
-  const latestLegId = civicSnapshot.latestLegislativeElectionId
+  const lowerElectionIds = useMemo(
+    () =>
+      civicSnapshot.latestLegislativeElectionIds &&
+      civicSnapshot.latestLegislativeElectionIds.length > 0
+        ? civicSnapshot.latestLegislativeElectionIds
+        : civicSnapshot.latestLegislativeElectionId
+          ? [civicSnapshot.latestLegislativeElectionId]
+          : [],
+    [
+      civicSnapshot.latestLegislativeElectionIds,
+      civicSnapshot.latestLegislativeElectionId,
+    ],
+  )
+  const upperElectionIds = useMemo(
+    () => civicSnapshot.latestUpperElectionIds ?? [],
+    [civicSnapshot.latestUpperElectionIds],
+  )
+  const isBicameralWithUpper =
+    seatsInfo?.legislatureType === 'BICAMERAL' &&
+    (upperElectionIds.length > 0 || (seatsInfo?.upperSeats ?? 0) > 0)
+  const [selectedHouseTab, setSelectedHouseTab] = useState<'lower' | 'upper'>(
+    'lower',
+  )
+  const activeHouseTab =
+    isBicameralWithUpper && selectedHouseTab === 'upper' ? 'upper' : 'lower'
+  const activeElectionIds =
+    activeHouseTab === 'upper' ? upperElectionIds : lowerElectionIds
   const resolvedModernElectionCount = modernElectionCount ?? electionCount
 
-  const latestLegQuery = useQuery({
-    queryKey: ['election-detail-dashboard', latestLegId],
-    queryFn: () => getElection(latestLegId!),
-    enabled: Boolean(latestLegId),
-    staleTime: 1000 * 60 * 5,
+  const legDetailQueries = useQueries({
+    queries: activeElectionIds.map((eid) => ({
+      queryKey: ['election-detail-dashboard', eid],
+      queryFn: () => getElection(eid),
+      enabled: Boolean(eid),
+      staleTime: 1000 * 60 * 5,
+    })),
   })
+  const loadedLegDetails = useMemo(
+    () =>
+      legDetailQueries
+        .map((q) => q.data)
+        .filter((item): item is NonNullable<typeof item> => Boolean(item)),
+    [legDetailQueries],
+  )
 
   const partyMetaById = useMemo(
     () => new Map(parties.map((party) => [party.id, party])),
@@ -5039,13 +5084,44 @@ export function ParliamentAndPartyBentoCard({
   const { hemicycleSpec, governanceBalance } = useMemo(() => {
     const lowerSeats = seatsInfo?.lowerSeats ?? null
     const upperSeats = seatsInfo?.upperSeats ?? null
-    const totalLegSeats = lowerSeats ?? upperSeats ?? null
+    const houseSeatsFallback =
+      activeHouseTab === 'upper'
+        ? (upperSeats ?? null)
+        : (lowerSeats ?? upperSeats ?? null)
 
-    const legDetail = latestLegQuery.data
-    const seatRows = (legDetail?.partyResults ?? []).filter(
-      (pr) => (pr.seatsWon ?? 0) > 0,
-    )
-    if (legDetail && seatRows.length > 0) {
+    // 동일 회차 병립형(지역구+비례) 복수 선거 결과를 정당 단위로 합산
+    const mergedByParty = new Map<
+      string,
+      {
+        partyId: string
+        party: { name?: string; shortName?: string | null; brandColor?: string | null } | null
+        seatsWon: number
+      }
+    >()
+    let sumElectionTotalSeats = 0
+    for (const detail of loadedLegDetails) {
+      if (detail.totalSeats != null && detail.totalSeats > 0) {
+        sumElectionTotalSeats += detail.totalSeats
+      }
+      for (const pr of detail.partyResults ?? []) {
+        const won = Number(pr.seatsWon ?? 0)
+        if (won <= 0) continue
+        const existing = mergedByParty.get(pr.partyId)
+        if (existing) {
+          existing.seatsWon += won
+        } else {
+          mergedByParty.set(pr.partyId, {
+            partyId: pr.partyId,
+            party: pr.party ?? null,
+            seatsWon: won,
+          })
+        }
+      }
+    }
+
+    const primaryDetail = loadedLegDetails[0] ?? null
+    const seatRows = [...mergedByParty.values()]
+    if (primaryDetail && seatRows.length > 0) {
       const enriched = seatRows
         .map((pr, idx) => {
           const master = partyMetaById.get(pr.partyId)
@@ -5063,7 +5139,7 @@ export function ParliamentAndPartyBentoCard({
               pr.party?.name ||
               master?.name ||
               '정당',
-            seats: Number(pr.seatsWon ?? 0),
+            seats: pr.seatsWon,
             color,
             posWeight: pos ? (POSITION_SORT_WEIGHT[pos] ?? 5) : 5.5,
           }
@@ -5076,15 +5152,29 @@ export function ParliamentAndPartyBentoCard({
       const sumWon = enriched.reduce((sumAcc, row) => sumAcc + row.seats, 0)
       const resolvedTotal = Math.max(
         sumWon,
-        legDetail.totalSeats ?? totalLegSeats ?? sumWon,
+        houseSeatsFallback ?? (sumElectionTotalSeats > 0 ? sumElectionTotalSeats : sumWon),
       )
       const majority = Math.floor(resolvedTotal / 2) + 1
 
-      const rulingPartyIds = new Set(
-        (currentCabinet?.partyDistribution ?? [])
-          .map((pd) => pd.partyId)
-          .filter((pid): pid is string => Boolean(pid)),
+      // 공식 내각 정당 연결(CabinetPoliticalParty)을 최우선 사용하고, 없을 때만 각료 정당 분포로 폴백
+      const explicitCabParties = currentCabinet?.cabinetParties ?? []
+      const rulingPartyIds = new Set<string>(
+        explicitCabParties.length > 0
+          ? explicitCabParties
+              .filter(
+                (cp) => cp.role === 'LEADING' || cp.role === 'COALITION',
+              )
+              .map((cp) => cp.partyId)
+          : (currentCabinet?.partyDistribution ?? [])
+              .map((pd) => pd.partyId)
+              .filter((pid): pid is string => Boolean(pid)),
       )
+      const confidencePartyIds = new Set<string>(
+        explicitCabParties
+          .filter((cp) => cp.role === 'CONFIDENCE_AND_SUPPLY')
+          .map((cp) => cp.partyId),
+      )
+
       let balanceBadge: {
         tone: 'majority' | 'divided' | 'plurality'
         text: string
@@ -5094,6 +5184,9 @@ export function ParliamentAndPartyBentoCard({
         const rulingSeats = enriched
           .filter((row) => rulingPartyIds.has(row.partyId))
           .reduce((sumAcc, row) => sumAcc + row.seats, 0)
+        const supportSeats = enriched
+          .filter((row) => confidencePartyIds.has(row.partyId))
+          .reduce((sumAcc, row) => sumAcc + row.seats, 0)
         if (rulingSeats >= majority) {
           balanceBadge = {
             tone: 'majority',
@@ -5101,6 +5194,11 @@ export function ParliamentAndPartyBentoCard({
               rulingPartyIds.size > 1
                 ? `여대야소 · 연정 과반 (${rulingSeats}/${resolvedTotal}석)`
                 : `여대야소 · 여당 과반 (${rulingSeats}/${resolvedTotal}석)`,
+          }
+        } else if (supportSeats > 0 && rulingSeats + supportSeats >= majority) {
+          balanceBadge = {
+            tone: 'majority',
+            text: `소수 여당 + 신임·보완 과반 (${rulingSeats + supportSeats}/${resolvedTotal}석)`,
           }
         } else if (rulingSeats > 0) {
           balanceBadge = {
@@ -5124,6 +5222,11 @@ export function ParliamentAndPartyBentoCard({
         }
       }
 
+      const captionTitle =
+        loadedLegDetails.length > 1
+          ? `${primaryDetail.shortName || primaryDetail.name} (지역구+비례 합산)`
+          : primaryDetail.shortName || primaryDetail.name
+
       return {
         hemicycleSpec: {
           slices: enriched.map((row) => ({
@@ -5134,7 +5237,7 @@ export function ParliamentAndPartyBentoCard({
             meta: `${row.seats}석`,
           })),
           totalSeats: resolvedTotal,
-          subCaption: `과반 ${majority}석 · ${legDetail.shortName || legDetail.name}`,
+          subCaption: `과반 ${majority}석 · ${captionTitle}`,
           showMajority: true,
         },
         governanceBalance: balanceBadge,
@@ -5202,7 +5305,13 @@ export function ParliamentAndPartyBentoCard({
     }
 
     return { hemicycleSpec: null, governanceBalance: null }
-  }, [seatsInfo, latestLegQuery.data, partyMetaById, currentCabinet])
+  }, [
+    seatsInfo,
+    activeHouseTab,
+    loadedLegDetails,
+    partyMetaById,
+    currentCabinet,
+  ])
 
   const featuredElection = nextElection ?? recentElection
 
@@ -5253,11 +5362,37 @@ export function ParliamentAndPartyBentoCard({
       </BentoCardHeader>
 
       <BentoCardBody>
-        {governanceBalance ? (
-          <BadgeCluster>
-            <GovernanceBalanceChip $tone={governanceBalance.tone}>
-              {governanceBalance.text}
-            </GovernanceBalanceChip>
+        {(governanceBalance || isBicameralWithUpper) ? (
+          <BadgeCluster style={{ justifyContent: 'space-between' }}>
+            {governanceBalance ? (
+              <GovernanceBalanceChip $tone={governanceBalance.tone}>
+                {governanceBalance.text}
+              </GovernanceBalanceChip>
+            ) : (
+              <span />
+            )}
+            {isBicameralWithUpper ? (
+              <span style={{ display: 'inline-flex', gap: 4 }} role="tablist" aria-label="양원 의석 전환">
+                <BentoActionBtn
+                  type="button"
+                  role="tab"
+                  aria-selected={activeHouseTab === 'lower'}
+                  $accent={activeHouseTab === 'lower'}
+                  onClick={() => setSelectedHouseTab('lower')}
+                >
+                  {seatsInfo?.lowerName || '하원'}
+                </BentoActionBtn>
+                <BentoActionBtn
+                  type="button"
+                  role="tab"
+                  aria-selected={activeHouseTab === 'upper'}
+                  $accent={activeHouseTab === 'upper'}
+                  onClick={() => setSelectedHouseTab('upper')}
+                >
+                  {seatsInfo?.upperName || '상원'}
+                </BentoActionBtn>
+              </span>
+            ) : null}
           </BadgeCluster>
         ) : null}
 

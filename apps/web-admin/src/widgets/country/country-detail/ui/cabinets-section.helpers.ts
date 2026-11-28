@@ -17,6 +17,8 @@ export function getPersonName(
         name?: string | null
         surname?: string | null
         middleName?: string | null
+        /** 개인 표시 순서 — 빠뜨리면 국가 기본값도 없는 역사국가 인물이 성-우선으로 떨어진다 */
+        nameDisplayOrder?: string | null
         country?: { defaultNameDisplayOrder?: string | null } | null
       }
     | null
@@ -28,6 +30,7 @@ export function getPersonName(
       name: person.name ?? '',
       surname: person.surname ?? null,
       middleName: person.middleName ?? null,
+      nameDisplayOrder: person.nameDisplayOrder ?? null,
       country: person.country ?? null,
     },
     true,

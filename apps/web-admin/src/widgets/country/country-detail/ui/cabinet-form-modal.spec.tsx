@@ -285,4 +285,164 @@ describe('CabinetFormModal — 정보 밀도 완화 · 점세개(⋯) 설정 메
     await waitFor(() => expect(screen.getByText('이토 히로부미')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: '인물 변경' })).toBeInTheDocument()
   })
+
+  it('정체(PoliticalSystem)에 등록된 수반 카테고리가 있으면 기본 세팅되고 행정부 분류 전환 시 취임 방식·법정 임기까지 연동된다', async () => {
+    const psApi = jest.requireMock('@/shared/api/political-system') as {
+      listPoliticalSystems: jest.Mock
+    }
+    psApi.listPoliticalSystems.mockResolvedValueOnce([
+      {
+        id: 'ps-semi',
+        name: '프랑스 제5공화국',
+        countryId: 'country-hu',
+        historicalCountryId: null,
+        isCurrent: true,
+        governmentForm: 'SEMI_PRESIDENTIAL',
+        headSelectionMethod: 'DIRECT',
+        headOfStateTermYears: 5,
+        headOfStatePositionId: 'pos-pres',
+        headOfStatePosition: {
+          id: 'pos-pres',
+          title: '대통령',
+          positionType: 'HEAD_OF_STATE',
+          isMonarchical: false,
+        },
+        headOfStateHasPower: true,
+        headOfGovernmentPositionId: 'pos-pm',
+        headOfGovernmentPosition: {
+          id: 'pos-pm',
+          title: '총리',
+          positionType: 'HEAD_OF_GOVERNMENT',
+          isMonarchical: false,
+        },
+        headOfGovernmentHasPower: true,
+      },
+    ])
+
+    renderCabinetModal({
+      headPositionOptions: [
+        {
+          id: 'pos-pm',
+          title: '총리',
+          positionType: 'HEAD_OF_GOVERNMENT',
+          isMonarchical: false,
+        },
+        {
+          id: 'pos-pres',
+          title: '대통령',
+          positionType: 'HEAD_OF_STATE',
+          isMonarchical: false,
+        },
+      ],
+    })
+
+    expect(await screen.findByText('이원집정부제')).toBeInTheDocument()
+    const roleSelect = screen.getByRole('combobox', { name: '수반 직책' })
+    expect(roleSelect).toHaveValue('총리')
+
+    // 국가원수(행정부) 전환 시 정체에 등록된 '대통령' 카탈로그와 '직접 선거' 취임 방식이 즉시 세팅됨
+    fireEvent.click(screen.getByRole('button', { name: '국가원수 (행정부)' }))
+    expect(roleSelect).toHaveValue('대통령')
+
+    const appointmentGroup = screen.getByRole('radiogroup', { name: '취임 방식' })
+    await waitFor(() => {
+      expect(
+        within(appointmentGroup).getByRole('radio', { name: '직접 선거' }),
+      ).toHaveAttribute('aria-checked', 'true')
+    })
+
+    // 시작 연도 입력 시 법정 임기(5년) 만료일 적용 버튼이 노출됨
+    const startYearInput = screen.getAllByRole('textbox', { name: '연도' })[0]
+    fireEvent.change(startYearInput, { target: { value: '2022' } })
+    const applyTermBtn = await screen.findByRole('button', {
+      name: '법정 임기(5년) 만료일 적용',
+    })
+    fireEvent.click(applyTermBtn)
+    expect(screen.getAllByRole('textbox', { name: '연도' })[1]).toHaveValue(
+      '2027',
+    )
+  })
+
+  it('같은 연도에 헌정 체제가 교차할 때(1960년 1·2공화국) 빠른 선택 칩을 노출하고 저장 시 선택된 정체 ID를 createCabinet에 영속화한다', async () => {
+    const psApi = jest.requireMock('@/shared/api/political-system') as {
+      listPoliticalSystems: jest.Mock
+    }
+    const careerApi = jest.requireMock('@/shared/api/person-career') as {
+      personCareerApi: {
+        createCabinet: jest.Mock
+      }
+    }
+    careerApi.personCareerApi.createCabinet.mockResolvedValueOnce({
+      id: 'cab-1960-interim',
+    })
+    psApi.listPoliticalSystems.mockResolvedValueOnce([
+      {
+        id: 'ps-kr-1st',
+        name: '제1공화국',
+        countryId: 'country-hu',
+        historicalCountryId: null,
+        startEra: 'AD',
+        startYear: 1948,
+        startMonth: 8,
+        startDay: 15,
+        endEra: 'AD',
+        endYear: 1960,
+        endMonth: 6,
+        endDay: 14,
+        isCurrent: false,
+        governmentForm: 'PRESIDENTIAL',
+      },
+      {
+        id: 'ps-kr-2nd',
+        name: '제2공화국',
+        countryId: 'country-hu',
+        historicalCountryId: null,
+        startEra: 'AD',
+        startYear: 1960,
+        startMonth: 6,
+        startDay: 15,
+        endEra: 'AD',
+        endYear: 1961,
+        endMonth: 5,
+        endDay: 16,
+        isCurrent: false,
+        governmentForm: 'PARLIAMENTARY',
+      },
+    ])
+
+    renderCabinetModal({ initialMode: 'collective' })
+
+    const startYearInput = screen.getAllByRole('textbox', { name: '연도' })[0]
+    fireEvent.change(startYearInput, { target: { value: '1960' } })
+
+    // 동년 체제 전환 안내와 빠른 선택 칩 노출 확인
+    expect(
+      await screen.findByText(/헌정 체제 2개가 교차합니다/),
+    ).toBeInTheDocument()
+
+    const firstRepChip = screen.getByRole('button', {
+      name: /제1공화국.*선택/,
+    })
+    fireEvent.click(firstRepChip)
+
+    const collectiveNameInput = screen.getByPlaceholderText(
+      /예: 혁명통치평의회/,
+    )
+    fireEvent.change(collectiveNameInput, {
+      target: { value: '허정 과도정부' },
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '행정부 · 내각 등록' }),
+    )
+
+    await waitFor(() => {
+      expect(careerApi.personCareerApi.createCabinet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: '허정 과도정부',
+          politicalSystemId: 'ps-kr-1st',
+        }),
+      )
+    })
+  })
 })

@@ -22,6 +22,8 @@ import { DEPARTMENT_NAME_FRAMES } from './department-name-frames'
 export type CabinetScopeForDepartment = {
   countryId?: string | null
   historicalCountryId?: string | null
+  /** 명시적으로 귀속 지정된 헌정 체제 ID (과도내각·개헌기 오버라이드) */
+  politicalSystemId?: string | null
   /** 복합 역사국가(예: 오스트리아-헝가리 제국 ↔ 헝가리 왕국) 조회 시 허용할 본국·구성국 ID 집합 */
   allowedHistoricalCountryIds?: ReadonlySet<string> | null
   startDate?: string | null
@@ -97,18 +99,6 @@ function structuredPartsToKey(
   const month = parts.month != null ? parts.month : isEnd ? 12 : 1
   const day = parts.day != null ? parts.day : isEnd ? 31 : 1
   return signedYear * 10000 + month * 100 + day
-}
-
-function extractSignedYear(dateStr: string | null | undefined): number | null {
-  if (!dateStr || typeof dateStr !== 'string') return null
-  const trimmed = dateStr.trim()
-  const bcPrefix = /^BC\s*(\d{1,6})/i.exec(trimmed)
-  if (bcPrefix) return -Number(bcPrefix[1])
-  const bcMatch = /^-(\d{1,6})/.exec(trimmed)
-  if (bcMatch) return -Number(bcMatch[1])
-  const adMatch = /^(\d{1,6})/.exec(trimmed)
-  if (adMatch) return Number(adMatch[1])
-  return null
 }
 
 /**
@@ -670,12 +660,30 @@ export function findActivePoliticalSystemForCabinet(
 ): PoliticalSystem | null {
   if (!systems.length) return null
   if (!cabinetScope) {
-    return systems.find((s) => s.endYear == null) ?? systems[0] ?? null
+    return systems.find((s) => s.isCurrent || s.endYear == null) ?? systems[0] ?? null
+  }
+  if (cabinetScope.politicalSystemId) {
+    const explicit = systems.find(
+      (sys) => sys.id === cabinetScope.politicalSystemId,
+    )
+    if (explicit) return explicit
   }
 
   const cabHistId = cabinetScope.historicalCountryId || null
-  const cabStartYear = extractSignedYear(cabinetScope.startDate)
-  const cabEndYear = extractSignedYear(cabinetScope.endDate)
+  const cabStartKey =
+    structuredPartsToKey(
+      cabinetScope.startYear != null
+        ? { era: cabinetScope.startEra, year: cabinetScope.startYear }
+        : null,
+      false,
+    ) ?? parseDateKeyFromString(cabinetScope.startDate, false)
+  const cabEndKey =
+    structuredPartsToKey(
+      cabinetScope.endYear != null
+        ? { era: cabinetScope.endEra, year: cabinetScope.endYear }
+        : null,
+      true,
+    ) ?? parseDateKeyFromString(cabinetScope.endDate, true)
 
   const candidates = systems.filter((sys) => {
     if (cabHistId) {
@@ -687,51 +695,58 @@ export function findActivePoliticalSystemForCabinet(
         return false
       }
     } else if (sys.historicalCountryId) {
-      // 현대국가 정권인데 역사국가 정체이면 연도가 명시적으로 겹칠 때만 허용
-      if (cabStartYear == null) return false
+      // 현대국가 정권인데 역사국가 정체이면 시점이 명시적으로 겹칠 때만 허용
+      if (cabStartKey == null) return false
     }
 
-    const sysStart =
-      sys.startYear != null
-        ? sys.startEra === 'BC'
-          ? -sys.startYear
-          : sys.startYear
-        : null
-    const sysEnd =
-      sys.endYear != null
-        ? sys.endEra === 'BC'
-          ? -sys.endYear
-          : sys.endYear
-        : null
+    const sysStartKey = structuredPartsToKey(
+      {
+        era: sys.startEra,
+        year: sys.startYear,
+        month: sys.startMonth,
+        day: sys.startDay,
+      },
+      false,
+    )
+    const sysEndKey = structuredPartsToKey(
+      {
+        era: sys.endEra,
+        year: sys.endYear,
+        month: sys.endMonth,
+        day: sys.endDay,
+      },
+      true,
+    )
 
-    if (cabStartYear != null && sysEnd != null && cabStartYear > sysEnd) {
+    if (cabStartKey != null && sysEndKey != null && cabStartKey > sysEndKey) {
       return false
     }
-    if (cabEndYear != null && sysStart != null && cabEndYear < sysStart) {
+    if (cabEndKey != null && sysStartKey != null && cabEndKey < sysStartKey) {
       return false
     }
     return true
   })
 
   if (candidates.length === 0) {
-    // 같은 역사국가 정체가 있으면 그중 첫 번째, 없으면 현대 정체 폴백
     if (cabHistId) {
       return (
         systems.find((s) => s.historicalCountryId === cabHistId) ?? null
       )
     }
     return (
-      systems.find((s) => !s.historicalCountryId && s.endYear == null) ??
+      systems.find((s) => !s.historicalCountryId && (s.isCurrent || s.endYear == null)) ??
       systems.find((s) => !s.historicalCountryId) ??
       systems[0] ??
       null
     )
   }
 
-  // 같은 historicalCountryId 일치를 최우선, 그 다음 현재 진행 중(endYear == null) 우선
   return (
     candidates.find((s) => cabHistId && s.historicalCountryId === cabHistId) ??
-    candidates.find((s) => !cabHistId && !s.historicalCountryId && s.endYear == null) ??
+    candidates.find(
+      (s) => !cabHistId && !s.historicalCountryId && (s.isCurrent || s.endYear == null),
+    ) ??
+    candidates[candidates.length - 1] ??
     candidates[0] ??
     null
   )
@@ -743,12 +758,29 @@ export function findActivePoliticalSystemForCabinet(
  */
 export function doesCabinetMatchPoliticalSystem(
   cabinet: {
+    politicalSystemId?: string | null
     startDate?: string | null
     endDate?: string | null
+    startEra?: string | null
+    startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    endEra?: string | null
+    endYear?: number | null
+    endMonth?: number | null
+    endDay?: number | null
     historicalCountryId?: string | null
     headTenure?: {
       startDate?: string | null
       endDate?: string | null
+      startEra?: string | null
+      startYear?: number | null
+      startMonth?: number | null
+      startDay?: number | null
+      endEra?: string | null
+      endYear?: number | null
+      endMonth?: number | null
+      endDay?: number | null
       historicalCountryId?: string | null
     } | null
   },
@@ -760,78 +792,164 @@ export function doesCabinetMatchPoliticalSystem(
     | 'endEra'
     | 'endYear'
     | 'isCurrent'
-  >,
+  > & {
+    id?: string
+    startMonth?: number | null
+    startDay?: number | null
+    endMonth?: number | null
+    endDay?: number | null
+  },
 ): boolean {
+  if (cabinet.politicalSystemId && system.id) {
+    return cabinet.politicalSystemId === system.id
+  }
   const cabHistId =
     cabinet.historicalCountryId ??
     cabinet.headTenure?.historicalCountryId ??
     null
   const sysHistId = system.historicalCountryId ?? null
-  if (sysHistId && cabHistId) {
-    if (cabHistId !== sysHistId) return false
-  } else if (sysHistId && !cabHistId) {
-    if (!system.isCurrent) return false
-  } else if (!sysHistId && cabHistId) {
-    if (!system.isCurrent) return false
+  if (sysHistId && cabHistId && cabHistId !== sysHistId) {
+    return false
   }
 
-  const sysStart =
+  const sysStartKey = structuredPartsToKey(
+    {
+      era: system.startEra,
+      year: system.startYear,
+      month: system.startMonth,
+      day: system.startDay,
+    },
+    false,
+  )
+  const sysEndKey = structuredPartsToKey(
+    {
+      era: system.endEra,
+      year: system.endYear,
+      month: system.endMonth,
+      day: system.endDay,
+    },
+    true,
+  )
+
+  // 한쪽만 historicalCountryId가 있을 때는 날짜 경계가 명시되어 있거나 현행(isCurrent)일 때만 허용
+  if (Boolean(sysHistId) !== Boolean(cabHistId)) {
+    if (!system.isCurrent && sysStartKey == null && sysEndKey == null) {
+      return false
+    }
+  }
+
+  if (sysStartKey == null && sysEndKey == null) return true
+
+  const effStart = cabinet.startDate ?? cabinet.headTenure?.startDate ?? null
+  const effEnd = cabinet.endDate ?? cabinet.headTenure?.endDate ?? null
+  const cabStartKey =
+    structuredPartsToKey(
+      cabinet.startYear != null
+        ? {
+            era: cabinet.startEra,
+            year: cabinet.startYear,
+            month: cabinet.startMonth,
+            day: cabinet.startDay,
+          }
+        : cabinet.headTenure?.startYear != null
+          ? {
+              era: cabinet.headTenure.startEra,
+              year: cabinet.headTenure.startYear,
+              month: cabinet.headTenure.startMonth,
+              day: cabinet.headTenure.startDay,
+            }
+          : null,
+      false,
+    ) ?? parseDateKeyFromString(effStart, false)
+  const cabEndKey =
+    structuredPartsToKey(
+      cabinet.endYear != null
+        ? {
+            era: cabinet.endEra,
+            year: cabinet.endYear,
+            month: cabinet.endMonth,
+            day: cabinet.endDay,
+          }
+        : cabinet.headTenure?.endYear != null
+          ? {
+              era: cabinet.headTenure.endEra,
+              year: cabinet.headTenure.endYear,
+              month: cabinet.headTenure.endMonth,
+              day: cabinet.headTenure.endDay,
+            }
+          : null,
+      true,
+    ) ?? parseDateKeyFromString(effEnd, true)
+
+  if (cabStartKey == null && cabEndKey == null) return false
+
+  const cabStartYear =
+    cabStartKey != null ? Math.trunc(cabStartKey / 10000) : null
+  const cabEndYear = cabEndKey != null ? Math.trunc(cabEndKey / 10000) : null
+  const sysStartYear =
     system.startYear != null
       ? system.startEra === 'BC'
         ? -Math.abs(system.startYear)
         : system.startYear
       : null
-  const sysEnd =
+  const sysEndYear =
     system.endYear != null
       ? system.endEra === 'BC'
         ? -Math.abs(system.endYear)
         : system.endYear
       : null
+  const hasMonthPrecisionBoundary =
+    system.startMonth != null || system.endMonth != null
 
-  if (sysStart == null && sysEnd == null) return true
-
-  const effStart = cabinet.startDate ?? cabinet.headTenure?.startDate ?? null
-  const effEnd = cabinet.endDate ?? cabinet.headTenure?.endDate ?? null
-  const cabStartYear = extractSignedYear(effStart)
-  const cabEndYear = extractSignedYear(effEnd)
-
-  if (cabStartYear == null && cabEndYear == null) return false
-
-  if (cabStartYear != null) {
-    if (sysEnd != null && cabStartYear > sysEnd) return false
-    if (sysStart != null && cabEndYear != null && cabEndYear < sysStart) {
+  if (cabStartKey != null) {
+    if (sysEndKey != null && cabStartKey > sysEndKey) return false
+    if (sysStartKey != null && cabEndKey != null && cabEndKey < sysStartKey) {
       return false
     }
-    // 체제 교체 경계 연도(예: 1988년 퇴임 vs 1988년 새 공화국 출범) 중복 산입 방지
-    if (
-      sysStart != null &&
-      cabStartYear < sysStart &&
-      cabEndYear != null &&
-      cabEndYear <= sysStart
-    ) {
-      return false
+    // 연도 단위만 입력된 체제에서의 교체 경계 연도 중복 산입 방지
+    if (!hasMonthPrecisionBoundary) {
+      if (
+        sysStartYear != null &&
+        cabStartYear != null &&
+        cabStartYear < sysStartYear &&
+        cabEndYear != null &&
+        cabEndYear <= sysStartYear
+      ) {
+        return false
+      }
+      if (
+        sysEndYear != null &&
+        cabStartYear != null &&
+        (sysStartYear == null || sysStartYear < sysEndYear) &&
+        cabStartYear === sysEndYear &&
+        (cabEndYear == null || cabEndYear > sysEndYear)
+      ) {
+        return false
+      }
+    } else {
+      // 월·일 정밀도가 있을 때는 정확한 키 경계로 판정
+      if (
+        sysStartKey != null &&
+        cabStartKey < sysStartKey &&
+        cabEndKey != null &&
+        cabEndKey <= sysStartKey
+      ) {
+        return false
+      }
     }
     if (
-      sysEnd != null &&
-      (sysStart == null || sysStart < sysEnd) &&
-      cabStartYear === sysEnd &&
-      (cabEndYear == null || cabEndYear > sysEnd)
-    ) {
-      return false
-    }
-    if (
-      sysStart != null &&
-      cabEndYear == null &&
+      sysStartKey != null &&
+      cabEndKey == null &&
       !system.isCurrent &&
-      sysEnd != null &&
-      cabStartYear < sysStart
+      sysEndKey != null &&
+      cabStartKey < sysStartKey
     ) {
       return false
     }
     return true
   }
 
-  if (cabEndYear != null && sysStart != null && cabEndYear < sysStart) {
+  if (cabEndKey != null && sysStartKey != null && cabEndKey < sysStartKey) {
     return false
   }
   return true

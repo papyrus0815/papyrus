@@ -656,6 +656,15 @@ export function CabinetsSection({
   const [registerModalInitialMode, setRegisterModalInitialMode] = useState<
     CabinetFormMode | undefined
   >(undefined)
+
+  useEffect(() => {
+    if (searchParams.get('createCabinet') !== '1') return
+    setRegisterModalInitialMode(undefined)
+    setRegisterCabinetModalOpen(true)
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('createCabinet')
+    setSearchParams(nextParams, { replace: true })
+  }, [searchParams, setSearchParams])
   const [bulkMinisterModalOpen, setBulkMinisterModalOpen] = useState(false)
   const [appointmentModalOpen, setAppointmentModalOpen] = useState(false)
   const [preselectedMinisterDeptId, setPreselectedMinisterDeptId] = useState<
@@ -1021,6 +1030,61 @@ export function CabinetsSection({
     ).map((category) => ({ category, label: CABINET_CATEGORY_LABEL[category] }))
   }, [countryFilteredCabinets])
 
+  const regimeFilterChipEntries = useMemo(() => {
+    if (politicalSystems.length < 2) return []
+    return politicalSystems.map((sysItem) => {
+      const formLabel = sysItem.governmentForm
+        ? (GOVERNMENT_FORM_META[sysItem.governmentForm]?.label ??
+          sysItem.governmentForm)
+        : null
+      const label = sysItem.name?.trim() || formLabel || '헌정 체제'
+      const count = countryFilteredCabinets.filter((cabItem) =>
+        doesCabinetMatchPoliticalSystem(cabItem, sysItem),
+      ).length
+      return {
+        id: sysItem.id,
+        label,
+        count,
+        isCurrent: Boolean(sysItem.isCurrent),
+      }
+    })
+  }, [politicalSystems, countryFilteredCabinets])
+
+  const resolveCabinetRegimeLabel = useCallback(
+    (cabinetItem: CabinetListItemDto): string | null => {
+      if (politicalSystems.length < 2) return null
+      const explicitSys = (
+        cabinetItem as {
+          politicalSystem?: {
+            name?: string | null
+            governmentForm?: string | null
+          } | null
+        }
+      ).politicalSystem
+      if (explicitSys) {
+        return (
+          explicitSys.name?.trim() ||
+          (explicitSys.governmentForm
+            ? (GOVERNMENT_FORM_META[explicitSys.governmentForm]?.label ??
+              explicitSys.governmentForm)
+            : null)
+        )
+      }
+      const matched = politicalSystems.find((sysItem) =>
+        doesCabinetMatchPoliticalSystem(cabinetItem, sysItem),
+      )
+      if (!matched) return null
+      return (
+        matched.name?.trim() ||
+        (matched.governmentForm
+          ? (GOVERNMENT_FORM_META[matched.governmentForm]?.label ??
+            matched.governmentForm)
+          : null)
+      )
+    },
+    [politicalSystems],
+  )
+
   const filteredCabinets = useMemo(() => {
     let list = countryFilteredCabinets
 
@@ -1100,6 +1164,7 @@ export function CabinetsSection({
         : '—'
       const monarchPersonSearch =
         monarchPersonRaw !== '—' ? monarchPersonRaw : ''
+      const regimeLabel = resolveCabinetRegimeLabel(cabinetItem) ?? ''
       return [
         personName,
         head?.regnalName ?? '',
@@ -1112,6 +1177,7 @@ export function CabinetsSection({
         eraLine,
         monarchLine,
         monarchPersonSearch,
+        regimeLabel,
       ].some((val) =>
         String(val ?? '')
           .toLowerCase()
@@ -1126,6 +1192,7 @@ export function CabinetsSection({
     country.name,
     countryTenures,
     cabinetTimelineCountryScope,
+    resolveCabinetRegimeLabel,
   ])
 
   /** 타임라인·원장 행 — 내각 + 내각 없는 재위(군주 행, `cabinet-reign-rows`) */
@@ -2555,6 +2622,93 @@ export function CabinetsSection({
                         </CabS.CabListControlsRow>
                         </CabT.ToolbarContainer>
 
+                        {regimeFilterChipEntries.length >= 2 ? (
+                          <div
+                            role="tablist"
+                            aria-label="헌정 체제 시대별 필터"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              flexWrap: 'wrap',
+                              gap: 6,
+                              paddingTop: 4,
+                            }}
+                          >
+                            <button
+                              type="button"
+                              role="tab"
+                              aria-selected={!activeRegimeFilter}
+                              onClick={clearRegimeFilter}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                padding: '3px 10px',
+                                borderRadius: 999,
+                                border: `1px solid ${!activeRegimeFilter ? palette.accent : palette.borderMid}`,
+                                background: !activeRegimeFilter
+                                  ? palette.accentBg
+                                  : palette.inputBg,
+                                color: !activeRegimeFilter
+                                  ? palette.accent
+                                  : palette.textMuted,
+                                fontSize: 11.5,
+                                fontWeight: !activeRegimeFilter ? 700 : 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span>전체 체제</span>
+                              <strong>{countryFilteredCabinets.length}</strong>
+                            </button>
+                            {regimeFilterChipEntries.map((regimeEntry) => {
+                              const isActive =
+                                activeRegimeFilter?.id === regimeEntry.id
+                              return (
+                                <button
+                                  key={regimeEntry.id}
+                                  type="button"
+                                  role="tab"
+                                  aria-selected={isActive}
+                                  onClick={() =>
+                                    setRegimeFilterInUrl(
+                                      isActive ? '' : regimeEntry.id,
+                                    )
+                                  }
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    padding: '3px 10px',
+                                    borderRadius: 999,
+                                    border: `1px solid ${isActive ? palette.accent : palette.borderMid}`,
+                                    background: isActive
+                                      ? palette.accentBg
+                                      : palette.inputBg,
+                                    color: isActive
+                                      ? palette.accent
+                                      : palette.text,
+                                    fontSize: 11.5,
+                                    fontWeight: isActive ? 700 : 600,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <span>{regimeEntry.label}</span>
+                                  <span
+                                    style={{
+                                      color: isActive
+                                        ? palette.accent
+                                        : palette.textMuted,
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    {regimeEntry.count}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        ) : null}
+
                         {hasActiveToolbarFilters ? (
                           <div
                             style={{
@@ -3045,6 +3199,7 @@ export function CabinetsSection({
                               head?.subTermNumber ?? null,
                             ),
                             cabinetName: item.name?.trim() || null,
+                            regimeLabel: resolveCabinetRegimeLabel(item),
                             territoryLabel: territoryLabel || null,
                             reignEraLine,
                             thumbUrl: head?.person?.profileImageUrl
@@ -6222,6 +6377,7 @@ export function CabinetsSection({
             activeRegimeFilter?.historicalCountryId ||
             ''
           }
+          initialPoliticalSystemId={activeRegimeFilter?.id ?? null}
           initialMode={
             registerModalInitialMode ??
             (cabinetCategoryFilter === 'COLLECTIVE' ? 'collective' : undefined)

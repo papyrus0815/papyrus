@@ -53,6 +53,8 @@ export interface TenureBar {
   regnalName: string | null
   /** 직책 표시명 (대통령·국왕 등) */
   positionTitle: string | null
+  /** 원시 직위 유형 (HEAD_OF_STATE | HEAD_OF_GOVERNMENT — 실권 수반 필터 판별용) */
+  positionType?: string | null
   /** 직책 분류 (색상·범례용) */
   positionCategory: PositionTypeCategory
   /** 대수/재위번호 (예: 20대, 14세) */
@@ -148,6 +150,7 @@ export function normalizeTenures(rawList: unknown): TenureBar[] {
         personName: getPersonName(t),
         regnalName,
         positionTitle: getPositionTitle(t),
+        positionType: getPositionType(t),
         positionCategory: categorize(t),
         ordinal: ordinalOf(t),
         startDate,

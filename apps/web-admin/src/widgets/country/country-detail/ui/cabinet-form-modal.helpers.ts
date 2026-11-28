@@ -1,4 +1,5 @@
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { resolveSystemHeadPositionSlots } from '@/entities/political-system/model/political-system'
 import type {
   PartyMembershipRow,
   PoliticalPartyRow,
@@ -543,10 +544,75 @@ export function resolveContemporaryRepublicNotice(
   }
 }
 
+export function findOverlappingPoliticalSystems(
+  politicalSystems: PoliticalSystem[],
+  axis: { countryId: string | null; historicalCountryId: string | null },
+  signedStartYear: number | null,
+  startMonth?: number | null,
+  startDay?: number | null,
+): PoliticalSystem[] {
+  if (politicalSystems.length === 0 || signedStartYear == null) return []
+
+  const scopedList = politicalSystems.filter((sysItem) => {
+    if (axis.historicalCountryId) {
+      return sysItem.historicalCountryId === axis.historicalCountryId
+    }
+    if (axis.countryId) {
+      return (
+        sysItem.countryId === axis.countryId && !sysItem.historicalCountryId
+      )
+    }
+    return true
+  })
+
+  const pool = scopedList.length > 0 ? scopedList : politicalSystems
+  const validMonth =
+    startMonth != null &&
+    Number.isFinite(startMonth) &&
+    startMonth >= 1 &&
+    startMonth <= 12
+      ? Math.trunc(startMonth)
+      : null
+  const validDay =
+    validMonth != null &&
+    startDay != null &&
+    Number.isFinite(startDay) &&
+    startDay >= 1 &&
+    startDay <= 31
+      ? Math.trunc(startDay)
+      : null
+  const queryStartKey =
+    signedStartYear * 10000 + (validMonth ?? 1) * 100 + (validDay ?? 1)
+  const queryEndKey =
+    signedStartYear * 10000 + (validMonth ?? 12) * 100 + (validDay ?? 31)
+
+  return pool.filter((sysItem) => {
+    const startSigned = toSignedYear(sysItem.startEra, sysItem.startYear)
+    const endSigned = toSignedYear(sysItem.endEra, sysItem.endYear)
+    const sysStartKey =
+      startSigned != null
+        ? startSigned * 10000 +
+          (sysItem.startMonth ?? 1) * 100 +
+          (sysItem.startDay ?? 1)
+        : null
+    const sysEndKey =
+      endSigned != null
+        ? endSigned * 10000 +
+          (sysItem.endMonth ?? 12) * 100 +
+          (sysItem.endDay ?? 31)
+        : null
+    if (sysStartKey != null && queryEndKey < sysStartKey) return false
+    if (sysEndKey != null && queryStartKey > sysEndKey) return false
+    return sysStartKey != null || sysEndKey != null
+  })
+}
+
 export function findMatchingPoliticalSystem(
   politicalSystems: PoliticalSystem[],
   axis: { countryId: string | null; historicalCountryId: string | null },
   signedStartYear: number | null,
+  startMonth?: number | null,
+  startDay?: number | null,
 ): PoliticalSystem | null {
   if (politicalSystems.length === 0) return null
 
@@ -565,14 +631,16 @@ export function findMatchingPoliticalSystem(
   const pool = scopedList.length > 0 ? scopedList : politicalSystems
 
   if (signedStartYear != null) {
-    const yearMatched = pool.find((sysItem) => {
-      const startSigned = toSignedYear(sysItem.startEra, sysItem.startYear)
-      const endSigned = toSignedYear(sysItem.endEra, sysItem.endYear)
-      if (startSigned != null && signedStartYear < startSigned) return false
-      if (endSigned != null && signedStartYear > endSigned) return false
-      return startSigned != null || endSigned != null
-    })
-    if (yearMatched) return yearMatched
+    const matchedPool = findOverlappingPoliticalSystems(
+      politicalSystems,
+      axis,
+      signedStartYear,
+      startMonth,
+      startDay,
+    )
+    if (matchedPool.length > 0) {
+      return matchedPool[matchedPool.length - 1] ?? matchedPool[0]
+    }
   }
 
   const currentSystem = pool.find((sysItem) => sysItem.isCurrent)
@@ -583,7 +651,7 @@ export function findMatchingPoliticalSystem(
 
 export function extractCanonicalRoleFromPoliticalSystem(
   activePoliticalSystem: PoliticalSystem | null | undefined,
-  nonMonarchicalDefs: ScopedRoleDefinitionInput[],
+  roleDefs: ScopedRoleDefinitionInput[],
 ): {
   title: string
   positionType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
@@ -592,85 +660,115 @@ export function extractCanonicalRoleFromPoliticalSystem(
 } | null {
   if (!activePoliticalSystem) return null
 
-  const govForm = activePoliticalSystem.governmentForm ?? null
-  const systemLeadsViaState =
-    govForm === 'PRESIDENTIAL' ||
-    (activePoliticalSystem.headOfStateHasPower === true &&
-      activePoliticalSystem.headOfGovernmentHasPower === false)
+  const slots = resolveSystemHeadPositionSlots(activePoliticalSystem)
+  const allowMonarchicalDirectRule =
+    activePoliticalSystem.governmentForm === 'ABSOLUTE_MONARCHY'
+  const candidateSlots = [slots.primaryCabinetSlot, slots.secondaryCabinetSlot]
 
-  const candidateBranchList: Array<{
-    posObj: { id: string; title: string; positionType?: string } | null
-    rawTitle: string | null
-    explicitPosId: string | null
-    branch: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
-  }> = systemLeadsViaState
-    ? [
-        {
-          posObj: activePoliticalSystem.headOfStatePosition ?? null,
-          rawTitle: activePoliticalSystem.headOfStateTitle ?? null,
-          explicitPosId: activePoliticalSystem.headOfStatePositionId ?? null,
-          branch: 'HEAD_OF_STATE',
-        },
-        {
-          posObj: activePoliticalSystem.headOfGovernmentPosition ?? null,
-          rawTitle: activePoliticalSystem.headOfGovernmentTitle ?? null,
-          explicitPosId:
-            activePoliticalSystem.headOfGovernmentPositionId ?? null,
-          branch: 'HEAD_OF_GOVERNMENT',
-        },
-      ]
-    : [
-        {
-          posObj: activePoliticalSystem.headOfGovernmentPosition ?? null,
-          rawTitle: activePoliticalSystem.headOfGovernmentTitle ?? null,
-          explicitPosId:
-            activePoliticalSystem.headOfGovernmentPositionId ?? null,
-          branch: 'HEAD_OF_GOVERNMENT',
-        },
-        {
-          posObj: activePoliticalSystem.headOfStatePosition ?? null,
-          rawTitle: activePoliticalSystem.headOfStateTitle ?? null,
-          explicitPosId: activePoliticalSystem.headOfStatePositionId ?? null,
-          branch: 'HEAD_OF_STATE',
-        },
-      ]
+  for (const slot of candidateSlots) {
+    if (!slot || !slot.title.trim()) continue
+    if (!allowMonarchicalDirectRule && slot.isMonarchical) continue
 
-  for (const branchEntry of candidateBranchList) {
-    const cleanTitle = (
-      branchEntry.posObj?.title ??
-      branchEntry.rawTitle ??
-      ''
-    ).trim()
-    if (!cleanTitle) continue
-    if (isMonarchicalExecutiveOption({ title: cleanTitle })) continue
-
-    const matchedOption = nonMonarchicalDefs.find(
+    const cleanTitle = slot.title.trim()
+    const matchedOption = roleDefs.find(
       (defOption) =>
-        (branchEntry.posObj?.id && defOption.id === branchEntry.posObj.id) ||
-        (branchEntry.explicitPosId &&
-          defOption.id === branchEntry.explicitPosId) ||
+        (slot.positionId && defOption.id === slot.positionId) ||
         defOption.title.trim() === cleanTitle,
     )
     const regimeLabel = activePoliticalSystem.name?.trim() || '헌정 체제'
     return {
       title: cleanTitle,
-      positionType: inferExecutivePositionType(
-        cleanTitle,
-        (branchEntry.posObj?.positionType as
-          | 'HEAD_OF_STATE'
-          | 'HEAD_OF_GOVERNMENT'
-          | undefined) ?? branchEntry.branch,
-      ),
-      positionDefId:
-        matchedOption?.id ??
-        branchEntry.posObj?.id ??
-        branchEntry.explicitPosId ??
-        null,
+      positionType: slot.axis,
+      positionDefId: matchedOption?.id ?? slot.positionId ?? null,
       reasonHint: `${regimeLabel}에 지정된 공식 수반 직책("${cleanTitle}")이 기본 선택되었습니다.`,
     }
   }
 
   return null
+}
+
+export function resolveSmartDefaultMonarchRole(params: {
+  headPositionOptions: ScopedRoleDefinitionInput[]
+  activePoliticalSystem?: PoliticalSystem | null
+}): {
+  title: string
+  positionType: 'HEAD_OF_STATE'
+  positionDefId: string | null
+  reasonHint: string | null
+} {
+  const { headPositionOptions, activePoliticalSystem = null } = params
+  if (activePoliticalSystem) {
+    const slots = resolveSystemHeadPositionSlots(activePoliticalSystem)
+    const isMonarchicalRegime =
+      activePoliticalSystem.governmentForm === 'CONSTITUTIONAL_MONARCHY' ||
+      activePoliticalSystem.governmentForm === 'ABSOLUTE_MONARCHY'
+    const monarchSlot =
+      slots.monarchSlot ?? (isMonarchicalRegime ? slots.stateSlot : null)
+    if (monarchSlot && monarchSlot.title.trim()) {
+      const cleanTitle = monarchSlot.title.trim()
+      const matchedDef = headPositionOptions.find(
+        (defOption) =>
+          (monarchSlot.positionId && defOption.id === monarchSlot.positionId) ||
+          defOption.title.trim() === cleanTitle,
+      )
+      const regimeLabel = activePoliticalSystem.name?.trim() || '헌정 체제'
+      return {
+        title: cleanTitle,
+        positionType: 'HEAD_OF_STATE',
+        positionDefId: matchedDef?.id ?? monarchSlot.positionId ?? null,
+        reasonHint: `${regimeLabel}에 등록된 군주·원수 직함("${cleanTitle}")이 기본 선택되었습니다.`,
+      }
+    }
+  }
+
+  const scopedMonarchDef = headPositionOptions.find((defItem) =>
+    isMonarchicalExecutiveOption(defItem),
+  )
+  if (scopedMonarchDef) {
+    return {
+      title: scopedMonarchDef.title.trim(),
+      positionType: 'HEAD_OF_STATE',
+      positionDefId: scopedMonarchDef.id,
+      reasonHint: null,
+    }
+  }
+
+  return {
+    title: '국왕',
+    positionType: 'HEAD_OF_STATE',
+    positionDefId: null,
+    reasonHint: null,
+  }
+}
+
+export function computeConstitutionalTermEndParts(
+  startParts: ParsedDateParts,
+  termYears: number | null | undefined,
+): ParsedDateParts | null {
+  if (
+    termYears == null ||
+    !Number.isFinite(termYears) ||
+    termYears <= 0 ||
+    !startParts.year.trim()
+  ) {
+    return null
+  }
+  const parsedStartYear = Number(startParts.year.trim())
+  if (!Number.isInteger(parsedStartYear) || parsedStartYear <= 0) {
+    return null
+  }
+  const signedStart =
+    startParts.era === 'BC' ? -parsedStartYear : parsedStartYear
+  let signedEnd = signedStart + Math.trunc(termYears)
+  if (signedStart < 0 && signedEnd >= 0) {
+    signedEnd += 1
+  }
+  return {
+    era: signedEnd < 0 ? 'BC' : 'AD',
+    year: String(Math.abs(signedEnd)),
+    month: startParts.month,
+    day: startParts.day,
+  }
 }
 
 export function resolveSmartDefaultExecutiveRole(params: {
@@ -701,10 +799,12 @@ export function resolveSmartDefaultExecutiveRole(params: {
     (defItem) => !isMonarchicalExecutiveOption(defItem),
   )
 
-  // 0) If activePoliticalSystem specifies an explicit canonical non-monarchical executive role, honor it first
+  // 0) If activePoliticalSystem specifies an explicit canonical executive role, honor it first
   const canonicalFromSystem = extractCanonicalRoleFromPoliticalSystem(
     activePoliticalSystem,
-    nonMonarchicalDefs,
+    activePoliticalSystem?.governmentForm === 'ABSOLUTE_MONARCHY'
+      ? headPositionOptions
+      : nonMonarchicalDefs,
   )
   if (canonicalFromSystem) {
     return canonicalFromSystem

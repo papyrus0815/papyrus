@@ -2,6 +2,13 @@ import { memo, useMemo } from 'react'
 
 import styled, { css } from 'styled-components'
 
+import {
+  findPoliticalSystemAtDate,
+  formatPeriod as formatPoliticalSystemPeriod,
+  GOVERNMENT_FORM_LABEL,
+  resolveEffectivePowerHolderRole,
+} from '@/entities/political-system/model/political-system'
+import type { PoliticalSystem } from '@/shared/api/political-system'
 import type { PinnedRow, YearRange } from '../model/types'
 import { yearToX } from '../lib/time-scale'
 import type { SegmentTenuresResult } from '../api/use-segment-tenures'
@@ -31,18 +38,27 @@ interface RowProps {
   onJumpToCountry?: (kind: 'COUNTRY' | 'HISTORICAL', countryId: string) => void
   /** 카테고리 필터 — 활성 카테고리만 막대 노출 */
   categoryFilter?: (c: TenureBar['positionCategory']) => boolean
+  /** 헌정 체제(PoliticalSystem) 시대 배경 띠 노출 여부 */
+  showRegimeBands?: boolean
+  /** 실권 수반만 보기 (`headOfStateHasPower` / `headOfGovernmentHasPower` 기반) */
+  powerHoldersOnly?: boolean
 }
 
 const BAR_HEIGHT = 26
 const LANE_GAP = 4
 const ROW_VPAD_TOP = 18
+const REGIME_BAND_HEIGHT = 16
 const ROW_VPAD_BOTTOM = 10
 const MIN_ROW_HEIGHT = 60
 
-function rowHeightFor(laneCount: number): number {
+function rowHeightFor(laneCount: number, extraTop = 0): number {
   const need =
-    ROW_VPAD_TOP + ROW_VPAD_BOTTOM + laneCount * BAR_HEIGHT + (laneCount - 1) * LANE_GAP
-  return Math.max(MIN_ROW_HEIGHT, need)
+    ROW_VPAD_TOP +
+    extraTop +
+    ROW_VPAD_BOTTOM +
+    laneCount * BAR_HEIGHT +
+    (laneCount - 1) * LANE_GAP
+  return Math.max(MIN_ROW_HEIGHT + extraTop, need)
 }
 
 interface PackedSegment {
@@ -61,6 +77,8 @@ function TimelineRowImpl({
   onSelectBar,
   onJumpToCountry,
   categoryFilter,
+  showRegimeBands = false,
+  powerHoldersOnly = false,
 }: RowProps) {
   // segments 배열은 추가순 — 라벨 표시는 시간순(lifespanStartYear)으로 다시 정렬한다.
   const orderedSegments = useMemo(
@@ -68,17 +86,54 @@ function TimelineRowImpl({
     [row.segments],
   )
 
-  const { packed, laneCount } = useMemo(() => {
-    const filteredSegs = segmentResults.map((res) => ({
-      segmentId: res.segmentId,
-      bars: categoryFilter
-        ? res.bars.filter((b) => categoryFilter(b.positionCategory))
-        : res.bars,
-    }))
-    return packRowByBands(filteredSegs)
-  }, [segmentResults, categoryFilter])
+  const rowSystems = useMemo(() => {
+    const byId = new Map<string, PoliticalSystem>()
+    for (const res of segmentResults) {
+      for (const sys of res.politicalSystems ?? []) {
+        if (!byId.has(sys.id)) byId.set(sys.id, sys)
+      }
+    }
+    return [...byId.values()]
+  }, [segmentResults])
 
-  const rowHeight = rowHeightFor(laneCount)
+  const hasVisibleRegimeBands = showRegimeBands && rowSystems.length > 0
+  const topOffset = hasVisibleRegimeBands ? REGIME_BAND_HEIGHT : 0
+
+  const { packed, laneCount } = useMemo(() => {
+    const filteredSegs = segmentResults.map((res) => {
+      const systems = res.politicalSystems ?? []
+      return {
+        segmentId: res.segmentId,
+        bars: res.bars.filter((b) => {
+          if (categoryFilter && !categoryFilter(b.positionCategory)) {
+            return false
+          }
+          if (powerHoldersOnly && systems.length > 0 && b.positionType) {
+            const matched = findPoliticalSystemAtDate(systems, {
+              countryId: res.kind === 'COUNTRY' ? res.countryId : null,
+              historicalCountryId:
+                res.kind === 'HISTORICAL' ? res.countryId : null,
+              isoDate: b.startDate,
+              fallbackToCurrent: false,
+            })
+            if (matched) {
+              const effRole = resolveEffectivePowerHolderRole(matched)
+              if (
+                effRole !== 'DUAL_EXECUTIVE' &&
+                b.positionType !== effRole
+              ) {
+                return false
+              }
+            }
+          }
+          return true
+        }),
+      }
+    })
+    return packRowByBands(filteredSegs)
+  }, [segmentResults, categoryFilter, powerHoldersOnly])
+
+  const rowHeight = rowHeightFor(laneCount, topOffset)
 
   const isLoading = segmentResults.some((r) => r.isLoading)
   const totalBars = segmentResults.reduce((acc, r) => acc + r.bars.length, 0)
@@ -130,12 +185,20 @@ function TimelineRowImpl({
             width={width}
           />
         )}
+        {hasVisibleRegimeBands && (
+          <RegimeEraBands
+            systems={rowSystems}
+            range={range}
+            width={width}
+          />
+        )}
         {packed.map((seg) => (
           <SegmentBars
             key={seg.segmentId}
             packed={seg}
             range={range}
             width={width}
+            topOffset={topOffset}
             highlightYear={highlightYear}
             onSelectBar={(bar) => onSelectBar?.(bar, row)}
           />
@@ -275,7 +338,14 @@ function SegmentRibbons({
   )
 }
 
-function SegmentBars({ packed, range, width, highlightYear, onSelectBar }: SegmentBarsProps) {
+function SegmentBars({
+  packed,
+  range,
+  width,
+  topOffset = 0,
+  highlightYear,
+  onSelectBar,
+}: SegmentBarsProps & { topOffset?: number }) {
   const tooltip = useHeadsTooltip()
 
   /** ←/→ 키로 인접 막대로 포커스 이동 — DOM 순서 기반. 다른 위젯 막대로 새지 않게 캔버스로 스코프 한정 */
@@ -312,7 +382,7 @@ function SegmentBars({ packed, range, width, highlightYear, onSelectBar }: Segme
           (bar.endJulian == null || bar.endJulian >= highlightYear)
         const dimmed = highlightYear != null && !isHighlightedByYear
         const ongoing = bar.endDate == null
-        const top = ROW_VPAD_TOP + lane * (BAR_HEIGHT + LANE_GAP)
+        const top = ROW_VPAD_TOP + topOffset + lane * (BAR_HEIGHT + LANE_GAP)
         const labelText = formatBarLabel(bar)
         // 가이드 연도에 걸린 막대만 '즉위 N년차' — 좁은 막대는 이름이 먼저라 생략
         const tenureYear =
@@ -809,4 +879,128 @@ const TooltipHint = styled.div`
   padding-top: 4px;
   border-top: 1px solid rgba(127, 127, 127, 0.25);
   opacity: 0.6;
+`
+
+function signedSystemYear(
+  era: string | null | undefined,
+  year: number | null | undefined,
+  month?: number | null,
+): number | null {
+  if (year == null || !Number.isFinite(year)) return null
+  const base = era === 'BC' ? -Math.abs(year) : year
+  const monthOffset =
+    month != null && month >= 1 && month <= 12 ? (month - 1) / 12 : 0
+  return base + monthOffset
+}
+
+function RegimeEraBands({
+  systems,
+  range,
+  width,
+}: {
+  systems: PoliticalSystem[]
+  range: YearRange
+  width: number
+}) {
+  const tooltip = useHeadsTooltip()
+  const nowYear = new Date().getFullYear()
+  const bands = useMemo(() => {
+    return systems
+      .map((sys, idx) => {
+        const start = signedSystemYear(
+          sys.startEra,
+          sys.startYear,
+          sys.startMonth,
+        )
+        if (start == null) return null
+        const rawEnd = signedSystemYear(
+          sys.endEra,
+          sys.endYear,
+          sys.endMonth,
+        )
+        const end = rawEnd ?? (sys.isCurrent ? nowYear : start + 1)
+        if (end < range.startYear || start > range.endYear) return null
+        const x1 = yearToX(Math.max(start, range.startYear), range, width)
+        const x2 = yearToX(Math.min(end, range.endYear), range, width)
+        const left = Math.min(x1, x2)
+        const w = Math.max(4, Math.abs(x2 - x1))
+        const label =
+          sys.name?.trim() ||
+          (sys.governmentForm
+            ? GOVERNMENT_FORM_LABEL[sys.governmentForm]
+            : '헌정 체제')
+        return {
+          sys,
+          left,
+          w,
+          label,
+          alt: idx % 2 === 1,
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item != null)
+  }, [systems, range, width, nowYear])
+
+  return (
+    <>
+      {bands.map((item) => (
+        <RegimeBandChip
+          key={item.sys.id}
+          $alt={item.alt}
+          style={{ left: item.left, width: item.w }}
+          onMouseEnter={(evt) =>
+            tooltip.show(
+              evt.clientX,
+              evt.clientY,
+              <TooltipBody>
+                <TooltipName>{item.label}</TooltipName>
+                {item.sys.governmentForm ? (
+                  <TooltipMeta>
+                    {GOVERNMENT_FORM_LABEL[item.sys.governmentForm]}
+                  </TooltipMeta>
+                ) : null}
+                <TooltipPeriod>
+                  {formatPoliticalSystemPeriod(item.sys)}
+                </TooltipPeriod>
+              </TooltipBody>,
+            )
+          }
+          onMouseMove={(evt) => tooltip.move(evt.clientX, evt.clientY)}
+          onMouseLeave={() => tooltip.hide()}
+        >
+          {item.w >= 44 ? <span>{item.label}</span> : null}
+        </RegimeBandChip>
+      ))}
+    </>
+  )
+}
+
+const RegimeBandChip = styled.div<{ $alt: boolean }>`
+  position: absolute;
+  top: 16px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: ${({ theme, $alt }) =>
+    theme.mode === 'dark'
+      ? $alt
+        ? 'rgba(99, 102, 241, 0.22)'
+        : 'rgba(14, 165, 233, 0.18)'
+      : $alt
+        ? 'rgba(79, 70, 229, 0.11)'
+        : 'rgba(2, 132, 199, 0.10)'};
+  border-left: 2px solid
+    ${({ $alt }) => ($alt ? 'rgba(99, 102, 241, 0.7)' : 'rgba(14, 165, 233, 0.7)')};
+  font-size: 9.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  z-index: 1;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 `

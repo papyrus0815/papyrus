@@ -8,6 +8,9 @@ import {
   canAutoClosePreviousOngoingCabinet,
   checkPersonTenureLifespanWarning,
   checkReshuffleTenureRangeWarning,
+  computeConstitutionalTermEndParts,
+  findMatchingPoliticalSystem,
+  findOverlappingPoliticalSystems,
   formatPartyOptionLabel,
   formatPeriodDurationSummary,
   formatQuickPersonPreview,
@@ -18,6 +21,7 @@ import {
   resolveMatchingPartyFromMemberships,
   resolvePolityYearGuidance,
   resolveSmartDefaultExecutiveRole,
+  resolveSmartDefaultMonarchRole,
 } from './cabinet-form-modal.helpers'
 
 const HUNGARY_MOCK_COUNTRY: UnifiedCountry = {
@@ -408,5 +412,180 @@ describe('cabinet-form-modal.helpers (Hungary & multi-era UX)', () => {
       cabinetEnd: { era: 'AD', year: '', month: '', day: '' },
     })
     expect(reshuffleWarn).toContain('1917.06')
+  })
+
+  it('distinguishes same-year regime transitions (1960 1st vs 2nd Republic) using month/day precision', () => {
+    const firstRep = {
+      id: 'ps-kr-1',
+      name: '제1공화국',
+      countryId: 'c-kr',
+      historicalCountryId: null,
+      startEra: 'AD',
+      startYear: 1948,
+      startMonth: 8,
+      startDay: 15,
+      endEra: 'AD',
+      endYear: 1960,
+      endMonth: 6,
+      endDay: 14,
+      isCurrent: false,
+      governmentForm: 'PRESIDENTIAL',
+    } as unknown as PoliticalSystem
+    const secondRep = {
+      id: 'ps-kr-2',
+      name: '제2공화국',
+      countryId: 'c-kr',
+      historicalCountryId: null,
+      startEra: 'AD',
+      startYear: 1960,
+      startMonth: 6,
+      startDay: 15,
+      endEra: 'AD',
+      endYear: 1961,
+      endMonth: 5,
+      endDay: 16,
+      isCurrent: false,
+      governmentForm: 'PARLIAMENTARY',
+    } as unknown as PoliticalSystem
+
+    expect(
+      findMatchingPoliticalSystem(
+        [firstRep, secondRep],
+        { countryId: 'c-kr', historicalCountryId: null },
+        1960,
+        3,
+        15,
+      )?.id,
+    ).toBe('ps-kr-1')
+
+    expect(
+      findMatchingPoliticalSystem(
+        [firstRep, secondRep],
+        { countryId: 'c-kr', historicalCountryId: null },
+        1960,
+        8,
+        19,
+      )?.id,
+    ).toBe('ps-kr-2')
+  })
+
+  it('defaults monarch role to PoliticalSystem monarch position (황제/천황) and computes constitutional term expiry', () => {
+    const koreanEmpire = {
+      id: 'ps-daehan',
+      name: '대한제국 전제군주정',
+      governmentForm: 'ABSOLUTE_MONARCHY',
+      headOfStatePositionId: 'pos-emperor',
+      headOfStatePosition: {
+        id: 'pos-emperor',
+        title: '황제',
+        positionType: 'HEAD_OF_STATE',
+        isMonarchical: true,
+      },
+      headOfStateHasPower: true,
+    } as unknown as PoliticalSystem
+
+    const monarchDefault = resolveSmartDefaultMonarchRole({
+      headPositionOptions: [
+        {
+          id: 'pos-king',
+          title: '국왕',
+          positionType: 'HEAD_OF_STATE',
+          isMonarchical: true,
+        },
+        {
+          id: 'pos-emperor',
+          title: '황제',
+          positionType: 'HEAD_OF_STATE',
+          isMonarchical: true,
+        },
+      ],
+      activePoliticalSystem: koreanEmpire,
+    })
+    expect(monarchDefault).toEqual(
+      expect.objectContaining({
+        title: '황제',
+        positionType: 'HEAD_OF_STATE',
+        positionDefId: 'pos-emperor',
+      }),
+    )
+
+    const directRuleExec = resolveSmartDefaultExecutiveRole({
+      headPositionOptions: [],
+      existingHeadTenures: [],
+      activePoliticalSystem: koreanEmpire,
+      polityDisplayName: '대한제국',
+      isHistoricalPolity: true,
+    })
+    expect(directRuleExec.title).toBe('황제')
+    expect(directRuleExec.positionDefId).toBe('pos-emperor')
+
+    expect(
+      computeConstitutionalTermEndParts(
+        { era: 'AD', year: '2022', month: '5', day: '10' },
+        5,
+      ),
+    ).toEqual({ era: 'AD', year: '2027', month: '5', day: '10' })
+  })
+
+  it('detects overlapping regimes in same-year transitions (1960 1st vs 2nd Republic) and narrows down when exact month/day is given', () => {
+    const regimes = [
+      {
+        id: 'ps-kr-1st',
+        name: '제1공화국',
+        countryId: 'c-kr',
+        historicalCountryId: null,
+        startEra: 'AD',
+        startYear: 1948,
+        startMonth: 8,
+        startDay: 15,
+        endEra: 'AD',
+        endYear: 1960,
+        endMonth: 6,
+        endDay: 14,
+        isCurrent: false,
+      },
+      {
+        id: 'ps-kr-2nd',
+        name: '제2공화국',
+        countryId: 'c-kr',
+        historicalCountryId: null,
+        startEra: 'AD',
+        startYear: 1960,
+        startMonth: 6,
+        startDay: 15,
+        endEra: 'AD',
+        endYear: 1961,
+        endMonth: 5,
+        endDay: 16,
+        isCurrent: false,
+      },
+    ] as unknown as PoliticalSystem[]
+
+    const yearOnlyOverlap = findOverlappingPoliticalSystems(
+      regimes,
+      { countryId: 'c-kr', historicalCountryId: null },
+      1960,
+      null,
+      null,
+    )
+    expect(yearOnlyOverlap.map((r) => r.id)).toEqual(['ps-kr-1st', 'ps-kr-2nd'])
+
+    const exactAugustMatch = findOverlappingPoliticalSystems(
+      regimes,
+      { countryId: 'c-kr', historicalCountryId: null },
+      1960,
+      8,
+      23,
+    )
+    expect(exactAugustMatch.map((r) => r.id)).toEqual(['ps-kr-2nd'])
+    expect(
+      findMatchingPoliticalSystem(
+        regimes,
+        { countryId: 'c-kr', historicalCountryId: null },
+        1960,
+        4,
+        27,
+      )?.id,
+    ).toBe('ps-kr-1st')
   })
 })

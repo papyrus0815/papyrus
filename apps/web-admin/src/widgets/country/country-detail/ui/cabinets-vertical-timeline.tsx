@@ -43,6 +43,7 @@ export interface CabinetVerticalTimelineRow {
   /** '제1대' · '제3대 2기' */
   termLabel: string | null
   cabinetName: string | null
+  regimeLabel?: string | null
   territoryLabel: string | null
   /** 취임일이 걸친 군주 재위 연호 한 줄 */
   reignEraLine: string | null
@@ -245,10 +246,29 @@ export function CabinetsVerticalTimeline({
                       </NameLine>
                     )}
                     {isContinuation ? (
-                      row.territoryLabel ? <SubLine>{row.territoryLabel}</SubLine> : null
-                    ) : row.cabinetName || row.territoryLabel ? (
+                      row.regimeLabel || row.territoryLabel ? (
+                        <SubLine>
+                          {[
+                            row.regimeLabel,
+                            row.territoryLabel && row.territoryLabel !== row.regimeLabel
+                              ? row.territoryLabel
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </SubLine>
+                      ) : null
+                    ) : row.cabinetName || row.regimeLabel || row.territoryLabel ? (
                       <SubLine>
-                        {[row.cabinetName, row.territoryLabel].filter(Boolean).join(' · ')}
+                        {[
+                          row.cabinetName,
+                          row.regimeLabel,
+                          row.territoryLabel && row.territoryLabel !== row.regimeLabel
+                            ? row.territoryLabel
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </SubLine>
                     ) : null}
                     {row.reignEraLine ? <EraLine>{row.reignEraLine}</EraLine> : null}

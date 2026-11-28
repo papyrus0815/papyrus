@@ -10,6 +10,7 @@ import {
   GOVERNMENT_FORM_LABEL,
   headOfGovernmentTitleOf,
   headOfStateTitleOf,
+  resolveEffectivePowerHolderRole,
 } from '@/entities/political-system/model/political-system'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
@@ -88,6 +89,8 @@ export interface CurrentHead {
   positionTitle: string
   positionType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT' | string
   startDate: string
+  /** 현행 헌정 체제의 실권 보유 수반인지 여부 */
+  isPowerHolder?: boolean
 }
 
 /** 비어 있는 축을 채우러 갈 곳 — 대시보드 위젯이 탭 이동으로 해석한다 */
@@ -149,6 +152,13 @@ export interface CurrentCabinetSummary {
     partyId: string | null
     partyName: string
     count: number
+    color?: string | null
+  }>
+  /** 내각 공식 지지 정당 연결 (`CabinetPoliticalParty` — 집권여당·연정·신임보완) */
+  cabinetParties?: Array<{
+    partyId: string
+    partyName: string
+    role: string
     color?: string | null
   }>
 }
@@ -268,6 +278,10 @@ export interface CivicInstitutionalSnapshot {
   avgTurnout: number | null
   electionTypeCounts: Array<{ type: string; count: number }>
   latestLegislativeElectionId: string | null
+  /** 하원(또는 단원) 최신 총선 ID 묶음 — 병립형(지역구+비례)일 때 함께 담김 */
+  latestLegislativeElectionIds?: string[]
+  /** 양원제일 때 상원 최신 선거 ID 묶음 */
+  latestUpperElectionIds?: string[]
   regimeEras: RegimeEraBand[]
   recentTreaties: Array<{
     id: string
@@ -287,6 +301,8 @@ export interface CivicInstitutionalSnapshot {
     stateStructure: string | null
     legislatureType: string | null
     partySystem: string | null
+    constitutionLaw?: { id: string; name: string } | null
+    foundingEvent?: { id: string; title: string } | null
   } | null
 }
 
@@ -1285,14 +1301,34 @@ export function useCountryDashboardStats(
       const end = t.endDate ? new Date(t.endDate).getTime() : null
       return end == null || end >= now
     })
+    const rawSystems = Array.isArray(politicalSystemsQuery.data)
+      ? (politicalSystemsQuery.data as any[])
+      : []
+    const scopedSystems =
+      country?.type === 'modern'
+        ? rawSystems.filter((s) => !s?.historicalCountryId)
+        : rawSystems
+    const activeSystemForHeads =
+      scopedSystems.find((s) => s?.isCurrent) ??
+      [...scopedSystems].reverse().find((s) => s?.endYear == null) ??
+      null
+    const effectivePowerRole = activeSystemForHeads
+      ? resolveEffectivePowerHolderRole(activeSystemForHeads)
+      : 'HEAD_OF_STATE'
+
     const ordered = [...matches]
     ordered.sort((a, b) => {
-      const order = (t: any) =>
-        (t.positionType ??
-          t.positionDefinition?.positionType ??
-          t.position?.positionType) === 'HEAD_OF_STATE'
-          ? 0
-          : 1
+      const typeOf = (t: any) =>
+        t.positionType ??
+        t.positionDefinition?.positionType ??
+        t.position?.positionType
+      const order = (t: any) => {
+        const pt = typeOf(t)
+        if (effectivePowerRole === 'HEAD_OF_GOVERNMENT') {
+          return pt === 'HEAD_OF_GOVERNMENT' ? 0 : 1
+        }
+        return pt === 'HEAD_OF_STATE' ? 0 : 1
+      }
       const oa = order(a)
       const ob = order(b)
       if (oa !== ob) return oa - ob
@@ -1316,6 +1352,15 @@ export function useCountryDashboardStats(
         ) ||
         t.person?.name ||
         '이름 없음'
+      const posType =
+        t.positionType ??
+        t.positionDefinition?.positionType ??
+        t.position?.positionType ??
+        'OTHER'
+      const isPowerHolder =
+        effectivePowerRole === 'DUAL_EXECUTIVE'
+          ? posType === 'HEAD_OF_STATE' || posType === 'HEAD_OF_GOVERNMENT'
+          : posType === effectivePowerRole
       return {
         tenureId: t.id,
         personId: t.person?.id ?? '',
@@ -1326,15 +1371,17 @@ export function useCountryDashboardStats(
           t.title ??
           t.positionDefinition?.title ??
           '직책 미상',
-        positionType:
-          t.positionType ??
-          t.positionDefinition?.positionType ??
-          t.position?.positionType ??
-          'OTHER',
+        positionType: posType,
         startDate: t.startDate,
+        isPowerHolder,
       }
     })
-  }, [tenuresQuery.data, country?.defaultNameDisplayOrder])
+  }, [
+    tenuresQuery.data,
+    politicalSystemsQuery.data,
+    country?.type,
+    country?.defaultNameDisplayOrder,
+  ])
 
   const treatyCount = (treatiesQuery.data as { total?: number } | undefined)
     ?.total ?? 0
@@ -1614,12 +1661,25 @@ export function useCountryDashboardStats(
       const id = m.person?.id ?? m.personId
       if (typeof id === 'string' && id) uniquePersonIds.add(id)
     }
+    const cabinetParties = Array.isArray(top.politicalParties)
+      ? top.politicalParties
+          .filter((cp: any) => cp?.party?.id)
+          .map((cp: any) => ({
+            partyId: String(cp.party.id),
+            partyName: String(
+              cp.party.shortName?.trim() || cp.party.name || '정당',
+            ),
+            role: String(cp.role ?? 'LEADING'),
+            color: cp.party.brandColor ?? null,
+          }))
+      : []
     return {
       cabinetId: top.id,
       name: top.name ?? '현 행정부',
       startDate: top.headTenure?.startDate ?? null,
       ministerCount: uniquePersonIds.size,
       partyDistribution,
+      cabinetParties,
     }
   }, [latestActiveCabinetId, cabinetsQuery.data, tenuresQuery.data])
 
@@ -2429,9 +2489,77 @@ export function useCountryDashboardStats(
           Date.parse(String(b.pollDate ?? '')) -
           Date.parse(String(a.pollDate ?? '')),
       )
-    const latestLegislativeElectionId = sortedPastLeg[0]?.id
-      ? String(sortedPastLeg[0].id)
-      : null
+    const pickLatestParallelGroup = (pool: any[]): string[] => {
+      if (pool.length === 0) return []
+      const anchor = pool[0]!
+      const anchorId = String(anchor.id)
+      const anchorType = String(anchor.electionType)
+      const isParallelCandidate =
+        anchorType === 'PARLIAMENTARY_CONSTITUENCY' ||
+        anchorType === 'PARLIAMENTARY_PROPORTIONAL'
+      if (!isParallelCandidate) return [anchorId]
+      const anchorChamber = anchor.chamberId ?? null
+      const anchorOrd = anchor.convocationOrdinal ?? null
+      const anchorDay = String(anchor.pollDate ?? '').slice(0, 10)
+      const companion = pool.find((other) => {
+        if (!other?.id || String(other.id) === anchorId) return false
+        const otherType = String(other.electionType)
+        if (
+          otherType !== 'PARLIAMENTARY_CONSTITUENCY' &&
+          otherType !== 'PARLIAMENTARY_PROPORTIONAL'
+        ) {
+          return false
+        }
+        if (otherType === anchorType) return false
+        if ((other.chamberId ?? null) !== anchorChamber) return false
+        if (anchorOrd != null && other.convocationOrdinal === anchorOrd) {
+          return true
+        }
+        return Boolean(
+          anchorDay && String(other.pollDate ?? '').slice(0, 10) === anchorDay,
+        )
+      })
+      return companion ? [anchorId, String(companion.id)] : [anchorId]
+    }
+
+    const activeLowerChamberId: string | null =
+      activeSys?.lowerChamberId ?? null
+    const activeUpperChamberId: string | null =
+      activeSys?.legislatureType === 'BICAMERAL'
+        ? (activeSys?.upperChamberId ?? null)
+        : null
+
+    const lowerPool = sortedPastLeg.filter((el) => {
+      if (String(el.electionType) === 'UPPER_HOUSE') return false
+      if (el.chamber?.role === 'UPPER') return false
+      if (activeUpperChamberId && el.chamberId === activeUpperChamberId) {
+        return false
+      }
+      if (activeLowerChamberId && el.chamberId) {
+        return el.chamberId === activeLowerChamberId
+      }
+      return true
+    })
+
+    const upperPool =
+      activeSys?.legislatureType === 'BICAMERAL'
+        ? sortedPastLeg.filter((el) => {
+            if (activeUpperChamberId) {
+              return el.chamberId === activeUpperChamberId
+            }
+            return (
+              el.chamber?.role === 'UPPER' ||
+              String(el.electionType) === 'UPPER_HOUSE'
+            )
+          })
+        : []
+
+    const latestLegislativeElectionIds = pickLatestParallelGroup(
+      lowerPool.length > 0 ? lowerPool : sortedPastLeg,
+    )
+    const latestUpperElectionIds = pickLatestParallelGroup(upperPool)
+    const latestLegislativeElectionId =
+      latestLegislativeElectionIds[0] ?? null
 
     return {
       turnoutSparkPoints,
@@ -2440,6 +2568,8 @@ export function useCountryDashboardStats(
         .map(([type, count]) => ({ type, count }))
         .sort((a, b) => b.count - a.count),
       latestLegislativeElectionId,
+      latestLegislativeElectionIds,
+      latestUpperElectionIds,
       regimeEras,
       recentTreaties,
       recentLaws,
@@ -2461,6 +2591,18 @@ export function useCountryDashboardStats(
             stateStructure: activeSys.stateStructure ?? null,
             legislatureType: activeSys.legislatureType ?? null,
             partySystem: activeSys.partySystem ?? null,
+            constitutionLaw: activeSys.constitutionLaw?.id
+              ? {
+                  id: String(activeSys.constitutionLaw.id),
+                  name: String(activeSys.constitutionLaw.name ?? '헌법'),
+                }
+              : null,
+            foundingEvent: activeSys.foundingEvent?.id
+              ? {
+                  id: String(activeSys.foundingEvent.id),
+                  title: String(activeSys.foundingEvent.title ?? '출범 사건'),
+                }
+              : null,
           }
         : null,
     }

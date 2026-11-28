@@ -3,6 +3,10 @@ import { useRef } from 'react'
 import { useQueries } from '@tanstack/react-query'
 
 import { personCareerApi } from '@/shared/api/person-career'
+import {
+  listPoliticalSystems,
+  type PoliticalSystem,
+} from '@/shared/api/political-system'
 
 import type { PinnedSegment } from '../model/types'
 import { normalizeTenures, type TenureBar } from '../lib/normalize-tenures'
@@ -12,15 +16,18 @@ export interface SegmentTenuresResult {
   countryId: string
   kind: PinnedSegment['kind']
   bars: TenureBar[]
+  politicalSystems?: PoliticalSystem[]
   isLoading: boolean
   error: unknown
 }
 
 /** 로딩·미해결 segment가 공유하는 안정 빈 배열 — bars 참조가 흔들리지 않게 한다 */
 const EMPTY_BARS: TenureBar[] = []
+const EMPTY_SYSTEMS: PoliticalSystem[] = []
 
 interface CacheEntry {
   data: TenureBar[] | undefined
+  systems: PoliticalSystem[] | undefined
   isLoading: boolean
   error: unknown
   result: SegmentTenuresResult
@@ -50,11 +57,27 @@ export function useSegmentTenures(segments: PinnedSegment[]): SegmentTenuresResu
     })),
   })
 
+  const systemQueries = useQueries({
+    queries: segments.map((seg) => ({
+      queryKey: ['heads-of-state', 'political-systems', seg.kind, seg.countryId],
+      queryFn: async () => {
+        const scope =
+          seg.kind === 'COUNTRY'
+            ? { countryId: seg.countryId }
+            : { historicalCountryId: seg.countryId }
+        return listPoliticalSystems(scope).catch(() => EMPTY_SYSTEMS)
+      },
+      staleTime: 5 * 60 * 1000,
+    })),
+  })
+
   const cacheRef = useRef(new Map<string, CacheEntry>())
 
   return segments.map((seg, idx) => {
     const q = queries[idx]
+    const sysQ = systemQueries[idx]
     const data = q?.data as TenureBar[] | undefined
+    const systems = sysQ?.data as PoliticalSystem[] | undefined
     const isLoading = q?.isLoading ?? false
     const error = q?.error ?? null
 
@@ -62,6 +85,7 @@ export function useSegmentTenures(segments: PinnedSegment[]): SegmentTenuresResu
     if (
       cached &&
       cached.data === data &&
+      cached.systems === systems &&
       cached.isLoading === isLoading &&
       cached.error === error &&
       cached.result.countryId === seg.countryId &&
@@ -75,10 +99,11 @@ export function useSegmentTenures(segments: PinnedSegment[]): SegmentTenuresResu
       countryId: seg.countryId,
       kind: seg.kind,
       bars: data ?? EMPTY_BARS,
+      politicalSystems: systems ?? EMPTY_SYSTEMS,
       isLoading,
       error,
     }
-    cacheRef.current.set(seg.segmentId, { data, isLoading, error, result })
+    cacheRef.current.set(seg.segmentId, { data, systems, isLoading, error, result })
     return result
   })
 }

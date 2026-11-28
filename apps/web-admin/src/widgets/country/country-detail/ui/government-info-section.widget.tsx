@@ -154,6 +154,7 @@ export function GovernmentInfoSection({
         cabinetId?: string | null
         departmentId?: string | null
         regimeId?: string | null
+        createCabinet?: boolean
       },
     ) => {
       userManuallyPickedTabRef.current = true
@@ -178,6 +179,11 @@ export function GovernmentInfoSection({
         nextParams.set('regimeId', extra.regimeId)
       } else {
         nextParams.delete('regimeId')
+      }
+      if (extra?.createCabinet) {
+        nextParams.set('createCabinet', '1')
+      } else {
+        nextParams.delete('createCabinet')
       }
       setSearchParams(nextParams, { replace: true })
     },
@@ -393,6 +399,12 @@ export function GovernmentInfoSection({
               onOpenCabinetsByRegime={(targetRegimeId) =>
                 switchSubTab('cabinets', { regimeId: targetRegimeId })
               }
+              onRegisterCabinetForRegime={(targetRegimeId) =>
+                switchSubTab('cabinets', {
+                  regimeId: targetRegimeId,
+                  createCabinet: true,
+                })
+              }
             />
           </GovContentStage>
         )}
@@ -518,6 +530,48 @@ export function GovernmentInfoSection({
         width="min(940px, 100vw)"
       >
         <div style={{ padding: '20px 24px 36px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              marginBottom: 14,
+              padding: '9px 12px',
+              borderRadius: 8,
+              border: '1px solid rgba(148, 163, 184, 0.28)',
+              fontSize: 12,
+            }}
+          >
+            <span>
+              전 국가 보편 직책·국가별 스코프·역대 재임자·중복 직책 통합은 전용
+              관리 지면에서 한눈에 다룰 수 있습니다.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setPositionsDrawerOpen(false)
+                navigate(
+                  pathKeys.government.positions({
+                    polity: country?.id
+                      ? `${country.type === 'historical' ? 'h' : 'm'}:${country.id}`
+                      : undefined,
+                  }),
+                )
+              }}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                fontWeight: 700,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                whiteSpace: 'nowrap',
+                color: 'inherit',
+              }}
+            >
+              관직·직책 정본 관리 페이지 열기 ↗
+            </button>
+          </div>
           <PositionDefinitionsSection
             country={country}
             defaultScopeFilter="country_only"

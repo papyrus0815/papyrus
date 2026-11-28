@@ -73,6 +73,12 @@ function HeadsOfStateTimelineInner() {
     endYear: number
   } | null>(null)
   const [modalPersonId, setModalPersonId] = useState<string | null>(null)
+  const [showRegimeBands, setShowRegimeBands] = useState<boolean>(() =>
+    readJSON<boolean>('hos-show-regime-bands:v1', true),
+  )
+  const [powerHoldersOnly, setPowerHoldersOnly] = useState<boolean>(() =>
+    readJSON<boolean>('hos-power-holders-only:v1', false),
+  )
   const navigate = useNavigate()
   const userPresets = useUserPresets()
   const categoryFilter = useCategoryFilter()
@@ -444,6 +450,38 @@ function HeadsOfStateTimelineInner() {
             isAllEnabled={categoryFilter.isAllEnabled}
             onReset={categoryFilter.reset}
           />
+          <RegimeTogglesGroup aria-label="헌정 체제 및 실권 기준 옵션">
+            <TableToggle
+              type="button"
+              $active={showRegimeBands}
+              aria-pressed={showRegimeBands}
+              onClick={() =>
+                setShowRegimeBands((prev) => {
+                  const next = !prev
+                  writeJSON('hos-show-regime-bands:v1', next)
+                  return next
+                })
+              }
+              title="각 국가 트랙 상단에 제1~6공화국·바이마르 등 헌정 체제 구간 띠를 함께 표시합니다"
+            >
+              헌정 체제 띠
+            </TableToggle>
+            <TableToggle
+              type="button"
+              $active={powerHoldersOnly}
+              aria-pressed={powerHoldersOnly}
+              onClick={() =>
+                setPowerHoldersOnly((prev) => {
+                  const next = !prev
+                  writeJSON('hos-power-holders-only:v1', next)
+                  return next
+                })
+              }
+              title="정체·헌정의 실권 설정(대통령제→대통령, 내각제·입헌군주제→총리)에 따라 당시 실질 행정수반만 남깁니다"
+            >
+              실권 수반만 보기
+            </TableToggle>
+          </RegimeTogglesGroup>
         </LegendRow>
 
         <Body>
@@ -492,6 +530,8 @@ function HeadsOfStateTimelineInner() {
               notify.info('사건을 오버레이에서 제거했습니다')
             }}
             categoryFilter={categoryFilter.isEnabled}
+            showRegimeBands={showRegimeBands}
+            powerHoldersOnly={powerHoldersOnly}
           />
           <AnimatePresence initial={false}>
             {state.highlightYear != null && state.rows.length > 0 && (
@@ -829,12 +869,22 @@ const LegendRow = styled.div`
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   padding: 8px 32px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.primary};
   @media (max-width: 760px) {
     padding: 6px 16px;
   }
+`
+
+const RegimeTogglesGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 `
 
 const Body = styled.div`

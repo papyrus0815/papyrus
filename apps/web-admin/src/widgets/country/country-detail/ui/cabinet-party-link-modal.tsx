@@ -44,6 +44,8 @@ export type CabinetPartyLinkModalProps = {
   cabinetId: string
   countryId?: string
   historicalCountryId?: string
+  /** 내각 출범일 (있으면 직전 선거를 최상단에 자동 추천·기본 선택) */
+  cabinetStartDate?: string | null
   /** 이미 연결된 정당 — 선택 목록에서 제외 */
   linkedPartyIds: string[]
   isDark: boolean
@@ -54,6 +56,7 @@ export function CabinetPartyLinkModal({
   cabinetId,
   countryId,
   historicalCountryId,
+  cabinetStartDate,
   linkedPartyIds,
   isDark,
   onClose,
@@ -78,7 +81,7 @@ export function CabinetPartyLinkModal({
     enabled: countryQueryEnabled && linkMode === 'manual',
   })
 
-  const { data: electionsList = [], isPending: electionsPending } = useQuery({
+  const { data: electionsListRaw = [], isPending: electionsPending } = useQuery({
     queryKey: [
       'elections-for-cabinet-party',
       countryId ?? '',
@@ -95,6 +98,66 @@ export function CabinetPartyLinkModal({
       }),
     enabled: countryQueryEnabled && linkMode === 'election',
   })
+
+  // 내각 출범일을 prop 또는 QueryCache에서 해석하여 출범 직전 치러진 선거를 우선 정렬·추천한다
+  const resolvedCabinetStartMs = useMemo(() => {
+    let rawDate = cabinetStartDate ?? null
+    if (!rawDate) {
+      const cachedQueries = queryClient.getQueriesData<unknown>({
+        queryKey: ['cabinets-by-country'],
+      })
+      for (const [, data] of cachedQueries) {
+        if (!Array.isArray(data)) continue
+        const found = data.find(
+          (row: { id?: string; startDate?: string | null; headTenure?: { startDate?: string | null } | null }) =>
+            row?.id === cabinetId,
+        )
+        if (found) {
+          rawDate = found.startDate ?? found.headTenure?.startDate ?? null
+          if (rawDate) break
+        }
+      }
+    }
+    if (!rawDate) return null
+    const parsed = Date.parse(rawDate)
+    return Number.isFinite(parsed) ? parsed : null
+  }, [cabinetStartDate, cabinetId, queryClient])
+
+  const { electionsList, recommendedElectionId } = useMemo(() => {
+    if (resolvedCabinetStartMs == null || electionsListRaw.length === 0) {
+      return { electionsList: electionsListRaw, recommendedElectionId: null }
+    }
+    const cutoffMs = resolvedCabinetStartMs + 14 * 86_400_000
+    const beforeCabinet: typeof electionsListRaw = []
+    const afterCabinet: typeof electionsListRaw = []
+    for (const el of electionsListRaw) {
+      const pollMs = el.pollDate ? Date.parse(el.pollDate) : NaN
+      if (Number.isFinite(pollMs) && pollMs <= cutoffMs) {
+        beforeCabinet.push(el)
+      } else {
+        afterCabinet.push(el)
+      }
+    }
+    beforeCabinet.sort(
+      (left, right) =>
+        Date.parse(right.pollDate ?? '') - Date.parse(left.pollDate ?? ''),
+    )
+    return {
+      electionsList: [...beforeCabinet, ...afterCabinet],
+      recommendedElectionId: beforeCabinet[0]?.id ?? null,
+    }
+  }, [electionsListRaw, resolvedCabinetStartMs])
+
+  React.useEffect(() => {
+    if (
+      linkMode === 'election' &&
+      !electionId &&
+      recommendedElectionId &&
+      !electionsPending
+    ) {
+      setElectionId(recommendedElectionId)
+    }
+  }, [linkMode, electionId, recommendedElectionId, electionsPending])
 
   const { data: electionDetail, isPending: electionDetailPending } = useQuery({
     queryKey: ['election-detail', electionId],
@@ -348,8 +411,12 @@ export function CabinetPartyLinkModal({
                             : el.pollDate || ''
                           return (
                             <option key={el.id} value={el.id}>
+                              {el.id === recommendedElectionId
+                                ? '★ 출범 직전 선거 — '
+                                : ''}
                               {el.shortName?.trim() || el.name} ·{' '}
                               {labelElectionType(el.electionType)}
+                              {el.chamber?.name ? ` (${el.chamber.name})` : ''}
                               {pollLabel ? ` · ${pollLabel}` : ''}
                             </option>
                           )

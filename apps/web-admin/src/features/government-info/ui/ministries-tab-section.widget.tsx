@@ -29,7 +29,7 @@ import {
   resolveDepartmentLifecycleStatus,
   toSignedHistoricalYear,
 } from '@/shared/lib/ministry-department/ministry-department-utils'
-import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerSplitPaneSkeleton } from '@/shared/ui/ledger-skeleton'
 import {
   EmptyStateFeatureCard,
   EmptyStateFill,
@@ -950,7 +950,10 @@ export function MinistriesTabSection({
               </EmptyStateSimple>
             </EmptyStateFill>
           ) : ministriesLoading ? (
-            <ChartSkeleton variant="bars" rows={5} />
+            <LedgerSplitPaneSkeleton
+              rows={7}
+              label="중앙부처·행정기관을 불러오는 중"
+            />
           ) : displayCategoriesList.length === 0 ? (
             <EmptyStateFill>
               <EmptyStateFeatureCard

@@ -1,8 +1,14 @@
 import {
+  addTermYearsToIsoDate,
+  diagnosePoliticalSystemsIntegrity,
+  resolveEffectivePowerHolderRole,
+} from '@/entities/political-system/model/political-system'
+import {
   compareCabinetsNewestFirst,
   dateRangesOverlapIso,
   doesCabinetMatchPoliticalSystem,
   filterDepartmentsForCabinet,
+  findActivePoliticalSystemForCabinet,
   findDepartmentForMember,
   getTenureChronologyKey,
   isConstitutionalNonExecutiveOrgan,
@@ -646,6 +652,165 @@ describe('department-cabinet-matcher', () => {
         },
       )
       expect(filtered.map((dept) => dept.id)).toEqual(['dept-moj'])
+    })
+
+    it('동일 연도(1960년) 내 헌정 체제 교체 시 월·일 경계로 내각 소속 정체를 정확히 판별한다', () => {
+      const firstRepublic = {
+        historicalCountryId: null,
+        startEra: 'AD' as const,
+        startYear: 1948,
+        startMonth: 8,
+        startDay: 15,
+        endEra: 'AD' as const,
+        endYear: 1960,
+        endMonth: 6,
+        endDay: 14,
+        isCurrent: false,
+      }
+      const secondRepublic = {
+        historicalCountryId: null,
+        startEra: 'AD' as const,
+        startYear: 1960,
+        startMonth: 6,
+        startDay: 15,
+        endEra: 'AD' as const,
+        endYear: 1961,
+        endMonth: 5,
+        endDay: 16,
+        isCurrent: false,
+      }
+      const changMyonCabinet = {
+        startDate: '1960-08-23',
+        endDate: '1961-05-18',
+        historicalCountryId: null,
+      }
+
+      expect(doesCabinetMatchPoliticalSystem(changMyonCabinet, firstRepublic)).toBe(
+        false,
+      )
+      expect(doesCabinetMatchPoliticalSystem(changMyonCabinet, secondRepublic)).toBe(
+        true,
+      )
+    })
+
+    it('내각에 명시적 politicalSystemId가 지정되어 있으면 날짜보다 우선하여 귀속 체제를 판별한다', () => {
+      const sysA = {
+        id: 'ps-transitional',
+        historicalCountryId: null,
+        startEra: 'AD' as const,
+        startYear: 1960,
+        startMonth: 4,
+        startDay: 27,
+        endEra: 'AD' as const,
+        endYear: 1960,
+        endMonth: 6,
+        endDay: 14,
+        isCurrent: false,
+      }
+      const sysB = {
+        id: 'ps-second-rep',
+        historicalCountryId: null,
+        startEra: 'AD' as const,
+        startYear: 1960,
+        startMonth: 6,
+        startDay: 15,
+        endEra: 'AD' as const,
+        endYear: 1961,
+        endMonth: 5,
+        endDay: 16,
+        isCurrent: false,
+      }
+      const pinnedCabinet = {
+        politicalSystemId: 'ps-transitional',
+        startDate: '1960-06-15',
+        endDate: '1960-08-19',
+        historicalCountryId: null,
+      }
+      expect(doesCabinetMatchPoliticalSystem(pinnedCabinet, sysA)).toBe(true)
+      expect(doesCabinetMatchPoliticalSystem(pinnedCabinet, sysB)).toBe(false)
+      expect(
+        findActivePoliticalSystemForCabinet([sysA, sysB] as any, {
+          countryId: 'kr',
+          politicalSystemId: 'ps-transitional',
+          startDate: '1960-06-15',
+        })?.id,
+      ).toBe('ps-transitional')
+    })
+
+    it('실권 수반 판별·법정 임기 만료일 계산·헌정 연표 정합성 진단을 정확히 수행한다', () => {
+      // 1) 실권 수반 판별
+      expect(
+        resolveEffectivePowerHolderRole({
+          headOfStateHasPower: false,
+          headOfGovernmentHasPower: true,
+          governmentForm: 'PARLIAMENTARY',
+        }),
+      ).toBe('HEAD_OF_GOVERNMENT')
+      expect(
+        resolveEffectivePowerHolderRole({
+          headOfStateHasPower: true,
+          headOfGovernmentHasPower: true,
+          governmentForm: 'SEMI_PRESIDENTIAL',
+        }),
+      ).toBe('DUAL_EXECUTIVE')
+      expect(
+        resolveEffectivePowerHolderRole({
+          headOfStateHasPower: null,
+          headOfGovernmentHasPower: null,
+          governmentForm: 'PRESIDENTIAL',
+        }),
+      ).toBe('HEAD_OF_STATE')
+
+      // 2) 법정 임기 만료일 계산
+      expect(addTermYearsToIsoDate('2024-05-30', 4)).toBe('2028-05-29')
+      expect(addTermYearsToIsoDate('2022-05-10', 5)).toBe('2027-05-09')
+
+      // 3) 헌정 연표 정합성 진단 (기간 중복 · 공백 · 양원제 상원 누락 · 미매칭 선거 연도)
+      const issues = diagnosePoliticalSystemsIntegrity({
+        systems: [
+          {
+            id: 'ps-1',
+            name: '제1공화국',
+            countryId: 'kr',
+            historicalCountryId: null,
+            startEra: 'AD',
+            startYear: 1948,
+            endEra: 'AD',
+            endYear: 1960,
+            isCurrent: false,
+            legislatureType: 'BICAMERAL',
+            lowerChamberId: 'ch-low',
+            upperChamberId: null,
+            upperHouseName: null,
+          },
+          {
+            id: 'ps-3',
+            name: '제3공화국',
+            countryId: 'kr',
+            historicalCountryId: null,
+            startEra: 'AD',
+            startYear: 1963,
+            endEra: 'AD',
+            endYear: 1972,
+            isCurrent: false,
+            legislatureType: 'UNICAMERAL',
+            lowerChamberId: 'ch-na',
+          },
+        ] as any,
+        electionDates: [
+          {
+            id: 'el-1987',
+            name: '제13대 대선',
+            pollDate: '1987-12-16',
+            countryId: 'kr',
+            historicalCountryId: null,
+          },
+        ],
+      })
+      const kinds = issues.map((issue) => issue.kind)
+      expect(kinds).toContain('MISSING_UPPER_CHAMBER')
+      expect(kinds).toContain('CONSTITUTIONAL_GAP')
+      expect(kinds).toContain('UNCOVERED_RECORDS')
     })
   })
 })

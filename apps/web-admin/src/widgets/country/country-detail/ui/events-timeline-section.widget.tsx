@@ -30,6 +30,13 @@ import styled, { useTheme } from 'styled-components'
 
 import { useEvents } from '@/entities/event/model'
 import type { EventCountryParticipant } from '@/entities/event/model/country-participant'
+import { usePoliticalSystems } from '@/entities/political-system/api'
+import {
+  formatPeriod as formatPoliticalSystemPeriod,
+  GOVERNMENT_FORM_LABEL,
+  parseIsoOrYmdToDateKey,
+  toSignedDateKey,
+} from '@/entities/political-system/model/political-system'
 import {
   domainAccent,
   domainLabel,
@@ -86,7 +93,7 @@ import {
   LedgerViewSwitch,
   LedgerViewSwitchItem,
 } from './country-ledger-primitives'
-import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
 
 export interface EventsTimelineSectionProps {
@@ -160,6 +167,9 @@ export function EventsTimelineSection({
     'all' | 'modern' | 'historical'
   >('all')
   const [polityFilterId, setPolityFilterId] = useState<string | null>(null)
+  const [regimeFilterId, setRegimeFilterId] = useState<string | null>(
+    () => searchParams.get('regimeId') || null,
+  )
   const [domainFilter, setDomainFilter] = useState<EventDomainKey | 'all'>('all')
   const [selectedCentury, setSelectedCentury] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -192,6 +202,14 @@ export function EventsTimelineSection({
     countryId: countryId ?? undefined,
     autoLoadAll: true,
   })
+
+  const { data: politicalSystems = [] } = usePoliticalSystems(
+    countryId
+      ? isHistoricalCountry
+        ? { historicalCountryId: countryId, includeConstituents: true }
+        : { countryId }
+      : {},
+  )
 
   const scopeSet = useMemo(
     () => (scopeCountryIds?.length ? new Set(scopeCountryIds) : null),
@@ -441,6 +459,78 @@ export function EventsTimelineSection({
     theme.mode,
   ])
 
+  const regimeEraChips = useMemo(() => {
+    if (politicalSystems.length === 0 || list.length === 0) return []
+    const doesEventMatchSystem = (
+      evt: (typeof list)[number],
+      sysStartKey: number | null,
+      sysEndKey: number | null,
+      foundingEventId: string | null,
+    ) => {
+      if (foundingEventId && evt.id === foundingEventId) return true
+      const evtStartKey = parseIsoOrYmdToDateKey(evt.startDate, 'start')
+      if (evtStartKey == null) return false
+      const evtEndKey =
+        parseIsoOrYmdToDateKey(evt.endDate, 'end') ?? evtStartKey
+      const minBound = sysStartKey ?? Number.NEGATIVE_INFINITY
+      const maxBound = sysEndKey ?? Number.POSITIVE_INFINITY
+      return evtStartKey <= maxBound && evtEndKey >= minBound
+    }
+
+    return politicalSystems
+      .map((sys) => {
+        const startKey = toSignedDateKey(
+          sys.startEra,
+          sys.startYear,
+          sys.startMonth,
+          sys.startDay,
+          'start',
+        )
+        const endKey = toSignedDateKey(
+          sys.endEra,
+          sys.endYear,
+          sys.endMonth,
+          sys.endDay,
+          'end',
+        )
+        if (startKey == null && endKey == null) return null
+        const formLabel = sys.governmentForm
+          ? GOVERNMENT_FORM_LABEL[sys.governmentForm] ?? sys.governmentForm
+          : '정체'
+        const label = sys.name?.trim() || formLabel
+        const periodLabel = formatPoliticalSystemPeriod(sys)
+        const foundingEventId = sys.foundingEvent?.id ?? null
+        const count = list.reduce(
+          (acc, evt) =>
+            acc +
+            (doesEventMatchSystem(evt, startKey, endKey, foundingEventId)
+              ? 1
+              : 0),
+          0,
+        )
+        return {
+          id: sys.id,
+          label,
+          formLabel,
+          periodLabel,
+          isCurrent: Boolean(sys.isCurrent),
+          startKey,
+          endKey,
+          foundingEventId,
+          count,
+        }
+      })
+      .filter((chip): chip is NonNullable<typeof chip> => chip != null)
+  }, [politicalSystems, list])
+
+  const activeRegimeChip = useMemo(
+    () =>
+      regimeFilterId
+        ? (regimeEraChips.find((chip) => chip.id === regimeFilterId) ?? null)
+        : null,
+    [regimeEraChips, regimeFilterId],
+  )
+
   const filteredList = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     return list.filter((eventItem) => {
@@ -452,6 +542,27 @@ export function EventsTimelineSection({
 
       if (domainFilter !== 'all' && domKey !== domainFilter) {
         return false
+      }
+
+      if (activeRegimeChip) {
+        if (
+          activeRegimeChip.foundingEventId &&
+          eventItem.id === activeRegimeChip.foundingEventId
+        ) {
+          // 출범 사건 직접 일치
+        } else {
+          const evtStartKey = parseIsoOrYmdToDateKey(
+            eventItem.startDate,
+            'start',
+          )
+          if (evtStartKey == null) return false
+          const evtEndKey =
+            parseIsoOrYmdToDateKey(eventItem.endDate, 'end') ?? evtStartKey
+          const minBound =
+            activeRegimeChip.startKey ?? Number.NEGATIVE_INFINITY
+          const maxBound = activeRegimeChip.endKey ?? Number.POSITIVE_INFINITY
+          if (!(evtStartKey <= maxBound && evtEndKey >= minBound)) return false
+        }
       }
 
       if (selectedCentury != null) {
@@ -504,6 +615,7 @@ export function EventsTimelineSection({
   }, [
     list,
     domainFilter,
+    activeRegimeChip,
     selectedCentury,
     polityFilterId,
     hasHistoricalBridge,
@@ -824,6 +936,7 @@ export function EventsTimelineSection({
   const isFiltered =
     eraScopeFilter !== 'all' ||
     polityFilterId != null ||
+    regimeFilterId != null ||
     domainFilter !== 'all' ||
     selectedCentury != null ||
     searchQuery.trim().length > 0
@@ -831,6 +944,7 @@ export function EventsTimelineSection({
   const resetAllFilters = () => {
     setEraScopeFilter('all')
     setPolityFilterId(null)
+    setRegimeFilterId(null)
     setDomainFilter('all')
     setSelectedCentury(null)
     setSearchQuery('')
@@ -1129,16 +1243,19 @@ export function EventsTimelineSection({
               aria-selected={
                 eraScopeFilter === 'all' &&
                 domainFilter === 'all' &&
-                polityFilterId == null
+                polityFilterId == null &&
+                regimeFilterId == null
               }
               $active={
                 eraScopeFilter === 'all' &&
                 domainFilter === 'all' &&
-                polityFilterId == null
+                polityFilterId == null &&
+                regimeFilterId == null
               }
               onClick={() => {
                 setEraScopeFilter('all')
                 setPolityFilterId(null)
+                setRegimeFilterId(null)
                 setDomainFilter('all')
               }}
             >
@@ -1210,6 +1327,17 @@ export function EventsTimelineSection({
                 onClick={() => setPolityFilterId(null)}
               >
                 <span>{activePolityName}</span>
+                <FiX size={11} />
+              </ActiveFilterPill>
+            )}
+            {activeRegimeChip && (
+              <ActiveFilterPill
+                type="button"
+                onClick={() => setRegimeFilterId(null)}
+              >
+                <span>
+                  헌정: {activeRegimeChip.label} ({activeRegimeChip.periodLabel})
+                </span>
                 <FiX size={11} />
               </ActiveFilterPill>
             )}
@@ -1298,9 +1426,51 @@ export function EventsTimelineSection({
         </FilterToolbar>
       )}
 
+      {list.length > 0 && regimeEraChips.length > 0 && (
+        <RegimeEraStrip aria-label="헌정 체제별 사건 필터">
+          <RegimeEraStripLabel>헌정 체제</RegimeEraStripLabel>
+          <RegimeEraChipsRow>
+            <ScopeFilterChip
+              type="button"
+              $active={regimeFilterId == null}
+              aria-pressed={regimeFilterId == null}
+              onClick={() => setRegimeFilterId(null)}
+            >
+              전체 헌정기
+            </ScopeFilterChip>
+            {regimeEraChips.map((chip) => {
+              const active = regimeFilterId === chip.id
+              return (
+                <ScopeFilterChip
+                  key={chip.id}
+                  type="button"
+                  $active={active}
+                  aria-pressed={active}
+                  title={`${chip.label} (${chip.formLabel} · ${chip.periodLabel}) 구간의 사건만 보기`}
+                  onClick={() =>
+                    setRegimeFilterId((prev) =>
+                      prev === chip.id ? null : chip.id,
+                    )
+                  }
+                >
+                  <span>{chip.label}</span>
+                  <RegimePeriodMeta>{chip.periodLabel}</RegimePeriodMeta>
+                  <ChipCount>{chip.count}</ChipCount>
+                </ScopeFilterChip>
+              )
+            })}
+          </RegimeEraChipsRow>
+        </RegimeEraStrip>
+      )}
+
       <section aria-label="사건 연대표 본문">
         {isLoading && list.length === 0 ? (
-          <ChartSkeleton variant="bars" rows={6} />
+          <LedgerTableSkeleton
+            rows={8}
+            columns={4}
+            showToolbar={false}
+            label="사건 연대표를 불러오는 중"
+          />
         ) : list.length === 0 ? (
           <CountryTabEmptyState
             Icon={FiCalendar}
@@ -2395,4 +2565,35 @@ const LoadMoreErrorBox = styled.div`
   gap: 12px;
   font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RegimeEraStrip = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 8px 0 4px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const RegimeEraStripLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+`
+
+const RegimeEraChipsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+const RegimePeriodMeta = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
 `

@@ -4,7 +4,14 @@ import { useQuery } from '@tanstack/react-query'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { usePoliticalSystems } from '@/entities/political-system/api'
-import { GOVERNMENT_FORM_LABEL } from '@/entities/political-system/model/political-system'
+import {
+  formatPeriod as formatPoliticalSystemPeriod,
+  GOVERNMENT_FORM_LABEL,
+  LEGISLATURE_TYPE_LABEL,
+  parseIsoOrYmdToDateKey,
+  toSignedDateKey,
+  toSignedYear,
+} from '@/entities/political-system/model/political-system'
 import {
   DEPARTMENT_KIND_LABEL,
   administrationDepartmentApi,
@@ -52,6 +59,29 @@ export type GovernmentCategoryStatRow = {
   categoryName: string
   departmentCount: number
   categoryId?: string | null
+}
+
+export type GovernmentFormDurationStat = {
+  formKey: string
+  formLabel: string
+  totalYears: number
+  regimeCount: number
+  cabinetCount: number
+  sharePercent: number
+}
+
+export type ConstitutionalRegimeSummaryRow = {
+  id: string
+  name: string
+  governmentFormKey: string | null
+  governmentFormLabel: string
+  legislatureLabel: string | null
+  periodLabel: string
+  durationYears: number | null
+  isCurrent: boolean
+  cabinetCount: number
+  avgCabinetYears: number | null
+  constitutionLawName: string | null
 }
 
 export type GovernmentStatisticsOptions = {
@@ -223,6 +253,143 @@ export function useGovernmentStatistics(options?: GovernmentStatisticsOptions) {
         departmentCount: entryValue.count,
         categoryId: entryValue.categoryId,
       }))
+
+    // 헌정사 · 정부형태 누적 존속 및 체제별 내각 통계 집계
+    const nowYear = new Date().getFullYear()
+    const cabinetStartKeys = visibleCabinets.map((cabItem) => {
+      const effStartIso = resolveCabinetEffectiveDates(cabItem).startDate
+      const startKey =
+        toSignedDateKey(
+          cabItem.startEra,
+          cabItem.startYear,
+          cabItem.startMonth,
+          cabItem.startDay,
+          'start',
+        ) ?? parseIsoOrYmdToDateKey(effStartIso, 'start')
+      return {
+        cab: cabItem,
+        politicalSystemId:
+          (cabItem as { politicalSystemId?: string | null }).politicalSystemId ??
+          null,
+        startKey,
+      }
+    })
+
+    const formMap = new Map<
+      string,
+      { formLabel: string; totalYears: number; regimeCount: number; cabinetCount: number }
+    >()
+
+    const regimeSummaries: ConstitutionalRegimeSummaryRow[] =
+      politicalSystems.map((sys) => {
+        const startSigned = toSignedYear(sys.startEra, sys.startYear)
+        const endSigned =
+          toSignedYear(sys.endEra, sys.endYear) ??
+          (sys.isCurrent && !isHistorical ? nowYear : null)
+        const durationYears =
+          startSigned != null && endSigned != null && endSigned >= startSigned
+            ? Math.max(
+                1,
+                endSigned -
+                  startSigned -
+                  (startSigned < 0 && endSigned > 0 ? 1 : 0),
+              )
+            : null
+
+        const sysStartKey = toSignedDateKey(
+          sys.startEra,
+          sys.startYear,
+          sys.startMonth,
+          sys.startDay,
+          'start',
+        )
+        const sysEndKey = toSignedDateKey(
+          sys.endEra,
+          sys.endYear,
+          sys.endMonth,
+          sys.endDay,
+          'end',
+        )
+
+        const matchedCabinets = cabinetStartKeys.filter((entry) => {
+          if (entry.politicalSystemId) {
+            return entry.politicalSystemId === sys.id
+          }
+          if (entry.startKey == null) return false
+          if (sysStartKey == null && sysEndKey == null) return false
+          const minKey = sysStartKey ?? Number.NEGATIVE_INFINITY
+          const maxKey = sysEndKey ?? Number.POSITIVE_INFINITY
+          return entry.startKey >= minKey && entry.startKey <= maxKey
+        })
+
+        const cabinetCount = matchedCabinets.length
+        const avgCabinetYears =
+          durationYears != null && cabinetCount > 0
+            ? Math.round((durationYears / cabinetCount) * 10) / 10
+            : null
+
+        const formKey = sys.governmentForm ?? 'OTHER'
+        const formLabel = sys.governmentForm
+          ? GOVERNMENT_FORM_LABEL[sys.governmentForm] ?? sys.governmentForm
+          : '기타·미분류'
+        const legislatureLabel = sys.legislatureType
+          ? LEGISLATURE_TYPE_LABEL[sys.legislatureType] ?? sys.legislatureType
+          : null
+        const displayName = sys.name?.trim() || formLabel
+
+        const prevForm = formMap.get(formKey) ?? {
+          formLabel,
+          totalYears: 0,
+          regimeCount: 0,
+          cabinetCount: 0,
+        }
+        prevForm.totalYears += durationYears ?? 0
+        prevForm.regimeCount += 1
+        prevForm.cabinetCount += cabinetCount
+        formMap.set(formKey, prevForm)
+
+        return {
+          id: sys.id,
+          name: displayName,
+          governmentFormKey: sys.governmentForm ?? null,
+          governmentFormLabel: formLabel,
+          legislatureLabel,
+          periodLabel: formatPoliticalSystemPeriod(sys),
+          durationYears,
+          isCurrent: Boolean(sys.isCurrent),
+          cabinetCount,
+          avgCabinetYears,
+          constitutionLawName: sys.constitutionLaw?.name ?? null,
+        }
+      })
+
+    const totalMeasuredRegimeYears = Array.from(formMap.values()).reduce(
+      (acc, entry) => acc + entry.totalYears,
+      0,
+    )
+    const governmentFormBreakdown: GovernmentFormDurationStat[] = Array.from(
+      formMap.entries(),
+    )
+      .map(([formKey, entry]) => ({
+        formKey,
+        formLabel: entry.formLabel,
+        totalYears: entry.totalYears,
+        regimeCount: entry.regimeCount,
+        cabinetCount: entry.cabinetCount,
+        sharePercent:
+          totalMeasuredRegimeYears > 0
+            ? Math.round((entry.totalYears / totalMeasuredRegimeYears) * 1000) /
+              10
+            : Math.round(
+                (entry.regimeCount / Math.max(1, politicalSystems.length)) *
+                  1000,
+              ) / 10,
+      }))
+      .sort(
+        (left, right) =>
+          right.totalYears - left.totalYears ||
+          right.regimeCount - left.regimeCount,
+      )
 
     const allEvents: GovernmentStatisticTimelineItem[] = []
 
@@ -438,6 +605,9 @@ export function useGovernmentStatistics(options?: GovernmentStatisticsOptions) {
       allEvents,
       eventCounts,
       categoryStats,
+      governmentFormBreakdown,
+      regimeSummaries,
+      totalMeasuredRegimeYears,
     }
   }, [
     departments,
