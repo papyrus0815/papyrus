@@ -74,6 +74,7 @@ import { shouldEndFollowStart } from '../lib/event-date-parts'
 
 import { EventCoverField } from './event-cover-field'
 import { EventDateField } from './event-date-field'
+import { PlaceMiniMap } from './place-mini-map'
 
 export interface SimilarEventCandidate {
   id: string
@@ -468,6 +469,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
+  const keywordInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const subtitleInputRef = useRef<HTMLInputElement>(null)
   const detachableSubtitle = useMemo(
@@ -1345,246 +1347,245 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         id="event-form-group-basic"
         aria-labelledby="event-form-group-basic-title"
       >
+        {/* 표지(대표 이미지) — 왼쪽 판 맨 위, 판 폭 그대로 */}
+        <CoverSlot>
+          <EventCoverField
+            src={thumbnail ? getImageUrl(thumbnail) : ''}
+            uploading={thumbnail.startsWith('blob:')}
+            onPick={() => {
+              playClickSound()
+              thumbnailInputRef.current?.click()
+            }}
+            onFile={(file) => {
+              playClickSound()
+              void handleThumbnailUpload(file)
+            }}
+            onRemove={() => {
+              playClickSound()
+              if (thumbnail.startsWith('blob:')) {
+                URL.revokeObjectURL(thumbnail)
+              }
+              setThumbnail('')
+              setThumbnailFile(null)
+              if (thumbnailInputRef.current) {
+                thumbnailInputRef.current.value = ''
+              }
+            }}
+            onImageError={() => {
+              if (thumbnail.startsWith('blob:')) {
+                URL.revokeObjectURL(thumbnail)
+              }
+            }}
+          />
+          <input
+            ref={thumbnailInputRef}
+            type="file"
+            accept="image/*"
+            aria-label="대표 이미지 파일"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              void handleThumbnailUpload(file)
+            }}
+          />
+        </CoverSlot>
         <FormGroupTitle id="event-form-group-basic-title">
           기본 정보
         </FormGroupTitle>
-        {/* 표지(대표 이미지) | 사건명 — 표지가 라벨 열 자리에 서서 폼의 얼굴이 된다 */}
-        <S.FormRow>
-          <CoverColumn>
-            <EventCoverField
-              src={thumbnail ? getImageUrl(thumbnail) : ''}
-              uploading={thumbnail.startsWith('blob:')}
-              onPick={() => {
-                playClickSound()
-                thumbnailInputRef.current?.click()
-              }}
-              onFile={(file) => {
-                playClickSound()
-                void handleThumbnailUpload(file)
-              }}
-              onRemove={() => {
-                playClickSound()
-                if (thumbnail.startsWith('blob:')) {
-                  URL.revokeObjectURL(thumbnail)
-                }
-                setThumbnail('')
-                setThumbnailFile(null)
-                if (thumbnailInputRef.current) {
-                  thumbnailInputRef.current.value = ''
-                }
-              }}
-              onImageError={() => {
-                if (thumbnail.startsWith('blob:')) {
-                  URL.revokeObjectURL(thumbnail)
-                }
-              }}
-            />
-            <input
-              ref={thumbnailInputRef}
-              type="file"
-              accept="image/*"
-              aria-label="대표 이미지 파일"
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                void handleThumbnailUpload(file)
-              }}
-            />
-          </CoverColumn>
-          <S.FormField>
-            <TitleFieldLabel htmlFor="event-form-title">
-              사건명 <S.Required>*</S.Required>
-            </TitleFieldLabel>
-            <TitleInput
-              ref={titleInputRef}
-              id="event-form-title"
-              type="text"
-              /* 모달이 열리면 닫기(✕)가 아니라 여기로 — 등록의 첫 동작은 이름 쓰기다 */
-              data-autofocus=""
-              placeholder="예: 제2차 세계 대전"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              aria-invalid={Boolean(titleError)}
-              aria-describedby={
-                titleError ? 'event-form-title-error' : undefined
-              }
-            />
-            {titleError && (
-              <S.ErrorMessage id="event-form-title-error" role="alert">
-                {titleError}
-              </S.ErrorMessage>
-            )}
-            {setSubtitle && (
-              <SubtitleFieldGroup>
-                <SubtitleAssistRow>
-                  <SubtitleFieldLabel htmlFor="event-form-subtitle">
-                    부제 · 이칭 <span>(선택 · 통칭·작전명·핵심 성격)</span>
-                  </SubtitleFieldLabel>
-                  {detachableSubtitle && (
-                    <SubtitleSplitBtn
-                      type="button"
-                      onClick={() => {
-                        playClickSound()
-                        setTitle(detachableSubtitle.mainTitle)
-                        setSubtitle(detachableSubtitle.detachedSubtitle)
-                        requestAnimationFrame(() => subtitleInputRef.current?.focus())
-                      }}
-                    >
-                      ‘{detachableSubtitle.detachedSubtitle}’을(를) 부제로 분리
-                    </SubtitleSplitBtn>
-                  )}
-                </SubtitleAssistRow>
-                <SubtitleInputRow>
-                  <SubtitleInput
-                    ref={subtitleInputRef}
-                    id="event-form-subtitle"
-                    type="text"
-                    maxLength={150}
-                    placeholder="예: 바르바로사 작전 — 나치 독일의 소련 침공 지시"
-                    aria-label="부제 · 이칭·작전명"
-                    value={subtitle}
-                    onChange={(changeEvent) => setSubtitle(changeEvent.target.value)}
-                  />
-                  {subtitle && (
-                    <SubtitleClearBtn
-                      type="button"
-                      aria-label="부제 지우기"
-                      title="부제 지우기"
-                      onClick={() => {
-                        setSubtitle('')
-                        requestAnimationFrame(() => subtitleInputRef.current?.focus())
-                      }}
-                    >
-                      <FiX size={13} aria-hidden />
-                    </SubtitleClearBtn>
-                  )}
-                </SubtitleInputRow>
-              </SubtitleFieldGroup>
-            )}
-            {(titleSuggestionSlot ||
-              titleYearSuggestion ||
-              titleLocationSuggestion ||
-              (onOpenCountryModal && titleSuggestedCountries.length > 0)) && (
-              <TitleSuggestionRow aria-label="사건명 자동 감지 추천">
-                {titleYearSuggestion && (
-                  <TitleSuggestionButton
-                    type="button"
-                    onClick={applyTitleYearSuggestion}
-                  >
-                    추천 기간 적용: {titleYearSuggestion.label}
-                  </TitleSuggestionButton>
-                )}
-                {titleSuggestionSlot && (
-                  <TitleSuggestionButton
+        {/* 사건명 — 표지 아래 제목처럼(글의 머리) */}
+        <TitleBlock>
+          <TitleEyebrow htmlFor="event-form-title">
+            사건명 <S.Required>*</S.Required>
+          </TitleEyebrow>
+          <TitleInput
+            ref={titleInputRef}
+            id="event-form-title"
+            type="text"
+            /* 모달이 열리면 닫기(✕)가 아니라 여기로 — 등록의 첫 동작은 이름 쓰기다 */
+            data-autofocus=""
+            placeholder="예: 제2차 세계 대전"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            aria-invalid={Boolean(titleError)}
+            aria-describedby={
+              titleError ? 'event-form-title-error' : undefined
+            }
+          />
+          {titleError && (
+            <S.ErrorMessage id="event-form-title-error" role="alert">
+              {titleError}
+            </S.ErrorMessage>
+          )}
+          {setSubtitle && (
+            <SubtitleFieldGroup>
+              <SubtitleAssistRow>
+                <SubtitleFieldLabel htmlFor="event-form-subtitle">
+                  부제 · 이칭 <span>(선택 · 통칭·작전명·핵심 성격)</span>
+                </SubtitleFieldLabel>
+                {detachableSubtitle && (
+                  <SubtitleSplitBtn
                     type="button"
                     onClick={() => {
                       playClickSound()
-                      titleSuggestionSlot.onApply()
+                      setTitle(detachableSubtitle.mainTitle)
+                      setSubtitle(detachableSubtitle.detachedSubtitle)
+                      requestAnimationFrame(() => subtitleInputRef.current?.focus())
                     }}
                   >
-                    추천 분류 적용: {titleSuggestionSlot.label}
-                  </TitleSuggestionButton>
+                    ‘{detachableSubtitle.detachedSubtitle}’을(를) 부제로 분리
+                  </SubtitleSplitBtn>
                 )}
-                {onOpenCountryModal && titleSuggestedCountries.length > 0 && (
-                  <TitleSuggestionButton
+              </SubtitleAssistRow>
+              <SubtitleInputRow>
+                <SubtitleInput
+                  ref={subtitleInputRef}
+                  id="event-form-subtitle"
+                  type="text"
+                  maxLength={150}
+                  placeholder="예: 바르바로사 작전 — 나치 독일의 소련 침공 지시"
+                  aria-label="부제 · 이칭·작전명"
+                  value={subtitle}
+                  onChange={(changeEvent) => setSubtitle(changeEvent.target.value)}
+                />
+                {subtitle && (
+                  <SubtitleClearBtn
                     type="button"
-                    onClick={() => addBatchParticipants(titleSuggestedCountries)}
-                  >
-                    추천 참여국 적용:{' '}
-                    {titleSuggestedCountries
-                      .map((candidate) => candidate.label)
-                      .join(' · ')}
-                  </TitleSuggestionButton>
-                )}
-                {titleLocationSuggestion && locationSlot && (
-                  <TitleSuggestionButton
-                    type="button"
+                    aria-label="부제 지우기"
+                    title="부제 지우기"
                     onClick={() => {
-                      playClickSound()
+                      setSubtitle('')
+                      requestAnimationFrame(() => subtitleInputRef.current?.focus())
+                    }}
+                  >
+                    <FiX size={13} aria-hidden />
+                  </SubtitleClearBtn>
+                )}
+              </SubtitleInputRow>
+            </SubtitleFieldGroup>
+          )}
+          {(titleSuggestionSlot ||
+            titleYearSuggestion ||
+            titleLocationSuggestion ||
+            (onOpenCountryModal && titleSuggestedCountries.length > 0)) && (
+            <TitleSuggestionRow aria-label="사건명 자동 감지 추천">
+              {titleYearSuggestion && (
+                <TitleSuggestionButton
+                  type="button"
+                  onClick={applyTitleYearSuggestion}
+                >
+                  추천 기간 적용: {titleYearSuggestion.label}
+                </TitleSuggestionButton>
+              )}
+              {titleSuggestionSlot && (
+                <TitleSuggestionButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    titleSuggestionSlot.onApply()
+                  }}
+                >
+                  추천 분류 적용: {titleSuggestionSlot.label}
+                </TitleSuggestionButton>
+              )}
+              {onOpenCountryModal && titleSuggestedCountries.length > 0 && (
+                <TitleSuggestionButton
+                  type="button"
+                  onClick={() => addBatchParticipants(titleSuggestedCountries)}
+                >
+                  추천 참여국 적용:{' '}
+                  {titleSuggestedCountries
+                    .map((candidate) => candidate.label)
+                    .join(' · ')}
+                </TitleSuggestionButton>
+              )}
+              {titleLocationSuggestion && locationSlot && (
+                <TitleSuggestionButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    locationSlot.setLocation(titleLocationSuggestion)
+                  }}
+                >
+                  추천 위치 적용: {titleLocationSuggestion}
+                </TitleSuggestionButton>
+              )}
+              {[
+                Boolean(titleSuggestionSlot),
+                Boolean(titleYearSuggestion),
+                Boolean(titleLocationSuggestion),
+                Boolean(onOpenCountryModal && titleSuggestedCountries.length > 0),
+              ].filter(Boolean).length >= 2 && (
+                <TitleApplyAllButton
+                  type="button"
+                  aria-label="사건명 추천 모두 적용"
+                  onClick={() => {
+                    playClickSound()
+                    titleSuggestionSlot?.onApply()
+                    if (titleYearSuggestion) {
+                      const nextPrecision =
+                        titleYearSuggestion.precision ?? 'year'
+                      setStartDate(titleYearSuggestion.startIso)
+                      setStartDatePrecision?.(nextPrecision)
+                      setStartTime('')
+                      if (!endDate) {
+                        setEndDate(titleYearSuggestion.endIso)
+                        setEndDatePrecision?.(nextPrecision)
+                        setEndTime('')
+                      }
+                    }
+                    if (onOpenCountryModal && titleSuggestedCountries.length > 0) {
+                      addBatchParticipants(titleSuggestedCountries)
+                    }
+                    if (titleLocationSuggestion && locationSlot) {
                       locationSlot.setLocation(titleLocationSuggestion)
-                    }}
-                  >
-                    추천 위치 적용: {titleLocationSuggestion}
-                  </TitleSuggestionButton>
-                )}
-                {[
-                  Boolean(titleSuggestionSlot),
-                  Boolean(titleYearSuggestion),
-                  Boolean(titleLocationSuggestion),
-                  Boolean(onOpenCountryModal && titleSuggestedCountries.length > 0),
-                ].filter(Boolean).length >= 2 && (
-                  <TitleApplyAllButton
-                    type="button"
-                    aria-label="사건명 추천 모두 적용"
-                    onClick={() => {
-                      playClickSound()
-                      titleSuggestionSlot?.onApply()
-                      if (titleYearSuggestion) {
-                        const nextPrecision =
-                          titleYearSuggestion.precision ?? 'year'
-                        setStartDate(titleYearSuggestion.startIso)
-                        setStartDatePrecision?.(nextPrecision)
-                        setStartTime('')
-                        if (!endDate) {
-                          setEndDate(titleYearSuggestion.endIso)
-                          setEndDatePrecision?.(nextPrecision)
-                          setEndTime('')
-                        }
-                      }
-                      if (onOpenCountryModal && titleSuggestedCountries.length > 0) {
-                        addBatchParticipants(titleSuggestedCountries)
-                      }
-                      if (titleLocationSuggestion && locationSlot) {
-                        locationSlot.setLocation(titleLocationSuggestion)
-                      }
-                    }}
-                  >
-                    한 번에 채우기
-                  </TitleApplyAllButton>
-                )}
-              </TitleSuggestionRow>
-            )}
-            {similarEventsSlot && similarEventsSlot.candidates.length > 0 && (
-              <SimilarEventsBar role="region" aria-label="유사·중복 사건 안내">
-                <SimilarEventsLabel>유사 사건</SimilarEventsLabel>
-                {similarEventsSlot.candidates.map((candidate) => (
-                  <SimilarEventItem key={candidate.id}>
-                    <SimilarEventTitle>
-                      {candidate.title}
-                      {candidate.dateLabel ? ` (${candidate.dateLabel})` : ''}
-                    </SimilarEventTitle>
-                    {candidate.kind === 'COLLECTION' &&
-                      similarEventsSlot.onSelectAsParent && (
-                        <SimilarEventActionBtn
-                          type="button"
-                          aria-label={`'${candidate.title}' 상위 사건으로 지정`}
-                          onClick={() => {
-                            playClickSound()
-                            similarEventsSlot.onSelectAsParent?.(candidate)
-                          }}
-                        >
-                          상위 사건으로 지정
-                        </SimilarEventActionBtn>
-                      )}
-                    {similarEventsSlot.onAddAsRelated && (
+                    }
+                  }}
+                >
+                  한 번에 채우기
+                </TitleApplyAllButton>
+              )}
+            </TitleSuggestionRow>
+          )}
+          {similarEventsSlot && similarEventsSlot.candidates.length > 0 && (
+            <SimilarEventsBar role="region" aria-label="유사·중복 사건 안내">
+              <SimilarEventsLabel>유사 사건</SimilarEventsLabel>
+              {similarEventsSlot.candidates.map((candidate) => (
+                <SimilarEventItem key={candidate.id}>
+                  <SimilarEventTitle>
+                    {candidate.title}
+                    {candidate.dateLabel ? ` (${candidate.dateLabel})` : ''}
+                  </SimilarEventTitle>
+                  {candidate.kind === 'COLLECTION' &&
+                    similarEventsSlot.onSelectAsParent && (
                       <SimilarEventActionBtn
                         type="button"
-                        aria-label={`'${candidate.title}' 연관 사건으로 추가`}
+                        aria-label={`'${candidate.title}' 상위 사건으로 지정`}
                         onClick={() => {
                           playClickSound()
-                          similarEventsSlot.onAddAsRelated?.(candidate)
+                          similarEventsSlot.onSelectAsParent?.(candidate)
                         }}
                       >
-                        연관 사건으로 추가
+                        상위 사건으로 지정
                       </SimilarEventActionBtn>
                     )}
-                  </SimilarEventItem>
-                ))}
-              </SimilarEventsBar>
-            )}
-          </S.FormField>
-        </S.FormRow>
+                  {similarEventsSlot.onAddAsRelated && (
+                    <SimilarEventActionBtn
+                      type="button"
+                      aria-label={`'${candidate.title}' 연관 사건으로 추가`}
+                      onClick={() => {
+                        playClickSound()
+                        similarEventsSlot.onAddAsRelated?.(candidate)
+                      }}
+                    >
+                      연관 사건으로 추가
+                    </SimilarEventActionBtn>
+                  )}
+                </SimilarEventItem>
+              ))}
+            </SimilarEventsBar>
+          )}
+        </TitleBlock>
 
         {/* 기간 — 사건명 바로 다음에 배치하여 시대 기준(역사국가·동시대 사건/인물)을 먼저 잡는다 */}
         <S.FormRow>
@@ -4081,255 +4082,339 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormRow>
         )}
 
-        {/* 위치 */}
+        {/* 위치 — 글자 칸이 아니라 '지도 위의 한 점': 왼쪽 작은 지도 + 장소 이름·좌표·메모 */}
         {locationSlot && (
           <S.FormRow>
             <S.FormLabel htmlFor="event-form-location">
               위치<OptionalTag>(선택)</OptionalTag>
             </S.FormLabel>
             <S.FormField>
-              <LocationInputRow>
-                <LocationSearchAnchor
-                  onBlur={(blurEvent) => {
-                    if (
-                      !blurEvent.currentTarget.contains(
-                        blurEvent.relatedTarget as Node | null,
-                      )
-                    ) {
-                      setIsLocationQuickDismissed(true)
-                    }
-                  }}
-                >
-                  <LocationInput
-                    id="event-form-location"
-                    type="text"
-                    aria-label="위치 이름"
-                    maxLength={255}
-                    placeholder="예: 베르사유 궁전, 워털루, 판문점 (직접 입력 또는 지도에서 선택)"
-                    value={locationSlot.location}
-                    onFocus={() => setIsLocationQuickDismissed(false)}
-                    onChange={(e) => {
-                      locationSlot.setLocation(e.target.value)
-                      setActiveLocationResultIndex(0)
-                      setIsLocationQuickDismissed(false)
-                    }}
-                    onKeyDown={(keyEvent) => {
-                      const matches =
-                        locationSlot.quickSearch?.candidates ?? []
-                      if (keyEvent.key === 'ArrowDown') {
-                        if (matches.length > 0) {
-                          keyEvent.preventDefault()
-                          setIsLocationQuickDismissed(false)
-                          setActiveLocationResultIndex(
-                            (prev) => (prev + 1) % matches.length,
-                          )
-                        }
-                      } else if (keyEvent.key === 'ArrowUp') {
-                        if (matches.length > 0) {
-                          keyEvent.preventDefault()
-                          setIsLocationQuickDismissed(false)
-                          setActiveLocationResultIndex(
-                            (prev) =>
-                              (prev - 1 + matches.length) % matches.length,
-                          )
-                        }
-                      } else if (
-                        keyEvent.key === 'Enter' &&
-                        !isLocationQuickDismissed
-                      ) {
-                        if (parsedLocationCoord) {
-                          keyEvent.preventDefault()
-                          playClickSound()
-                          locationSlot.onSelectCoordinates?.(
-                            parsedLocationCoord.lat,
-                            parsedLocationCoord.lng,
-                          )
-                          locationSlot.setLocation('')
-                          setIsLocationQuickDismissed(true)
-                        } else if (matches.length > 0) {
-                          keyEvent.preventDefault()
-                          const picked =
-                            matches[
-                              Math.min(
-                                activeLocationResultIndex,
-                                matches.length - 1,
-                              )
-                            ] ?? matches[0]
-                          if (picked) {
-                            playClickSound()
-                            locationSlot.setLocation(picked.shortName)
-                            locationSlot.onSelectCoordinates?.(
-                              picked.lat,
-                              picked.lng,
-                            )
-                            setIsLocationQuickDismissed(true)
-                            setActiveLocationResultIndex(0)
-                          }
-                        }
-                      } else if (
-                        keyEvent.key === 'Escape' &&
-                        !isLocationQuickDismissed
-                      ) {
-                        keyEvent.preventDefault()
-                        setIsLocationQuickDismissed(true)
-                      }
-                    }}
-                  />
-                  {!isLocationQuickDismissed &&
-                    (parsedLocationCoord !== null ||
-                      (locationSlot.quickSearch &&
-                        locationSlot.location.trim().length >= 2 &&
-                        (locationSlot.quickSearch.candidates.length > 0 ||
-                          locationSlot.quickSearch.isSearching))) && (
-                      <CountryQuickResultBox
-                        role="region"
-                        aria-label="위치 빠른 검색 결과"
-                      >
-                        {parsedLocationCoord ? (
-                          <CountryQuickResultButton
-                            type="button"
-                            $active
-                            onClick={() => {
-                              playClickSound()
-                              locationSlot.onSelectCoordinates?.(
-                                parsedLocationCoord.lat,
-                                parsedLocationCoord.lng,
-                              )
-                              locationSlot.setLocation('')
-                              setIsLocationQuickDismissed(true)
-                            }}
-                          >
-                            <CountryQuickResultName>
-                              + 좌표로 바로 핀 설정
-                            </CountryQuickResultName>
-                            <CountryQuickResultMeta>
-                              <span>
-                                {formatLocationCoordinate(
-                                  parsedLocationCoord.lat,
-                                  parsedLocationCoord.lng,
-                                )}
-                              </span>
-                            </CountryQuickResultMeta>
-                          </CountryQuickResultButton>
-                        ) : locationSlot.quickSearch &&
-                          locationSlot.quickSearch.candidates.length > 0 ? (
-                          locationSlot.quickSearch.candidates.map(
-                            (candidate, candidateIdx) => (
-                              <CountryQuickResultButton
-                                key={candidate.placeId}
-                                type="button"
-                                $active={
-                                  candidateIdx === activeLocationResultIndex
-                                }
-                                onMouseEnter={() =>
-                                  setActiveLocationResultIndex(candidateIdx)
-                                }
-                                onClick={() => {
-                                  playClickSound()
-                                  locationSlot.setLocation(candidate.shortName)
-                                  locationSlot.onSelectCoordinates?.(
-                                    candidate.lat,
-                                    candidate.lng,
-                                  )
-                                  setIsLocationQuickDismissed(true)
-                                  setActiveLocationResultIndex(0)
-                                }}
-                              >
-                                <CountryQuickResultName>
-                                  + {candidate.shortName}
-                                </CountryQuickResultName>
-                                <CountryQuickResultMeta>
-                                  <span>{candidate.displayName}</span>
-                                </CountryQuickResultMeta>
-                              </CountryQuickResultButton>
-                            ),
-                          )
-                        ) : (
-                          <CountryQuickEmpty>
-                            장소를 검색하는 중…
-                          </CountryQuickEmpty>
-                        )}
-                      </CountryQuickResultBox>
-                    )}
-                </LocationSearchAnchor>
-                <RowAddButton
+              <PlaceCard>
+                <PlaceMapButton
                   type="button"
+                  aria-label={
+                    locationSlot.latitude != null &&
+                    locationSlot.longitude != null
+                      ? '지도 미리보기 — 눌러 핀 옮기기'
+                      : '지도 미리보기 — 눌러 핀 찍기'
+                  }
                   onClick={() => {
                     playClickSound()
                     locationSlot.onOpenMapModal()
                   }}
                 >
-                  <FiMapPin size={14} />
                   {locationSlot.latitude != null &&
-                  locationSlot.longitude != null
-                    ? '지도 핀 수정'
-                    : '지도에서 찍기'}
-                </RowAddButton>
-                {locationSplitSuggestion && locationSlot.setLocationNote && (
-                  <LocationClearBtn
-                    type="button"
-                    aria-label="위치 이름과 메모 자동 나누기"
-                    onClick={() => {
-                      playClickSound()
-                      locationSlot.setLocation(locationSplitSuggestion.label)
-                      locationSlot.setLocationNote?.(locationSplitSuggestion.note)
+                  locationSlot.longitude != null ? (
+                    <PlaceMiniMap
+                      lat={locationSlot.latitude}
+                      lng={locationSlot.longitude}
+                    />
+                  ) : (
+                    <PlaceMapEmpty aria-hidden>
+                      <FiMapPin size={20} />
+                      <span>핀 없음</span>
+                      <small>눌러 지도에서 선택</small>
+                    </PlaceMapEmpty>
+                  )}
+                </PlaceMapButton>
+                <PlaceBody>
+                  <PlaceNameAnchor
+                    onBlur={(blurEvent) => {
+                      if (
+                        !blurEvent.currentTarget.contains(
+                          blurEvent.relatedTarget as Node | null,
+                        )
+                      ) {
+                        setIsLocationQuickDismissed(true)
+                      }
                     }}
                   >
-                    이름·메모 나누기
-                  </LocationClearBtn>
-                )}
-                {locationSlot.parentLocation &&
-                  !locationSlot.location.trim() &&
-                  locationSlot.latitude == null &&
-                  locationSlot.longitude == null && (
-                    <S.AddButton
-                      type="button"
-                      aria-label="상위 사건 위치 불러오기"
-                      title={`'${locationSlot.parentLocation.parentTitle}'의 위치를 그대로 가져옵니다`}
-                      onClick={() => {
-                        const parentLoc = locationSlot.parentLocation
-                        if (!parentLoc) return
-                        playClickSound()
-                        locationSlot.setLocation(parentLoc.location)
-                        if (
-                          parentLoc.latitude != null &&
-                          parentLoc.longitude != null
+                    <PlaceNameIcon aria-hidden>
+                      <FiMapPin size={15} />
+                    </PlaceNameIcon>
+                    <PlaceNameInput
+                      id="event-form-location"
+                      type="text"
+                      aria-label="위치 이름"
+                      maxLength={255}
+                      placeholder="장소 이름 — 예: 베르사유 궁전, 워털루, 판문점"
+                      value={locationSlot.location}
+                      onFocus={() => setIsLocationQuickDismissed(false)}
+                      onChange={(e) => {
+                        locationSlot.setLocation(e.target.value)
+                        setActiveLocationResultIndex(0)
+                        setIsLocationQuickDismissed(false)
+                      }}
+                      onKeyDown={(keyEvent) => {
+                        const matches =
+                          locationSlot.quickSearch?.candidates ?? []
+                        if (keyEvent.key === 'ArrowDown') {
+                          if (matches.length > 0) {
+                            keyEvent.preventDefault()
+                            setIsLocationQuickDismissed(false)
+                            setActiveLocationResultIndex(
+                              (prev) => (prev + 1) % matches.length,
+                            )
+                          }
+                        } else if (keyEvent.key === 'ArrowUp') {
+                          if (matches.length > 0) {
+                            keyEvent.preventDefault()
+                            setIsLocationQuickDismissed(false)
+                            setActiveLocationResultIndex(
+                              (prev) =>
+                                (prev - 1 + matches.length) % matches.length,
+                            )
+                          }
+                        } else if (
+                          keyEvent.key === 'Enter' &&
+                          !isLocationQuickDismissed
                         ) {
-                          locationSlot.onSelectCoordinates?.(
-                            parentLoc.latitude,
-                            parentLoc.longitude,
-                          )
+                          if (parsedLocationCoord) {
+                            keyEvent.preventDefault()
+                            playClickSound()
+                            locationSlot.onSelectCoordinates?.(
+                              parsedLocationCoord.lat,
+                              parsedLocationCoord.lng,
+                            )
+                            locationSlot.setLocation('')
+                            setIsLocationQuickDismissed(true)
+                          } else if (matches.length > 0) {
+                            keyEvent.preventDefault()
+                            const picked =
+                              matches[
+                                Math.min(
+                                  activeLocationResultIndex,
+                                  matches.length - 1,
+                                )
+                              ] ?? matches[0]
+                            if (picked) {
+                              playClickSound()
+                              locationSlot.setLocation(picked.shortName)
+                              locationSlot.onSelectCoordinates?.(
+                                picked.lat,
+                                picked.lng,
+                              )
+                              setIsLocationQuickDismissed(true)
+                              setActiveLocationResultIndex(0)
+                            }
+                          }
+                        } else if (
+                          keyEvent.key === 'Escape' &&
+                          !isLocationQuickDismissed
+                        ) {
+                          keyEvent.preventDefault()
+                          setIsLocationQuickDismissed(true)
                         }
-                        if (parentLoc.note) {
-                          locationSlot.setLocationNote?.(parentLoc.note)
+                      }}
+                    />
+                    {!isLocationQuickDismissed &&
+                      (parsedLocationCoord !== null ||
+                        (locationSlot.quickSearch &&
+                          locationSlot.location.trim().length >= 2 &&
+                          (locationSlot.quickSearch.candidates.length > 0 ||
+                            locationSlot.quickSearch.isSearching))) && (
+                        <CountryQuickResultBox
+                          role="region"
+                          aria-label="위치 빠른 검색 결과"
+                        >
+                          {parsedLocationCoord ? (
+                            <CountryQuickResultButton
+                              type="button"
+                              $active
+                              onClick={() => {
+                                playClickSound()
+                                locationSlot.onSelectCoordinates?.(
+                                  parsedLocationCoord.lat,
+                                  parsedLocationCoord.lng,
+                                )
+                                locationSlot.setLocation('')
+                                setIsLocationQuickDismissed(true)
+                              }}
+                            >
+                              <CountryQuickResultName>
+                                + 좌표로 바로 핀 설정
+                              </CountryQuickResultName>
+                              <CountryQuickResultMeta>
+                                <span>
+                                  {formatLocationCoordinate(
+                                    parsedLocationCoord.lat,
+                                    parsedLocationCoord.lng,
+                                  )}
+                                </span>
+                              </CountryQuickResultMeta>
+                            </CountryQuickResultButton>
+                          ) : locationSlot.quickSearch &&
+                            locationSlot.quickSearch.candidates.length > 0 ? (
+                            locationSlot.quickSearch.candidates.map(
+                              (candidate, candidateIdx) => (
+                                <CountryQuickResultButton
+                                  key={candidate.placeId}
+                                  type="button"
+                                  $active={
+                                    candidateIdx === activeLocationResultIndex
+                                  }
+                                  onMouseEnter={() =>
+                                    setActiveLocationResultIndex(candidateIdx)
+                                  }
+                                  onClick={() => {
+                                    playClickSound()
+                                    locationSlot.setLocation(candidate.shortName)
+                                    locationSlot.onSelectCoordinates?.(
+                                      candidate.lat,
+                                      candidate.lng,
+                                    )
+                                    setIsLocationQuickDismissed(true)
+                                    setActiveLocationResultIndex(0)
+                                  }}
+                                >
+                                  <CountryQuickResultName>
+                                    + {candidate.shortName}
+                                  </CountryQuickResultName>
+                                  <CountryQuickResultMeta>
+                                    <span>{candidate.displayName}</span>
+                                  </CountryQuickResultMeta>
+                                </CountryQuickResultButton>
+                              ),
+                            )
+                          ) : (
+                            <CountryQuickEmpty>
+                              장소를 검색하는 중…
+                            </CountryQuickEmpty>
+                          )}
+                        </CountryQuickResultBox>
+                      )}
+                  </PlaceNameAnchor>
+                  {locationSlot.latitude != null &&
+                    locationSlot.longitude != null && (
+                      <LocationCoordBar aria-label="선택된 지도 좌표">
+                        <FiMapPin size={12} />
+                        <span>
+                          {formatLocationCoordinate(
+                            locationSlot.latitude,
+                            locationSlot.longitude,
+                          )}
+                        </span>
+                        {locationSlot.onClearCoordinates && (
+                          <LocationCoordClearBtn
+                            type="button"
+                            aria-label="지도 핀 지우기"
+                            onClick={() => {
+                              playClickSound()
+                              locationSlot.onClearCoordinates?.()
+                            }}
+                          >
+                            핀 지우기
+                          </LocationCoordClearBtn>
+                        )}
+                      </LocationCoordBar>
+                    )}
+                  {locationSlot.setLocationNote && (
+                    <LocationNoteRow>
+                      <LocationNoteBadge>위치 메모</LocationNoteBadge>
+                      <LocationNoteInput
+                        type="text"
+                        aria-label="위치 메모"
+                        value={locationSlot.locationNote ?? ''}
+                        placeholder="위치 메모 (현 지명·세부 장소·전투 지점 등 선택 입력)"
+                        onChange={(event) =>
+                          locationSlot.setLocationNote?.(event.target.value)
                         }
+                      />
+                      {Boolean(locationSlot.locationNote?.trim()) && (
+                        <LocationCoordClearBtn
+                          type="button"
+                          aria-label="위치 메모 비우기"
+                          onClick={() => {
+                            playClickSound()
+                            locationSlot.setLocationNote?.('')
+                          }}
+                        >
+                          메모 지우기
+                        </LocationCoordClearBtn>
+                      )}
+                    </LocationNoteRow>
+                  )}
+                  <PlaceActions>
+                    <PlaceActionButton
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        locationSlot.onOpenMapModal()
                       }}
                     >
                       <FiMapPin size={14} />
-                      상위 사건 위치 불러오기
-                      {locationSlot.parentLocation.location
-                        ? ` (${locationSlot.parentLocation.location})`
-                        : ''}
-                    </S.AddButton>
-                  )}
-                {(locationSlot.location.trim().length > 0 ||
-                  Boolean(locationSlot.locationNote?.trim()) ||
-                  (locationSlot.latitude != null &&
-                    locationSlot.longitude != null)) && (
-                  <LocationClearBtn
-                    type="button"
-                    aria-label="위치 비우기"
-                    onClick={() => {
-                      playClickSound()
-                      locationSlot.setLocation('')
-                      locationSlot.setLocationNote?.('')
-                      locationSlot.onClearCoordinates?.()
-                    }}
-                  >
-                    비우기
-                  </LocationClearBtn>
-                )}
-              </LocationInputRow>
+                      {locationSlot.latitude != null &&
+                      locationSlot.longitude != null
+                        ? '지도 핀 수정'
+                        : '지도에서 찍기'}
+                    </PlaceActionButton>
+                    {locationSplitSuggestion && locationSlot.setLocationNote && (
+                      <LocationClearBtn
+                        type="button"
+                        aria-label="위치 이름과 메모 자동 나누기"
+                        onClick={() => {
+                          playClickSound()
+                          locationSlot.setLocation(locationSplitSuggestion.label)
+                          locationSlot.setLocationNote?.(locationSplitSuggestion.note)
+                        }}
+                      >
+                        이름·메모 나누기
+                      </LocationClearBtn>
+                    )}
+                    {locationSlot.parentLocation &&
+                      !locationSlot.location.trim() &&
+                      locationSlot.latitude == null &&
+                      locationSlot.longitude == null && (
+                        <PlaceActionButton
+                          type="button"
+                          aria-label="상위 사건 위치 불러오기"
+                          title={`'${locationSlot.parentLocation.parentTitle}'의 위치를 그대로 가져옵니다`}
+                          onClick={() => {
+                            const parentLoc = locationSlot.parentLocation
+                            if (!parentLoc) return
+                            playClickSound()
+                            locationSlot.setLocation(parentLoc.location)
+                            if (
+                              parentLoc.latitude != null &&
+                              parentLoc.longitude != null
+                            ) {
+                              locationSlot.onSelectCoordinates?.(
+                                parentLoc.latitude,
+                                parentLoc.longitude,
+                              )
+                            }
+                            if (parentLoc.note) {
+                              locationSlot.setLocationNote?.(parentLoc.note)
+                            }
+                          }}
+                        >
+                          <FiMapPin size={14} />
+                          상위 사건 위치 불러오기
+                          {locationSlot.parentLocation.location
+                            ? ` (${locationSlot.parentLocation.location})`
+                            : ''}
+                        </PlaceActionButton>
+                      )}
+                    {(locationSlot.location.trim().length > 0 ||
+                      Boolean(locationSlot.locationNote?.trim()) ||
+                      (locationSlot.latitude != null &&
+                        locationSlot.longitude != null)) && (
+                      <LocationClearBtn
+                        type="button"
+                        aria-label="위치 비우기"
+                        onClick={() => {
+                          playClickSound()
+                          locationSlot.setLocation('')
+                          locationSlot.setLocationNote?.('')
+                          locationSlot.onClearCoordinates?.()
+                        }}
+                      >
+                        비우기
+                      </LocationClearBtn>
+                    )}
+                  </PlaceActions>
+                </PlaceBody>
+              </PlaceCard>
               {!locationSlot.location.trim() &&
                 locationSlot.latitude == null &&
                 locationSlot.longitude == null &&
@@ -4362,56 +4447,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     ))}
                   </RecentParticipantBar>
                 )}
-              {locationSlot.latitude != null &&
-                locationSlot.longitude != null && (
-                  <LocationCoordBar aria-label="선택된 지도 좌표">
-                    <FiMapPin size={12} />
-                    <span>
-                      {formatLocationCoordinate(
-                        locationSlot.latitude,
-                        locationSlot.longitude,
-                      )}
-                    </span>
-                    {locationSlot.onClearCoordinates && (
-                      <LocationCoordClearBtn
-                        type="button"
-                        aria-label="지도 핀 지우기"
-                        onClick={() => {
-                          playClickSound()
-                          locationSlot.onClearCoordinates?.()
-                        }}
-                      >
-                        핀 지우기
-                      </LocationCoordClearBtn>
-                    )}
-                  </LocationCoordBar>
-                )}
-              {locationSlot.setLocationNote && (
-                <LocationNoteRow>
-                  <LocationNoteBadge>위치 메모</LocationNoteBadge>
-                  <LocationNoteInput
-                    type="text"
-                    aria-label="위치 메모"
-                    value={locationSlot.locationNote ?? ''}
-                    placeholder="위치 메모 (현 지명·세부 장소·전투 지점 등 선택 입력)"
-                    onChange={(event) =>
-                      locationSlot.setLocationNote?.(event.target.value)
-                    }
-                  />
-                  {Boolean(locationSlot.locationNote?.trim()) && (
-                    <LocationCoordClearBtn
-                      type="button"
-                      aria-label="위치 메모 비우기"
-                      onClick={() => {
-                        playClickSound()
-                        locationSlot.setLocationNote?.('')
-                      }}
-                    >
-                      메모 지우기
-                    </LocationCoordClearBtn>
-                  )}
-                </LocationNoteRow>
-              )}
             </S.FormField>
           </S.FormRow>
         )}
@@ -4427,36 +4462,83 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </OptionalTag>
           </S.FormLabel>
           <S.FormField>
-            <KeywordInput
-              type="text"
-              aria-label="키워드 입력"
-              placeholder="같은 사건 매칭용 대표 낱말 입력 후 Enter 또는 쉼표(,) — 최대 20개·각 30자"
-              value={keywordInput}
-              onChange={(e) => setKeywordInput(e.target.value)}
-              onBlur={() => {
-                if (keywordInput.trim()) {
-                  addKeywordsFromInput()
+            {/* 태그 상자 — 칩과 입력이 한 상자 안에(입력 칸 아래 칩 줄이 따로 놀던 것을 태그 편집기 모양으로) */}
+            <KeywordTokenBox
+              onMouseDown={(mouseEvent) => {
+                if (mouseEvent.target === mouseEvent.currentTarget) {
+                  mouseEvent.preventDefault()
+                  keywordInputRef.current?.focus()
                 }
               }}
-              onKeyDown={(e) => {
-                if ((e.nativeEvent as KeyboardEvent).isComposing) return
-                if (e.key === 'Enter' || e.key === ',') {
-                  if (keywordInput.trim()) {
-                    e.preventDefault()
-                    addKeywordsFromInput()
-                  } else if (e.key === ',') {
-                    e.preventDefault()
-                  }
-                } else if (
-                  e.key === 'Backspace' &&
-                  keywordInput === '' &&
+            >
+              {keywords.length === 0 && (
+                <KeywordBoxMark aria-hidden>#</KeywordBoxMark>
+              )}
+              {keywords.map((keyword) => (
+                <KeywordChip key={keyword}>
+                  <KeywordHash aria-hidden>#</KeywordHash>
+                  {keyword}
+                  <KeywordChipRemove
+                    type="button"
+                    onClick={() =>
+                      setKeywords(
+                        keywords.filter((item) => item !== keyword),
+                      )
+                    }
+                    aria-label={`${keyword} 제거`}
+                  >
+                    <FiX size={12} />
+                  </KeywordChipRemove>
+                </KeywordChip>
+              ))}
+              <KeywordInput
+                ref={keywordInputRef}
+                type="text"
+                aria-label="키워드 입력"
+                placeholder={
                   keywords.length > 0
-                ) {
-                  e.preventDefault()
-                  setKeywords(keywords.slice(0, -1))
+                    ? '낱말 더 입력 후 Enter 또는 쉼표(,)'
+                    : '같은 사건 매칭용 대표 낱말 입력 후 Enter 또는 쉼표(,) — 최대 20개·각 30자'
                 }
-              }}
-            />
+                value={keywordInput}
+                onChange={(e) => setKeywordInput(e.target.value)}
+                onBlur={() => {
+                  if (keywordInput.trim()) {
+                    addKeywordsFromInput()
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if ((e.nativeEvent as KeyboardEvent).isComposing) return
+                  if (e.key === 'Enter' || e.key === ',') {
+                    if (keywordInput.trim()) {
+                      e.preventDefault()
+                      addKeywordsFromInput()
+                    } else if (e.key === ',') {
+                      e.preventDefault()
+                    }
+                  } else if (
+                    e.key === 'Backspace' &&
+                    keywordInput === '' &&
+                    keywords.length > 0
+                  ) {
+                    e.preventDefault()
+                    setKeywords(keywords.slice(0, -1))
+                  }
+                }}
+              />
+              {keywords.length >= 2 && (
+                <KeywordClearAllButton
+                  type="button"
+                  aria-label="키워드 모두 지우기"
+                  onClick={() => {
+                    playClickSound()
+                    setKeywords([])
+                  }}
+                >
+                  모두 지우기
+                </KeywordClearAllButton>
+              )}
+            </KeywordTokenBox>
             {keywordValidationMsg && (
               <S.ErrorMessage role="alert">
                 {keywordValidationMsg}
@@ -4492,38 +4574,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   )}
                 </RecentParticipantBar>
               )}
-            {keywords.length > 0 && (
-              <KeywordChipList>
-                {keywords.map((keyword) => (
-                  <KeywordChip key={keyword}>
-                    {keyword}
-                    <KeywordChipRemove
-                      type="button"
-                      onClick={() =>
-                        setKeywords(
-                          keywords.filter((item) => item !== keyword),
-                        )
-                      }
-                      aria-label={`${keyword} 제거`}
-                    >
-                      <FiX size={12} />
-                    </KeywordChipRemove>
-                  </KeywordChip>
-                ))}
-                {keywords.length >= 2 && (
-                  <KeywordClearAllButton
-                    type="button"
-                    aria-label="키워드 모두 지우기"
-                    onClick={() => {
-                      playClickSound()
-                      setKeywords([])
-                    }}
-                  >
-                    모두 지우기
-                  </KeywordClearAllButton>
-                )}
-              </KeywordChipList>
-            )}
           </S.FormField>
         </S.FormRow>
 
@@ -4584,26 +4634,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     </S.FormSection>
   )
 }
-
-/*
- * 표지 열 — 사건명 행의 라벨 열 자리. 폭이 라벨 열(148·132·2단 104px)을 그대로 따르므로
- * 오른쪽 사건명 칸이 아래 행들의 필드 열과 같은 x에서 시작한다.
- */
-const CoverColumn = styled.div`
-  min-width: 0;
-  padding-top: 3px;
-`
-
-/** 표지 옆 사건명 라벨 — 라벨 열을 표지가 차지해 필드 위 머리글로 선다 */
-const TitleFieldLabel = styled.label`
-  display: block;
-  margin-bottom: -2px;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.45;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => S.getC(theme).text.secondary};
-`
 
 /** 선택(비필수) 필드 라벨 옆 표기 — 필수(*)와 시각적으로 구분 */
 /*
@@ -5764,8 +5794,14 @@ const InlineControlRow = styled.div`
   gap: 8px 12px;
 `
 
-/* ─── 기간 ─── */
+/*
+ * ─── 기간 ───
+ * 기간은 '칸 두 개'가 아니라 시작에서 종료로 이어지는 한 구간이다. 시작 = 찬 점, 종료 = 빈 점,
+ * 위아래로 쌓일 때(2단 왼쪽 판·좁은 화면)는 두 점을 세로 선으로 잇는다(연표의 막대). 판 폭을 따라야 해서
+ * 미디어쿼리 대신 컨테이너 쿼리 — 나란히 놓일 땐 점만 남는다.
+ */
 const DateRangeGrid = styled.div`
+  container-type: inline-size;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
   gap: 12px 18px;
@@ -5774,6 +5810,46 @@ const DateRangeGrid = styled.div`
   @media (max-width: 560px) {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+
+  > ${S.DateRangeColumn} {
+    position: relative;
+    padding-left: 20px;
+  }
+
+  > ${S.DateRangeColumn} ${S.DateRangeLabel}::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    box-sizing: border-box;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 2px solid ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => S.getC(theme).background.content};
+  }
+
+  > ${S.DateRangeColumn}:first-child ${S.DateRangeLabel}::before {
+    background: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 3px ${({ theme }) => (theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.22)' : 'rgba(99, 102, 241, 0.14)')};
+  }
+
+  @container (max-width: 637px) {
+    > ${S.DateRangeColumn}:first-child::after {
+      content: '';
+      position: absolute;
+      left: 4.5px;
+      top: 18px;
+      bottom: -16px;
+      width: 2px;
+      border-radius: 2px;
+      background: linear-gradient(
+        180deg,
+        ${({ theme }) => theme.colors.primary} 0%,
+        ${({ theme }) => (theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.35)' : 'rgba(99, 102, 241, 0.3)')} 100%
+      );
+    }
   }
 `
 
@@ -5790,13 +5866,6 @@ const DateTimeLine = styled.div`
 `
 
 /* ─── 키워드 칩 ─── (인라인 스타일·하드코딩 색 → 폼 토큰) */
-const KeywordChipList = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 2px;
-`
-
 const KeywordChip = styled.span`
   display: inline-flex;
   align-items: center;
@@ -6034,29 +6103,6 @@ function formatLocationCoordinate(lat: number, lng: number): string {
   const longitude = `${lng >= 0 ? '동경' : '서경'} ${Math.abs(lng).toFixed(4)}°`
   return `${latitude}, ${longitude}`
 }
-
-const LocationInputRow = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-`
-
-const LocationSearchAnchor = styled(CountryQuickSearchAnchor)`
-  flex: 1 1 240px;
-  min-width: 180px;
-
-  /* 좁은 화면 — 입력 칸은 전폭, 옆 버튼은 모두 다음 줄에 함께. 예전엔 버튼마다 줄바꿈이 제각각이었다
-     (국가 추가=아래 줄, 인물 고르기=같은 줄, 새 인물 등록=아래 줄) */
-  @media (max-width: 768px) {
-    flex-basis: 100%;
-  }
-`
-
-const LocationInput = styled(S.Input)`
-  width: 100%;
-  height: 36px;
-`
 
 /* 키워드 칸 — 공용 FormInput(38px)을 폼의 본 칸 높이 36에 맞춘다 */
 const KeywordInput = styled(S.Input)`
@@ -6765,4 +6811,303 @@ const RelatedMemoRow = styled.div`
   ${RelatedSubLabel} {
     padding-top: 8px;
   }
+`
+
+/* ─── 성격에 맞춘 칸 모양 — 표지 · 제목 · 장소 · 태그 ─────────────────────────────────
+ * 모든 칸이 '라벨 + 테 두른 입력 칸 + 버튼'이라 무엇을 쓰는 자리인지 모양으로는 알 수 없었다.
+ * 칸·안내·동작은 그대로 두고 겉모양만 각 자료의 성격을 따른다.
+ */
+
+/** 표지 — 왼쪽 판 맨 위, 판 폭 그대로(라벨 열에 끼우지 않는다) */
+const CoverSlot = styled.div`
+  margin: 0 0 18px;
+  min-width: 0;
+`
+
+/** 사건명 — 서류 칸이 아니라 글의 제목처럼: 큰 글씨 · 밑줄 하나 */
+const TitleBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 0 16px;
+
+  && ${TitleInput} {
+    height: 50px;
+    padding: 0 2px;
+    border: none;
+    border-bottom: 2px solid ${({ theme }) => S.getC(theme).border.default};
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 23px;
+    font-weight: 750;
+    letter-spacing: -0.025em;
+    color: ${({ theme }) => theme.colors.text.primary};
+
+    &::placeholder {
+      font-weight: 650;
+      color: ${({ theme }) => S.getC(theme).text.muted};
+    }
+    &:hover:not(:focus) {
+      border-bottom-color: ${({ theme }) => S.getC(theme).border.hover};
+    }
+    &:focus {
+      border-bottom-color: ${({ theme }) => theme.colors.primary};
+      box-shadow: 0 1px 0 0 ${({ theme }) => theme.colors.primary};
+    }
+    &[aria-invalid='true'] {
+      border-bottom-color: ${({ theme }) => theme.colors.error};
+    }
+  }
+
+  && ${SubtitleInput} {
+    height: 36px;
+    padding: 0 30px 0 2px;
+    border: none;
+    border-bottom: 1px solid ${({ theme }) => S.getC(theme).border.light};
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 15px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.secondary};
+
+    &:hover:not(:focus) {
+      border-bottom-color: ${({ theme }) => S.getC(theme).border.hover};
+    }
+    &:focus {
+      border-bottom-color: ${({ theme }) => theme.colors.primary};
+      box-shadow: none;
+    }
+  }
+
+  ${SubtitleFieldGroup} {
+    margin-top: 10px;
+  }
+`
+
+const TitleEyebrow = styled.label`
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => S.getC(theme).text.secondary};
+`
+
+/** 위치 — 지도 위의 한 점: [작은 지도 | 장소 이름 · 좌표 · 메모 · 동작] 카드 하나 */
+const PlaceCard = styled.div`
+  display: grid;
+  grid-template-columns: 152px minmax(0, 1fr);
+  min-width: 0;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  border-radius: 14px;
+  background: ${({ theme }) => S.getC(theme).background.content};
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:focus-within {
+    border-color: ${({ theme }) => S.getC(theme).border.focus};
+    box-shadow: 0 0 0 3px ${({ theme }) => S.getC(theme).border.focusHalo};
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const PlaceMapButton = styled.button`
+  position: relative;
+  min-height: 136px;
+  padding: 0;
+  border: none;
+  border-right: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  border-radius: 13px 0 0 13px;
+  overflow: hidden;
+  background: ${({ theme }) => S.getC(theme).background.section};
+  cursor: pointer;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(99, 102, 241, 0);
+    transition: background 0.15s ease;
+  }
+  &:hover::after {
+    background: rgba(99, 102, 241, 0.1);
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 3px ${({ theme }) => theme.colors.primary};
+  }
+
+  @media (max-width: 560px) {
+    min-height: 112px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => S.getC(theme).border.light};
+    border-radius: 13px 13px 0 0;
+  }
+`
+
+/* 핀 없는 지도 — 모눈(지도 종이) 위에 빈 핀 */
+const PlaceMapEmpty = styled.span`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  background-image:
+    linear-gradient(${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.06)')} 1px, transparent 1px),
+    linear-gradient(90deg, ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.06)')} 1px, transparent 1px);
+  background-size: 18px 18px;
+
+  small {
+    font-size: 10.5px;
+    font-weight: 500;
+  }
+
+  svg {
+    color: ${({ theme }) => S.getC(theme).text.muted};
+  }
+`
+
+const PlaceBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 14px 12px;
+
+  ${LocationCoordBar} {
+    margin-top: 0;
+  }
+  ${LocationNoteRow} {
+    margin-top: 0;
+  }
+`
+
+const PlaceNameAnchor = styled(CountryQuickSearchAnchor)`
+  flex: none;
+  width: 100%;
+`
+
+const PlaceNameIcon = styled.span`
+  position: absolute;
+  left: 0;
+  top: 19px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: ${({ theme }) => theme.colors.primary};
+  pointer-events: none;
+`
+
+/** 장소 이름 — 카드의 제목 줄(테 없이 밑줄) */
+const PlaceNameInput = styled(S.Input)`
+  && {
+    width: 100%;
+    height: 38px;
+    padding: 0 2px 0 22px;
+    border: none;
+    border-bottom: 1px solid ${({ theme }) => S.getC(theme).border.light};
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  &&:hover:not(:focus) {
+    border-bottom-color: ${({ theme }) => S.getC(theme).border.hover};
+  }
+  &&:focus {
+    border-bottom-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: none;
+  }
+`
+
+const PlaceActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+const PlaceActionButton = styled(S.AddButton)`
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+`
+
+/** 키워드 — 태그 편집기: 칩과 입력이 한 상자 */
+const KeywordTokenBox = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  border-radius: 10px;
+  background: ${({ theme }) => S.getC(theme).background.content};
+  cursor: text;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:hover:not(:focus-within) {
+    border-color: ${({ theme }) => S.getC(theme).border.hover};
+  }
+  &:focus-within {
+    border-color: ${({ theme }) => S.getC(theme).border.focus};
+    box-shadow: 0 0 0 3px ${({ theme }) => S.getC(theme).border.focusHalo};
+  }
+
+  && ${KeywordInput} {
+    flex: 1 1 180px;
+    min-width: 120px;
+    height: 30px;
+    padding: 0 4px;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  ${KeywordChip} {
+    height: 28px;
+    padding: 0 3px 0 8px;
+    border-radius: 7px;
+    cursor: default;
+  }
+
+  ${KeywordClearAllButton} {
+    margin-left: auto;
+  }
+`
+
+const KeywordBoxMark = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  border-radius: 6px;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.16)' : 'rgba(99, 102, 241, 0.08)')};
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: 13px;
+  font-weight: 800;
+`
+
+const KeywordHash = styled.span`
+  margin-right: 1px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
+  opacity: 0.7;
 `
