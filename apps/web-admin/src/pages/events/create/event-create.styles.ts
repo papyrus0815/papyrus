@@ -8,8 +8,8 @@
  *
  * | | 이 파일 | register-form-layout |
  * |---|---|---|
- * | 라벨 컬럼 | 200px (1024px에서 160px) | 360px |
- * | 라벨 글자 | 14px | 13px |
+ * | 라벨 컬럼 | 148px (1024px에서 132px, 2단 모달은 104px) | 360px |
+ * | 라벨 글자 | 13px | 13px |
  * | 필수 표식 | 빨간 `*` 글리프 | 5px 빨간 **점**(sr-only 텍스트) |
  * | 에러 | `⚠` 접두 + flex, #ef4444 | 평범한 block, #ea4335 |
  * | 힌트 | `text.muted`, line-height 1.5 | `text.secondary`, margin-top 6px |

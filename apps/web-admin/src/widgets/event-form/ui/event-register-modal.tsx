@@ -238,8 +238,16 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     setActiveSectionId(sectionId)
     const section = document.getElementById(sectionId)
     if (!section) return
-    const leftPane = document.getElementById('event-form-split-left')
-    const rightPane = document.getElementById('event-form-split-right')
+    // 판이 실제로 스크롤할 때만(≥1180 2단) 판을 굴린다 — 1열로 풀린 화면에서 판을 굴리면 아무 일도 없었다
+    const scrollablePane = (id: string) => {
+      const pane = document.getElementById(id)
+      if (!pane) return null
+      const style = getComputedStyle(pane)
+      // overflow-x: hidden 때문에 overflowY는 늘 auto로 계산된다 — 상자가 있는지(contents 아님)와 max-height로 가른다
+      return style.display !== 'contents' && style.maxHeight !== 'none' ? pane : null
+    }
+    const leftPane = scrollablePane('event-form-split-left')
+    const rightPane = scrollablePane('event-form-split-right')
     if (sectionId === 'event-form-group-participants' && rightPane) {
       rightPane.scrollTo?.({ top: 0, behavior: 'smooth' })
       rightPane.scrollTop = 0
@@ -267,8 +275,13 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
       if (target?.id === 'event-form-split-left') {
         const leftRect = target.getBoundingClientRect()
         const contextEl = document.getElementById('event-form-group-context')
+        // 바닥에 닿으면 마지막 섹션 — 맥락 묶음이 짧아 판 끝까지 내려도 머리글이 판정선(위+96)에
+        // 못 닿아 '맥락·부가'가 영영 켜지지 않았다
+        const atBottom =
+          target.scrollTop + target.clientHeight >= target.scrollHeight - 4
         const nextId =
-          contextEl && contextEl.getBoundingClientRect().top <= leftRect.top + 96
+          contextEl &&
+          (atBottom || contextEl.getBoundingClientRect().top <= leftRect.top + 96)
             ? 'event-form-group-context'
             : 'event-form-group-basic'
         setActiveSectionId((prev) => (prev === nextId ? prev : nextId))
@@ -278,12 +291,22 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
       const containerRect = container.getBoundingClientRect()
       const threshold = containerRect.top + 96
       let currentId: string = FORM_SECTION_LINKS[0].id
+      let lastPresentId: string | null = null
       for (const item of FORM_SECTION_LINKS) {
         const el = document.getElementById(item.id)
         if (!el) continue
+        lastPresentId = item.id
         if (el.getBoundingClientRect().top <= threshold) {
           currentId = item.id
         }
+      }
+      // 1단도 같은 규칙 — 바닥에 닿으면 마지막으로 놓인 섹션
+      if (
+        lastPresentId &&
+        container.scrollTop > 0 &&
+        container.scrollTop + container.clientHeight >= container.scrollHeight - 4
+      ) {
+        currentId = lastPresentId
       }
       setActiveSectionId((prev) => (prev === currentId ? prev : currentId))
     },
@@ -821,11 +844,12 @@ const SectionJumpBadge = styled.span<{ $done?: boolean }>`
       : theme.colors.primary};
 `
 
+/* 머리 막대 컨트롤 높이 = 32 — 섹션 내비 바깥(24+여백 6+테 2)·셸 닫기 버튼과 한 줄 */
 const LayoutModeToggleBtn = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 28px;
+  height: 32px;
   padding: 0 10px;
   border-radius: 8px;
   border: 1px solid
@@ -866,14 +890,14 @@ const LayoutModeToggleBtn = styled.button<{ $active?: boolean }>`
 `
 
 const HeaderResetBtn = styled.button`
-  height: 28px;
+  height: 32px;
   padding: 0 10px;
   border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;

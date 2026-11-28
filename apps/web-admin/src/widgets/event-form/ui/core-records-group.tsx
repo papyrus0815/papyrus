@@ -1828,7 +1828,7 @@ export function CoreRecordsGroup({
                   }}
                 >
                   <FiPlus size={15} />
-                  주요 수치 추가 (사망·부상·참여 인원 등)
+                  주요 수치 추가 <AddButtonExample>(사망·부상·참여 인원 등)</AddButtonExample>
                 </KitAddButton>
               )}
               {canExpandOrganizations && (
@@ -1840,7 +1840,7 @@ export function CoreRecordsGroup({
                   }}
                 >
                   <FiPlus size={15} />
-                  기관·조직·기업 추가 (공안위원회·의회 등)
+                  기관·조직·기업 추가 <AddButtonExample>(공안위원회·의회 등)</AddButtonExample>
                 </KitAddButton>
               )}
               {canExpandPersons && (
@@ -4746,7 +4746,7 @@ const ParentImportBanner = styled.div`
   padding: 10px 12px;
   margin-bottom: 12px;
   border-radius: 10px;
-  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
 `
@@ -5153,19 +5153,25 @@ const QuickSearchAnchor = styled.div`
   position: relative;
   flex: 1 1 200px;
   min-width: 0;
+
+  /* 좁은 화면 — 입력 칸은 전폭, 옆 버튼은 모두 다음 줄에 함께. 예전엔 버튼마다 줄바꿈이 제각각이었다
+     (국가 추가=아래 줄, 인물 고르기=같은 줄, 새 인물 등록=아래 줄) */
+  @media (max-width: 768px) {
+    flex-basis: 100%;
+  }
 `
 
 const QuickSearchInput = styled.input`
   width: 100%;
   min-width: 0;
-  height: 34px;
+  height: 36px;
   padding: 0 11px;
   border-radius: 8px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) => S.getC(theme).background.content};
   color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   &::placeholder {
@@ -5442,16 +5448,16 @@ const SidesVsGaugeSegment = styled.div<{ $slot?: SideSlot; $empty?: boolean }>`
   transition: flex-grow 0.22s ease, opacity 0.18s ease;
 `
 
+/*
+ * 카드 한 장이 280px 아래로 내려가면 세로로 쌓는다 — 2단 5:5 오른쪽 판(약 540px)에선 카드가 260px에
+ * 끼어 '영구 집단·계파 불러오기'가 잘리고 안내문 끝 글자 하나가 다음 줄로 떨어졌다.
+ * 뷰포트가 아니라 판 폭을 따라야 해서 미디어쿼리 대신 auto-fit.
+ */
 const SideBoardGrid = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 12px;
   min-width: 0;
-
-  @media (max-width: 560px) {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-  }
 `
 
 const sideSlotAccentColor = (slot: SideSlot | undefined): string => {
@@ -5573,7 +5579,7 @@ const SideNewGroupBtn = styled.button`
   height: 28px;
   padding: 0 8px;
   border-radius: 6px;
-  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
@@ -5716,6 +5722,7 @@ const SideMemberWrap = styled.div`
 
 const SideEmptyHint = styled.span`
   font-size: 12px;
+  word-break: keep-all;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -5772,7 +5779,7 @@ const SideQuickInput = styled.input`
   height: 28px;
   padding: 0 9px;
   border-radius: 6px;
-  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) => S.getC(theme).background.content};
   color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
@@ -5969,4 +5976,10 @@ const QuickMetricFieldLabel = styled.label`
     font-weight: 500;
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
+`
+
+/* 버튼 안 괄호 예시 — 문구는 그대로, 굵기·색만 한 단계 내려 동작 이름(앞부분)이 먼저 읽히게 */
+const AddButtonExample = styled.span`
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `

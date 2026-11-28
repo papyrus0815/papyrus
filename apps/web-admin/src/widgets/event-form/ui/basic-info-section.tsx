@@ -5,9 +5,11 @@ import {
   FiArrowDown,
   FiArrowUp,
   FiClock,
-  FiImage,
+  FiLayers,
+  FiLink2,
   FiMapPin,
   FiPlus,
+  FiRepeat,
   FiX,
 } from 'react-icons/fi'
 import styled, { type DefaultTheme, useTheme } from 'styled-components'
@@ -66,18 +68,11 @@ import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { type DatePickerPrecision } from '@/shared/ui/date-picker/date-picker-modal'
 import { TimeSegmentField } from '@/shared/ui/time-segment-field/time-segment-field'
-import {
-  KitUploadActions,
-  KitUploadFilled,
-  KitUploadRemove,
-  KitUploadStrip,
-  KitUploadText,
-  KitUploadThumb,
-} from '@/shared/ui/register-form-kit/register-form-kit'
 import { notify } from '@/shared/ui/toast'
 
 import { shouldEndFollowStart } from '../lib/event-date-parts'
 
+import { EventCoverField } from './event-cover-field'
 import { EventDateField } from './event-date-field'
 
 export interface SimilarEventCandidate {
@@ -599,7 +594,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         : null,
     [locationSlot],
   )
-  const [isThumbnailDragOver, setIsThumbnailDragOver] = useState(false)
   const [storedRecentParticipants] = useState<RecentParticipantRef[]>(() =>
     readRecentParticipants(),
   )
@@ -1354,12 +1348,54 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         <FormGroupTitle id="event-form-group-basic-title">
           기본 정보
         </FormGroupTitle>
-        {/* 사건명 */}
+        {/* 표지(대표 이미지) | 사건명 — 표지가 라벨 열 자리에 서서 폼의 얼굴이 된다 */}
         <S.FormRow>
-          <S.FormLabel htmlFor="event-form-title">
-            사건명 <S.Required>*</S.Required>
-          </S.FormLabel>
+          <CoverColumn>
+            <EventCoverField
+              src={thumbnail ? getImageUrl(thumbnail) : ''}
+              uploading={thumbnail.startsWith('blob:')}
+              onPick={() => {
+                playClickSound()
+                thumbnailInputRef.current?.click()
+              }}
+              onFile={(file) => {
+                playClickSound()
+                void handleThumbnailUpload(file)
+              }}
+              onRemove={() => {
+                playClickSound()
+                if (thumbnail.startsWith('blob:')) {
+                  URL.revokeObjectURL(thumbnail)
+                }
+                setThumbnail('')
+                setThumbnailFile(null)
+                if (thumbnailInputRef.current) {
+                  thumbnailInputRef.current.value = ''
+                }
+              }}
+              onImageError={() => {
+                if (thumbnail.startsWith('blob:')) {
+                  URL.revokeObjectURL(thumbnail)
+                }
+              }}
+            />
+            <input
+              ref={thumbnailInputRef}
+              type="file"
+              accept="image/*"
+              aria-label="대표 이미지 파일"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                void handleThumbnailUpload(file)
+              }}
+            />
+          </CoverColumn>
           <S.FormField>
+            <TitleFieldLabel htmlFor="event-form-title">
+              사건명 <S.Required>*</S.Required>
+            </TitleFieldLabel>
             <TitleInput
               ref={titleInputRef}
               id="event-form-title"
@@ -2612,7 +2648,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       </CountryQuickResultBox>
                     )}
                   </CountryQuickSearchAnchor>
-                  <S.AddButton
+                  <RowAddButton
                     type="button"
                     onClick={() => {
                       playClickSound()
@@ -2621,7 +2657,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   >
                     <FiPlus size={15} />
                     {relatedCountries.length > 0 ? '국가 더 추가' : '국가 추가'}
-                  </S.AddButton>
+                  </RowAddButton>
                   {relatedCountries.length === 2 && (
                     <S.AddButton
                       type="button"
@@ -2830,7 +2866,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   if (keywords.length > 0) {
     contextSummaryParts.push(`키워드 ${keywords.length}`)
   }
-  if (thumbnail) contextSummaryParts.push('썸네일')
   const contextSummaryText = contextSummaryParts.join(' · ')
 
   const contextGroup = (
@@ -2855,114 +2890,88 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.FormLabel>
             <S.FormField>
               {eventSeriesSlot.series ? (
-                <ParentEventCard role="group" aria-label="선택된 정기 시리즈">
-                  <ParticipantHeaderRow>
-                    <ParentEventBadge>정기 시리즈</ParentEventBadge>
-                    <ParticipantName>
-                      {eventSeriesSlot.series.title}
-                    </ParticipantName>
-                    {(eventSeriesSlot.series.cadenceLabel ||
-                      eventSeriesSlot.series.organizationName) && (
-                      <RelatedEventDateMeta>
-                        {[
-                          eventSeriesSlot.series.organizationName,
-                          eventSeriesSlot.series.cadenceLabel,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </RelatedEventDateMeta>
-                    )}
-                    <ParticipantHeaderRight>
-                      <ParticipantActions>
-                        <S.AddButton
-                          type="button"
-                          onClick={() => {
-                            playClickSound()
-                            eventSeriesSlot.onOpenPicker()
-                          }}
-                        >
-                          변경
-                        </S.AddButton>
-                        <ParticipantRemove
-                          type="button"
-                          onClick={() => {
-                            playClickSound()
-                            eventSeriesSlot.onClear()
-                          }}
-                          aria-label={`정기 시리즈 '${eventSeriesSlot.series.title}' 해제`}
-                        >
-                          <FiX size={14} />
-                        </ParticipantRemove>
-                      </ParticipantActions>
-                    </ParticipantHeaderRight>
-                  </ParticipantHeaderRow>
-                  <ParticipantRoleBar>
-                    <ParticipantRoleBarLabel>회차</ParticipantRoleBarLabel>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        alignItems: 'center',
-                        gap: 8,
-                        flex: 1,
+                <LinkedCard
+                  $tone="series"
+                  role="group"
+                  aria-label="선택된 정기 시리즈"
+                >
+                  <LinkedIcon aria-hidden>
+                    <FiRepeat size={15} />
+                  </LinkedIcon>
+                  <LinkedBody>
+                    <LinkedTitle>{eventSeriesSlot.series.title}</LinkedTitle>
+                    <LinkedMeta>
+                      <LinkedKicker>정기 시리즈</LinkedKicker>
+                      {[
+                        eventSeriesSlot.series.organizationName,
+                        eventSeriesSlot.series.cadenceLabel,
+                      ]
+                        .filter(Boolean)
+                        .map((part) => (
+                          <span key={part}>{part}</span>
+                        ))}
+                    </LinkedMeta>
+                  </LinkedBody>
+                  <LinkedActions>
+                    <LinkedTextButton
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        eventSeriesSlot.onOpenPicker()
                       }}
                     >
-                      <input
-                        type="number"
-                        min={1}
-                        max={9999}
-                        aria-label="정규 회차 번호"
-                        value={eventSeriesSlot.seriesEdition}
-                        onChange={(e) =>
-                          eventSeriesSlot.onSeriesEditionChange(e.target.value)
-                        }
-                        placeholder="회차 숫자 (예: 43)"
-                        style={{
-                          width: 130,
-                          height: 30,
-                          padding: '0 8px',
-                          borderRadius: 7,
-                          border: '1px solid rgba(148, 163, 184, 0.38)',
-                          fontSize: 12.5,
-                          background: 'transparent',
-                          color: 'inherit',
-                        }}
-                      />
-                      <input
-                        type="text"
-                        aria-label="회차 표기 오버라이드"
-                        value={eventSeriesSlot.seriesEditionLabel}
-                        onChange={(e) =>
-                          eventSeriesSlot.onSeriesEditionLabelChange(
-                            e.target.value,
-                          )
-                        }
-                        placeholder="합동·특별 표기 (예: 제44·45차, 특별 정상회의)"
-                        style={{
-                          flex: '1 1 200px',
-                          height: 30,
-                          padding: '0 8px',
-                          borderRadius: 7,
-                          border: '1px solid rgba(148, 163, 184, 0.38)',
-                          fontSize: 12.5,
-                          background: 'transparent',
-                          color: 'inherit',
-                        }}
-                      />
-                    </div>
-                  </ParticipantRoleBar>
-                </ParentEventCard>
+                      변경
+                    </LinkedTextButton>
+                    <ParticipantRemove
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        eventSeriesSlot.onClear()
+                      }}
+                      aria-label={`정기 시리즈 '${eventSeriesSlot.series.title}' 해제`}
+                    >
+                      <FiX size={14} />
+                    </ParticipantRemove>
+                  </LinkedActions>
+                  <LinkedSubRow>
+                    <ParticipantRoleBarLabel>회차</ParticipantRoleBarLabel>
+                    <EditionNumberInput
+                      type="number"
+                      min={1}
+                      max={9999}
+                      aria-label="정규 회차 번호"
+                      value={eventSeriesSlot.seriesEdition}
+                      onChange={(e) =>
+                        eventSeriesSlot.onSeriesEditionChange(e.target.value)
+                      }
+                      placeholder="회차 숫자 (예: 43)"
+                    />
+                    <EditionLabelInput
+                      type="text"
+                      aria-label="회차 표기 오버라이드"
+                      value={eventSeriesSlot.seriesEditionLabel}
+                      onChange={(e) =>
+                        eventSeriesSlot.onSeriesEditionLabelChange(
+                          e.target.value,
+                        )
+                      }
+                      placeholder="합동·특별 표기 (예: 제44·45차, 특별 정상회의)"
+                    />
+                  </LinkedSubRow>
+                </LinkedCard>
               ) : (
-                <S.AddButton
+                <LinkEmptyButton
                   type="button"
+                  $tone="series"
                   onClick={() => {
                     playClickSound()
                     eventSeriesSlot.onOpenPicker()
                   }}
                 >
-                  <FiPlus size={15} />
-                  정기 시리즈·회차 연결 (아세안·APEC·쿼드·총회 등)
-                </S.AddButton>
+                  <FiRepeat size={14} />
+                  정기 시리즈·회차 연결{' '}
+                  <AddButtonExample>(아세안·APEC·쿼드·총회 등)</AddButtonExample>
+                </LinkEmptyButton>
               )}
             </S.FormField>
           </S.FormRow>
@@ -2976,46 +2985,51 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.FormLabel>
             <S.FormField>
               {parentEventSlot.parent ? (
-                <ParentEventCard role="group" aria-label="선택된 상위 사건">
-                  <ParticipantHeaderRow>
-                    <ParentEventBadge>상위 묶음</ParentEventBadge>
-                    <ParticipantName>
-                      {parentEventSlot.parent.title}
-                    </ParticipantName>
-                    {parentEventSlot.parentPeriod?.startDate && (
-                      <RelatedEventDateMeta>
-                        {parentEventSlot.parentPeriod.startDate.slice(0, 10)}
-                        {parentEventSlot.parentPeriod.endDate &&
-                        parentEventSlot.parentPeriod.endDate.slice(0, 10) !==
-                          parentEventSlot.parentPeriod.startDate.slice(0, 10)
-                          ? ` ~ ${parentEventSlot.parentPeriod.endDate.slice(0, 10)}`
-                          : ''}
-                      </RelatedEventDateMeta>
-                    )}
-                    <ParticipantHeaderRight>
-                      <ParticipantActions>
-                        <S.AddButton
-                          type="button"
-                          onClick={() => {
-                            playClickSound()
-                            parentEventSlot.onOpenPicker()
-                          }}
-                        >
-                          변경
-                        </S.AddButton>
-                        <ParticipantRemove
-                          type="button"
-                          onClick={() => {
-                            playClickSound()
-                            parentEventSlot.onClear()
-                          }}
-                          aria-label={`상위 사건 '${parentEventSlot.parent.title}' 해제`}
-                        >
-                          <FiX size={14} />
-                        </ParticipantRemove>
-                      </ParticipantActions>
-                    </ParticipantHeaderRight>
-                  </ParticipantHeaderRow>
+                <LinkedCard
+                  $tone="parent"
+                  role="group"
+                  aria-label="선택된 상위 사건"
+                >
+                  <LinkedIcon aria-hidden>
+                    <FiLayers size={15} />
+                  </LinkedIcon>
+                  <LinkedBody>
+                    <LinkedTitle>{parentEventSlot.parent.title}</LinkedTitle>
+                    <LinkedMeta>
+                      <LinkedKicker>상위 묶음</LinkedKicker>
+                      {parentEventSlot.parentPeriod?.startDate && (
+                        <span>
+                          {parentEventSlot.parentPeriod.startDate.slice(0, 10)}
+                          {parentEventSlot.parentPeriod.endDate &&
+                          parentEventSlot.parentPeriod.endDate.slice(0, 10) !==
+                            parentEventSlot.parentPeriod.startDate.slice(0, 10)
+                            ? ` ~ ${parentEventSlot.parentPeriod.endDate.slice(0, 10)}`
+                            : ''}
+                        </span>
+                      )}
+                    </LinkedMeta>
+                  </LinkedBody>
+                  <LinkedActions>
+                    <LinkedTextButton
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        parentEventSlot.onOpenPicker()
+                      }}
+                    >
+                      변경
+                    </LinkedTextButton>
+                    <ParticipantRemove
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        parentEventSlot.onClear()
+                      }}
+                      aria-label={`상위 사건 '${parentEventSlot.parent.title}' 해제`}
+                    >
+                      <FiX size={14} />
+                    </ParticipantRemove>
+                  </LinkedActions>
                   {((!startDate &&
                     Boolean(parentEventSlot.parentPeriod?.startDate)) ||
                     Boolean(
@@ -3027,17 +3041,16 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         locationSlot.latitude == null &&
                         locationSlot.longitude == null,
                     )) && (
-                    <ParticipantRoleBar>
+                    <LinkedSubRow>
                       <ParticipantRoleBarLabel>이어받기</ParticipantRoleBarLabel>
-                      <ParticipantRoleChipGroup
+                      <InheritChipGroup
                         role="group"
                         aria-label="상위 사건 정보 이어받기"
                       >
                         {!startDate &&
                           parentEventSlot.parentPeriod?.startDate && (
-                            <ParticipantRoleChipBtn
+                            <InheritChip
                               type="button"
-                              $active={false}
                               aria-label="상위 사건 카드에서 시작일 이어받기"
                               onClick={() => {
                                 const parentStart =
@@ -3068,13 +3081,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                               }}
                             >
                               + 시작일 맞춤
-                            </ParticipantRoleChipBtn>
+                            </InheritChip>
                           )}
                         {parentCountriesSlot &&
                           parentCountriesSlot.count > 0 && (
-                            <ParticipantRoleChipBtn
+                            <InheritChip
                               type="button"
-                              $active={false}
                               aria-label="상위 사건 카드에서 참여국 이어받기"
                               onClick={() => {
                                 playClickSound()
@@ -3082,15 +3094,14 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                               }}
                             >
                               + 참여국 {parentCountriesSlot.count}곳 불러오기
-                            </ParticipantRoleChipBtn>
+                            </InheritChip>
                           )}
                         {locationSlot?.parentLocation &&
                           !locationSlot.location.trim() &&
                           locationSlot.latitude == null &&
                           locationSlot.longitude == null && (
-                            <ParticipantRoleChipBtn
+                            <InheritChip
                               type="button"
-                              $active={false}
                               aria-label="상위 사건 카드에서 위치 이어받기"
                               onClick={() => {
                                 const parentLoc = locationSlot.parentLocation
@@ -3115,12 +3126,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                               {locationSlot.parentLocation.location
                                 ? ` (${locationSlot.parentLocation.location})`
                                 : ''}
-                            </ParticipantRoleChipBtn>
+                            </InheritChip>
                           )}
-                      </ParticipantRoleChipGroup>
-                    </ParticipantRoleBar>
+                      </InheritChipGroup>
+                    </LinkedSubRow>
                   )}
-                </ParentEventCard>
+                </LinkedCard>
               ) : (
                 <CountryQuickSearchRow>
                   {parentEventSlot.quickSearch && (
@@ -3135,7 +3146,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         }
                       }}
                     >
-                      <CountryQuickSearchInput
+                      <LinkSearchIcon aria-hidden>
+                        <FiLayers size={14} />
+                      </LinkSearchIcon>
+                      <LinkSearchInput
                         type="search"
                         aria-label="상위 사건 빠른 검색"
                         placeholder="묶음 사건명으로 빠른 검색"
@@ -3242,7 +3256,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       )}
                     </CountryQuickSearchAnchor>
                   )}
-                  <S.AddButton
+                  <LinkPickButton
                     type="button"
                     onClick={() => {
                       playClickSound()
@@ -3251,7 +3265,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   >
                     <FiPlus size={15} />
                     상위 사건 선택
-                  </S.AddButton>
+                  </LinkPickButton>
                   {(() => {
                     const selectParentCandidate =
                       parentEventSlot.onSelectCandidate ??
@@ -3604,7 +3618,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       </ModalCausalFlowBoard>
                     )
                   })()}
-                  <ParticipantList>
+                  <RelatedList>
                     {relatedEventsSlot.items.map((item, index) => {
                       const roleKey = toRelationRoleKey(
                         item.relationType,
@@ -3665,6 +3679,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         <ParticipantRow
                           key={item.relatedEventId}
                           $causalLane={causalLane}
+                          $flat
                           draggable
                           onDragStart={(dragEvent) => {
                             setDraggingRelatedId(item.relatedEventId)
@@ -3718,7 +3733,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                             </ParticipantHeaderRight>
                           </ParticipantHeaderRow>
                           <ParticipantRoleBar>
-                            <ParticipantRoleBarLabel>관계</ParticipantRoleBarLabel>
+                            <RelatedSubLabel>관계</RelatedSubLabel>
                             <ParticipantRoleChipGroup
                               role="group"
                               aria-label={`${item.title} 빠른 관계 선택`}
@@ -3771,23 +3786,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                               ))}
                             </RoleSelect>
                           </ParticipantRoleBar>
-                          <RelatedMemoSection>
-                            <RelatedMemoHeaderRow>
-                              <RelatedMemoLabel>관계 설명 메모</RelatedMemoLabel>
-                              {hasRelatedDescription && (
-                                <ParticipantDescClearBtn
-                                  type="button"
-                                  aria-label={`${item.title} 관계 설명 비우기`}
-                                  onClick={() => {
-                                    playClickSound()
-                                    patchItem({ description: '' })
-                                  }}
-                                >
-                                  비우기
-                                </ParticipantDescClearBtn>
-                              )}
-                            </RelatedMemoHeaderRow>
+                          <RelatedMemoRow>
+                            <RelatedSubLabel as="label" htmlFor={`related-memo-${item.relatedEventId}`}>
+                              메모
+                            </RelatedSubLabel>
                             <RelatedMemoTextarea
+                              id={`related-memo-${item.relatedEventId}`}
                               rows={Math.max(
                                 2,
                                 Math.min(
@@ -3804,11 +3808,23 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                                 })
                               }
                             />
-                          </RelatedMemoSection>
+                            {hasRelatedDescription && (
+                              <ParticipantDescClearBtn
+                                type="button"
+                                aria-label={`${item.title} 관계 설명 비우기`}
+                                onClick={() => {
+                                  playClickSound()
+                                  patchItem({ description: '' })
+                                }}
+                              >
+                                비우기
+                              </ParticipantDescClearBtn>
+                            )}
+                          </RelatedMemoRow>
                         </ParticipantRow>
                       )
                   })}
-                  </ParticipantList>
+                  </RelatedList>
                 </>
               )}
               <CountryQuickSearchRow>
@@ -3824,7 +3840,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       }
                     }}
                   >
-                    <CountryQuickSearchInput
+                    <LinkSearchIcon aria-hidden>
+                      <FiLink2 size={14} />
+                    </LinkSearchIcon>
+                    <LinkSearchInput
                       type="search"
                       aria-label="연관 사건 빠른 검색"
                       placeholder="사건명으로 빠른 검색하여 추가"
@@ -3923,7 +3942,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     )}
                   </CountryQuickSearchAnchor>
                 )}
-                <S.AddButton
+                <LinkPickButton
                   type="button"
                   onClick={() => {
                     playClickSound()
@@ -3934,7 +3953,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   {relatedEventsSlot.items.length > 0
                     ? '사건 더 추가'
                     : '사건 찾아서 추가'}
-                </S.AddButton>
+                </LinkPickButton>
                 {(() => {
                   const hasLastSavedChip = Boolean(
                     relatedEventsSlot.lastSavedEvent &&
@@ -4233,7 +4252,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       </CountryQuickResultBox>
                     )}
                 </LocationSearchAnchor>
-                <S.AddButton
+                <RowAddButton
                   type="button"
                   onClick={() => {
                     playClickSound()
@@ -4245,7 +4264,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   locationSlot.longitude != null
                     ? '지도 핀 수정'
                     : '지도에서 찍기'}
-                </S.AddButton>
+                </RowAddButton>
                 {locationSplitSuggestion && locationSlot.setLocationNote && (
                   <LocationClearBtn
                     type="button"
@@ -4408,7 +4427,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </OptionalTag>
           </S.FormLabel>
           <S.FormField>
-            <S.Input
+            <KeywordInput
               type="text"
               aria-label="키워드 입력"
               placeholder="같은 사건 매칭용 대표 낱말 입력 후 Enter 또는 쉼표(,) — 최대 20개·각 30자"
@@ -4508,130 +4527,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormField>
         </S.FormRow>
 
-        {/* 썸네일 이미지 */}
-        <S.FormRow>
-          <S.FormLabel>
-            썸네일 이미지<OptionalTag>(선택)</OptionalTag>
-          </S.FormLabel>
-          <S.FormField>
-            {thumbnail ? (
-              <KitUploadFilled
-                onDragOver={(dragEvent) => {
-                  dragEvent.preventDefault()
-                  setIsThumbnailDragOver(true)
-                }}
-                onDragLeave={() => setIsThumbnailDragOver(false)}
-                onDrop={(dropEvent) => {
-                  dropEvent.preventDefault()
-                  setIsThumbnailDragOver(false)
-                  const file = dropEvent.dataTransfer.files?.[0]
-                  if (file) {
-                    playClickSound()
-                    void handleThumbnailUpload(file)
-                  }
-                }}
-              >
-                <KitUploadThumb>
-                  <img
-                    src={getImageUrl(thumbnail)}
-                    alt="썸네일 미리보기"
-                    onError={() => {
-                      if (thumbnail.startsWith('blob:')) {
-                        URL.revokeObjectURL(thumbnail)
-                      }
-                    }}
-                  />
-                </KitUploadThumb>
-                <KitUploadText>
-                  <strong>
-                    {isThumbnailDragOver
-                      ? '여기에 놓아 대표 이미지 바꾸기'
-                      : thumbnail.startsWith('blob:')
-                        ? '올리는 중…'
-                        : '대표 이미지'}
-                  </strong>
-                  <span>목록과 상세 머리에 쓰입니다</span>
-                </KitUploadText>
-                <KitUploadActions>
-                  <S.UploadButton
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      thumbnailInputRef.current?.click()
-                    }}
-                  >
-                    바꾸기
-                  </S.UploadButton>
-                  <KitUploadRemove
-                    type="button"
-                    aria-label="썸네일 제거"
-                    onClick={() => {
-                      playClickSound()
-                      if (thumbnail.startsWith('blob:')) {
-                        URL.revokeObjectURL(thumbnail)
-                      }
-                      setThumbnail('')
-                      setThumbnailFile(null)
-                      if (thumbnailInputRef.current) {
-                        thumbnailInputRef.current.value = ''
-                      }
-                    }}
-                  >
-                    <FiX size={15} />
-                  </KitUploadRemove>
-                </KitUploadActions>
-              </KitUploadFilled>
-            ) : (
-              <KitUploadStrip
-                type="button"
-                $dragOver={isThumbnailDragOver}
-                onClick={() => {
-                  playClickSound()
-                  thumbnailInputRef.current?.click()
-                }}
-                onDragOver={(dragEvent) => {
-                  dragEvent.preventDefault()
-                  setIsThumbnailDragOver(true)
-                }}
-                onDragLeave={() => setIsThumbnailDragOver(false)}
-                onDrop={(dropEvent) => {
-                  dropEvent.preventDefault()
-                  setIsThumbnailDragOver(false)
-                  const file = dropEvent.dataTransfer.files?.[0]
-                  if (file) {
-                    playClickSound()
-                    void handleThumbnailUpload(file)
-                  }
-                }}
-              >
-                <KitUploadThumb aria-hidden>
-                  <FiImage size={18} />
-                </KitUploadThumb>
-                <KitUploadText>
-                  <strong>
-                    {isThumbnailDragOver
-                      ? '여기에 놓아 대표 이미지 올리기'
-                      : '대표 이미지 올리기'}
-                  </strong>
-                  <span>
-                    클릭 · 드래그 · Ctrl/⌘+V 붙여넣기 · 10MB 이하
-                  </span>
-                </KitUploadText>
-              </KitUploadStrip>
-            )}
-            <input
-              ref={thumbnailInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                void handleThumbnailUpload(file)
-              }}
-            />
-          </S.FormField>
-        </S.FormRow>
       </FormGroup>
   )
 
@@ -4642,16 +4537,14 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       animate={{ opacity: 1 }}
       transition={{ duration: 0.2 }}
       data-layout-mode={layoutMode}
+      /*
+       * 분야 색은 **세부 칩·안내 글씨(--chip-*)에만** 흘린다. 예전엔 --active-domain-*까지 폼 전체에
+       * 깔아 '군사'를 고르면 섹션 점·요약 배지·역할 칩·키워드 칩·기간 배지가 모두 빨갛게 물들어
+       * 폼이 오류 상태처럼 보였다. 그 소비처들은 이제 폴백(앱 primary)을 쓴다.
+       */
       style={
         activeDomainTone
           ? {
-              '--active-domain-rgb': activeDomainTone.soft.rgb,
-              '--active-domain-accent': isDark
-                ? activeDomainTone.dark
-                : activeDomainTone.badge,
-              '--active-domain-text': isDark
-                ? activeDomainTone.soft.textDark
-                : activeDomainTone.soft.text,
               '--chip-rgb': activeDomainTone.soft.rgb,
               '--chip-text': activeDomainTone.soft.text,
               '--chip-text-dark': activeDomainTone.soft.textDark,
@@ -4692,9 +4585,35 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   )
 }
 
+/*
+ * 표지 열 — 사건명 행의 라벨 열 자리. 폭이 라벨 열(148·132·2단 104px)을 그대로 따르므로
+ * 오른쪽 사건명 칸이 아래 행들의 필드 열과 같은 x에서 시작한다.
+ */
+const CoverColumn = styled.div`
+  min-width: 0;
+  padding-top: 3px;
+`
+
+/** 표지 옆 사건명 라벨 — 라벨 열을 표지가 차지해 필드 위 머리글로 선다 */
+const TitleFieldLabel = styled.label`
+  display: block;
+  margin-bottom: -2px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => S.getC(theme).text.secondary};
+`
+
 /** 선택(비필수) 필드 라벨 옆 표기 — 필수(*)와 시각적으로 구분 */
+/*
+ * inline-block + keep-all — 2단 라벨 열(104px)에서 '(전쟁 핵심 기록)'이 '기 / 록)'처럼 낱말 중간에서
+ * 쪼개졌다. 이제 꼬리표가 통째로 다음 줄로 내려가고, 그래도 길면 띄어쓰기에서만 끊긴다.
+ */
 const OptionalTag = styled.span`
+  display: inline-block;
   margin-left: 4px;
+  word-break: keep-all;
   font-size: 11.5px;
   font-weight: 500;
   color: ${({ theme }) => S.getC(theme).text.muted};
@@ -4804,16 +4723,12 @@ const ParentPeriodFill = styled.div<{ $warning?: boolean }>`
   transition: left 0.2s ease, width 0.2s ease;
 `
 
+/* 겉 상자 없음 — 레인(점선 = 끌어 놓는 자리)만 남겨, 상자 안 상자 안 상자였던 겹을 한 겹 덜었다 */
 const ModalCausalFlowBoard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
   margin-bottom: 10px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#f8fafc'};
 `
 
 const ModalCausalGrid = styled.div`
@@ -4988,6 +4903,8 @@ const ParticipantRow = styled.div<{
   $role?: EventCountryRole
   $dragOver?: boolean
   $causalLane?: 'cause' | 'effect' | 'concurrent'
+  /** 연관 사건 — 카드 대신 RelatedList 안의 한 줄(테·그림자·굵은 왼쪽 띠 없음, 구분선은 목록이 긋는다) */
+  $flat?: boolean
 }>`
   display: flex;
   flex-direction: column;
@@ -5025,6 +4942,23 @@ const ParticipantRow = styled.div<{
         ? '0 2px 8px rgba(0, 0, 0, 0.22)'
         : '0 2px 8px rgba(15, 23, 42, 0.06)'};
   }
+
+  ${({ $flat, $dragOver, theme }) =>
+    $flat
+      ? `
+    gap: 8px;
+    padding: 11px 12px 12px;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: ${$dragOver ? `${theme.colors.primary}10` : 'transparent'};
+
+    &:focus-within {
+      box-shadow: none;
+      background: ${theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.025)' : '#fafbfc'};
+    }
+  `
+      : ''}
 `
 
 const ParticipantNameWrap = styled.div`
@@ -5323,6 +5257,12 @@ const CountryQuickSearchAnchor = styled.div`
   position: relative;
   flex: 1 1 280px;
   min-width: 0;
+
+  /* 좁은 화면 — 입력 칸은 전폭, 옆 버튼은 모두 다음 줄에 함께. 예전엔 버튼마다 줄바꿈이 제각각이었다
+     (국가 추가=아래 줄, 인물 고르기=같은 줄, 새 인물 등록=아래 줄) */
+  @media (max-width: 768px) {
+    flex-basis: 100%;
+  }
 `
 
 const CountryQuickSearchInput = styled.input`
@@ -5337,7 +5277,7 @@ const CountryQuickSearchInput = styled.input`
     theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.02)'};
   color: ${({ theme }) => theme.colors.text.primary};
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   letter-spacing: -0.01em;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
@@ -5768,12 +5708,18 @@ const FormGroup = styled.section`
   }
 `
 
+/*
+ * 높이 고정(41 = 내용 28 + 아래 여백 12 + 선 1) — 2단에서 오른쪽 '참여 주체' 머리글에만 비율 토글(28)이
+ * 들어가 41px로 늘고 왼쪽은 32px라, 좌우 구분선이 9px 엇갈렸다.
+ */
 const FormGroupTitle = styled.h3`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   width: 100%;
+  box-sizing: border-box;
+  min-height: 41px;
   margin: 0 0 12px;
   padding-bottom: 12px;
   border-bottom: 1px solid ${({ theme }) => S.getC(theme).border.light};
@@ -5980,36 +5926,6 @@ const SimilarEventsBar = styled.div`
   font-size: 12px;
 `
 
-const ParentEventCard = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 11px 13px;
-  border-radius: 11px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.025)' : '#ffffff'};
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.03)'};
-`
-
-const ParentEventBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.2)'
-      : 'rgba(99, 102, 241, 0.1)'};
-  color: ${({ theme }) => theme.colors.primary};
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-  flex-shrink: 0;
-`
-
 const SimilarEventsLabel = styled.span`
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -6129,10 +6045,30 @@ const LocationInputRow = styled.div`
 const LocationSearchAnchor = styled(CountryQuickSearchAnchor)`
   flex: 1 1 240px;
   min-width: 180px;
+
+  /* 좁은 화면 — 입력 칸은 전폭, 옆 버튼은 모두 다음 줄에 함께. 예전엔 버튼마다 줄바꿈이 제각각이었다
+     (국가 추가=아래 줄, 인물 고르기=같은 줄, 새 인물 등록=아래 줄) */
+  @media (max-width: 768px) {
+    flex-basis: 100%;
+  }
 `
 
 const LocationInput = styled(S.Input)`
   width: 100%;
+  height: 36px;
+`
+
+/* 키워드 칸 — 공용 FormInput(38px)을 폼의 본 칸 높이 36에 맞춘다 */
+const KeywordInput = styled(S.Input)`
+  height: 36px;
+`
+
+/**
+ * 입력 칸 옆 추가 버튼 — 최소 폭을 맞춰 줄마다 입력 칸의 오른쪽 끝이 한 선에 서게 한다.
+ * (버튼 폭이 122·133·118로 달라 상위 사건·연관 사건·위치 칸 끝이 들쭉날쭉했다)
+ */
+const RowAddButton = styled(S.AddButton)`
+  min-width: 136px;
 `
 
 const LocationNoteRow = styled.div`
@@ -6229,6 +6165,11 @@ const FormGroupRightCluster = styled.div`
 `
 
 const SplitRatioGroup = styled.div`
+  /* 1179px 이하는 그리드가 1열이라 비율을 바꿔도 아무 변화가 없다 — 숨긴다 */
+  @media (max-width: 1179px) {
+    display: none !important;
+  }
+
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -6297,9 +6238,29 @@ const SplitColumnsGrid = styled.div<{
     }
   }
 
+  /*
+   * 1179px 이하는 1열 — 두 판을 display: contents로 풀어 묶음을 그리드 항목으로 올리고,
+   * 순서를 머리 내비·1단 보기와 같은 기본 → 참여 주체 → 맥락으로 맞춘다
+   * (판 DOM 그대로면 왼쪽 판 안의 맥락이 참여 주체보다 먼저 나왔다).
+   */
   @media (max-width: 1179px) {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
+
+    > #event-form-split-left,
+    > #event-form-split-right {
+      display: contents;
+    }
+
+    #event-form-group-basic {
+      order: 1;
+    }
+    #event-form-group-participants {
+      order: 2;
+    }
+    #event-form-group-context {
+      order: 3;
+    }
   }
 `
 
@@ -6378,35 +6339,10 @@ const RelatedDirectionBadge = styled.span<{
   }};
 `
 
-const RelatedMemoSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  width: 100%;
-  min-width: 0;
-  margin-top: 2px;
-  padding-top: 8px;
-  border-top: 1px dashed ${({ theme }) => S.getC(theme).border.light};
-`
-
-const RelatedMemoHeaderRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 20px;
-`
-
-const RelatedMemoLabel = styled.span`
-  font-size: 11.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  letter-spacing: -0.01em;
-`
-
 const RelatedMemoTextarea = styled(RoleDescriptionTextarea)`
-  min-height: 54px;
-  padding: 8px 11px;
+  flex: 1 1 auto;
+  min-height: 52px;
+  padding: 7px 11px;
   border-radius: 9px;
   font-size: 13px;
   line-height: 1.5;
@@ -6419,6 +6355,7 @@ const SplitEditModeHint = styled.p`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/* 실선 — 점선 테는 끌어 놓는 자리(썸네일 업로드·인과 레인·미배정 띠) 전용으로 남긴다 */
 const SplitRecordsGuideBox = styled.div`
   display: flex;
   flex-direction: column;
@@ -6426,7 +6363,7 @@ const SplitRecordsGuideBox = styled.div`
   margin-top: 8px;
   padding: 9px 12px;
   border-radius: 10px;
-  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(255, 255, 255, 0.02)'
@@ -6506,4 +6443,326 @@ const CollapsedClassificationKind = styled.span`
   font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/* 버튼 안 괄호 예시 — 문구는 그대로, 굵기·색만 한 단계 내려 동작 이름(앞부분)이 먼저 읽히게 */
+const AddButtonExample = styled.span`
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/* ─── 사건 연결 3종(정기 시리즈 · 상위 사건 · 연관 사건) ─────────────────────────────
+ * 예전엔 셋 다 '입력 칸 + 테 두른 버튼'(빈 상태)·'배지 + 이름 + 날짜 알약 + 변경 버튼 + ✕ + 회색 띠'(고른 상태)로
+ * 모양이 같아 어느 줄이 무엇인지 라벨을 읽어야 알았고, 상자·알약·띠가 겹겹이라 복잡했다.
+ * 이제 종류마다 아이콘과 색이 하나씩 — 상위 = 겹친 층(남색), 정기 시리즈 = 반복(청록), 연관 = 고리(회색 + 레인 색) —
+ * 이고, 고른 카드는 [아이콘 | 이름/종류·날짜 | 변경 ✕] 한 줄 + 필요할 때만 아래 보조 줄.
+ */
+type LinkTone = 'parent' | 'series'
+
+const LINK_TONE_RGB: Record<LinkTone, string> = {
+  parent: '99, 102, 241',
+  series: '13, 148, 136',
+}
+
+const linkToneText = (tone: LinkTone, theme: DefaultTheme) =>
+  tone === 'series'
+    ? theme.mode === 'dark'
+      ? '#5eead4'
+      : '#0f766e'
+    : theme.mode === 'dark'
+      ? '#a5b4fc'
+      : '#4f46e5'
+
+const LinkedCard = styled.div<{ $tone: LinkTone }>`
+  --link-rgb: ${({ $tone }) => LINK_TONE_RGB[$tone]};
+  --link-text: ${({ $tone, theme }) => linkToneText($tone, theme)};
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 11px;
+  padding: 10px 8px 10px 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--link-rgb), ${({ theme }) => (theme.mode === 'dark' ? 0.3 : 0.2)});
+  background: rgba(var(--link-rgb), ${({ theme }) => (theme.mode === 'dark' ? 0.07 : 0.035)});
+  min-width: 0;
+`
+
+const LinkedIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(var(--link-rgb), ${({ theme }) => (theme.mode === 'dark' ? 0.2 : 0.12)});
+  color: var(--link-text);
+`
+
+const LinkedBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const LinkedTitle = styled.span`
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+/** 종류 · 날짜 · 기구 · 주기 — 알약 대신 점으로 이은 한 줄 */
+const LinkedMeta = styled.span`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 6px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  > * + *::before {
+    content: '·';
+    margin-right: 6px;
+    color: ${({ theme }) => S.getC(theme).text.muted};
+  }
+`
+
+const LinkedKicker = styled.span`
+  font-weight: 700;
+  color: var(--link-text);
+`
+
+const LinkedActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+`
+
+const LinkedTextButton = styled.button`
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    color: var(--link-text);
+    background: rgba(var(--link-rgb), 0.1);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--link-text);
+    outline-offset: 1px;
+  }
+`
+
+/** 고른 카드 아래 보조 줄(이어받기·회차) — 이름 열과 같은 x에서 시작 */
+const LinkedSubRow = styled.div`
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(var(--link-rgb), ${({ theme }) => (theme.mode === 'dark' ? 0.18 : 0.12)});
+  min-width: 0;
+
+  @media (max-width: 560px) {
+    grid-column: 1 / -1;
+  }
+`
+
+const InheritChipGroup = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const InheritChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  max-width: 100%;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--link-rgb), 0.26);
+  background: ${({ theme }) => S.getC(theme).background.content};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--link-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+
+  &:hover {
+    border-color: rgba(var(--link-rgb), 0.5);
+    background: rgba(var(--link-rgb), 0.08);
+  }
+`
+
+const editionInputCss = ({ theme }: { theme: DefaultTheme }) => `
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid ${S.getC(theme).border.default};
+  background: ${S.getC(theme).background.content};
+  color: ${theme.colors.text.primary};
+  font: inherit;
+  font-size: 12.5px;
+  min-width: 0;
+
+  &::placeholder {
+    color: ${S.getC(theme).text.muted};
+  }
+  &:focus {
+    outline: none;
+    border-color: ${S.getC(theme).border.focus};
+    box-shadow: 0 0 0 3px ${S.getC(theme).border.focusHalo};
+  }
+`
+
+const EditionNumberInput = styled.input`
+  ${editionInputCss}
+  width: 130px;
+`
+
+const EditionLabelInput = styled.input`
+  ${editionInputCss}
+  flex: 1 1 200px;
+`
+
+/** 빈 정기 시리즈 — 테 없는 '+ 잇기' 줄(테 두른 버튼이 입력 칸 줄들과 같은 모양이라 구분이 안 됐다) */
+const LinkEmptyButton = styled.button<{ $tone: LinkTone }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  height: 36px;
+  padding: 0 12px 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+
+  svg {
+    color: ${({ $tone, theme }) => linkToneText($tone, theme)};
+  }
+  &:hover {
+    background: rgba(${({ $tone }) => LINK_TONE_RGB[$tone]}, 0.07);
+    border-color: rgba(${({ $tone }) => LINK_TONE_RGB[$tone]}, 0.22);
+  }
+`
+
+/** 검색 칸 앞 종류 아이콘 — 상위(층)·연관(고리)이 같은 모양의 빈 칸으로 보이지 않게 */
+const LinkSearchIcon = styled.span`
+  position: absolute;
+  left: 12px;
+  top: 18px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  pointer-events: none;
+`
+
+const LinkSearchInput = styled(CountryQuickSearchInput)`
+  padding-left: 34px;
+`
+
+/** 검색 칸 옆 '목록에서 고르기' — 테 없는 보조 버튼(칸 하나 + 버튼 하나였던 상자 두 개를 하나로) */
+const LinkPickButton = styled(RowAddButton)`
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: transparent;
+  }
+`
+
+/** 연관 사건 목록 — 카드 여러 장 대신 테 하나 + 구분선 */
+const RelatedList = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) => S.getC(theme).background.content};
+  overflow: hidden;
+
+  > * + * {
+    border-top: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  }
+
+  /* 긴 제목은 이름 칸 안에서 줄을 바꾸고 ✕는 첫 줄 오른쪽에 남는다(예전엔 ✕만 홀로 다음 줄로 떨어졌다) */
+  ${ParticipantHeaderRow} {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+  }
+  ${ParticipantNameWrap} {
+    flex: 1 1 auto;
+    align-items: flex-start;
+  }
+  ${ParticipantNameWrap} > * {
+    margin-top: 1px;
+  }
+  ${ParticipantName} {
+    flex: 1 1 0;
+    margin-top: 0;
+    font-size: 13.5px;
+    font-weight: 650;
+    line-height: 1.4;
+  }
+  /* 날짜는 알약 대신 이름 뒤 보조 글자 */
+  ${RelatedEventDateMeta} {
+    height: auto;
+    padding: 1px 0 0;
+    border: none;
+    background: none;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+/** 연관 사건 줄 안의 '관계'·'메모' 라벨 — 같은 폭이라 칩·메모 칸이 한 x에서 시작 */
+const RelatedSubLabel = styled.span`
+  flex: 0 0 30px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RelatedMemoRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+
+  ${RelatedSubLabel} {
+    padding-top: 8px;
+  }
 `

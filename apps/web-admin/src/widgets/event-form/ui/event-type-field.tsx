@@ -40,6 +40,8 @@ import {
   KitChoiceChip,
   KitGroupLabel,
 } from '@/shared/ui/register-form-kit/register-form-kit'
+// 칸·버튼 테는 폼 공용 팔레트(getC = 공용 FormInput과 같은 slate)로 — 이 파일만 테마 gray라 테가 두 벌이었다
+import { getC } from '@/pages/events/create/event-create.styles'
 
 export interface EventTypeFieldProps {
   /** 고른 분야 키(MILITARY…) — 앞에 보일 세부를 정한다. 없으면 자주 쓰는 세부 + 전체 보기 */
@@ -458,10 +460,10 @@ const ToolbarRow = styled.div`
   gap: 8px 12px;
 `
 
+/* 전폭 — 이 칸만 320px로 끊겨 다른 칸들과 오른쪽 끝이 어긋났다 */
 const QuickSearchAnchor = styled.div`
   position: relative;
   flex: 1 1 200px;
-  max-width: 320px;
   min-width: 0;
 `
 
@@ -579,10 +581,10 @@ const Hint = styled.p`
   margin: 4px 0 0;
   padding: 9px 13px;
   border-radius: 8px;
+  /* 중립 면 — 분야 색 면(군사=빨강)이면 오류 경고 상자로 읽혔다. 분야 색은 굵은 글씨에만 남긴다 */
   background: ${({ theme }) =>
-    `rgba(var(--chip-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.12 : 0.06})`};
-  border: 1px solid ${({ theme }) =>
-    `rgba(var(--chip-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.24 : 0.16})`};
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => getC(theme).border.default};
   font-size: 12px;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -599,7 +601,7 @@ const Hint = styled.p`
 const MoreButton = styled.button`
   height: 34px;
   padding: 0 13px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border: 1px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 999px;
   background: transparent;
   font: inherit;
@@ -612,7 +614,7 @@ const MoreButton = styled.button`
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    border-color: ${({ theme }) => getC(theme).border.hover};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
   }
@@ -717,15 +719,15 @@ const QuickSearchRow = styled.div`
 const QuickSearchInput = styled.input`
   flex: 1;
   min-width: 0;
-  height: 34px;
+  height: 36px;
   padding: 0 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border: 1px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 8px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#ffffff'};
   color: ${({ theme }) => theme.colors.text.primary};
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13.5px;
   letter-spacing: -0.01em;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
@@ -734,7 +736,7 @@ const QuickSearchInput = styled.input`
   }
 
   &:hover:not(:focus) {
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    border-color: ${({ theme }) => getC(theme).border.hover};
   }
 
   &:focus {
