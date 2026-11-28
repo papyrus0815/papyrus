@@ -227,8 +227,8 @@ model Election {
   @@index([countryId, convocationOrdinal], name: "idx_election_country_convocation")
   @@index([historicalCountryId, convocationOrdinal], name: "idx_election_hist_country_convocation")
   @@index([eventId], name: "idx_election_eventId")
-  /// 동일 국가(현대 또는 역사)·선거 유형·회차 숫자 중복 방지 (회차 미입력 시 MySQL은 NULL 중복 허용)
-  @@unique([countryId, historicalCountryId, electionType, convocationOrdinal], name: "uniq_election_scope_type_convocation")
+  /// 동일 국가(현대 또는 역사)·선거 유형·원(chamber)·회차 숫자 중복 방지 (양원제에서 상·하원 동일 대수 공존 허용)
+  @@unique([countryId, historicalCountryId, electionType, chamberId, convocationOrdinal], name: "uniq_election_scope_type_chamber_convocation")
   @@map("election")
 }
 
@@ -256,8 +256,8 @@ model ElectionPartyResult {
   election Election       @relation(fields: [electionId], references: [id], onDelete: Cascade)
   party    PoliticalParty @relation("ElectionPartyResults", fields: [partyId], references: [id], onDelete: Cascade)
 
-  /// 이 선거 정당 집계를 근거로 연결된 행정부–정당 행(최대 1건)
-  cabinetPoliticalPartyLink CabinetPoliticalParty? @relation("CabinetPartyFromElectionResult")
+  /// 이 선거 정당 집계를 근거로 연결된 행정부–정당 행들 (의원내각제 개각·후임 내각으로 1:N 연결 허용)
+  cabinetPoliticalPartyLinks CabinetPoliticalParty[] @relation("CabinetPartyFromElectionResult")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -571,9 +571,9 @@ model CabinetPoliticalParty {
   /// 데이터 입력 경로(수동·선거 집계·수반 후보 등)
   provenance CabinetPartyProvenance @default(MANUAL) @map("provenance")
 
-  /// 선거별 정당 집계와 연결할 때(선택, 출처 추적용)
-  electionPartyResultId String? @unique @map("election_party_result_id") @db.Char(36)
-  electionPartyResult     ElectionPartyResult? @relation("CabinetPartyFromElectionResult", fields: [electionPartyResultId], references: [id], onDelete: SetNull)
+  /// 선거별 정당 집계와 연결할 때(선택, 출처 추적용 — 의원내각제 개각·후임 내각에서도 같은 총선 집계를 공유 가능)
+  electionPartyResultId String? @map("election_party_result_id") @db.Char(36)
+  electionPartyResult   ElectionPartyResult? @relation("CabinetPartyFromElectionResult", fields: [electionPartyResultId], references: [id], onDelete: SetNull)
 
   cabinet Cabinet        @relation("CabinetPoliticalParties", fields: [cabinetId], references: [id], onDelete: Cascade)
   party   PoliticalParty @relation("CabinetPartyAffiliations", fields: [partyId], references: [id], onDelete: Cascade)

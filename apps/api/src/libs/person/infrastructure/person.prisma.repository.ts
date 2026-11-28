@@ -7922,7 +7922,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       }),
       this.prisma.politicalSystem.count({
         where: {
-          OR: [{ headOfStatePositionId: id }, { headOfGovernmentPositionId: id }],
+          OR: [{ headOfStatePositionId: id }, { headOfGovernmentPositionId: id }, { commanderInChiefPositionId: id }],
         },
       }),
       this.prisma.treatySignatory.count({

@@ -61,7 +61,15 @@ export type ChamberDto = StructuredPeriodFields & {
   note?: string | null
   sortOrder: number
   sizes: ChamberSizeDto[]
-  _count?: { elections?: number; observations?: number; systemsAsLower?: number; systemsAsUpper?: number }
+  _count?: {
+    elections?: number
+    observations?: number
+    tenures?: number
+    passedLaws?: number
+    ratifiedTreatySignatories?: number
+    systemsAsLower?: number
+    systemsAsUpper?: number
+  }
 }
 
 export type ChamberInput = {

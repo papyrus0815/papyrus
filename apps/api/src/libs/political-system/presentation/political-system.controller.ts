@@ -30,6 +30,8 @@ import {
 import type {
   CreatePoliticalSystemDto,
   PoliticalSystemResponseDto,
+  PromotePoliticalSystemHeadPositionsDto,
+  PromotePoliticalSystemHeadPositionsResponseDto,
   UpdatePoliticalSystemDto,
 } from './dto/political-system.dto'
 
@@ -52,7 +54,13 @@ const COUNTRY_REF_SELECT = { select: { id: true, name: true } } as const
 
 /** 직함은 관직 정의 카탈로그가 정본 — 표시에 필요한 칸만 딸려 보낸다 */
 const POSITION_REF_SELECT = {
-  select: { id: true, title: true, titleLocal: true, positionType: true },
+  select: {
+    id: true,
+    title: true,
+    titleLocal: true,
+    positionType: true,
+    isMonarchical: true,
+  },
 } as const
 
 /** 응답 include 한 벌 — 목록·단건·생성·수정이 같은 모양을 내려야 한다 */
@@ -61,8 +69,24 @@ const RESPONSE_INCLUDE = {
   historicalCountry: COUNTRY_REF_SELECT,
   headOfStatePosition: POSITION_REF_SELECT,
   headOfGovernmentPosition: POSITION_REF_SELECT,
+  commanderInChiefPosition: POSITION_REF_SELECT,
   lowerChamber: { select: { id: true, name: true, localName: true, role: true } },
   upperChamber: { select: { id: true, name: true, localName: true, role: true } },
+  warConsentChamber: { select: { id: true, name: true, localName: true, role: true } },
+  constitutionLaw: {
+    select: { id: true, name: true, startDate: true, endDate: true },
+  },
+  foundingEvent: {
+    select: {
+      id: true,
+      title: true,
+      startEra: true,
+      startYear: true,
+      startMonth: true,
+      startDay: true,
+      deletedAt: true,
+    },
+  },
 } as const
 
 /**
@@ -155,11 +179,196 @@ export class PoliticalSystemController {
 
     // 정렬은 부호 연·월·일로 — Prisma orderBy는 startYear만 보므로 BC가 뒤집히고 동년 내 교체 순서가 섞인다.
     // 연도 미상은 항상 끝(signedDateKey가 +Infinity).
-    return rows.sort(
-      (left, right) =>
-        signedDateKey(left.startEra, left.startYear, left.startMonth, left.startDay, 'start') -
-        signedDateKey(right.startEra, right.startYear, right.startMonth, right.startDay, 'start'),
-    ) as PoliticalSystemResponseDto[]
+    return rows
+      .sort(
+        (left, right) =>
+          signedDateKey(left.startEra, left.startYear, left.startMonth, left.startDay, 'start') -
+          signedDateKey(right.startEra, right.startYear, right.startMonth, right.startDay, 'start'),
+      )
+      .map((row) => this.sanitizeFoundingEvent(row)) as PoliticalSystemResponseDto[]
+  }
+
+  /**
+   * 미연결 수기 수반 직함(`headOfStateTitle` / `headOfGovernmentTitle`)을
+   * 관직 정의 카탈로그(`GovernmentPositionDefinition`)로 일괄 승격·연결한다.
+   *
+   * @tag political-systems
+   */
+  @Post('promote-head-positions')
+  async promoteHeadPositions(
+    @Body() dto: PromotePoliticalSystemHeadPositionsDto,
+    @Request() req: any,
+  ): Promise<PromotePoliticalSystemHeadPositionsResponseDto> {
+    const accountId: string | undefined = req.user?.id ?? req.user?.sub
+    const cid = dto.countryId?.trim() || null
+    const hid = dto.historicalCountryId?.trim() || null
+    if (!cid && !hid) {
+      throw new BadRequestException(
+        '일괄 승격 대상 국가(countryId 또는 historicalCountryId)를 지정해 주세요',
+      )
+    }
+    const createMissing = dto.createMissingDefinitions !== false
+
+    let scopeWhere: Prisma.PoliticalSystemWhereInput
+    if (hid) {
+      const constituentWindows = await resolveConstituentPolityWindows(
+        this.prisma,
+        hid,
+      )
+      const memberIds = Array.from(
+        new Set([hid, ...constituentWindows.map((win) => win.memberCountryId)]),
+      )
+      scopeWhere = {
+        historicalCountryId: memberIds.length > 1 ? { in: memberIds } : hid,
+      }
+    } else {
+      scopeWhere = (await resolveCountryScopeOr(
+        this.prisma,
+        cid!,
+      )) as Prisma.PoliticalSystemWhereInput
+    }
+
+    const targets = await this.prisma.politicalSystem.findMany({
+      where: {
+        AND: [
+          scopeWhere,
+          {
+            OR: [
+              {
+                headOfStatePositionId: null,
+                headOfStateTitle: { not: null },
+              },
+              {
+                headOfGovernmentPositionId: null,
+                headOfGovernmentTitle: { not: null },
+              },
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        accountId: true,
+        countryId: true,
+        historicalCountryId: true,
+        governmentForm: true,
+        headOfStatePositionId: true,
+        headOfStateTitle: true,
+        headOfGovernmentPositionId: true,
+        headOfGovernmentTitle: true,
+      },
+    })
+
+    const updatedSystemIds: string[] = []
+    let createdDefinitionCount = 0
+
+    for (const sys of targets) {
+      if (sys.accountId && sys.accountId !== accountId) continue
+      const sysAxis = {
+        countryId: sys.countryId ?? null,
+        historicalCountryId: sys.historicalCountryId ?? null,
+      }
+      const patch: UpdatePoliticalSystemDto = {
+        headOfStatePositionId: sys.headOfStatePositionId,
+        headOfStateTitle: sys.headOfStateTitle,
+        headOfGovernmentPositionId: sys.headOfGovernmentPositionId,
+        headOfGovernmentTitle: sys.headOfGovernmentTitle,
+      }
+
+      await this.promoteFreeTextPositionRefs(patch, sysAxis)
+
+      if (createMissing && this.prisma.governmentPositionDefinition?.create) {
+        const missingSlots: Array<{
+          posKey: 'headOfStatePositionId' | 'headOfGovernmentPositionId'
+          titleKey: 'headOfStateTitle' | 'headOfGovernmentTitle'
+          expectedType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+        }> = [
+          {
+            posKey: 'headOfStatePositionId',
+            titleKey: 'headOfStateTitle',
+            expectedType: 'HEAD_OF_STATE',
+          },
+          {
+            posKey: 'headOfGovernmentPositionId',
+            titleKey: 'headOfGovernmentTitle',
+            expectedType: 'HEAD_OF_GOVERNMENT',
+          },
+        ]
+
+        for (const slot of missingSlots) {
+          if (patch[slot.posKey]) continue
+          const remainingTitle = patch[slot.titleKey]?.trim()
+          if (!remainingTitle) continue
+
+          const inferredMonarchical =
+            slot.expectedType === 'HEAD_OF_STATE' &&
+            (sys.governmentForm === 'ABSOLUTE_MONARCHY' ||
+              sys.governmentForm === 'CONSTITUTIONAL_MONARCHY' ||
+              /국왕|여왕|황제|천황|대공|술탄|차르|샤|파라오|칸|군주|태왕|가한/i.test(
+                remainingTitle,
+              ))
+
+          const createdDef =
+            await this.prisma.governmentPositionDefinition.create({
+              data: {
+                title: remainingTitle,
+                positionType: slot.expectedType,
+                isMonarchical: inferredMonarchical,
+                isGeneric: false,
+                ...(sysAxis.countryId || sysAxis.historicalCountryId
+                  ? {
+                      scopes: {
+                        create: {
+                          countryId: sysAxis.historicalCountryId
+                            ? null
+                            : sysAxis.countryId,
+                          historicalCountryId: sysAxis.historicalCountryId,
+                        },
+                      },
+                    }
+                  : {}),
+              },
+              select: { id: true },
+            })
+          createdDefinitionCount += 1
+          patch[slot.posKey] = createdDef.id
+          patch[slot.titleKey] = null
+        }
+      }
+
+      const hosPromoted =
+        !sys.headOfStatePositionId && Boolean(patch.headOfStatePositionId)
+      const hogPromoted =
+        !sys.headOfGovernmentPositionId &&
+        Boolean(patch.headOfGovernmentPositionId)
+
+      if (hosPromoted || hogPromoted) {
+        await this.prisma.politicalSystem.update({
+          where: { id: sys.id },
+          data: {
+            ...(hosPromoted
+              ? {
+                  headOfStatePositionId: patch.headOfStatePositionId,
+                  headOfStateTitle: null,
+                }
+              : {}),
+            ...(hogPromoted
+              ? {
+                  headOfGovernmentPositionId: patch.headOfGovernmentPositionId,
+                  headOfGovernmentTitle: null,
+                }
+              : {}),
+          },
+        })
+        updatedSystemIds.push(sys.id)
+      }
+    }
+
+    return {
+      updatedSystemCount: updatedSystemIds.length,
+      createdDefinitionCount,
+      updatedSystemIds,
+    }
   }
 
   /** @tag political-systems */
@@ -170,7 +379,7 @@ export class PoliticalSystemController {
       include: RESPONSE_INCLUDE,
     })
     if (!row) throw new NotFoundException('정체를 찾을 수 없습니다')
-    return row as PoliticalSystemResponseDto
+    return this.sanitizeFoundingEvent(row) as PoliticalSystemResponseDto
   }
 
   /** @tag political-systems */
@@ -190,7 +399,9 @@ export class PoliticalSystemController {
         !rest.endEra && { endEra: (rest.startEra ?? 'AD') }),
     }
     this.assertPeriodOrder(normalizedRest)
+    await this.promoteFreeTextPositionRefs(normalizedRest, resolvedAxis)
     await this.assertPositionRefs(normalizedRest, resolvedAxis)
+    await this.assertConstitutionAndEventRefs(normalizedRest, resolvedAxis)
 
     const createData = await this.withChamberCache(this.writable(normalizedRest))
     const row = await this.prisma.politicalSystem.create({
@@ -202,7 +413,10 @@ export class PoliticalSystemController {
       },
       include: RESPONSE_INCLUDE,
     })
-    return row as PoliticalSystemResponseDto
+    if (normalizedRest.isCurrent) {
+      await this.unsetSiblingCurrentSystems(row.id, resolvedAxis)
+    }
+    return this.sanitizeFoundingEvent(row) as PoliticalSystemResponseDto
   }
 
   /** @tag political-systems */
@@ -288,6 +502,7 @@ export class PoliticalSystemController {
           ? dto.upperHouseSeats
           : existing.upperHouseSeats,
     })
+    await this.promoteFreeTextPositionRefs(dto, resolvedAxis)
     await this.assertPositionRefs(
       {
         headOfStatePositionId:
@@ -302,6 +517,24 @@ export class PoliticalSystemController {
             : axisChanged
               ? existing.headOfGovernmentPositionId
               : undefined,
+        commanderInChiefPositionId:
+          dto.commanderInChiefPositionId !== undefined
+            ? dto.commanderInChiefPositionId
+            : axisChanged
+              ? existing.commanderInChiefPositionId
+              : undefined,
+      },
+      resolvedAxis,
+    )
+    await this.assertConstitutionAndEventRefs(
+      {
+        constitutionLawId:
+          dto.constitutionLawId !== undefined
+            ? dto.constitutionLawId
+            : axisChanged
+              ? existing.constitutionLawId
+              : undefined,
+        foundingEventId: dto.foundingEventId,
       },
       resolvedAxis,
     )
@@ -335,7 +568,10 @@ export class PoliticalSystemController {
       data: writeData,
       include: RESPONSE_INCLUDE,
     })
-    return row as PoliticalSystemResponseDto
+    if (dto.isCurrent === true) {
+      await this.unsetSiblingCurrentSystems(id, resolvedAxis)
+    }
+    return this.sanitizeFoundingEvent(row) as PoliticalSystemResponseDto
   }
 
   /** @tag political-systems */
@@ -359,6 +595,9 @@ export class PoliticalSystemController {
         historicalCountryId: true,
         headOfStatePositionId: true,
         headOfGovernmentPositionId: true,
+        commanderInChiefPositionId: true,
+        constitutionLawId: true,
+        foundingEventId: true,
         startEra: true,
         startYear: true,
         startMonth: true,
@@ -449,6 +688,96 @@ export class PoliticalSystemController {
   }
 
   /**
+   * 수기 직함 텍스트(headOfStateTitle / headOfGovernmentTitle)만 넘어왔을 때
+   * 관직 정의 카탈로그에 동명·동유형의 호환 정의가 이미 등록되어 있다면 자동으로 정본 PositionId FK로 승격한다.
+   */
+  private async promoteFreeTextPositionRefs(
+    dto: UpdatePoliticalSystemDto,
+    targetAxis: { countryId: string | null; historicalCountryId: string | null },
+  ) {
+    if (!this.prisma.governmentPositionDefinition?.findMany) return
+    const axes: Array<{
+      posKey: 'headOfStatePositionId' | 'headOfGovernmentPositionId'
+      titleKey: 'headOfStateTitle' | 'headOfGovernmentTitle'
+      expectedType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+    }> = [
+      {
+        posKey: 'headOfStatePositionId',
+        titleKey: 'headOfStateTitle',
+        expectedType: 'HEAD_OF_STATE',
+      },
+      {
+        posKey: 'headOfGovernmentPositionId',
+        titleKey: 'headOfGovernmentTitle',
+        expectedType: 'HEAD_OF_GOVERNMENT',
+      },
+    ]
+
+    for (const axisSpec of axes) {
+      if (dto[axisSpec.posKey]) continue
+      const rawTitle = dto[axisSpec.titleKey]?.trim()
+      if (!rawTitle) continue
+
+      const candidates =
+        await this.prisma.governmentPositionDefinition.findMany({
+          where: {
+            title: rawTitle,
+            positionType: axisSpec.expectedType,
+            isGeneric: false,
+          },
+          select: {
+            id: true,
+            administrationDepartment: {
+              select: { countryId: true, historicalCountryId: true },
+            },
+            scopes: {
+              select: { countryId: true, historicalCountryId: true },
+            },
+          },
+        })
+      if (!Array.isArray(candidates) || candidates.length === 0) continue
+
+      let scopedMatchId: string | null = null
+      let globalMatchId: string | null = null
+
+      for (const cand of candidates) {
+        if (
+          cand.administrationDepartment &&
+          (cand.administrationDepartment.countryId ||
+            cand.administrationDepartment.historicalCountryId)
+        ) {
+          const ok = await this.isAxisCompatible(
+            targetAxis,
+            cand.administrationDepartment,
+          )
+          if (!ok) continue
+          scopedMatchId = scopedMatchId ?? cand.id
+          continue
+        }
+        const activeScopes = (cand.scopes ?? []).filter((s) =>
+          Boolean(s.countryId || s.historicalCountryId),
+        )
+        if (activeScopes.length === 0) {
+          globalMatchId = globalMatchId ?? cand.id
+          continue
+        }
+        for (const scope of activeScopes) {
+          if (await this.isAxisCompatible(targetAxis, scope)) {
+            scopedMatchId = scopedMatchId ?? cand.id
+            break
+          }
+        }
+      }
+
+      const promotedId = scopedMatchId ?? globalMatchId
+      if (promotedId) {
+        dto[axisSpec.posKey] = promotedId
+        dto[axisSpec.titleKey] = null
+      }
+    }
+  }
+
+  /**
    * 카탈로그 참조 검증. 없는 id면 FK 위반이 500으로 새고, 유형이 어긋난 정의
    * (예: 국가원수 칸에 각료 정의)나 타국 전용 스코프 정의를 그대로 받으면 정합성이 깨진다.
    */
@@ -458,20 +787,30 @@ export class PoliticalSystemController {
   ) {
     const checks: Array<{
       id: string
-      expected: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+      allowedTypes: readonly string[]
       label: string
     }> = []
     if (dto.headOfStatePositionId)
       checks.push({
         id: dto.headOfStatePositionId,
-        expected: 'HEAD_OF_STATE',
+        allowedTypes: ['HEAD_OF_STATE'],
         label: '국가원수',
       })
     if (dto.headOfGovernmentPositionId)
       checks.push({
         id: dto.headOfGovernmentPositionId,
-        expected: 'HEAD_OF_GOVERNMENT',
+        allowedTypes: ['HEAD_OF_GOVERNMENT'],
         label: '정부수반',
+      })
+    if (dto.commanderInChiefPositionId)
+      checks.push({
+        id: dto.commanderInChiefPositionId,
+        allowedTypes: [
+          'HEAD_OF_STATE',
+          'HEAD_OF_GOVERNMENT',
+          'MILITARY_COMMANDER',
+        ],
+        label: '군 최고통수권자',
       })
     if (checks.length === 0) return
 
@@ -497,9 +836,14 @@ export class PoliticalSystemController {
           `${check.label} 직함으로 지정한 관직 정의를 찾을 수 없습니다`,
         )
       }
-      if (found.positionType !== check.expected) {
+      if (!check.allowedTypes.includes(found.positionType)) {
         throw new BadRequestException(
           `${check.label} 칸에는 ${check.label} 유형의 관직 정의만 지정할 수 있습니다`,
+        )
+      }
+      if (found.isGeneric) {
+        throw new BadRequestException(
+          `${check.label} 칸에는 시스템 범용 더미 직위 대신 실제 수반 직위 정의(예: 대통령·총리·국왕)를 선택해 주세요`,
         )
       }
       if (targetAxis && !found.isGeneric) {
@@ -580,6 +924,29 @@ export class PoliticalSystemController {
       throw new BadRequestException('상원 의석수는 0 이상의 정수여야 합니다')
     }
 
+    const termFields: Array<{ label: string; value: number | null | undefined }> = [
+      { label: '국가원수 임기(년)', value: dto.headOfStateTermYears },
+      { label: '국가원수 중임 상한(회)', value: dto.headOfStateTermLimit },
+      { label: '하원·단원 임기(년)', value: dto.lowerHouseTermYears },
+      { label: '상원 임기(년)', value: dto.upperHouseTermYears },
+    ]
+    for (const field of termFields) {
+      if (
+        field.value != null &&
+        (!Number.isInteger(field.value) || field.value < 1 || field.value > 100)
+      ) {
+        throw new BadRequestException(`${field.label}는 1~100 사이의 정수여야 합니다`)
+      }
+    }
+    if (
+      dto.electoralThresholdPercent != null &&
+      (!Number.isFinite(dto.electoralThresholdPercent) ||
+        dto.electoralThresholdPercent < 0 ||
+        dto.electoralThresholdPercent > 100)
+    ) {
+      throw new BadRequestException('봉쇄조항 기준 득표율(%)은 0~100 사이여야 합니다')
+    }
+
     const start = signedDateKey(
       dto.startEra ?? 'AD',
       dto.startYear ?? null,
@@ -613,6 +980,18 @@ export class PoliticalSystemController {
       })
       if (!chamber) throw new BadRequestException('원을 찾을 수 없습니다.')
       data[`${side}HouseName`] = chamber.localName ? `${chamber.name}(${chamber.localName})` : chamber.name
+    }
+    if (
+      typeof data.warConsentChamberId === 'string' &&
+      data.warConsentChamberId
+    ) {
+      const consentChamber = await this.prisma.chamber?.findUnique({
+        where: { id: data.warConsentChamberId },
+        select: { id: true },
+      })
+      if (!consentChamber) {
+        throw new BadRequestException('개전·선전포고 동의 의회 원을 찾을 수 없습니다.')
+      }
     }
     return data
   }
@@ -650,15 +1029,45 @@ export class PoliticalSystemController {
       'headOfGovernmentHasPower',
       'stateStructure',
       'partySystem',
+      'headSelectionMethod',
+      'headOfStateTermYears',
+      'headOfStateTermLimit',
+      'lowerHouseTermYears',
+      'upperHouseTermYears',
+      'electoralSystem',
+      'electoralThresholdPercent',
+      'warPowerAuthority',
+      'warConsentChamberId',
+      'commanderInChiefPositionId',
+      'warPowerNotes',
+      'constitutionLawId',
+      'foundingEventId',
       'notes',
     ]
     for (const key of keys) {
       if (dto[key] !== undefined) data[key] = dto[key]
     }
+    if (typeof data.constitutionLawId === 'string') {
+      data.constitutionLawId = data.constitutionLawId.trim() || null
+    }
+    if (typeof data.foundingEventId === 'string') {
+      data.foundingEventId = data.foundingEventId.trim() || null
+    }
+    if (typeof data.warConsentChamberId === 'string') {
+      data.warConsentChamberId = data.warConsentChamberId.trim() || null
+    }
+    if (typeof data.commanderInChiefPositionId === 'string') {
+      data.commanderInChiefPositionId =
+        data.commanderInChiefPositionId.trim() || null
+    }
+    if (typeof data.warPowerNotes === 'string') {
+      data.warPowerNotes = data.warPowerNotes.trim() || null
+    }
     if (dto.legislatureType === 'UNICAMERAL') {
       data.upperHouseName = null
       data.upperHouseSeats = null
       data.upperChamberId = null
+      data.upperHouseTermYears = null
     } else if (dto.legislatureType === 'NONE') {
       data.lowerHouseName = null
       data.lowerHouseSeats = null
@@ -666,6 +1075,20 @@ export class PoliticalSystemController {
       data.upperHouseSeats = null
       data.lowerChamberId = null
       data.upperChamberId = null
+      data.lowerHouseTermYears = null
+      data.upperHouseTermYears = null
+      data.electoralSystem = null
+      data.electoralThresholdPercent = null
+      data.warConsentChamberId = null
+    }
+    if (
+      dto.warPowerAuthority === 'MONARCH_PREROGATIVE' ||
+      dto.warPowerAuthority === 'EXECUTIVE_EXCLUSIVE' ||
+      dto.warPowerAuthority === 'RENOUNCED'
+    ) {
+      if (dto.warConsentChamberId === undefined) {
+        data.warConsentChamberId = null
+      }
     }
     /*
      * 한 직함에 두 진실을 두지 않는다. 카탈로그에서 고른 정의가 오면 같은 축의
@@ -676,5 +1099,113 @@ export class PoliticalSystemController {
     if (data.headOfStatePositionId) data.headOfStateTitle = null
     if (data.headOfGovernmentPositionId) data.headOfGovernmentTitle = null
     return data
+  }
+
+  private sanitizeFoundingEvent<
+    T extends { foundingEvent?: { deletedAt?: Date | null } | null },
+  >(row: T): T {
+    if (!row || !row.foundingEvent) return row
+    if (row.foundingEvent.deletedAt != null) {
+      return { ...row, foundingEvent: null }
+    }
+    const { deletedAt: _deletedAt, ...cleanEvent } = row.foundingEvent as Record<
+      string,
+      unknown
+    >
+    return { ...row, foundingEvent: cleanEvent as T['foundingEvent'] }
+  }
+
+  /**
+   * 동일 정치체(현대 국가 직접 소속 또는 동일 역사 국가)에서 새 현행 체제(isCurrent=true)를 저장하면
+   * 기존 현행 체제의 플래그를 내려 복수의 현행 체제가 동시에 남지 않게 정리한다.
+   */
+  private async unsetSiblingCurrentSystems(
+    keepId: string,
+    axis: { countryId: string | null; historicalCountryId: string | null },
+  ) {
+    if (!this.prisma.politicalSystem?.updateMany) return
+    const scopeWhere: Prisma.PoliticalSystemWhereInput = axis.historicalCountryId
+      ? { historicalCountryId: axis.historicalCountryId }
+      : axis.countryId
+        ? { countryId: axis.countryId, historicalCountryId: null }
+        : {}
+    if (Object.keys(scopeWhere).length === 0) return
+    await this.prisma.politicalSystem.updateMany({
+      where: {
+        ...scopeWhere,
+        id: { not: keepId },
+        isCurrent: true,
+      },
+      data: { isCurrent: false },
+    })
+  }
+
+  private async assertConstitutionAndEventRefs(
+    dto: Pick<UpdatePoliticalSystemDto, 'constitutionLawId' | 'foundingEventId'>,
+    targetAxis: { countryId: string | null; historicalCountryId: string | null },
+  ) {
+    const lawId = dto.constitutionLawId?.trim()
+    if (lawId && this.prisma.law?.findUnique) {
+      const law = await this.prisma.law.findUnique({
+        where: { id: lawId },
+        select: { id: true, name: true, countryId: true, historicalCountryId: true },
+      })
+      if (!law) {
+        throw new BadRequestException('지정한 헌법·기본법 법령을 찾을 수 없습니다')
+      }
+      const compatible = await this.isLawCompatibleWithAxis(law, targetAxis)
+      if (!compatible) {
+        throw new BadRequestException(
+          `법령(${law.name})의 소속 국가·시대와 이 정체의 국가·시대가 일치하지 않습니다`,
+        )
+      }
+    }
+
+    const eventId = dto.foundingEventId?.trim()
+    if (eventId && this.prisma.event?.findUnique) {
+      const event = await this.prisma.event.findUnique({
+        where: { id: eventId },
+        select: { id: true, deletedAt: true },
+      })
+      if (!event || event.deletedAt != null) {
+        throw new BadRequestException('지정한 출범 계기 사건을 찾을 수 없습니다')
+      }
+    }
+  }
+
+  private async isLawCompatibleWithAxis(
+    law: { countryId: string | null; historicalCountryId: string | null },
+    axis: { countryId: string | null; historicalCountryId: string | null },
+  ): Promise<boolean> {
+    if (!law.countryId && !law.historicalCountryId) return true
+    if (law.historicalCountryId && axis.historicalCountryId) {
+      return law.historicalCountryId === axis.historicalCountryId
+    }
+    if (law.countryId && axis.countryId && law.countryId === axis.countryId) {
+      return true
+    }
+    if (this.prisma.historicalCountryModernCountry?.findFirst) {
+      if (law.historicalCountryId && axis.countryId) {
+        const link = await this.prisma.historicalCountryModernCountry.findFirst({
+          where: {
+            historicalCountryId: law.historicalCountryId,
+            modernCountryId: axis.countryId,
+          },
+          select: { id: true },
+        })
+        return Boolean(link)
+      }
+      if (axis.historicalCountryId && law.countryId) {
+        const link = await this.prisma.historicalCountryModernCountry.findFirst({
+          where: {
+            historicalCountryId: axis.historicalCountryId,
+            modernCountryId: law.countryId,
+          },
+          select: { id: true },
+        })
+        return Boolean(link)
+      }
+    }
+    return false
   }
 }

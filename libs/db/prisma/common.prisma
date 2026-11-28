@@ -55,6 +55,8 @@ model Account {
   personLifeEvents  PersonLifeEvent[]          @relation("AccountPersonLifeEvents")
   /// 이 계정이 등록한 조약(Treaty)
   treaties Treaty[] @relation("AccountTreaties")
+  /// 이 계정이 등록한 선전포고·개전 기록(WarDeclaration)
+  warDeclarations WarDeclaration[] @relation("AccountWarDeclarations")
   /// 이 계정이 등록한 선거(Election)
   elections Election[] @relation("AccountElections")
   /// 이 계정이 등록한 정기 사건·회의 시리즈(EventSeries)

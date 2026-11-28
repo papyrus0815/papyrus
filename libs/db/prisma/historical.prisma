@@ -302,6 +302,8 @@ model HistoricalCountry {
   // 🆕 정규화된 군사 사건 관계
   treatySignatories              TreatySignatory[]
   allianceMembers                AllianceMember[]
+  warDeclarationsIssued          WarDeclaration[] @relation("WarDeclarationDeclaringHistoricalCountry")
+  warDeclarationsReceived        WarDeclaration[] @relation("WarDeclarationTargetHistoricalCountry")
 
   // 🆕 왕조 통치 관계
   /// 이 국가를 통치한 왕조들의 역사 (시기별)

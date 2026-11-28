@@ -19,13 +19,14 @@ import { pathKeys } from '@/shared/router'
 
 import { countryTabCanvasPadding } from './country-ledger-primitives'
 import { CountryMilitaryWarsPanel } from './country-military-wars-panel'
+import { CountryWarDeclarationsPanel } from './country-war-declarations-panel'
 import { MilitaryUnitFormModal } from './military-unit-form.modal'
 
 export interface CountryMilitarySectionProps {
   country: UnifiedCountry
 }
 
-type MilitarySubTab = 'units' | 'wars'
+type MilitarySubTab = 'units' | 'wars' | 'declarations'
 
 export function CountryMilitarySection({
   country,
@@ -36,8 +37,14 @@ export function CountryMilitarySection({
   const isHistorical = country.type === 'historical'
 
   const unitIdQuery = searchParams.get('unitId')?.trim() || ''
-  const subQuery: MilitarySubTab =
-    searchParams.get('sub') === 'wars' && !unitIdQuery ? 'wars' : 'units'
+  const rawSub = searchParams.get('sub')
+  const subQuery: MilitarySubTab = unitIdQuery
+    ? 'units'
+    : rawSub === 'wars'
+      ? 'wars'
+      : rawSub === 'declarations'
+        ? 'declarations'
+        : 'units'
 
   const [militaryUnitModalOpen, setMilitaryUnitModalOpen] = useState(false)
   const [militaryUnitEditingId, setMilitaryUnitEditingId] = useState<
@@ -133,7 +140,12 @@ export function CountryMilitarySection({
   return (
     <>
       <SectionCanvas aria-label="군사 사령부 및 전쟁사">
-        {subQuery === 'wars' ? (
+        {subQuery === 'declarations' ? (
+          <CountryWarDeclarationsPanel
+            country={country}
+            linkedHistoricalCountryIds={relatedHistoricalIds}
+          />
+        ) : subQuery === 'wars' ? (
           <CountryMilitaryWarsPanel
             country={country}
             linkedHistoricalCountryIds={relatedHistoricalIds}

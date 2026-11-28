@@ -3716,6 +3716,11 @@ function StatehoodField({
             )
           })}
         </StatehoodGrid>
+        {isWarDeclaration && (
+          <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.45, color: '#64748b' }}>
+            선전포고의 법적·헌정 정본(개전 유형·수반·의회 표결·종전 조약)은 국가 상세 › 군사 › 선전포고 원장에서 설정하며, 사건은 외교적 배경과 전달 경위 서술을 보조합니다.
+          </div>
+        )}
         {onAssignRole && unassigned.length > 0 && (
           <UnassignedBar
             role="group"

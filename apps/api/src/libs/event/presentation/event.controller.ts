@@ -829,7 +829,265 @@ export class EventController {
             id: election.id,
             name: election.name,
             pollDate: toIsoOrNull(election.pollDate),
+            electionType: election.electionType ?? null,
+            totalSeats: election.totalSeats ?? null,
+            voterTurnoutPercent:
+              election.voterTurnoutPercent != null
+                ? Number(election.voterTurnoutPercent)
+                : null,
+            countryId: election.countryId ?? null,
+            historicalCountryId: election.historicalCountryId ?? null,
           }))
+        : undefined,
+      /** 이 사건으로 출범·전환된 헌정 체제 — 상세에서만 include(conditional 계약) */
+      politicalSystemsFounded: Array.isArray((event as any).politicalSystemsFounded)
+        ? (event as any).politicalSystemsFounded.map((ps: any) => ({
+            id: ps.id,
+            name: ps.name ?? null,
+            governmentForm: ps.governmentForm ?? null,
+            legislatureType: ps.legislatureType ?? null,
+            startEra: ps.startEra ?? null,
+            startYear: ps.startYear ?? null,
+            endEra: ps.endEra ?? null,
+            endYear: ps.endYear ?? null,
+            isCurrent: Boolean(ps.isCurrent),
+            countryId: ps.countryId ?? null,
+            historicalCountryId: ps.historicalCountryId ?? null,
+            countryName:
+              ps.historicalCountry?.name ?? ps.country?.name ?? null,
+            constitutionLaw: ps.constitutionLaw
+              ? { id: ps.constitutionLaw.id, name: ps.constitutionLaw.name }
+              : null,
+          }))
+        : undefined,
+      /** 이 사건을 보조 서사로 삼는 국가 선전포고·개전 정본 목록 */
+      warDeclarations: Array.isArray((event as any).warDeclarationsAsNarrative)
+        ? (event as any).warDeclarationsAsNarrative.map((wd: any) => {
+            const declName =
+              wd.declaringHistoricalCountry?.name ??
+              wd.declaringCountry?.name ??
+              '미상 국가'
+            const tgtName =
+              wd.targetHistoricalCountry?.name ??
+              wd.targetCountry?.name ??
+              '미상 국가'
+            const person = wd.decidedByPerson
+            const personDisplay = person
+              ? [person.surname, person.middleName, person.name]
+                  .filter(Boolean)
+                  .join(' ')
+                  .trim() || '인물'
+              : null
+            return {
+              id: wd.id,
+              kind: wd.kind,
+              title: wd.title ?? null,
+              displayTitle:
+                wd.title?.trim() ||
+                `${declName}의 대(對)${tgtName} ${
+                  wd.kind === 'ULTIMATUM_EXPIRY'
+                    ? '최후통첩 및 개전'
+                    : wd.kind === 'ALLIANCE_ENTRY'
+                      ? '참전 선언'
+                      : wd.kind === 'UNDECLARED_HOSTILITIES'
+                        ? '무선전 개전'
+                        : wd.kind === 'CO_BELLIGERENCY'
+                          ? '재참전·공동교전 선언'
+                          : wd.kind === 'DIPLOMATIC_SEVERANCE'
+                            ? '국교 단절'
+                            : '선전포고'
+                }`,
+              casusBelli: wd.casusBelli ?? null,
+              summary: wd.summary ?? null,
+              declaredDate: toIsoOrNull(wd.declaredDate),
+              declaredEra: wd.declaredEra ?? null,
+              declaredYear: wd.declaredYear ?? null,
+              declaredMonth: wd.declaredMonth ?? null,
+              declaredDay: wd.declaredDay ?? null,
+              declaredPrecision: wd.declaredPrecision ?? null,
+              severanceEra: wd.severanceEra ?? null,
+              severanceYear: wd.severanceYear ?? null,
+              severanceMonth: wd.severanceMonth ?? null,
+              severanceDay: wd.severanceDay ?? null,
+              declaringCountryId: wd.declaringCountryId ?? null,
+              declaringHistoricalCountryId:
+                wd.declaringHistoricalCountryId ?? null,
+              declaringCountryName: declName,
+              declaringFlagEmoji: wd.declaringCountry?.flagEmoji ?? null,
+              targetCountryId: wd.targetCountryId ?? null,
+              targetHistoricalCountryId: wd.targetHistoricalCountryId ?? null,
+              targetCountryName: tgtName,
+              targetFlagEmoji: wd.targetCountry?.flagEmoji ?? null,
+              cabinet: wd.cabinet
+                ? { id: wd.cabinet.id, name: wd.cabinet.name }
+                : null,
+              decidedByPerson:
+                person && personDisplay
+                  ? { id: person.id, displayName: personDisplay }
+                  : null,
+              decidedByTenureTitle:
+                wd.decidedByTenure?.title ??
+                wd.decidedByTenure?.positionDefinition?.title ??
+                null,
+              approvedChamber: wd.approvedChamber
+                ? { id: wd.approvedChamber.id, name: wd.approvedChamber.name }
+                : null,
+              yeas: wd.yeas ?? null,
+              nays: wd.nays ?? null,
+              abstentions: wd.abstentions ?? null,
+              warEvent:
+                wd.warEvent && wd.warEvent.deletedAt == null
+                  ? { id: wd.warEvent.id, title: wd.warEvent.title }
+                  : null,
+              ultimatumEvent:
+                wd.ultimatumEvent && wd.ultimatumEvent.deletedAt == null
+                  ? { id: wd.ultimatumEvent.id, title: wd.ultimatumEvent.title }
+                  : null,
+              terminationKind: wd.terminationKind ?? null,
+              endedEra: wd.endedEra ?? null,
+              endedYear: wd.endedYear ?? null,
+              endedMonth: wd.endedMonth ?? null,
+              endedDay: wd.endedDay ?? null,
+              peaceTreaty: wd.peaceTreaty
+                ? { id: wd.peaceTreaty.id, name: wd.peaceTreaty.name }
+                : null,
+            }
+          })
+        : undefined,
+      /** 이 사건(최후통첩 등)을 선행 원인으로 삼은 국가 선전포고·개전 정본 목록 */
+      warDeclarationsFromUltimatum: Array.isArray(
+        (event as any).warDeclarationsAsUltimatum,
+      )
+        ? (event as any).warDeclarationsAsUltimatum.map((wd: any) => {
+            const declName =
+              wd.declaringHistoricalCountry?.name ??
+              wd.declaringCountry?.name ??
+              '미상 국가'
+            const tgtName =
+              wd.targetHistoricalCountry?.name ??
+              wd.targetCountry?.name ??
+              '미상 국가'
+            return {
+              id: wd.id,
+              kind: wd.kind,
+              displayTitle:
+                wd.title?.trim() || `${declName}의 대(對)${tgtName} 개전`,
+              casusBelli: wd.casusBelli ?? null,
+              declaredEra: wd.declaredEra ?? null,
+              declaredYear: wd.declaredYear ?? null,
+              declaredMonth: wd.declaredMonth ?? null,
+              declaredDay: wd.declaredDay ?? null,
+              declaringCountryId: wd.declaringCountryId ?? null,
+              declaringHistoricalCountryId:
+                wd.declaringHistoricalCountryId ?? null,
+              declaringCountryName: declName,
+              declaringFlagEmoji: wd.declaringCountry?.flagEmoji ?? null,
+              targetCountryId: wd.targetCountryId ?? null,
+              targetHistoricalCountryId: wd.targetHistoricalCountryId ?? null,
+              targetCountryName: tgtName,
+              targetFlagEmoji: wd.targetCountry?.flagEmoji ?? null,
+              warEvent:
+                wd.warEvent && wd.warEvent.deletedAt == null
+                  ? { id: wd.warEvent.id, title: wd.warEvent.title }
+                  : null,
+              narrativeEventId:
+                wd.narrativeEvent && wd.narrativeEvent.deletedAt == null
+                  ? wd.narrativeEvent.id
+                  : null,
+              narrativeEventTitle:
+                wd.narrativeEvent && wd.narrativeEvent.deletedAt == null
+                  ? wd.narrativeEvent.title
+                  : null,
+            }
+          })
+        : undefined,
+      /** 이 전쟁(WAR)에 귀속된 국가 선전포고·개전 정본 목록 */
+      warDeclarationsInWar: Array.isArray((event as any).warDeclarationsInWar)
+        ? (event as any).warDeclarationsInWar.map((wd: any) => {
+            const declName =
+              wd.declaringHistoricalCountry?.name ??
+              wd.declaringCountry?.name ??
+              '미상 국가'
+            const tgtName =
+              wd.targetHistoricalCountry?.name ??
+              wd.targetCountry?.name ??
+              '미상 국가'
+            const person = wd.decidedByPerson
+            const personDisplay = person
+              ? [person.surname, person.middleName, person.name]
+                  .filter(Boolean)
+                  .join(' ')
+                  .trim() || '인물'
+              : null
+            return {
+              id: wd.id,
+              kind: wd.kind,
+              displayTitle:
+                wd.title?.trim() ||
+                `${declName}의 대(對)${tgtName} ${
+                  wd.kind === 'ULTIMATUM_EXPIRY'
+                    ? '최후통첩 및 개전'
+                    : wd.kind === 'ALLIANCE_ENTRY'
+                      ? '참전 선언'
+                      : wd.kind === 'UNDECLARED_HOSTILITIES'
+                        ? '무선전 개전'
+                        : wd.kind === 'CO_BELLIGERENCY'
+                          ? '재참전·공동교전 선언'
+                          : wd.kind === 'DIPLOMATIC_SEVERANCE'
+                            ? '국교 단절'
+                            : '선전포고'
+                }`,
+              casusBelli: wd.casusBelli ?? null,
+              declaredDate: toIsoOrNull(wd.declaredDate),
+              declaredEra: wd.declaredEra ?? null,
+              declaredYear: wd.declaredYear ?? null,
+              declaredMonth: wd.declaredMonth ?? null,
+              declaredDay: wd.declaredDay ?? null,
+              declaredPrecision: wd.declaredPrecision ?? null,
+              declaringCountryId: wd.declaringCountryId ?? null,
+              declaringHistoricalCountryId:
+                wd.declaringHistoricalCountryId ?? null,
+              declaringCountryName: declName,
+              declaringFlagEmoji: wd.declaringCountry?.flagEmoji ?? null,
+              targetCountryId: wd.targetCountryId ?? null,
+              targetHistoricalCountryId: wd.targetHistoricalCountryId ?? null,
+              targetCountryName: tgtName,
+              targetFlagEmoji: wd.targetCountry?.flagEmoji ?? null,
+              decidedByPerson:
+                person && personDisplay
+                  ? { id: person.id, displayName: personDisplay }
+                  : null,
+              decidedByTenureTitle:
+                wd.decidedByTenure?.title ??
+                wd.decidedByTenure?.positionDefinition?.title ??
+                null,
+              approvedChamber: wd.approvedChamber
+                ? { id: wd.approvedChamber.id, name: wd.approvedChamber.name }
+                : null,
+              yeas: wd.yeas ?? null,
+              nays: wd.nays ?? null,
+              ultimatumEvent:
+                wd.ultimatumEvent && wd.ultimatumEvent.deletedAt == null
+                  ? { id: wd.ultimatumEvent.id, title: wd.ultimatumEvent.title }
+                  : null,
+              narrativeEventId:
+                wd.narrativeEvent && wd.narrativeEvent.deletedAt == null
+                  ? wd.narrativeEvent.id
+                  : null,
+              narrativeEventTitle:
+                wd.narrativeEvent && wd.narrativeEvent.deletedAt == null
+                  ? wd.narrativeEvent.title
+                  : null,
+              terminationKind: wd.terminationKind ?? null,
+              endedEra: wd.endedEra ?? null,
+              endedYear: wd.endedYear ?? null,
+              endedMonth: wd.endedMonth ?? null,
+              endedDay: wd.endedDay ?? null,
+              peaceTreaty: wd.peaceTreaty
+                ? { id: wd.peaceTreaty.id, name: wd.peaceTreaty.name }
+                : null,
+            }
+          })
         : undefined,
       /** 이 사건으로 시작된 재임·재위 — 상세에서만 include */
       accessions:
@@ -967,6 +1225,7 @@ export class EventController {
     @Query('hasNoKeywords') hasNoKeywords?: string,
     @Query('includeSubEvents') includeSubEvents?: string,
     @Query('seriesId') seriesId?: string,
+    @Query('includeMilitaryTypes') includeMilitaryTypes?: string,
     @Request() req?: any,
   ): Promise<EventResponseDto[]> {
     const userId = req.user?.id || req.user?.sub // AuthGuard가 이미 인증 체크함
@@ -1101,10 +1360,43 @@ export class EventController {
         deletedAt: null,
         ...(filterSeriesId && { seriesId: filterSeriesId }),
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
-        ...(parseEventDomain(domain) && { domain: parseEventDomain(domain) }),
+        ...(parseEventDomain(domain) === 'MILITARY' &&
+        isFlagOn(includeMilitaryTypes)
+          ? {}
+          : parseEventDomain(domain)
+            ? { domain: parseEventDomain(domain) }
+            : {}),
         ...(parseEventTypes(types) && { type: { in: parseEventTypes(types) } }),
         ...((dateRange.gte || dateRange.lt) && { startDate: dateRange }),
-        ...(countryScopeWhere && { AND: [countryScopeWhere] }),
+        ...((countryScopeWhere ||
+          (parseEventDomain(domain) === 'MILITARY' &&
+            isFlagOn(includeMilitaryTypes))) && {
+          AND: [
+            ...(countryScopeWhere ? [countryScopeWhere] : []),
+            ...(parseEventDomain(domain) === 'MILITARY' &&
+            isFlagOn(includeMilitaryTypes)
+              ? [
+                  {
+                    OR: [
+                      { domain: 'MILITARY' as const },
+                      {
+                        type: {
+                          in: [
+                            'WAR' as const,
+                            'WAR_DECLARATION' as const,
+                            'BATTLE' as const,
+                            'UPRISING' as const,
+                            'MOBILIZATION' as const,
+                            'MILITARY_FORMATION' as const,
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                ]
+              : []),
+          ],
+        }),
         ...(isFlagOn(hasNoDescription) && {
           OR: [{ description: null }, { description: '' }],
         }),
@@ -1286,6 +1578,7 @@ export class EventController {
     @Query('hasNoKeywords') hasNoKeywords?: string,
     @Query('includeSubEvents') includeSubEvents?: string,
     @Query('seriesId') seriesId?: string,
+    @Query('includeMilitaryTypes') includeMilitaryTypes?: string,
     @Request() req?: any,
   ): Promise<{ total: number }> {
     const userId = req.user?.id || req.user?.sub
@@ -1379,10 +1672,43 @@ export class EventController {
         deletedAt: null,
         ...(filterSeriesId && { seriesId: filterSeriesId }),
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
-        ...(parseEventDomain(domain) && { domain: parseEventDomain(domain) }),
+        ...(parseEventDomain(domain) === 'MILITARY' &&
+        isFlagOn(includeMilitaryTypes)
+          ? {}
+          : parseEventDomain(domain)
+            ? { domain: parseEventDomain(domain) }
+            : {}),
         ...(parseEventTypes(types) && { type: { in: parseEventTypes(types) } }),
         ...((dateRange.gte || dateRange.lt) && { startDate: dateRange }),
-        ...(countryScopeWhere && { AND: [countryScopeWhere] }),
+        ...((countryScopeWhere ||
+          (parseEventDomain(domain) === 'MILITARY' &&
+            isFlagOn(includeMilitaryTypes))) && {
+          AND: [
+            ...(countryScopeWhere ? [countryScopeWhere] : []),
+            ...(parseEventDomain(domain) === 'MILITARY' &&
+            isFlagOn(includeMilitaryTypes)
+              ? [
+                  {
+                    OR: [
+                      { domain: 'MILITARY' as const },
+                      {
+                        type: {
+                          in: [
+                            'WAR' as const,
+                            'WAR_DECLARATION' as const,
+                            'BATTLE' as const,
+                            'UPRISING' as const,
+                            'MOBILIZATION' as const,
+                            'MILITARY_FORMATION' as const,
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                ]
+              : []),
+          ],
+        }),
         ...(isFlagOn(hasNoDescription) && {
           OR: [{ description: null }, { description: '' }],
         }),
@@ -2182,8 +2508,100 @@ export class EventController {
         },
         // 이 사건을 서사로 가진 선거 — 결과(정당 의석·후보 득표)는 GET /elections/:id가 정본.
         electionsWithNarrative: {
-          select: { id: true, name: true, pollDate: true },
+          select: {
+            id: true,
+            name: true,
+            pollDate: true,
+            electionType: true,
+            totalSeats: true,
+            voterTurnoutPercent: true,
+            countryId: true,
+            historicalCountryId: true,
+          },
           orderBy: { pollDate: 'asc' },
+        },
+        // 이 사건으로 출범·전환된 헌정 체제 (PoliticalSystem.foundingEventId 역참조)
+        politicalSystemsFounded: {
+          select: {
+            id: true,
+            name: true,
+            governmentForm: true,
+            legislatureType: true,
+            startEra: true,
+            startYear: true,
+            endEra: true,
+            endYear: true,
+            isCurrent: true,
+            countryId: true,
+            historicalCountryId: true,
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+            constitutionLaw: { select: { id: true, name: true } },
+          },
+          orderBy: [{ startYear: 'asc' }, { createdAt: 'asc' }],
+        },
+        warDeclarationsAsNarrative: {
+          include: {
+            declaringCountry: { select: { id: true, name: true, flagEmoji: true } },
+            declaringHistoricalCountry: { select: { id: true, name: true } },
+            targetCountry: { select: { id: true, name: true, flagEmoji: true } },
+            targetHistoricalCountry: { select: { id: true, name: true } },
+            cabinet: { select: { id: true, name: true } },
+            decidedByPerson: {
+              select: { id: true, name: true, surname: true, middleName: true },
+            },
+            decidedByTenure: {
+              select: {
+                id: true,
+                title: true,
+                positionDefinition: { select: { title: true } },
+              },
+            },
+            approvedChamber: { select: { id: true, name: true } },
+            warEvent: { select: { id: true, title: true, deletedAt: true } },
+            ultimatumEvent: { select: { id: true, title: true, deletedAt: true } },
+            peaceTreaty: { select: { id: true, name: true } },
+          },
+          orderBy: [{ declaredYear: 'asc' }, { createdAt: 'asc' }],
+        },
+        warDeclarationsAsUltimatum: {
+          include: {
+            declaringCountry: { select: { id: true, name: true, flagEmoji: true } },
+            declaringHistoricalCountry: { select: { id: true, name: true } },
+            targetCountry: { select: { id: true, name: true, flagEmoji: true } },
+            targetHistoricalCountry: { select: { id: true, name: true } },
+            warEvent: { select: { id: true, title: true, deletedAt: true } },
+            narrativeEvent: { select: { id: true, title: true, deletedAt: true } },
+          },
+          orderBy: [{ declaredYear: 'asc' }, { createdAt: 'asc' }],
+        },
+        warDeclarationsInWar: {
+          include: {
+            declaringCountry: { select: { id: true, name: true, flagEmoji: true } },
+            declaringHistoricalCountry: { select: { id: true, name: true } },
+            targetCountry: { select: { id: true, name: true, flagEmoji: true } },
+            targetHistoricalCountry: { select: { id: true, name: true } },
+            decidedByPerson: {
+              select: { id: true, name: true, surname: true, middleName: true },
+            },
+            decidedByTenure: {
+              select: {
+                id: true,
+                title: true,
+                positionDefinition: { select: { title: true } },
+              },
+            },
+            approvedChamber: { select: { id: true, name: true } },
+            ultimatumEvent: { select: { id: true, title: true, deletedAt: true } },
+            narrativeEvent: { select: { id: true, title: true, deletedAt: true } },
+            peaceTreaty: { select: { id: true, name: true } },
+          },
+          orderBy: [
+            { declaredYear: 'asc' },
+            { declaredMonth: 'asc' },
+            { declaredDay: 'asc' },
+            { createdAt: 'asc' },
+          ],
         },
         // 관련 조직·기업 — 기업이면 최신 주가 1점(시총)까지. 지금까지 시드만 쓰고 어디에도 안 보였다.
         organizationRelations: {
@@ -2846,6 +3264,9 @@ export class EventController {
       dto.seriesId === '' ? null : dto.seriesId,
     )
 
+    // 선전포고(WAR_DECLARATION) 사건이면 INITIATOR·TARGET 참여국으로부터 국가 정본 WarDeclaration 자동 생성
+    await this.syncCanonicalWarDeclarationFromEvent(event.id, userId)
+
     // 모든 관계 + 군사정보가 채워진 *조회와 동일한* 응답으로 반환 — 프론트가 시딩만으로
     // 완전한 상세를 렌더하도록(부분 응답 → refetch 점프 방지). 폴백: 재조회 실패 시 bare.
     const loaded = await this.loadEventDetail(event.id)
@@ -2953,6 +3374,9 @@ export class EventController {
     if (dto.seriesId && dto.seriesId !== '') {
       await this.syncSeriesPrincipalOrganization(id, dto.seriesId)
     }
+
+    // 선전포고(WAR_DECLARATION) 사건이면 국가 정본 WarDeclaration 자동 보강·동기화
+    await this.syncCanonicalWarDeclarationFromEvent(id, userId)
 
     // create와 동일 — 관계·군사정보 포함 full 응답으로 반환(시딩 시 점프 방지).
     const loaded = await this.loadEventDetail(id)
@@ -3278,6 +3702,167 @@ export class EventController {
       })
     }
     return { eventId: id, historicalCountryId: body.historicalCountryId, role: nextRole }
+  }
+
+  /**
+   * 사건 등록·수정 모달에서 `type === 'WAR_DECLARATION'`인 사건에 선포국(`INITIATOR`)·대상국(`TARGET`)이
+   * 지정되어 있으면, 고아 사건이 남지 않도록 국가 정본 `WarDeclaration` 행을 자동 생성·동기화한다.
+   */
+  private async syncCanonicalWarDeclarationFromEvent(
+    eventId: string,
+    accountId?: string,
+  ): Promise<void> {
+    if (!this.prisma.warDeclaration?.findMany) return
+    const ev = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        deletedAt: true,
+        startDate: true,
+        startEra: true,
+        startYear: true,
+        startMonth: true,
+        startDay: true,
+        startDatePrecision: true,
+        parentEventId: true,
+        parentEvent: { select: { id: true, type: true, deletedAt: true } },
+        extraParentLinks: {
+          select: {
+            parentEvent: { select: { id: true, type: true, deletedAt: true } },
+          },
+        },
+        countryRelations: {
+          select: {
+            countryId: true,
+            historicalCountryId: true,
+            role: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    })
+    if (!ev || ev.deletedAt != null || ev.type !== 'WAR_DECLARATION') return
+
+    const initiators = ev.countryRelations
+      .filter(
+        (r) =>
+          r.role === 'INITIATOR' &&
+          Boolean(r.countryId || r.historicalCountryId) &&
+          !(r.countryId && r.historicalCountryId),
+      )
+      .map((r) => ({
+        countryId: r.countryId ?? null,
+        historicalCountryId: r.historicalCountryId ?? null,
+      }))
+    const targets = ev.countryRelations
+      .filter(
+        (r) =>
+          r.role === 'TARGET' &&
+          Boolean(r.countryId || r.historicalCountryId) &&
+          !(r.countryId && r.historicalCountryId),
+      )
+      .map((r) => ({
+        countryId: r.countryId ?? null,
+        historicalCountryId: r.historicalCountryId ?? null,
+      }))
+    if (initiators.length === 0 || targets.length === 0) return
+
+    const warEventId =
+      (ev.parentEvent &&
+      ev.parentEvent.deletedAt == null &&
+      ev.parentEvent.type === 'WAR'
+        ? ev.parentEvent.id
+        : null) ??
+      ev.extraParentLinks.find(
+        (ep) =>
+          ep.parentEvent.deletedAt == null && ep.parentEvent.type === 'WAR',
+      )?.parentEvent.id ??
+      null
+
+    const existingRows = await this.prisma.warDeclaration.findMany({
+      where: { narrativeEventId: eventId },
+      select: {
+        id: true,
+        declaringCountryId: true,
+        declaringHistoricalCountryId: true,
+        targetCountryId: true,
+        targetHistoricalCountryId: true,
+        declaredYear: true,
+        warEventId: true,
+      },
+    })
+
+    const inferredKind =
+      ev.title.includes('최후통첩')
+        ? 'ULTIMATUM_EXPIRY'
+        : ev.title.includes('재참전') || ev.title.includes('공동교전')
+          ? 'CO_BELLIGERENCY'
+          : ev.title.includes('단교') || ev.title.includes('국교 단절')
+            ? 'DIPLOMATIC_SEVERANCE'
+            : 'FORMAL_DECLARATION'
+
+    for (const init of initiators) {
+      for (const targ of targets) {
+        const sameModern =
+          init.countryId != null && init.countryId === targ.countryId
+        const sameHist =
+          init.historicalCountryId != null &&
+          init.historicalCountryId === targ.historicalCountryId
+        if (sameModern || sameHist) continue
+
+        const hit = existingRows.find(
+          (row) =>
+            row.declaringCountryId === init.countryId &&
+            row.declaringHistoricalCountryId === init.historicalCountryId &&
+            row.targetCountryId === targ.countryId &&
+            row.targetHistoricalCountryId === targ.historicalCountryId,
+        )
+        if (!hit) {
+          await this.prisma.warDeclaration.create({
+            data: {
+              declaringCountryId: init.countryId,
+              declaringHistoricalCountryId: init.historicalCountryId,
+              targetCountryId: targ.countryId,
+              targetHistoricalCountryId: targ.historicalCountryId,
+              kind: inferredKind,
+              declaredDate: ev.startDate,
+              declaredEra: ev.startEra,
+              declaredYear: ev.startYear,
+              declaredMonth: ev.startMonth,
+              declaredDay: ev.startDay,
+              declaredPrecision: ev.startDatePrecision,
+              warEventId,
+              narrativeEventId: eventId,
+              accountId: accountId ?? null,
+            },
+          })
+        } else if (
+          (hit.declaredYear == null && ev.startYear != null) ||
+          (hit.warEventId == null && warEventId != null)
+        ) {
+          await this.prisma.warDeclaration.update({
+            where: { id: hit.id },
+            data: {
+              ...(hit.declaredYear == null && ev.startYear != null
+                ? {
+                    declaredDate: ev.startDate,
+                    declaredEra: ev.startEra,
+                    declaredYear: ev.startYear,
+                    declaredMonth: ev.startMonth,
+                    declaredDay: ev.startDay,
+                    declaredPrecision: ev.startDatePrecision,
+                  }
+                : {}),
+              ...(hit.warEventId == null && warEventId != null
+                ? { warEventId }
+                : {}),
+            },
+          })
+        }
+      }
+    }
   }
 }
 

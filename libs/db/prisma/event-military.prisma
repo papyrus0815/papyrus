@@ -162,6 +162,9 @@ model Treaty {
   /// 이 조약을 근거로 한 영토 이전
   territoryTransfers EventTerritoryTransfer[] @relation("TerritoryTransferTreaty")
 
+  /// 이 조약을 종전·휴전 근거로 삼는 선전포고·개전 기록
+  endedWarDeclarations WarDeclaration[] @relation("WarDeclarationPeaceTreaty")
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -253,6 +256,17 @@ model TreatySignatory {
   /// 국가별 서명일 (조약 전체 서명일과 다를 수 있음)
   signedAt DateTime? @map("signed_at")
 
+  /// 국내 비준 동의·심의 의회 원 (Chamber, 예: 미국 상원, 대한민국 국회)
+  ratifiedChamberId  String?                   @map("ratified_chamber_id") @db.Char(36)
+  ratifiedChamber    Chamber?                  @relation("TreatySignatoryRatifiedChamber", fields: [ratifiedChamberId], references: [id], onDelete: SetNull)
+  /// 국내 비준 상태 (가결·부결·계류·불요)
+  ratificationStatus TreatyRatificationStatus? @map("ratification_status")
+  /// 비준(또는 부결) 의결일
+  ratifiedAt         DateTime?                 @map("ratified_at")
+  /// 비준 표결 찬성·반대 의석 수 (선택)
+  ratificationYeas   Int?                      @map("ratification_yeas")
+  ratificationNays   Int?                      @map("ratification_nays")
+
   /// 비고
   note String? @db.Text
 
@@ -265,6 +279,7 @@ model TreatySignatory {
   @@index([cabinetId], name: "idx_treaty_signatory_cabinetId")
   @@index([positionDefinitionId], name: "idx_treaty_signatory_positionDefId")
   @@index([tenureId], name: "idx_treaty_signatory_tenureId")
+  @@index([ratifiedChamberId], name: "idx_treaty_signatory_ratifiedChamberId")
   @@map("treaty_signatory")
 }
 
@@ -603,4 +618,147 @@ enum SideOutcome {
   WITHDRAWAL
   /// 결론 없음·논쟁 중
   INCONCLUSIVE
+}
+
+// ========================
+// 선전포고 · 개전 정본 (국가 주권 행위 원장 — Event 종속 제거)
+// ========================
+/// 선전포고·개전 행위의 유형
+enum WarDeclarationKind {
+  /// 공식 선전포고 (개전 포고문·칙령·외교 각서 전달)
+  FORMAL_DECLARATION
+  /// 최후통첩 시한 만료 개전 (예: 1914·1939 영국의 대독 개전)
+  ULTIMATUM_EXPIRY
+  /// 동맹·상호방위 의무 참전 선언 (예: 사르데냐 참전, 삼국동맹·추축국 참전)
+  ALLIANCE_ENTRY
+  /// 선전포고 없는 기습·사실상 개전 (예: 1904 여순 기습, 무력 침공 개시, 사후 포고)
+  UNDECLARED_HOSTILITIES
+  /// 진영 전환·재참전·공동교전국 선언 (예: 1943.10 이탈리아 대독 선전포고, 1918.11 루마니아 재참전)
+  CO_BELLIGERENCY
+  /// 국교 단절·통첩 (개전 직전 외교 단교를 독립 기록할 때)
+  DIPLOMATIC_SEVERANCE
+}
+
+/// 교전 상태 종결 방식
+enum WarTerminationKind {
+  /// 강화·평화 조약 발효
+  PEACE_TREATY
+  /// 휴전·정전 협정
+  ARMISTICE
+  /// 무조건 항복·항복 문서 조인
+  SURRENDER
+  /// 일방 국가 소멸·병합
+  STATE_EXTINCTION
+  /// 일방적·공동 전쟁 상태 종료 선언 (예: 1951 서방 연합국 대독 전쟁상태 종료, 1956 일소 공동선언)
+  UNILATERAL_DECLARATION
+  /// 법적 교전·휴전 상태 지속
+  ONGOING
+}
+
+/// 국가 간 선전포고·개전 정본 1행 = "[선포국 1곳] ──▶ [대상국 1곳]" 단방향 주권 행위.
+///
+/// 조약(Treaty)·선거(Election)·법령(Law)과 마찬가지로 **국가 측 원장이 정본**이며,
+/// 외교 비화·의회 연설·각서 전달 경위 등 서사(배경·전개·여파)가 필요한 경우에만
+/// 보조 사건(`narrativeEventId`)을 선택 연결한다(다국 공동 선포 사건 1건에 여러 행이 N:1 연결 가능).
+model WarDeclaration {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 선포국(개전 주체국) — 현대 국가 또는 역사적 국가 중 하나 (XOR)
+  declaringCountryId           String?            @map("declaring_country_id") @db.Char(36)
+  declaringCountry             Country?           @relation("WarDeclarationDeclaringCountry", fields: [declaringCountryId], references: [id], onDelete: Cascade)
+  declaringHistoricalCountryId String?            @map("declaring_historical_country_id") @db.Char(36)
+  declaringHistoricalCountry   HistoricalCountry? @relation("WarDeclarationDeclaringHistoricalCountry", fields: [declaringHistoricalCountryId], references: [id], onDelete: Cascade)
+
+  /// 대상국(피선포국) — 현대 국가 또는 역사적 국가 중 하나 (XOR)
+  targetCountryId           String?            @map("target_country_id") @db.Char(36)
+  targetCountry             Country?           @relation("WarDeclarationTargetCountry", fields: [targetCountryId], references: [id], onDelete: Cascade)
+  targetHistoricalCountryId String?            @map("target_historical_country_id") @db.Char(36)
+  targetHistoricalCountry   HistoricalCountry? @relation("WarDeclarationTargetHistoricalCountry", fields: [targetHistoricalCountryId], references: [id], onDelete: Cascade)
+
+  /// 개전 행위 유형
+  kind WarDeclarationKind @default(FORMAL_DECLARATION)
+
+  /// 고유 표시 제목 오버라이드 (비우면 '{선포국}의 대(對){대상국} 선전포고' 자동 구성)
+  title String? @db.VarChar(200)
+
+  /// 개전 명분·사유 한 줄 (예: '사라예보 사건 배후 책임 및 최후통첩 일부 거부')
+  casusBelli String? @map("casus_belli") @db.VarChar(500)
+
+  /// 국가 원장 요약·전달 경위 메모
+  summary String? @db.Text
+
+  /// 개전·선포 시점 (AD 1000+ DATETIME 거울 + BC·정밀도 안전 구조화 필드)
+  declaredDate      DateTime? @map("declared_date")
+  declaredEra       Era?      @map("declared_era")
+  declaredYear      Int?      @map("declared_year")
+  declaredMonth     Int?      @map("declared_month")
+  declaredDay       Int?      @map("declared_day")
+  declaredPrecision String?   @map("declared_precision") @db.VarChar(10)
+
+  /// 외교 단교 시점 (선전포고에 앞서 국교를 먼저 끊은 경우, 선택)
+  severanceEra   Era? @map("severance_era")
+  severanceYear  Int? @map("severance_year")
+  severanceMonth Int? @map("severance_month")
+  severanceDay   Int? @map("severance_day")
+
+  /// 국가 헌정 의사결정 주체 (내각 · 결정/서명 인물 · 재임 직위 · 승인 의회 원 및 표결)
+  cabinetId         String?                   @map("cabinet_id") @db.Char(36)
+  cabinet           Cabinet?                  @relation("WarDeclarationCabinet", fields: [cabinetId], references: [id], onDelete: SetNull)
+  decidedByPersonId String?                   @map("decided_by_person_id") @db.Char(36)
+  decidedByPerson   Person?                   @relation("WarDeclarationDecidedByPerson", fields: [decidedByPersonId], references: [id], onDelete: SetNull)
+  decidedByTenureId String?                   @map("decided_by_tenure_id") @db.Char(36)
+  decidedByTenure   GovernmentPositionTenure? @relation("WarDeclarationDecidedByTenure", fields: [decidedByTenureId], references: [id], onDelete: SetNull)
+  approvedChamberId String?                   @map("approved_chamber_id") @db.Char(36)
+  approvedChamber   Chamber?                  @relation("WarDeclarationApprovedChamber", fields: [approvedChamberId], references: [id], onDelete: SetNull)
+  yeas              Int?                      @map("yeas")
+  nays              Int?                      @map("nays")
+  abstentions       Int?                      @map("abstentions")
+
+  /// 상위 전쟁(Event: WAR) 연결 — 전쟁 조망의 개전·참전 도미노가 이 컬럼으로 집계된다
+  warEventId String? @map("war_event_id") @db.Char(36)
+  warEvent   Event?  @relation("WarDeclarationParentWar", fields: [warEventId], references: [id], onDelete: SetNull)
+
+  /// 선행 최후통첩 사건(Event: DECLARATION 등) 연결 — '최후통첩 발송 → 거부/만료 → 개전' 외교 체인 (선택)
+  ultimatumEventId String? @map("ultimatum_event_id") @db.Char(36)
+  ultimatumEvent   Event?  @relation("WarDeclarationUltimatumEvent", fields: [ultimatumEventId], references: [id], onDelete: SetNull)
+
+  /// 보조 서술 사건(Event) 연결 — 전후 외교 경위·연설·비화를 서술할 때만 선택 연결 (N:1 허용)
+  narrativeEventId String? @map("narrative_event_id") @db.Char(36)
+  narrativeEvent   Event?  @relation("WarDeclarationNarrativeEvent", fields: [narrativeEventId], references: [id], onDelete: SetNull)
+
+  /// 법적·실질적 교전 상태 종결 정보 (휴전·강화조약·항복·종전선언)
+  terminationKind WarTerminationKind? @map("termination_kind")
+  endedDate       DateTime?           @map("ended_date")
+  endedEra        Era?                @map("ended_era")
+  endedYear       Int?                @map("ended_year")
+  endedMonth      Int?                @map("ended_month")
+  endedDay        Int?                @map("ended_day")
+  endedPrecision  String?             @map("ended_precision") @db.VarChar(10)
+  peaceTreatyId   String?             @map("peace_treaty_id") @db.Char(36)
+  peaceTreaty     Treaty?             @relation("WarDeclarationPeaceTreaty", fields: [peaceTreatyId], references: [id], onDelete: SetNull)
+  terminationNote String?             @map("termination_note") @db.VarChar(500)
+
+  /// 등록 계정
+  accountId String?  @map("account_id") @db.Char(36)
+  account   Account? @relation("AccountWarDeclarations", fields: [accountId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([declaringCountryId], name: "idx_war_decl_declaringCountryId")
+  @@index([declaringHistoricalCountryId], name: "idx_war_decl_declaringHistCountryId")
+  @@index([targetCountryId], name: "idx_war_decl_targetCountryId")
+  @@index([targetHistoricalCountryId], name: "idx_war_decl_targetHistCountryId")
+  @@index([warEventId], name: "idx_war_decl_warEventId")
+  @@index([ultimatumEventId], name: "idx_war_decl_ultimatumEventId")
+  @@index([narrativeEventId], name: "idx_war_decl_narrativeEventId")
+  @@index([peaceTreatyId], name: "idx_war_decl_peaceTreatyId")
+  @@index([approvedChamberId], name: "idx_war_decl_approvedChamberId")
+  @@index([cabinetId], name: "idx_war_decl_cabinetId")
+  @@index([decidedByPersonId], name: "idx_war_decl_decidedByPersonId")
+  @@index([decidedByTenureId], name: "idx_war_decl_decidedByTenureId")
+  @@index([declaredYear], name: "idx_war_decl_declaredYear")
+  @@index([accountId], name: "idx_war_decl_accountId")
+  @@map("war_declaration")
 }

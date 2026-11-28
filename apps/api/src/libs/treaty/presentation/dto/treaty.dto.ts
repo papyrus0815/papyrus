@@ -41,6 +41,16 @@ export const TREATY_PARTICIPATION_VALUES = [
 
 export type TreatyParticipationTypeValue = (typeof TREATY_PARTICIPATION_VALUES)[number]
 
+export const TREATY_RATIFICATION_STATUS_VALUES = [
+  'RATIFIED',
+  'REJECTED',
+  'PENDING',
+  'EXEMPT',
+] as const
+
+export type TreatyRatificationStatusValue =
+  (typeof TREATY_RATIFICATION_STATUS_VALUES)[number]
+
 /** 서명국 입력 (조약 생성 시 treatyId 없음) */
 export class CreateTreatySignatoryNestedDto {
   @IsOptional()
@@ -85,6 +95,35 @@ export class CreateTreatySignatoryNestedDto {
   @ValidateIf((_, v) => v !== null && v !== undefined && v !== '')
   @IsDateString()
   signedAt?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsString()
+  ratifiedChamberId?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsIn(TREATY_RATIFICATION_STATUS_VALUES)
+  ratificationStatus?: TreatyRatificationStatusValue | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsDateString()
+  ratifiedAt?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  ratificationYeas?: number | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  ratificationNays?: number | null
 
   @IsOptional()
   @IsString()
@@ -265,6 +304,35 @@ export class CreateTreatySignatoryBodyDto {
   signedAt?: string | null
 
   @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsString()
+  ratifiedChamberId?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsIn(TREATY_RATIFICATION_STATUS_VALUES)
+  ratificationStatus?: TreatyRatificationStatusValue | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsDateString()
+  ratifiedAt?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  ratificationYeas?: number | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  ratificationNays?: number | null
+
+  @IsOptional()
   @IsString()
   note?: string | null
 }
@@ -312,6 +380,35 @@ export class UpdateTreatySignatoryBodyDto {
   @ValidateIf((_, v) => v !== null && v !== undefined && v !== '')
   @IsDateString()
   signedAt?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsString()
+  ratifiedChamberId?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsIn(TREATY_RATIFICATION_STATUS_VALUES)
+  ratificationStatus?: TreatyRatificationStatusValue | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsDateString()
+  ratifiedAt?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  ratificationYeas?: number | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  ratificationNays?: number | null
 
   @IsOptional()
   @IsString()

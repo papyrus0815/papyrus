@@ -74,6 +74,62 @@ enum PartySystem {
   OTHER
 }
 
+/// 국가원수 선출·계승 방식
+enum HeadSelectionMethod {
+  /// 국민 직선 (결선투표 포함)
+  DIRECT
+  /// 간선 (의회·선거인단·통일주체국민회의 등)
+  INDIRECT
+  /// 세습 (왕위·황위 계승)
+  HEREDITARY
+  /// 임명·지명 (총독, 최고지도자 지명 등)
+  APPOINTED
+  /// 군사집권·비상추대
+  COUP_OR_JUNTA
+  /// 기타
+  OTHER
+}
+
+/// 의회(하원·단원 기준) 주 선거제도 유형
+enum ElectoralSystemType {
+  /// 소선거구 단순다수제
+  FPTP
+  /// 결선투표제 (2회 투표제)
+  TWO_ROUND
+  /// 병립형 (지역구 + 비례대표 별도 산정)
+  PARALLEL
+  /// 연동형 비례대표제 (준연동형 포함)
+  MMP
+  /// 정당명부식 비례대표제
+  PARTY_LIST_PR
+  /// 중·대선거구 단기비이양식
+  SNTV_MMDP
+  /// 단기이양식 선호투표
+  STV
+  /// 간선·선거인단·직능선출
+  INDIRECT_ELECTORAL
+  /// 기타
+  OTHER
+}
+
+/// 헌법상 개전·선전포고 결정 권한 소재 (누가 전쟁을 선포하는가)
+enum WarPowerAuthority {
+  /// 군주 대권 단독 (예: 일본 제국 헌법 제13조 천황 대권, 러시아 제국 황제)
+  MONARCH_PREROGATIVE
+  /// 군주 선포 + 상원·참의원 동의 (예: 1871 독일 제국 헌법 제11조 — 황제가 연방참의원 동의로 선포, 영토 피침 시 예외)
+  MONARCH_WITH_UPPER_HOUSE
+  /// 의회 전속 의결·승인 (예: 미국 헌법 제1조 8절 연방의회, 1791 프랑스 헌법·제3공화국 양원 합동 동의)
+  LEGISLATURE_EXCLUSIVE
+  /// 행정부(원수·수반) 선포 + 의회 사전·사후 동의 (예: 대한민국 헌법 제60조 2항 국회의 선전포고 동의권)
+  EXECUTIVE_WITH_LEGISLATURE_CONSENT
+  /// 국가원수·행정부 단독 결정 (전권 대통령제·군정·일당제 최고지도부 등)
+  EXECUTIVE_EXCLUSIVE
+  /// 헌법상 교전권·전쟁 포기 (예: 일본국 헌법 제9조)
+  RENOUNCED
+  /// 기타·혼합
+  OTHER
+}
+
 model PoliticalSystem {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
@@ -151,6 +207,46 @@ model PoliticalSystem {
   stateStructure StateStructure? @map("state_structure")
   partySystem    PartySystem?    @map("party_system")
 
+  //--- 헌법상 선출·임기·선거제도 규칙
+  /// 국가원수 선출·계승 방식 (직선·간선·세습 등)
+  headSelectionMethod       HeadSelectionMethod? @map("head_selection_method")
+  /// 국가원수 법정 임기 (년, 예: 5, 4)
+  headOfStateTermYears      Int?                 @map("head_of_state_term_years")
+  /// 국가원수 중임·연임 상한 횟수 (1=단임, 2=1차 중임 허용, null=무제한·미정)
+  headOfStateTermLimit      Int?                 @map("head_of_state_term_limit")
+  /// 하원(또는 단원) 의원 법정 임기 (년, 예: 4, 2, 5)
+  lowerHouseTermYears       Int?                 @map("lower_house_term_years")
+  /// 상원 의원 법정 임기 (년, 예: 6)
+  upperHouseTermYears       Int?                 @map("upper_house_term_years")
+  /// 주 선거제도 유형 (소선거구, 병립형, 연동형, 정당명부 비례 등)
+  electoralSystem           ElectoralSystemType? @map("electoral_system")
+  /// 의회 비례대표·정당 진입 봉쇄조항 기준 득표율 (%, 예: 3.0, 5.0)
+  electoralThresholdPercent Float?               @map("electoral_threshold_percent")
+
+  //--- 헌법상 군 통수권 · 개전·선전포고 규칙
+  /// 개전·선전포고 권한 소재 (군주 대권, 의회 전속, 행정부 선포+의회 동의, 교전권 포기 등)
+  warPowerAuthority          WarPowerAuthority?            @map("war_power_authority")
+  /// 선전포고 의결·동의 담당 의회 원 (예: 독일 제국 연방참의원, 단원제 국회 등. 양원 모두 동의면 비우거나 주 원 지정)
+  warConsentChamberId        String?                       @map("war_consent_chamber_id") @db.Char(36)
+  warConsentChamber          Chamber?                      @relation("PoliticalSystemWarConsentChamber", fields: [warConsentChamberId], references: [id], onDelete: SetNull)
+  /// 헌법상 군 최고통수권자 직위 (관직 정의 카탈로그 정본 — 예: 황제, 대통령, 국왕)
+  commanderInChiefPositionId String?                       @map("commander_in_chief_position_id") @db.Char(36)
+  commanderInChiefPosition   GovernmentPositionDefinition? @relation("PoliticalSystemCommanderInChiefPosition", fields: [commanderInChiefPositionId], references: [id], onDelete: SetNull)
+  /// 개전·통수권 예외·단서 조항 메모 (예: '제국 영토·해안 피침 시 연방참의원 동의 면제')
+  warPowerNotes              String?                       @map("war_power_notes") @db.VarChar(500)
+
+  //--- 헌정 근거 법령 및 출범 사건
+  /// 이 정체의 기본 헌법·헌장·기본법(Law) 연결
+  constitutionLawId String? @map("constitution_law_id") @db.Char(36)
+  constitutionLaw   Law?    @relation("PoliticalSystemConstitutionLaw", fields: [constitutionLawId], references: [id], onDelete: SetNull)
+
+  /// 이 정체가 출범하게 된 계기 사건(제헌·혁명·개헌·건국 등)
+  foundingEventId String? @map("founding_event_id") @db.Char(36)
+  foundingEvent   Event?  @relation("PoliticalSystemFoundingEvent", fields: [foundingEventId], references: [id], onDelete: SetNull)
+
+  /// 이 정체에 명시적으로 귀속 지정된 행정부·내각들
+  cabinets Cabinet[] @relation("CabinetPoliticalSystem")
+
   /// 헌법·정체 전환의 배경 등 서술
   notes String? @db.Text
 
@@ -168,6 +264,10 @@ model PoliticalSystem {
   @@index([headOfGovernmentPositionId], name: "idx_political_system_headOfGovernmentPositionId")
   @@index([lowerChamberId], name: "idx_political_system_lowerChamberId")
   @@index([upperChamberId], name: "idx_political_system_upperChamberId")
+  @@index([constitutionLawId], name: "idx_political_system_constitutionLawId")
+  @@index([foundingEventId], name: "idx_political_system_foundingEventId")
+  @@index([warConsentChamberId], name: "idx_political_system_warConsentChamberId")
+  @@index([commanderInChiefPositionId], name: "idx_political_system_commanderInChiefPosId")
   @@map("political_system")
 }
 
@@ -240,11 +340,16 @@ model Chamber {
   note      String? @db.Text
   sortOrder Int     @default(0) @map("sort_order")
 
-  sizes          ChamberSize[]
-  elections      Election[]        @relation("ElectionChamber")
-  observations   Observation[]     @relation("ObservationChamber")
-  systemsAsLower PoliticalSystem[] @relation("PoliticalSystemLowerChamber")
-  systemsAsUpper PoliticalSystem[] @relation("PoliticalSystemUpperChamber")
+  sizes                     ChamberSize[]
+  elections                 Election[]                 @relation("ElectionChamber")
+  observations              Observation[]              @relation("ObservationChamber")
+  tenures                   GovernmentPositionTenure[] @relation("TenureChamber")
+  passedLaws                Law[]                      @relation("LawPassedChamber")
+  ratifiedTreatySignatories TreatySignatory[]          @relation("TreatySignatoryRatifiedChamber")
+  systemsAsLower            PoliticalSystem[]          @relation("PoliticalSystemLowerChamber")
+  systemsAsUpper            PoliticalSystem[]          @relation("PoliticalSystemUpperChamber")
+  systemsAsWarConsent       PoliticalSystem[]          @relation("PoliticalSystemWarConsentChamber")
+  approvedWarDeclarations   WarDeclaration[]           @relation("WarDeclarationApprovedChamber")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

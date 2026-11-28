@@ -782,6 +782,9 @@ export const roleLabel = (role: string | null | undefined, eventType?: string | 
   eventCountryRoleLabel(role, eventType) ?? '관여'
 
 export interface WarDeclarationEventItem {
+  /** 고유 행 키 — 정본 WarDeclaration은 `wd:<id>`, 미백필 하위 사건은 `ev:<id>` */
+  rowKey?: string
+  /** 연결된 보조 사건(Event) id — 순수 국가 원장 기록(사건 미연결)이면 빈 문자열 */
   eventId: string
   title: string
   dateLabel: string
@@ -789,6 +792,8 @@ export interface WarDeclarationEventItem {
   initiators: EventOverviewCountry[]
   targets: EventOverviewCountry[]
   others: EventOverviewCountry[]
+  casusBelli?: string | null
+  chamberVoteLabel?: string | null
 }
 
 export interface WarParticipationMilestone {
@@ -830,16 +835,108 @@ function formatStructuredPointLabel(point: {
   return `${yearText}년`
 }
 
+export interface CanonicalOverviewWarDeclaration {
+  id: string
+  kind: string
+  displayTitle: string
+  casusBelli: string | null
+  declaredEra: 'BC' | 'AD' | null
+  declaredYear: number | null
+  declaredMonth: number | null
+  declaredDay: number | null
+  declaredPrecision: string | null
+  declaringCountry: {
+    key: string
+    id: string
+    kind: 'modern' | 'historical'
+    name: string
+    flagEmoji: string | null
+  } | null
+  targetCountry: {
+    key: string
+    id: string
+    kind: 'modern' | 'historical'
+    name: string
+    flagEmoji: string | null
+  } | null
+  approvedChamberName: string | null
+  yeas: number | null
+  nays: number | null
+  warEventId: string | null
+  narrativeEventId: string | null
+}
+
 /**
- * 전쟁 내 선전포고(WAR_DECLARATION) 하위 사건 흐름 + 상위 전쟁 참여국의 가담·이탈 시점 집계.
- * 선전포고 연쇄(도미노)와 참전·이탈 순서를 시간순으로 한눈에 읽도록 구성한다.
+ * 전쟁 내 국가 선전포고·개전 정본(WarDeclaration) + 미연결 WAR_DECLARATION 하위 사건 흐름 및 상위 전쟁 참전·이탈 집계.
+ * 사건 문서(Event)를 따로 만들지 않고 국가 원장에만 등록한 선전포고도 시간순 도미노에 온전히 포함하며,
+ * 보조 사건(narrativeEventId)이 연결된 정본은 해당 하위 사건과 중복되지 않게 병합한다.
  */
 export function buildWarDeclarationFlow(
   root: EventOverviewNode,
   descendants: EventOverviewNode[],
+  canonicalWarDeclarations: CanonicalOverviewWarDeclaration[] = [],
 ): WarDeclarationFlow {
-  const declarations: WarDeclarationEventItem[] = descendants
-    .filter((node) => node.type === 'WAR_DECLARATION')
+  const coveredNarrativeEventIds = new Set<string>()
+  const canonicalItems: WarDeclarationEventItem[] = canonicalWarDeclarations.map(
+    (wd) => {
+      if (wd.narrativeEventId) coveredNarrativeEventIds.add(wd.narrativeEventId)
+      const hasDate = wd.declaredYear != null
+      const point = hasDate
+        ? {
+            era: wd.declaredEra ?? 'AD',
+            year: wd.declaredYear!,
+            month:
+              wd.declaredPrecision === 'year' ? null : (wd.declaredMonth ?? null),
+            day:
+              wd.declaredPrecision === 'year' || wd.declaredPrecision === 'month'
+                ? null
+                : (wd.declaredDay ?? null),
+          }
+        : null
+      const dateLabel = point ? formatStructuredPointLabel(point) : '날짜 미상'
+      const sortKey = point ? structuredPointSortKey(point) : Infinity
+      const toOverviewCountry = (
+        c: CanonicalOverviewWarDeclaration['declaringCountry'],
+        role: string,
+      ): EventOverviewCountry[] =>
+        c
+          ? [
+              {
+                key: c.key,
+                id: c.id,
+                kind: c.kind,
+                name: c.name,
+                flagEmoji: c.flagEmoji,
+                role,
+                sideId: null,
+              },
+            ]
+          : []
+      const chamberVoteLabel = wd.approvedChamberName
+        ? wd.yeas != null && wd.nays != null
+          ? `${wd.approvedChamberName} (${wd.yeas}:${wd.nays})`
+          : wd.approvedChamberName
+        : null
+      return {
+        rowKey: `wd:${wd.id}`,
+        eventId: wd.narrativeEventId ?? '',
+        title: wd.displayTitle,
+        dateLabel,
+        sortKey,
+        initiators: toOverviewCountry(wd.declaringCountry, 'INITIATOR'),
+        targets: toOverviewCountry(wd.targetCountry, 'TARGET'),
+        others: [],
+        casusBelli: wd.casusBelli ?? null,
+        chamberVoteLabel,
+      }
+    },
+  )
+
+  const legacyEventItems: WarDeclarationEventItem[] = descendants
+    .filter(
+      (node) =>
+        node.type === 'WAR_DECLARATION' && !coveredNarrativeEventIds.has(node.id),
+    )
     .map((node) => {
       const effective = withEffectivePrecision(node)
       const span = toAxisSpan(effective)
@@ -851,6 +948,7 @@ export function buildWarDeclarationFlow(
         (country) => country.role !== 'INITIATOR' && country.role !== 'TARGET',
       )
       return {
+        rowKey: `ev:${node.id}`,
         eventId: node.id,
         title: node.title,
         dateLabel,
@@ -860,7 +958,14 @@ export function buildWarDeclarationFlow(
         others,
       }
     })
-    .sort((left, right) => left.sortKey - right.sortKey || left.title.localeCompare(right.title))
+
+  const declarations: WarDeclarationEventItem[] = [
+    ...canonicalItems,
+    ...legacyEventItems,
+  ].sort(
+    (left, right) =>
+      left.sortKey - right.sortKey || left.title.localeCompare(right.title),
+  )
 
   const sideNameById = new Map(root.sides.map((side) => [side.id, side.name]))
   const milestones: WarParticipationMilestone[] = []

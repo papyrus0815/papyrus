@@ -123,8 +123,10 @@ model Country {
   territoryTransfersTo      EventTerritoryTransfer[] @relation("TerritoryTransferToCountry")
 
   // 🆕 정규화된 군사 사건 관계
-  treatySignatories    TreatySignatory[]
-  allianceMembers      AllianceMember[]
+  treatySignatories       TreatySignatory[]
+  allianceMembers         AllianceMember[]
+  warDeclarationsIssued   WarDeclaration[] @relation("WarDeclarationDeclaringCountry")
+  warDeclarationsReceived WarDeclaration[] @relation("WarDeclarationTargetCountry")
 
   // 🆕 왕조 통치 관계
   /// 이 국가를 통치한/통치하는 왕조들의 역사 (입헌군주제 등)

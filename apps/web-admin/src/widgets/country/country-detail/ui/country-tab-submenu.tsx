@@ -104,7 +104,8 @@ const COUNTRY_TAB_SUBMENUS: Partial<Record<OverviewSubTab, SubmenuSpec>> = {
     buildPath: (countryId) => pathKeys.countryMilitary(countryId),
     items: [
       { value: null, label: '편제 · 사령부', hint: '최고사령부·참모본부·야전군·사단·함대 등 지휘 계통' },
-      { value: 'wars', label: '전쟁 · 참전사', hint: '이 나라가 치른 전쟁과 참전 기록' },
+      { value: 'wars', label: '전쟁 · 참전사', hint: '이 나라가 치른 전쟁과 전투·참전 기록' },
+      { value: 'declarations', label: '선전포고 · 개전 원장', hint: '선전포고·최후통첩·참전 선언·무선전 개전 및 종전 조약 정본' },
     ],
     tools: [
       {

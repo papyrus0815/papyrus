@@ -20,6 +20,16 @@ export type UpdatePoliticalSystemInput = Parameters<
   typeof politicalSystemsApi.update
 >[2]
 
+export type PromotePoliticalSystemHeadPositionsInput = Parameters<
+  typeof politicalSystemsApi.promote_head_positions.promoteHeadPositions
+>[1]
+
+export type PromotePoliticalSystemHeadPositionsResult = Awaited<
+  ReturnType<
+    typeof politicalSystemsApi.promote_head_positions.promoteHeadPositions
+  >
+>
+
 /** TransformInterceptor로 래핑된 응답({ data })에서 알맹이를 꺼낸다 */
 function unwrap<T>(response: unknown): T {
   const wrapped = response as { data?: T }
@@ -85,4 +95,15 @@ export async function updatePoliticalSystem(
 
 export async function deletePoliticalSystem(id: string): Promise<void> {
   await politicalSystemsApi.remove(getApiConnection(), id)
+}
+
+export async function promotePoliticalSystemHeadPositions(
+  dto: PromotePoliticalSystemHeadPositionsInput,
+): Promise<PromotePoliticalSystemHeadPositionsResult> {
+  return unwrap<PromotePoliticalSystemHeadPositionsResult>(
+    await politicalSystemsApi.promote_head_positions.promoteHeadPositions(
+      getApiConnection(),
+      dto,
+    ),
+  )
 }

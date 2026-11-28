@@ -480,7 +480,36 @@ export class EventResponseDto {
     description: '이 사건을 서사로 가진 선거 (상세 조회에서만). 결과는 GET /elections/:id가 정본',
     required: false,
   })
-  elections?: Array<{ id: string; name: string; pollDate: string | null }>
+  elections?: Array<{
+    id: string
+    name: string
+    pollDate: string | null
+    electionType?: string | null
+    totalSeats?: number | null
+    voterTurnoutPercent?: number | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+  }>
+
+  @ApiProperty({
+    description: '이 사건으로 출범·전환된 헌정 체제 목록 (상세 조회에서만)',
+    required: false,
+  })
+  politicalSystemsFounded?: Array<{
+    id: string
+    name: string | null
+    governmentForm: string | null
+    legislatureType: string | null
+    startEra: string | null
+    startYear: number | null
+    endEra: string | null
+    endYear: number | null
+    isCurrent: boolean
+    countryId: string | null
+    historicalCountryId: string | null
+    countryName: string | null
+    constitutionLaw: { id: string; name: string } | null
+  }>
 
   @ApiProperty({
     description: '이 사건으로 시작된 재임·재위(취임·즉위) (상세 조회에서만)',
@@ -642,6 +671,108 @@ export class EventResponseDto {
 
   @ApiProperty({ description: '진영(D1) — 소속 참여자 포함. 상세 응답에서만', required: false })
   sides?: EventSideView[]
+
+  /** 이 사건을 보조 서술로 삼는 국가 선전포고·개전 정본 목록 (정본은 WarDeclaration) */
+  warDeclarations?: Array<{
+    id: string
+    kind: string
+    title: string | null
+    displayTitle: string
+    casusBelli: string | null
+    summary: string | null
+    declaredDate: string | null
+    declaredEra: string | null
+    declaredYear: number | null
+    declaredMonth: number | null
+    declaredDay: number | null
+    declaredPrecision: string | null
+    severanceEra?: string | null
+    severanceYear?: number | null
+    severanceMonth?: number | null
+    severanceDay?: number | null
+    declaringCountryId: string | null
+    declaringHistoricalCountryId: string | null
+    declaringCountryName: string
+    declaringFlagEmoji: string | null
+    targetCountryId: string | null
+    targetHistoricalCountryId: string | null
+    targetCountryName: string
+    targetFlagEmoji: string | null
+    cabinet: { id: string; name: string | null } | null
+    decidedByPerson: { id: string; displayName: string } | null
+    decidedByTenureTitle: string | null
+    approvedChamber: { id: string; name: string } | null
+    yeas: number | null
+    nays: number | null
+    abstentions: number | null
+    warEvent: { id: string; title: string } | null
+    ultimatumEvent?: { id: string; title: string } | null
+    terminationKind: string | null
+    endedEra: string | null
+    endedYear: number | null
+    endedMonth: number | null
+    endedDay: number | null
+    peaceTreaty: { id: string; name: string } | null
+  }>
+
+  /** 이 사건(최후통첩 등)을 선행 원인으로 삼은 국가 선전포고·개전 정본 목록 */
+  warDeclarationsFromUltimatum?: Array<{
+    id: string
+    kind: string
+    displayTitle: string
+    casusBelli: string | null
+    declaredEra: string | null
+    declaredYear: number | null
+    declaredMonth: number | null
+    declaredDay: number | null
+    declaringCountryId: string | null
+    declaringHistoricalCountryId: string | null
+    declaringCountryName: string
+    declaringFlagEmoji: string | null
+    targetCountryId: string | null
+    targetHistoricalCountryId: string | null
+    targetCountryName: string
+    targetFlagEmoji: string | null
+    warEvent: { id: string; title: string } | null
+    narrativeEventId: string | null
+    narrativeEventTitle: string | null
+  }>
+
+  /** 이 전쟁(Event: WAR)에 귀속된 국가 선전포고·개전 정본 목록 */
+  warDeclarationsInWar?: Array<{
+    id: string
+    kind: string
+    displayTitle: string
+    casusBelli: string | null
+    declaredDate: string | null
+    declaredEra: string | null
+    declaredYear: number | null
+    declaredMonth: number | null
+    declaredDay: number | null
+    declaredPrecision: string | null
+    declaringCountryId: string | null
+    declaringHistoricalCountryId: string | null
+    declaringCountryName: string
+    declaringFlagEmoji: string | null
+    targetCountryId: string | null
+    targetHistoricalCountryId: string | null
+    targetCountryName: string
+    targetFlagEmoji: string | null
+    decidedByPerson?: { id: string; displayName: string } | null
+    decidedByTenureTitle?: string | null
+    approvedChamber?: { id: string; name: string } | null
+    yeas?: number | null
+    nays?: number | null
+    ultimatumEvent?: { id: string; title: string } | null
+    narrativeEventId: string | null
+    narrativeEventTitle: string | null
+    terminationKind?: string | null
+    endedEra?: string | null
+    endedYear?: number | null
+    endedMonth?: number | null
+    endedDay?: number | null
+    peaceTreaty?: { id: string; name: string } | null
+  }>
 }
 
 /**

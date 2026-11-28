@@ -79,6 +79,22 @@ export const TREATY_PARTICIPATION_LABELS: Record<TreatyParticipationType, string
   OBSERVER: '관찰국',
 }
 
+export type TreatyRatificationStatus =
+  | 'RATIFIED'
+  | 'REJECTED'
+  | 'PENDING'
+  | 'EXEMPT'
+
+export const TREATY_RATIFICATION_STATUS_LABELS: Record<
+  TreatyRatificationStatus,
+  string
+> = {
+  RATIFIED: '비준 가결',
+  REJECTED: '비준 부결',
+  PENDING: '비준 계류',
+  EXEMPT: '비준 불요(행정협정 등)',
+}
+
 export interface TreatyImageDto {
   id: string
   treatyId: string
@@ -159,9 +175,45 @@ export interface TreatySignatoryDto {
   } | null
   participationType: TreatyParticipationType
   signedAt: string | null
+  ratifiedChamberId?: string | null
+  ratifiedChamber?: {
+    id: string
+    name: string
+    shortName?: string | null
+    localName?: string | null
+    role: string
+  } | null
+  ratificationStatus?: TreatyRatificationStatus | null
+  ratifiedAt?: string | null
+  ratificationYeas?: number | null
+  ratificationNays?: number | null
   note: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface TreatyEndedWarDeclarationDto {
+  id: string
+  kind: string
+  title: string | null
+  declaredEra: 'BC' | 'AD' | null
+  declaredYear: number | null
+  declaredMonth: number | null
+  declaredDay: number | null
+  endedEra: 'BC' | 'AD' | null
+  endedYear: number | null
+  endedMonth: number | null
+  endedDay: number | null
+  terminationKind: string | null
+  declaringCountryId: string | null
+  declaringCountry: { id: string; name: string; flagEmoji: string | null } | null
+  declaringHistoricalCountryId: string | null
+  declaringHistoricalCountry: { id: string; name: string } | null
+  targetCountryId: string | null
+  targetCountry: { id: string; name: string; flagEmoji: string | null } | null
+  targetHistoricalCountryId: string | null
+  targetHistoricalCountry: { id: string; name: string } | null
+  warEvent: { id: string; title: string; deletedAt: string | null } | null
 }
 
 export interface TreatyDto {
@@ -193,6 +245,8 @@ export interface TreatyDto {
    * 보여 주는데 조약 상세는 사건을 안 보여 줘서 연결이 한 방향뿐이었다.
    */
   eventLinks?: TreatyEventLinkWithEventDto[]
+  /** 이 조약(강화·휴전 등)으로 법적·실질적 교전 상태가 종결된 국가 선전포고·개전 정본 목록 */
+  endedWarDeclarations?: TreatyEndedWarDeclarationDto[]
   createdAt: string
   updatedAt: string
 }
@@ -214,6 +268,11 @@ export type CreateTreatySignatoryDto = {
   positionDefinitionId?: string | null
   participationType?: TreatyParticipationType
   signedAt?: string | null
+  ratifiedChamberId?: string | null
+  ratificationStatus?: TreatyRatificationStatus | null
+  ratifiedAt?: string | null
+  ratificationYeas?: number | null
+  ratificationNays?: number | null
   note?: string | null
 }
 

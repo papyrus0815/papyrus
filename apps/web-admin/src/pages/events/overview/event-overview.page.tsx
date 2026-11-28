@@ -323,7 +323,11 @@ export function EventOverviewPanel({
       ordered,
       numberById,
       matrix,
-      warDeclarationFlow: buildWarDeclarationFlow(root, descendants),
+      warDeclarationFlow: buildWarDeclarationFlow(
+        root,
+        descendants,
+        data.warDeclarations ?? [],
+      ),
       types: typeBreakdown(descendants),
       persons: aggregatePersons([root, ...descendants]),
       units: aggregateMilitaryUnits([root, ...descendants]),

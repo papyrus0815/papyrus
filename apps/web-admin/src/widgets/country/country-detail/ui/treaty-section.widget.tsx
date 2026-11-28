@@ -61,6 +61,7 @@ import {
   type AddTreatyImageDto,
   TREATY_EVENT_LINK_LABELS,
   TREATY_PARTICIPATION_LABELS,
+  TREATY_RATIFICATION_STATUS_LABELS,
   TREATY_TYPE_LABELS,
   type TreatyDto,
   type TreatyEventLinkType,
@@ -83,6 +84,7 @@ import { pathKeys } from '@/shared/router'
 import { getTreatySectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import {
   PopoverMenu,
@@ -965,7 +967,12 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
           ) : null}
 
           {isLoading ? (
-            <ChartSkeleton variant="bars" rows={5} />
+            <LedgerTableSkeleton
+              rows={6}
+              columns={4}
+              showToolbar={false}
+              label="조약 목록을 불러오는 중"
+            />
           ) : treaties.length === 0 ? (
             <CountryTabEmptyState
               Icon={FiFileText}
@@ -2150,6 +2157,24 @@ export const TreatyDetail: React.FC<{
                               · {fmtDate(signatory.signedAt)} 서명
                             </TD.Tag>
                           )}
+                          {(signatory.ratificationStatus ||
+                            signatory.ratifiedChamber) && (
+                            <TD.Tag>
+                              ·{' '}
+                              {signatory.ratifiedChamber
+                                ? `${signatory.ratifiedChamber.shortName || signatory.ratifiedChamber.name} `
+                                : ''}
+                              {signatory.ratificationStatus
+                                ? TREATY_RATIFICATION_STATUS_LABELS[
+                                    signatory.ratificationStatus
+                                  ]
+                                : '비준 기록'}
+                              {signatory.ratificationYeas != null ||
+                              signatory.ratificationNays != null
+                                ? ` (${signatory.ratificationYeas ?? '—'}:${signatory.ratificationNays ?? '—'})`
+                                : ''}
+                            </TD.Tag>
+                          )}
                         </TD.PartyTags>
                       )}
                     </TD.PartyHead>
@@ -2365,6 +2390,52 @@ export const TreatyDetail: React.FC<{
                   {richTextToMultilineText(resolvedAftermath.text)}
                 </TD.Prose>
               )}
+            </TD.Section>
+          )}
+
+          {(treaty.endedWarDeclarations?.length ?? 0) > 0 && (
+            <TD.Section id={anchorId('ended-wars')}>
+              <TD.SectionHeader>
+                <TD.SectionTitle>종결한 교전 · 선전포고</TD.SectionTitle>
+                <TD.SectionMeta>
+                  {treaty.endedWarDeclarations!.length}건
+                </TD.SectionMeta>
+              </TD.SectionHeader>
+              <TD.EventLinkList>
+                {treaty.endedWarDeclarations!.map((wd) => {
+                  const decl =
+                    wd.declaringHistoricalCountry ?? wd.declaringCountry
+                  const targ = wd.targetHistoricalCountry ?? wd.targetCountry
+                  const declId =
+                    wd.declaringHistoricalCountryId ?? wd.declaringCountryId
+                  const yrLabel =
+                    wd.declaredYear != null
+                      ? `${wd.declaredEra === 'BC' ? 'BC ' : ''}${wd.declaredYear}${wd.endedYear != null ? `~${wd.endedYear}` : ''}`
+                      : '연도 미상'
+                  return (
+                    <TD.EventLinkRow key={wd.id}>
+                      <TD.EventLinkYear data-event-year>
+                        {yrLabel}
+                      </TD.EventLinkYear>
+                      <TD.EventLinkTitle
+                        to={
+                          declId
+                            ? `${pathKeys.countryMilitary(declId)}?sub=declarations`
+                            : wd.warEvent && wd.warEvent.deletedAt == null
+                              ? pathKeys.events.detail(wd.warEvent.id)
+                              : '#'
+                        }
+                      >
+                        {decl?.name ?? '미상'} ──▶ {targ?.name ?? '미상'}
+                        {wd.warEvent && wd.warEvent.deletedAt == null
+                          ? ` (${wd.warEvent.title})`
+                          : ''}
+                        <FiExternalLink size={12} aria-hidden />
+                      </TD.EventLinkTitle>
+                    </TD.EventLinkRow>
+                  )
+                })}
+              </TD.EventLinkList>
             </TD.Section>
           )}
 

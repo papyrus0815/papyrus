@@ -67,7 +67,19 @@ const chamberInclude = {
   successors: { select: { id: true, name: true, localName: true } },
   country: { select: { id: true, name: true } },
   historicalCountry: { select: { id: true, name: true } },
-  _count: { select: { elections: true, observations: true, systemsAsLower: true, systemsAsUpper: true } },
+  _count: {
+    select: {
+      elections: true,
+      observations: true,
+      tenures: true,
+      passedLaws: true,
+      ratifiedTreatySignatories: true,
+      systemsAsLower: true,
+      systemsAsUpper: true,
+      systemsAsWarConsent: true,
+      approvedWarDeclarations: true,
+    },
+  },
 } satisfies Prisma.ChamberInclude
 
 @ApiTags('chambers')
@@ -116,6 +128,7 @@ export class ChamberController {
     const end = parseStructuredDateInput(body.end, '끝')
     assertStructuredRangeOrder(start, end, '끝이 시작보다 앞설 수 없습니다.')
     if (body.predecessorId) await this.assertChamber(body.predecessorId)
+    const resolvedCountryId = await this.resolveDualFillCountryId(body.countryId, body.historicalCountryId)
     return this.prisma.chamber.create({
       data: {
         name,
@@ -123,7 +136,7 @@ export class ChamberController {
         shortName: body.shortName?.trim() || null,
         role: this.parseRole(body.role),
         composition: this.parseComposition(body.composition),
-        countryId: body.countryId || null,
+        countryId: resolvedCountryId,
         historicalCountryId: body.historicalCountryId || null,
         ...structuredDateData('start', start),
         ...structuredDateData('end', end),
@@ -150,6 +163,9 @@ export class ChamberController {
     const nextCountry = body.countryId !== undefined ? body.countryId : existing.countryId
     const nextHistorical = body.historicalCountryId !== undefined ? body.historicalCountryId : existing.historicalCountryId
     if (!nextCountry && !nextHistorical) throw new BadRequestException('국가(현대 또는 역사)를 정하세요.')
+    if (body.historicalCountryId !== undefined && body.countryId === undefined && nextHistorical) {
+      data.countryId = await this.resolveDualFillCountryId(existing.countryId, nextHistorical)
+    }
     const start = body.start !== undefined ? parseStructuredDateInput(body.start, '시작') : readStructuredDate(existing, 'start')
     const end = body.end !== undefined ? parseStructuredDateInput(body.end, '끝') : readStructuredDate(existing, 'end')
     assertStructuredRangeOrder(start, end, '끝이 시작보다 앞설 수 없습니다.')
@@ -161,7 +177,28 @@ export class ChamberController {
     }
     if (body.note !== undefined) data.note = body.note?.trim() || null
     if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
-    return this.prisma.chamber.update({ where: { id }, data, include: chamberInclude })
+
+    const updated = await this.prisma.chamber.update({ where: { id }, data, include: chamberInclude })
+
+    /* 원 이름·원어가 바뀌면 이 원을 참조하는 정체(PoliticalSystem)의 표시 캐시도 함께 갱신한다 */
+    if (
+      (body.name !== undefined || body.localName !== undefined) &&
+      this.prisma.politicalSystem?.updateMany
+    ) {
+      const cachedLabel = updated.localName ? `${updated.name}(${updated.localName})` : updated.name
+      await Promise.all([
+        this.prisma.politicalSystem.updateMany({
+          where: { lowerChamberId: id },
+          data: { lowerHouseName: cachedLabel },
+        }),
+        this.prisma.politicalSystem.updateMany({
+          where: { upperChamberId: id },
+          data: { upperHouseName: cachedLabel },
+        }),
+      ])
+    }
+
+    return updated
   }
 
   /** 지우면 선거·정체·의석 측정값의 원 연결은 비워진다(FK SetNull) — 화면이 그 수를 먼저 알린다 */
@@ -247,6 +284,22 @@ export class ChamberController {
   private async assertChamber(id: string): Promise<void> {
     const row = await this.prisma.chamber.findUnique({ where: { id }, select: { id: true } })
     if (!row) throw new NotFoundException('원을 찾을 수 없습니다.')
+  }
+
+  private async resolveDualFillCountryId(
+    countryId: string | null | undefined,
+    historicalCountryId: string | null | undefined,
+  ): Promise<string | null> {
+    const cid = countryId?.trim() || null
+    const hid = historicalCountryId?.trim() || null
+    if (cid) return cid
+    if (!hid || !this.prisma.historicalCountryModernCountry?.findMany) return null
+    const links = await this.prisma.historicalCountryModernCountry.findMany({
+      where: { historicalCountryId: hid },
+      select: { modernCountryId: true },
+      take: 2,
+    })
+    return links.length === 1 ? links[0].modernCountryId : null
   }
 
   /** 계보 순환 — 자기 자신이나 자기의 후신을 전신으로 삼지 않게 */

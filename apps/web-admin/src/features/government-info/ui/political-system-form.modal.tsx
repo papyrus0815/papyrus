@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
-import { FiAlertCircle } from 'react-icons/fi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { FiAlertCircle, FiCheck, FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type {
@@ -9,20 +9,33 @@ import type {
   UpdatePoliticalSystemInput,
 } from '@/entities/political-system/api'
 import {
+  ELECTORAL_SYSTEM_TYPE_LABEL,
+  ELECTORAL_SYSTEM_TYPE_ORDER,
   GOVERNMENT_FORM_LABEL,
+  HEAD_SELECTION_METHOD_LABEL,
+  HEAD_SELECTION_METHOD_ORDER,
   LEGISLATURE_TYPE_LABEL,
   LEGISLATURE_TYPE_ORDER,
   PARTY_SYSTEM_LABEL,
   PARTY_SYSTEM_ORDER,
+  presetFromHistoricalStateType,
   primaryHouseLabel,
   STATE_STRUCTURE_LABEL,
   STATE_STRUCTURE_ORDER,
+  WAR_POWER_AUTHORITY_LABEL,
+  WAR_POWER_AUTHORITY_ORDER,
+  type ElectoralSystemType,
   type GovernmentForm,
+  type HeadSelectionMethod,
   type LegislatureType,
+  type WarPowerAuthority,
 } from '@/entities/political-system/model/political-system'
 import { chamberApi, chamberKeys, chamberLabel, chamberSeatsAt } from '@/shared/api/chamber'
+import { getLaws, type LawRow } from '@/shared/api/election'
 import { personCareerApi } from '@/shared/api/person-career'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
+import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
+import { LinkedEventPickerField } from '@/widgets/country/country-detail/ui/linked-event-picker-field'
 import { buildPartialDateString, parsePartialDateString } from '@/shared/lib/partial-date-string'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { DatePickerModal, type DatePickerPrecision } from '@/shared/ui/date-picker/date-picker-modal'
@@ -114,6 +127,19 @@ type FormState = {
   headOfGovernmentHasPower: boolean
   stateStructure: string
   partySystem: string
+  headSelectionMethod: string
+  headOfStateTermYears: string
+  headOfStateTermLimit: string
+  lowerHouseTermYears: string
+  upperHouseTermYears: string
+  electoralSystem: string
+  electoralThresholdPercent: string
+  warPowerAuthority: string
+  warConsentChamberId: string
+  commanderInChiefPositionId: string
+  warPowerNotes: string
+  constitutionLawId: string
+  foundingEventId: string
   notes: string
 }
 
@@ -145,19 +171,37 @@ const EMPTY: FormState = {
   headOfGovernmentHasPower: true,
   stateStructure: '',
   partySystem: '',
+  headSelectionMethod: '',
+  headOfStateTermYears: '',
+  headOfStateTermLimit: '',
+  lowerHouseTermYears: '',
+  upperHouseTermYears: '',
+  electoralSystem: '',
+  electoralThresholdPercent: '',
+  warPowerAuthority: '',
+  warConsentChamberId: '',
+  commanderInChiefPositionId: '',
+  warPowerNotes: '',
+  constitutionLawId: '',
+  foundingEventId: '',
   notes: '',
 }
 
 const toText = (value: unknown) => (value == null ? '' : String(value))
 
-/**
- * '카탈로그에 없음' 센티널.
- *
- * 직함의 정본은 관직 정의 카탈로그(재임·재위가 참조하는 그 테이블)다. 그래도 자유입력을
- * 남겨 두는 이유 — '연합회의 의장'·'임시정부 수반'처럼 한 정체에서만 쓰인 칭호까지
- * 카탈로그에 올리면 다른 나라 직책 피커가 그만큼 지저분해진다.
- */
-const CUSTOM_TITLE = '__custom__'
+/** 새 수반 직위 카탈로그 등록 센티널 & 레거시 수기 직함 센티널 */
+const CREATE_POSITION_SENTINEL = '__create_position__'
+const LEGACY_UNLINKED_TITLE = '__legacy_unlinked__'
+
+const UNIVERSAL_HEAD_TITLES = new Set([
+  '대통령',
+  '총리',
+  '국왕',
+  '황제',
+  '여왕',
+  '수상',
+  '섭정',
+])
 
 /** 국가원수와 정부수반이 제도적으로 분리되는 이원 집행부 정체 */
 const DUAL_EXECUTIVE_FORMS = new Set<string>([
@@ -212,6 +256,21 @@ const PARTY_SYSTEM_OPTIONS: ChoiceChipOption[] = PARTY_SYSTEM_ORDER.map((key) =>
   value: key,
   label: PARTY_SYSTEM_LABEL[key],
 }))
+const HEAD_SELECTION_OPTIONS: ChoiceChipOption<HeadSelectionMethod>[] =
+  HEAD_SELECTION_METHOD_ORDER.map((key) => ({
+    value: key,
+    label: HEAD_SELECTION_METHOD_LABEL[key],
+  }))
+const ELECTORAL_SYSTEM_OPTIONS: ChoiceChipOption<ElectoralSystemType>[] =
+  ELECTORAL_SYSTEM_TYPE_ORDER.map((key) => ({
+    value: key,
+    label: ELECTORAL_SYSTEM_TYPE_LABEL[key],
+  }))
+const WAR_POWER_AUTHORITY_OPTIONS: ChoiceChipOption<WarPowerAuthority>[] =
+  WAR_POWER_AUTHORITY_ORDER.map((key) => ({
+    value: key,
+    label: WAR_POWER_AUTHORITY_LABEL[key],
+  }))
 const POWER_OPTIONS: ChoiceChipOption<'power' | 'symbolic'>[] = [
   { value: 'power', label: '실권 있음' },
   { value: 'symbolic', label: '상징적' },
@@ -225,6 +284,89 @@ interface DefinitionOption {
   title: string
   positionType: string
   titleLocal?: string | null
+  titleEn?: string | null
+  isGeneric?: boolean | null
+  isMonarchical?: boolean | null
+  scopes?: Array<{ countryId?: string | null; historicalCountryId?: string | null }>
+}
+
+function isDefinitionScopedToCountry(def: DefinitionOption): boolean {
+  return (def.scopes ?? []).some((s) => Boolean(s.countryId || s.historicalCountryId))
+}
+
+function isMonarchicalDef(def: DefinitionOption): boolean {
+  if (typeof def.isMonarchical === 'boolean') return def.isMonarchical
+  return /^(국왕|황제|여왕|천황|군주|대공|공작|술탄|칼리프|파라오|차르|샤|칸|가한|태왕|왕|친왕|교황)$/.test(
+    def.title.trim(),
+  )
+}
+
+/**
+ * 정부 형태(governmentForm) 선택 시 관직 정의 카탈로그에서 가장 적합한 국가원수·정부수반 직위 ID를 자동 매칭한다.
+ * (국가 전용 스코프 직위 우선 → 보편 직위 폴백)
+ */
+function pickDefaultHeadPositionId(
+  defs: DefinitionOption[],
+  govForm: string,
+  axis: HeadAxis,
+): string {
+  const candidates = defs.filter(
+    (def) => !def.isGeneric && def.positionType === axis,
+  )
+  if (candidates.length === 0) return ''
+
+  const scoped = candidates.filter(isDefinitionScopedToCountry)
+  const findByTitles = (pool: DefinitionOption[], titles: string[]) => {
+    for (const t of titles) {
+      const hit = pool.find((d) => d.title.trim() === t)
+      if (hit) return hit.id
+    }
+    return ''
+  }
+
+  if (axis === 'HEAD_OF_GOVERNMENT') {
+    if (scoped.length > 0) return scoped[0].id
+    return (
+      findByTitles(candidates, ['총리', '국무총리', '내각총리대신', '수상', '연방총리']) ||
+      candidates[0].id
+    )
+  }
+
+  const wantsMonarch =
+    govForm === 'CONSTITUTIONAL_MONARCHY' || govForm === 'ABSOLUTE_MONARCHY'
+  if (wantsMonarch) {
+    const monarchScoped = scoped.filter(isMonarchicalDef)
+    if (monarchScoped.length > 0) return monarchScoped[0].id
+    const monarchPool = candidates.filter(isMonarchicalDef)
+    return (
+      findByTitles(monarchPool, ['국왕', '황제', '천황', '여왕', '술탄', '차르', '대공']) ||
+      monarchPool[0]?.id ||
+      ''
+    )
+  }
+
+  const repScoped = scoped.filter((d) => !isMonarchicalDef(d))
+  if (repScoped.length > 0) return repScoped[0].id
+  const repPool = candidates.filter((d) => !isMonarchicalDef(d))
+  if (
+    govForm === 'PRESIDENTIAL' ||
+    govForm === 'SEMI_PRESIDENTIAL' ||
+    govForm === 'PARLIAMENTARY'
+  ) {
+    return (
+      findByTitles(repPool, ['대통령', '연방대통령', '국가주석']) ||
+      repPool[0]?.id ||
+      ''
+    )
+  }
+  if (govForm === 'ONE_PARTY') {
+    return (
+      findByTitles(repPool, ['국가주석', '최고지도자', '대통령']) ||
+      repPool[0]?.id ||
+      ''
+    )
+  }
+  return ''
 }
 
 function hydrate(system: PoliticalSystem): FormState {
@@ -251,19 +393,32 @@ function hydrate(system: PoliticalSystem): FormState {
     headOfStateChoice: system.headOfStatePositionId
       ? system.headOfStatePositionId
       : system.headOfStateTitle
-        ? CUSTOM_TITLE
+        ? LEGACY_UNLINKED_TITLE
         : '',
     headOfStateTitle: toText(system.headOfStateTitle),
     headOfStateHasPower: system.headOfStateHasPower ?? true,
     headOfGovernmentChoice: system.headOfGovernmentPositionId
       ? system.headOfGovernmentPositionId
       : system.headOfGovernmentTitle
-        ? CUSTOM_TITLE
+        ? LEGACY_UNLINKED_TITLE
         : '',
     headOfGovernmentTitle: toText(system.headOfGovernmentTitle),
     headOfGovernmentHasPower: system.headOfGovernmentHasPower ?? true,
     stateStructure: system.stateStructure ?? '',
     partySystem: system.partySystem ?? '',
+    headSelectionMethod: system.headSelectionMethod ?? '',
+    headOfStateTermYears: toText(system.headOfStateTermYears),
+    headOfStateTermLimit: toText(system.headOfStateTermLimit),
+    lowerHouseTermYears: toText(system.lowerHouseTermYears),
+    upperHouseTermYears: toText(system.upperHouseTermYears),
+    electoralSystem: system.electoralSystem ?? '',
+    electoralThresholdPercent: toText(system.electoralThresholdPercent),
+    warPowerAuthority: system.warPowerAuthority ?? '',
+    warConsentChamberId: system.warConsentChamberId ?? '',
+    commanderInChiefPositionId: system.commanderInChiefPositionId ?? '',
+    warPowerNotes: toText(system.warPowerNotes),
+    constitutionLawId: system.constitutionLawId ?? '',
+    foundingEventId: system.foundingEventId ?? '',
     notes: toText(system.notes),
   }
 }
@@ -275,54 +430,135 @@ const numberOrNull = (raw: string) => {
   return Number.isFinite(parsed) ? Math.trunc(parsed) : null
 }
 
+const floatOrNull = (raw: string) => {
+  const trimmed = raw.trim()
+  if (trimmed === '') return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 const textOrNull = (raw: string) => (raw.trim() === '' ? null : raw.trim())
 
 /**
- * 정부 형태 선택 시 통치 구조 기본값(실권 여부·입법부·정당제)을 맞춰준다.
+ * 정부 형태 선택 시 통치 구조 기본값(실권 여부·입법부·정당제·카탈로그 기본 수반 직위)을 맞춰준다.
  */
 function applyGovernmentFormDefaults(
   nextForm: string,
   prev: FormState,
+  defs: DefinitionOption[] = [],
+  opts?: { preserveManualHos?: boolean; preserveManualHog?: boolean },
 ): FormState {
   const next: FormState = { ...prev, governmentForm: nextForm }
+  const autoHos = pickDefaultHeadPositionId(defs, nextForm, 'HEAD_OF_STATE')
+  const autoHog = pickDefaultHeadPositionId(defs, nextForm, 'HEAD_OF_GOVERNMENT')
+  const applyHosIfAllowed = () => {
+    if (!opts?.preserveManualHos && autoHos) {
+      next.headOfStateChoice = autoHos
+      next.headOfStateTitle = ''
+    }
+  }
+  const applyHogIfAllowed = () => {
+    if (!opts?.preserveManualHog && autoHog) {
+      next.headOfGovernmentChoice = autoHog
+      next.headOfGovernmentTitle = ''
+    }
+  }
+
   switch (nextForm as GovernmentForm) {
     case 'PRESIDENTIAL':
       next.headOfStateHasPower = true
       next.headOfGovernmentChoice = ''
       next.headOfGovernmentTitle = ''
+      if (!next.headSelectionMethod) next.headSelectionMethod = 'DIRECT'
+      if (!next.warPowerAuthority) {
+        next.warPowerAuthority = 'EXECUTIVE_WITH_LEGISLATURE_CONSENT'
+      }
+      applyHosIfAllowed()
       break
     case 'PARLIAMENTARY':
+      next.headOfStateHasPower = false
+      next.headOfGovernmentHasPower = true
+      if (!next.headSelectionMethod) next.headSelectionMethod = 'INDIRECT'
+      if (!next.warPowerAuthority) {
+        next.warPowerAuthority = 'EXECUTIVE_WITH_LEGISLATURE_CONSENT'
+      }
+      applyHosIfAllowed()
+      applyHogIfAllowed()
+      break
     case 'CONSTITUTIONAL_MONARCHY':
       next.headOfStateHasPower = false
       next.headOfGovernmentHasPower = true
+      if (!next.headSelectionMethod) next.headSelectionMethod = 'HEREDITARY'
+      if (!next.warPowerAuthority) {
+        next.warPowerAuthority = 'EXECUTIVE_WITH_LEGISLATURE_CONSENT'
+      }
+      applyHosIfAllowed()
+      applyHogIfAllowed()
       break
     case 'SEMI_PRESIDENTIAL':
       next.headOfStateHasPower = true
       next.headOfGovernmentHasPower = true
+      if (!next.headSelectionMethod) next.headSelectionMethod = 'DIRECT'
+      if (!next.warPowerAuthority) {
+        next.warPowerAuthority = 'EXECUTIVE_WITH_LEGISLATURE_CONSENT'
+      }
+      applyHosIfAllowed()
+      applyHogIfAllowed()
       break
     case 'ABSOLUTE_MONARCHY':
       next.headOfStateHasPower = true
       next.headOfGovernmentChoice = ''
       next.headOfGovernmentTitle = ''
       if (!next.legislatureType) next.legislatureType = 'NONE'
+      if (!next.headSelectionMethod) next.headSelectionMethod = 'HEREDITARY'
+      if (!next.warPowerAuthority) {
+        next.warPowerAuthority = 'MONARCH_PREROGATIVE'
+      }
+      applyHosIfAllowed()
       break
     case 'ONE_PARTY':
       next.headOfStateHasPower = true
       if (!next.partySystem) next.partySystem = 'ONE_PARTY'
+      if (!next.warPowerAuthority) next.warPowerAuthority = 'EXECUTIVE_EXCLUSIVE'
+      applyHosIfAllowed()
       break
     case 'MILITARY':
+      next.headOfStateHasPower = true
+      if (!next.headSelectionMethod) next.headSelectionMethod = 'COUP_OR_JUNTA'
+      if (!next.warPowerAuthority) next.warPowerAuthority = 'EXECUTIVE_EXCLUSIVE'
+      applyHosIfAllowed()
+      break
     case 'THEOCRACY':
       next.headOfStateHasPower = true
+      if (!next.warPowerAuthority) next.warPowerAuthority = 'EXECUTIVE_EXCLUSIVE'
+      applyHosIfAllowed()
+      break
+    case 'PROVISIONAL':
+      if (!next.warPowerAuthority) next.warPowerAuthority = 'EXECUTIVE_EXCLUSIVE'
       break
     default:
       break
+  }
+  if (
+    !next.commanderInChiefPositionId &&
+    next.headOfStateChoice &&
+    next.headOfStateChoice !== LEGACY_UNLINKED_TITLE
+  ) {
+    next.commanderInChiefPositionId = next.headOfStateChoice
+  }
+  if (
+    !next.warConsentChamberId &&
+    next.warPowerAuthority === 'EXECUTIVE_WITH_LEGISLATURE_CONSENT' &&
+    next.lowerChamberId
+  ) {
+    next.warConsentChamberId = next.lowerChamberId
   }
   return next
 }
 
 /**
  * 국가원수·정부수반 한 축을 DTO 조각으로 옮긴다.
- * 지정 안 함이면 세 칸 모두 null — 감춘 값이 뒤에 남아 되살아나지 않게.
+ * 카탈로그 직위(PositionId)를 정본으로 보내고, 구 데이터의 미연결 수기 문자열(LEGACY_UNLINKED_TITLE)만 예외 보존한다.
  */
 function headAxisPayload(
   axis: 'headOfState' | 'headOfGovernment',
@@ -333,7 +569,7 @@ function headAxisPayload(
   const hasPower =
     axis === 'headOfState' ? form.headOfStateHasPower : form.headOfGovernmentHasPower
 
-  if (choice === CUSTOM_TITLE) {
+  if (choice === LEGACY_UNLINKED_TITLE) {
     const text = textOrNull(title)
     return {
       [`${axis}PositionId`]: null,
@@ -341,7 +577,7 @@ function headAxisPayload(
       [`${axis}HasPower`]: text ? hasPower : null,
     } as Partial<UpdatePoliticalSystemInput>
   }
-  if (choice) {
+  if (choice && choice !== CREATE_POSITION_SENTINEL) {
     return {
       [`${axis}PositionId`]: choice,
       [`${axis}Title`]: null,
@@ -372,20 +608,104 @@ export function PoliticalSystemFormModal({
   countryName,
   onSubmit,
 }: Props) {
+  const queryClient = useQueryClient()
   const [form, setForm] = useState<FormState>(EMPTY)
   const [saving, setSaving] = useState(false)
   const [forceSplitExecutive, setForceSplitExecutive] = useState(false)
+
+  const userTouchedHosRef = useRef(false)
+  const userTouchedHogRef = useRef(false)
+  const userTouchedLowerChamberRef = useRef(false)
+  const userTouchedUpperChamberRef = useRef(false)
+
+  const [quickPosCreator, setQuickPosCreator] = useState<{
+    axis: HeadAxis
+    title: string
+    titleLocal: string
+    isMonarchical: boolean
+    scoped: boolean
+    saving: boolean
+  } | null>(null)
+
+  const [quickChamberCreator, setQuickChamberCreator] = useState<{
+    side: 'lower' | 'upper'
+    name: string
+    localName: string
+    saving: boolean
+  } | null>(null)
 
   const { data: linkedHistoricalCountries = [] } =
     useHistoricalCountriesByModernCountry(
       open && !historicalCountryId && countryId ? countryId : '',
     )
+  const { data: allHistoricalCountries = [] } = useHistoricalCountries({
+    enabled: open && Boolean(historicalCountryId),
+  })
 
   const effectiveHistoricalCountryId =
     historicalCountryId ?? (form.historicalCountryId || undefined)
   const effectiveCountryIdForDefs = effectiveHistoricalCountryId
     ? undefined
     : countryId
+
+  const lawScopeParams = effectiveHistoricalCountryId
+    ? { historicalCountryId: effectiveHistoricalCountryId }
+    : countryId
+      ? { countryId }
+      : null
+  const { data: scopedLaws = [] } = useQuery<LawRow[]>({
+    queryKey: [
+      'laws',
+      effectiveHistoricalCountryId
+        ? `h:${effectiveHistoricalCountryId}`
+        : countryId
+          ? `c:${countryId}`
+          : '',
+    ],
+    queryFn: () => getLaws(lawScopeParams ?? {}),
+    enabled: open && Boolean(lawScopeParams),
+    staleTime: 60_000,
+  })
+
+  const constitutionLawOptions = useMemo<SearchableSelectOption[]>(() => {
+    const isConstitutionLike = (law: {
+      name: string
+      lawType?: { name?: string | null } | null
+    }) => /헌법|기본법|장전|헌장|대전|율령|태정관|제국헌법|임시헌장/i.test(`${law.lawType?.name ?? ''} ${law.name}`)
+
+    const pool: Array<{
+      id: string
+      name: string
+      lawType?: { name?: string | null } | null
+      startDate?: string | null
+    }> = [...scopedLaws]
+    if (
+      editing?.constitutionLaw?.id &&
+      !pool.some((item) => item.id === editing.constitutionLaw!.id)
+    ) {
+      pool.push(editing.constitutionLaw)
+    }
+
+    const sortedPool = [...pool].sort((left, right) => {
+      const leftConst = isConstitutionLike(left) ? 0 : 1
+      const rightConst = isConstitutionLike(right) ? 0 : 1
+      if (leftConst !== rightConst) return leftConst - rightConst
+      return left.name.localeCompare(right.name, 'ko')
+    })
+
+    return sortedPool.map((law) => {
+      const yearPart = law.startDate ? law.startDate.slice(0, 4) : null
+      const meta = [law.lawType?.name ?? null, yearPart ? `${yearPart}년` : null]
+        .filter(Boolean)
+        .join(' · ')
+      return {
+        value: law.id,
+        label: law.name,
+        meta: meta || undefined,
+        group: isConstitutionLike(law) ? '헌법 · 기본법' : '기타 법령',
+      }
+    })
+  }, [scopedLaws, editing?.constitutionLaw])
 
   /*
    * 직함 후보 = 관직 정의 카탈로그. 재임·재위가 쓰는 것과 **같은 목록·같은 쿼리키**를
@@ -437,9 +757,8 @@ export function PoliticalSystemFormModal({
   }
 
   /**
-   * 수정 중인 정체가 이미 참조하는 정의는 목록에서 빠져도 되살린다.
-   * 스코프 하드컷(예: 다른 나라 전용으로 스코프된 '국가주석')에 걸려 사라지면
-   * select 값이 매칭되지 않아 선택이 조용히 '지정 안 함'으로 떨어진다.
+   * 수정 중인 정체가 이미 참조하는 정의는 목록에서 빠져도 되살리고,
+   * 시스템 범용 더미(isGeneric: true)는 배제하며, 국가 스코프 직위 및 정체 성격(군주/공화)에 맞는 직위를 상단에 배치한다.
    */
   const optionsFor = useMemo(() => {
     const pinned: DefinitionOption[] = [
@@ -447,20 +766,59 @@ export function PoliticalSystemFormModal({
       editing?.headOfGovernmentPosition as DefinitionOption | null,
     ].filter((def): def is DefinitionOption => !!def?.id)
 
+    const wantsMonarch =
+      form.governmentForm === 'CONSTITUTIONAL_MONARCHY' ||
+      form.governmentForm === 'ABSOLUTE_MONARCHY'
+
     return (axis: HeadAxis) => {
       const pool = [...definitions]
       for (const def of pinned) {
         if (!pool.some((row) => row.id === def.id)) pool.push(def)
       }
       return pool
-        .filter((def) => def.positionType === axis)
-        .sort((left, right) => left.title.localeCompare(right.title, 'ko-KR'))
+        .filter(
+          (def) =>
+            def.positionType === axis &&
+            (!def.isGeneric || pinned.some((p) => p.id === def.id)),
+        )
+        .sort((left, right) => {
+          const leftScoped = isDefinitionScopedToCountry(left) ? 0 : 1
+          const rightScoped = isDefinitionScopedToCountry(right) ? 0 : 1
+          if (leftScoped !== rightScoped) return leftScoped - rightScoped
+          if (axis === 'HEAD_OF_STATE' && form.governmentForm) {
+            const leftMatchesNature =
+              isMonarchicalDef(left) === wantsMonarch ? 0 : 1
+            const rightMatchesNature =
+              isMonarchicalDef(right) === wantsMonarch ? 0 : 1
+            if (leftMatchesNature !== rightMatchesNature) {
+              return leftMatchesNature - rightMatchesNature
+            }
+          }
+          return left.title.localeCompare(right.title, 'ko-KR')
+        })
     }
-  }, [definitions, editing])
+  }, [definitions, editing, form.governmentForm])
 
   // 열릴 때마다 대상에 맞춰 채운다 — 직전에 열었던 값이 남지 않도록
+  const prefilledHistoricalRef = useRef(false)
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      prefilledHistoricalRef.current = false
+      userTouchedHosRef.current = false
+      userTouchedHogRef.current = false
+      userTouchedLowerChamberRef.current = false
+      userTouchedUpperChamberRef.current = false
+      setQuickPosCreator(null)
+      setQuickChamberCreator(null)
+      return
+    }
+    userTouchedHosRef.current = false
+    userTouchedHogRef.current = false
+    userTouchedLowerChamberRef.current = false
+    userTouchedUpperChamberRef.current = false
+    setQuickPosCreator(null)
+    setQuickChamberCreator(null)
+
     if (editing) {
       setForm(hydrate(editing))
       setForceSplitExecutive(
@@ -477,10 +835,174 @@ export function PoliticalSystemFormModal({
     setForceSplitExecutive(false)
     setForm(
       initialGovernmentForm
-        ? applyGovernmentFormDefaults(initialGovernmentForm, base)
+        ? applyGovernmentFormDefaults(initialGovernmentForm, base, definitions)
         : base,
     )
   }, [open, editing, initialGovernmentForm, defaultIsCurrent])
+
+  // 관직 사전이 로드되면: (1) 생성 모드에서 정부 형태에 맞는 기본 수반 직위를 자동 세팅하고,
+  // (2) 수정 모드에서 수기 직함(LEGACY_UNLINKED_TITLE)과 동명인 정식 카탈로그 직위가 있으면 자동 승격한다.
+  useEffect(() => {
+    if (!open || definitions.length === 0) return
+    setForm((prev) => {
+      let changed = false
+      const next = { ...prev }
+
+      if (editing) {
+        if (
+          prev.headOfStateChoice === LEGACY_UNLINKED_TITLE &&
+          prev.headOfStateTitle.trim()
+        ) {
+          const hit = definitions.find(
+            (d) =>
+              !d.isGeneric &&
+              d.positionType === 'HEAD_OF_STATE' &&
+              d.title.trim() === prev.headOfStateTitle.trim(),
+          )
+          if (hit) {
+            next.headOfStateChoice = hit.id
+            next.headOfStateTitle = ''
+            changed = true
+          }
+        }
+        if (
+          prev.headOfGovernmentChoice === LEGACY_UNLINKED_TITLE &&
+          prev.headOfGovernmentTitle.trim()
+        ) {
+          const hit = definitions.find(
+            (d) =>
+              !d.isGeneric &&
+              d.positionType === 'HEAD_OF_GOVERNMENT' &&
+              d.title.trim() === prev.headOfGovernmentTitle.trim(),
+          )
+          if (hit) {
+            next.headOfGovernmentChoice = hit.id
+            next.headOfGovernmentTitle = ''
+            changed = true
+          }
+        }
+        return changed ? next : prev
+      }
+
+      if (!prev.governmentForm) return prev
+      if (!userTouchedHosRef.current && !prev.headOfStateChoice) {
+        const defaultHos = pickDefaultHeadPositionId(
+          definitions,
+          prev.governmentForm,
+          'HEAD_OF_STATE',
+        )
+        if (defaultHos) {
+          next.headOfStateChoice = defaultHos
+          changed = true
+        }
+      }
+      if (
+        DUAL_EXECUTIVE_FORMS.has(prev.governmentForm) &&
+        !userTouchedHogRef.current &&
+        !prev.headOfGovernmentChoice
+      ) {
+        const defaultHog = pickDefaultHeadPositionId(
+          definitions,
+          prev.governmentForm,
+          'HEAD_OF_GOVERNMENT',
+        )
+        if (defaultHog) {
+          next.headOfGovernmentChoice = defaultHog
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [open, editing, definitions])
+
+  // 의회 원 카탈로그가 로드되거나 의회 구성(단원/양원)을 고르면 미선택 원 슬롯을 자동으로 매칭한다.
+  useEffect(() => {
+    if (!open || chambers.length === 0 || editing) return
+    if (!form.legislatureType || form.legislatureType === 'NONE') return
+
+    setForm((prev) => {
+      let changed = false
+      const next = { ...prev }
+      const signedStart =
+        Number.isFinite(Number(prev.startYear)) && Number(prev.startYear) > 0
+          ? prev.startEra === 'BC'
+            ? -Number(prev.startYear)
+            : Number(prev.startYear)
+          : null
+
+      if (!userTouchedLowerChamberRef.current && !prev.lowerChamberId) {
+        const lowerPool = chambers.filter((ch) =>
+          prev.legislatureType === 'UNICAMERAL'
+            ? ch.role === 'UNICAMERAL' || ch.role === 'LOWER'
+            : ch.role === 'LOWER' || ch.role === 'UNICAMERAL',
+        )
+        if (lowerPool.length === 1) {
+          const chosen = lowerPool[0]
+          next.lowerChamberId = chosen.id
+          next.lowerHouseName = chamberLabel(chosen)
+          if (!prev.lowerHouseSeats.trim()) {
+            const seats = chamberSeatsAt(chosen.sizes, signedStart)
+            if (seats != null) next.lowerHouseSeats = String(seats)
+          }
+          changed = true
+        }
+      }
+      if (
+        prev.legislatureType === 'BICAMERAL' &&
+        !userTouchedUpperChamberRef.current &&
+        !prev.upperChamberId
+      ) {
+        const upperPool = chambers.filter((ch) => ch.role === 'UPPER')
+        if (upperPool.length === 1) {
+          const chosen = upperPool[0]
+          next.upperChamberId = chosen.id
+          next.upperHouseName = chamberLabel(chosen)
+          if (!prev.upperHouseSeats.trim()) {
+            const seats = chamberSeatsAt(chosen.sizes, signedStart)
+            if (seats != null) next.upperHouseSeats = String(seats)
+          }
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [open, editing, chambers, form.legislatureType])
+
+  // 역사적 국가에서 새 정체를 처음 등록할 때 국가 형태(stateType)·존속 기간을 기본값으로 미리 채운다
+  useEffect(() => {
+    if (!open || editing || !historicalCountryId || prefilledHistoricalRef.current) {
+      return
+    }
+    const targetHc = (
+      allHistoricalCountries as Array<{
+        id: string
+        stateType?: string | null
+        startEra?: 'BC' | 'AD' | null
+        startYear?: number | null
+        endEra?: 'BC' | 'AD' | null
+        endYear?: number | null
+      }>
+    ).find((hc) => hc.id === historicalCountryId)
+    if (!targetHc) return
+    prefilledHistoricalRef.current = true
+    setForm((prev) => {
+      if (prev.startYear || prev.governmentForm) return prev
+      const preset = presetFromHistoricalStateType(targetHc.stateType)
+      let next: FormState = {
+        ...prev,
+        startEra: targetHc.startEra === 'BC' ? 'BC' : 'AD',
+        startYear: targetHc.startYear != null ? String(Math.abs(targetHc.startYear)) : prev.startYear,
+        endEra: targetHc.endEra === 'BC' ? 'BC' : 'AD',
+        endYear: targetHc.endYear != null ? String(Math.abs(targetHc.endYear)) : prev.endYear,
+        isCurrent: targetHc.endYear != null ? false : prev.isCurrent,
+        stateStructure: preset.stateStructure ?? prev.stateStructure,
+      }
+      if (!initialGovernmentForm && preset.governmentForm) {
+        next = applyGovernmentFormDefaults(preset.governmentForm, next)
+      }
+      return next
+    })
+  }, [open, editing, historicalCountryId, allHistoricalCountries, initialGovernmentForm])
 
   const set = <Key extends keyof FormState>(key: Key, value: FormState[Key]) =>
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -541,11 +1063,21 @@ export function PoliticalSystemFormModal({
       }
     }
 
+    if (
+      form.headOfStateChoice === LEGACY_UNLINKED_TITLE ||
+      (isDualExecutive && form.headOfGovernmentChoice === LEGACY_UNLINKED_TITLE)
+    ) {
+      notify.error(
+        '수기 문자열 직함은 저장할 수 없습니다. 「카탈로그 정식 등록·연결」 버튼을 눌러 DB 직책 정본으로 먼저 연결해 주세요.',
+      )
+      return
+    }
+
     const dto: UpdatePoliticalSystemInput = {
       name: textOrNull(form.name),
       ...(!historicalCountryId && countryId
         ? {
-            countryId: form.historicalCountryId ? null : countryId,
+            countryId,
             historicalCountryId: form.historicalCountryId || null,
           }
         : {}),
@@ -587,6 +1119,32 @@ export function PoliticalSystemFormModal({
         null) as UpdatePoliticalSystemInput['stateStructure'],
       partySystem: (form.partySystem ||
         null) as UpdatePoliticalSystemInput['partySystem'],
+      headSelectionMethod: (form.headSelectionMethod ||
+        null) as UpdatePoliticalSystemInput['headSelectionMethod'],
+      headOfStateTermYears: numberOrNull(form.headOfStateTermYears),
+      headOfStateTermLimit: numberOrNull(form.headOfStateTermLimit),
+      lowerHouseTermYears: hasLegislature
+        ? numberOrNull(form.lowerHouseTermYears)
+        : null,
+      upperHouseTermYears: isBicameral
+        ? numberOrNull(form.upperHouseTermYears)
+        : null,
+      electoralSystem: (hasLegislature && form.electoralSystem
+        ? form.electoralSystem
+        : null) as UpdatePoliticalSystemInput['electoralSystem'],
+      electoralThresholdPercent: hasLegislature
+        ? floatOrNull(form.electoralThresholdPercent)
+        : null,
+      warPowerAuthority: (form.warPowerAuthority ||
+        null) as UpdatePoliticalSystemInput['warPowerAuthority'],
+      warConsentChamberId:
+        hasLegislature && form.warConsentChamberId
+          ? form.warConsentChamberId
+          : null,
+      commanderInChiefPositionId: form.commanderInChiefPositionId || null,
+      warPowerNotes: textOrNull(form.warPowerNotes),
+      constitutionLawId: form.constitutionLawId || null,
+      foundingEventId: form.foundingEventId || null,
       notes: textOrNull(form.notes),
     }
 
@@ -662,14 +1220,217 @@ export function PoliticalSystemFormModal({
         ]
       : []
 
-  const headOptions = (axis: HeadAxis): SearchableSelectOption[] => [
-    ...optionsFor(axis).map((def) => ({
-      value: def.id,
-      label: def.title,
-      meta: def.titleLocal ?? undefined,
-    })),
-    { value: CUSTOM_TITLE, label: '목록에 없음 — 직접 입력', group: '직접' },
-  ]
+  const openQuickPositionCreator = (
+    axis: HeadAxis,
+    initialTitleText = '',
+  ) => {
+    const wantsMonarch =
+      axis === 'HEAD_OF_STATE' &&
+      (form.governmentForm === 'CONSTITUTIONAL_MONARCHY' ||
+        form.governmentForm === 'ABSOLUTE_MONARCHY')
+    const trimmed = initialTitleText.trim()
+    setQuickPosCreator({
+      axis,
+      title: trimmed,
+      titleLocal: '',
+      isMonarchical: wantsMonarch,
+      scoped:
+        Boolean(effectiveCountryIdForDefs || effectiveHistoricalCountryId) &&
+        (!trimmed || !UNIVERSAL_HEAD_TITLES.has(trimmed)),
+      saving: false,
+    })
+  }
+
+  const submitQuickPositionCreator = async () => {
+    if (!quickPosCreator) return
+    const trimmedTitle = quickPosCreator.title.trim()
+    if (!trimmedTitle) {
+      notify.error('등록할 수반 직위명을 입력해 주세요.')
+      return
+    }
+    const existingHit = definitions.find(
+      (d) =>
+        !d.isGeneric &&
+        d.positionType === quickPosCreator.axis &&
+        d.title.trim() === trimmedTitle,
+    )
+    if (existingHit) {
+      if (quickPosCreator.axis === 'HEAD_OF_STATE') {
+        userTouchedHosRef.current = true
+        setForm((prev) => ({
+          ...prev,
+          headOfStateChoice: existingHit.id,
+          headOfStateTitle: '',
+        }))
+      } else {
+        userTouchedHogRef.current = true
+        setForm((prev) => ({
+          ...prev,
+          headOfGovernmentChoice: existingHit.id,
+          headOfGovernmentTitle: '',
+        }))
+      }
+      setQuickPosCreator(null)
+      notify.success(`이미 관직 카탈로그에 있는 「${trimmedTitle}」 직위를 선택했습니다.`)
+      return
+    }
+
+    setQuickPosCreator((prev) => (prev ? { ...prev, saving: true } : null))
+    try {
+      const created = (await personCareerApi.createPositionDefinition({
+        title: trimmedTitle,
+        titleLocal: quickPosCreator.titleLocal.trim() || null,
+        positionType: quickPosCreator.axis,
+        rank: quickPosCreator.axis === 'HEAD_OF_STATE' ? 1 : 2,
+        isMonarchical:
+          quickPosCreator.axis === 'HEAD_OF_STATE'
+            ? quickPosCreator.isMonarchical
+            : false,
+      })) as { id?: string } | null
+      if (!created?.id) {
+        throw new Error('직위 정의 생성에 실패했습니다.')
+      }
+
+      const shouldAttachScope =
+        quickPosCreator.scoped &&
+        !UNIVERSAL_HEAD_TITLES.has(trimmedTitle) &&
+        Boolean(effectiveCountryIdForDefs || effectiveHistoricalCountryId)
+      if (shouldAttachScope) {
+        await personCareerApi.addPositionDefinitionScope(created.id, {
+          countryId: effectiveCountryIdForDefs || null,
+          historicalCountryId: effectiveHistoricalCountryId || null,
+          note: `${trimmedTitle} (정체 수반 직위 등록)`,
+        })
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['position-definitions'] })
+      if (quickPosCreator.axis === 'HEAD_OF_STATE') {
+        userTouchedHosRef.current = true
+        setForm((prev) => ({
+          ...prev,
+          headOfStateChoice: created.id!,
+          headOfStateTitle: '',
+        }))
+      } else {
+        userTouchedHogRef.current = true
+        setForm((prev) => ({
+          ...prev,
+          headOfGovernmentChoice: created.id!,
+          headOfGovernmentTitle: '',
+        }))
+      }
+      setQuickPosCreator(null)
+      notify.success(`「${trimmedTitle}」 직위를 카탈로그에 등록하고 선택했습니다.`)
+    } catch {
+      setQuickPosCreator((prev) => (prev ? { ...prev, saving: false } : null))
+      notify.error('수반 직위 카탈로그 등록에 실패했습니다.')
+    }
+  }
+
+  const submitQuickChamberCreator = async () => {
+    if (!quickChamberCreator) return
+    const trimmedName = quickChamberCreator.name.trim()
+    if (!trimmedName) {
+      notify.error('등록할 의회 원 이름을 입력해 주세요.')
+      return
+    }
+    if (!chamberScope.countryId && !chamberScope.historicalCountryId) {
+      notify.error('소속 국가 정보가 없어 의회 원을 생성할 수 없습니다.')
+      return
+    }
+    setQuickChamberCreator((prev) => (prev ? { ...prev, saving: true } : null))
+    try {
+      const side = quickChamberCreator.side
+      const role = isBicameral
+        ? side === 'upper'
+          ? 'UPPER'
+          : 'LOWER'
+        : 'UNICAMERAL'
+      const created = await chamberApi.create({
+        name: trimmedName,
+        localName: quickChamberCreator.localName.trim() || null,
+        role,
+        countryId: chamberScope.countryId,
+        historicalCountryId: chamberScope.historicalCountryId,
+      })
+      const seatsRaw =
+        side === 'lower' ? form.lowerHouseSeats : form.upperHouseSeats
+      const parsedSeats = numberOrNull(seatsRaw)
+      const parsedStartY = numberOrNull(form.startYear)
+      if (parsedSeats != null && parsedSeats > 0) {
+        try {
+          await chamberApi.createSize(created.id, {
+            seats: parsedSeats,
+            start:
+              parsedStartY != null
+                ? {
+                    era: form.startEra,
+                    year: parsedStartY,
+                    month: numberOrNull(form.startMonth) ?? undefined,
+                    day: numberOrNull(form.startDay) ?? undefined,
+                  }
+                : null,
+          })
+        } catch {
+          // 정원 부가 생성 실패 시 원 본체 연결은 유지
+        }
+      }
+      await queryClient.invalidateQueries({ queryKey: ['chambers'] })
+      if (side === 'lower') {
+        userTouchedLowerChamberRef.current = true
+      } else {
+        userTouchedUpperChamberRef.current = true
+      }
+      setForm((prev) => ({
+        ...prev,
+        [`${side}ChamberId`]: created.id,
+        [`${side}HouseName`]: chamberLabel(created),
+      }))
+      setQuickChamberCreator(null)
+      notify.success(`「${trimmedName}」 의회 원을 등록하고 연결했습니다.`)
+    } catch {
+      setQuickChamberCreator((prev) =>
+        prev ? { ...prev, saving: false } : null,
+      )
+      notify.error('의회 원 등록에 실패했습니다.')
+    }
+  }
+
+  const headOptions = (axis: HeadAxis): SearchableSelectOption[] => {
+    const wantsMonarch =
+      form.governmentForm === 'CONSTITUTIONAL_MONARCHY' ||
+      form.governmentForm === 'ABSOLUTE_MONARCHY'
+    return [
+      ...optionsFor(axis).map((def) => {
+        const scoped = isDefinitionScopedToCountry(def)
+        const groupLabel =
+          axis === 'HEAD_OF_GOVERNMENT'
+            ? scoped
+              ? '이 국가 전용 정부수반'
+              : '보편 정부수반 카테고리'
+            : isMonarchicalDef(def)
+              ? scoped
+                ? '이 국가 전용 군주·원수'
+                : '군주·왕실 칭호 카테고리'
+              : scoped
+                ? '이 국가 전용 국가원수'
+                : wantsMonarch
+                  ? '공화·기타 원수 카테고리'
+                  : '국가원수·수반 카테고리'
+        return {
+          value: def.id,
+          label: def.title,
+          meta: def.titleLocal ?? def.titleEn ?? undefined,
+          group: groupLabel,
+        }
+      }),
+      {
+        value: CREATE_POSITION_SENTINEL,
+        label: '+ 새 수반 직위를 카탈로그에 등록 후 선택',
+        group: '관직 카탈로그 추가',
+      },
+    ]
+  }
 
   const chamberChips = (side: 'lower' | 'upper'): ChoiceChipOption[] =>
     chambers
@@ -684,51 +1445,144 @@ export function PoliticalSystemFormModal({
     const seatsKey = side === 'lower' ? 'lowerHouseSeats' : 'upperHouseSeats'
     const label = side === 'lower' ? primaryHouseLabel(legislature) : '상원'
     const chips = chamberChips(side)
+    const isCreatingThisHouse = quickChamberCreator?.side === side
+    const hasLegacyUnlinkedName = Boolean(!chamberId && form[nameKey].trim())
     return (
       <FieldRow>
         <FieldLabel as="div">
           {label} <OptionalTag>(선택)</OptionalTag>
         </FieldLabel>
         <FieldControl>
-          {chips.length > 0 ? (
-            <ChoiceChips
-              ariaLabel={`${label} — 원 카탈로그`}
-              options={chips}
-              value={chamberId}
-              allowDeselect
-              onChange={(nextId) =>
-                nextId
-                  ? pickChamber(side, nextId)
-                  : setForm((prev) => ({ ...prev, [`${side}ChamberId`]: '' }))
-              }
-            />
+          <InlineCatalogBar>
+            {chips.length > 0 ? (
+              <ChoiceChips
+                ariaLabel={`${label} — 원 카탈로그`}
+                options={chips}
+                value={chamberId}
+                allowDeselect
+                onChange={(nextId) => {
+                  if (side === 'lower') userTouchedLowerChamberRef.current = true
+                  else userTouchedUpperChamberRef.current = true
+                  if (nextId) {
+                    pickChamber(side, nextId)
+                  } else {
+                    setForm((prev) => ({
+                      ...prev,
+                      [`${side}ChamberId`]: '',
+                      [nameKey]: '',
+                    }))
+                  }
+                }}
+              />
+            ) : (
+              <FieldHint style={{ margin: 0 }}>
+                등록된 의회 원이 없습니다. 정식 원(Chamber)으로 등록해 연결하세요.
+              </FieldHint>
+            )}
+            {!isCreatingThisHouse ? (
+              <InlineQuickAddBtn
+                type="button"
+                onClick={() =>
+                  setQuickChamberCreator({
+                    side,
+                    name: hasLegacyUnlinkedName ? form[nameKey].trim() : '',
+                    localName: '',
+                    saving: false,
+                  })
+                }
+              >
+                <FiPlus size={12} aria-hidden />새 {label} 원 등록
+              </InlineQuickAddBtn>
+            ) : null}
+          </InlineCatalogBar>
+
+          {hasLegacyUnlinkedName && !isCreatingThisHouse ? (
+            <LegacyPromoteNotice>
+              <span>
+                현재 수기 이름 <strong>「{form[nameKey].trim()}」</strong>만 저장되어 있습니다.
+              </span>
+              <InlineQuickAddBtn
+                type="button"
+                onClick={() =>
+                  setQuickChamberCreator({
+                    side,
+                    name: form[nameKey].trim(),
+                    localName: '',
+                    saving: false,
+                  })
+                }
+              >
+                정식 의회 원(Chamber)으로 전환
+              </InlineQuickAddBtn>
+            </LegacyPromoteNotice>
           ) : null}
+
+          {isCreatingThisHouse && quickChamberCreator ? (
+            <InlineCreatorCard>
+              <SubFieldPair $cols={2}>
+                <SubField>
+                  <SubFieldLabel>{label} 명칭 *</SubFieldLabel>
+                  <Input
+                    value={quickChamberCreator.name}
+                    onChange={(ev) =>
+                      setQuickChamberCreator((prev) =>
+                        prev ? { ...prev, name: ev.target.value } : null,
+                      )
+                    }
+                    placeholder={
+                      side === 'upper'
+                        ? '예: 참의원 · 상원 · 귀족원'
+                        : isBicameral
+                          ? '예: 중의원 · 하원 · 국민의회'
+                          : '예: 국회 · 최고인민회의'
+                    }
+                  />
+                </SubField>
+                <SubField>
+                  <SubFieldLabel>원어 표기 (선택)</SubFieldLabel>
+                  <Input
+                    value={quickChamberCreator.localName}
+                    onChange={(ev) =>
+                      setQuickChamberCreator((prev) =>
+                        prev ? { ...prev, localName: ev.target.value } : null,
+                      )
+                    }
+                    placeholder="예: Senate · 衆議院"
+                  />
+                </SubField>
+              </SubFieldPair>
+              <InlineCreatorFooter>
+                <SplitToggleBtn
+                  type="button"
+                  onClick={() => setQuickChamberCreator(null)}
+                >
+                  취소
+                </SplitToggleBtn>
+                <InlineSaveMiniBtn
+                  type="button"
+                  disabled={quickChamberCreator.saving}
+                  onClick={() => void submitQuickChamberCreator()}
+                >
+                  <FiCheck size={12} aria-hidden />
+                  {quickChamberCreator.saving ? '등록 중...' : '원 등록 후 연결'}
+                </InlineSaveMiniBtn>
+              </InlineCreatorFooter>
+            </InlineCreatorCard>
+          ) : null}
+
           <SubFieldPair $cols={2}>
             <SubField>
-              <SubFieldLabel>이름</SubFieldLabel>
-              <Input
-                value={form[nameKey]}
-                readOnly={Boolean(chamberId)}
-                title={chamberId ? '고른 원의 이름 — 바꾸려면 원을 고치거나 칩 선택을 푸세요' : undefined}
-                onChange={(event) => set(nameKey, event.target.value)}
-                placeholder={side === 'upper' ? '참의원 · 상원 · 귀족원' : isBicameral ? '중의원 · 하원' : '국회'}
-              />
-            </SubField>
-            <SubField>
-              <SubFieldLabel>의석</SubFieldLabel>
+              <SubFieldLabel>정체 기준 의석 정원 (선택)</SubFieldLabel>
               <Input
                 inputMode="numeric"
                 value={form[seatsKey]}
-                onChange={(event) => set(seatsKey, event.target.value.replace(/[^0-9]/g, ''))}
-                placeholder={side === 'upper' ? '100' : '300'}
+                onChange={(event) =>
+                  set(seatsKey, event.target.value.replace(/[^0-9]/g, ''))
+                }
+                placeholder={side === 'upper' ? '예: 100' : '예: 300'}
               />
             </SubField>
           </SubFieldPair>
-          {chips.length === 0 ? (
-            <FieldHint>
-              이 나라에 등록된 원이 없어 이름만 적습니다 — 아래 「의회 · 원」에서 원을 등록하면 여기서 고를 수 있습니다.
-            </FieldHint>
-          ) : null}
         </FieldControl>
       </FieldRow>
     )
@@ -736,6 +1590,7 @@ export function PoliticalSystemFormModal({
 
   const renderHead = (axis: 'headOfState' | 'headOfGovernment') => {
     const isState = axis === 'headOfState'
+    const axisKey: HeadAxis = isState ? 'HEAD_OF_STATE' : 'HEAD_OF_GOVERNMENT'
     const choice = isState ? form.headOfStateChoice : form.headOfGovernmentChoice
     const title = isState ? form.headOfStateTitle : form.headOfGovernmentTitle
     const hasPower = isState ? form.headOfStateHasPower : form.headOfGovernmentHasPower
@@ -748,34 +1603,193 @@ export function PoliticalSystemFormModal({
       : '정부수반'
     const placeholder = isState
       ? isDualExecutive
-        ? '대통령 · 국왕 · 천황 · 황제'
-        : '대통령 · 국왕 · 쇼군'
-      : '총리 · 수상 · 내각총리대신'
+        ? '관직 카탈로그에서 선택 (예: 대통령 · 국왕 · 천황 · 황제)'
+        : '관직 카탈로그에서 선택 (예: 대통령 · 국왕 · 황제)'
+      : '관직 카탈로그에서 선택 (예: 총리 · 국무총리 · 내각총리대신)'
+    const isCreatingThisAxis = quickPosCreator?.axis === axisKey
+    const isLegacyUnlinked = choice === LEGACY_UNLINKED_TITLE && Boolean(title.trim())
+
     return (
       <FieldRow>
         <FieldLabel as="div">
-          {label} 직함 <OptionalTag>(선택)</OptionalTag>
+          {label} 직위 <OptionalTag>(카탈로그)</OptionalTag>
         </FieldLabel>
         <FieldControl>
-          <SearchableSelect
-            options={headOptions(isState ? 'HEAD_OF_STATE' : 'HEAD_OF_GOVERNMENT')}
-            value={choice}
-            onChange={(nextValue) => set(isState ? 'headOfStateChoice' : 'headOfGovernmentChoice', nextValue)}
-            placeholder={placeholder}
-            searchPlaceholder="관직 사전에서 찾기"
-            ariaLabel={`${label} 직함`}
-            clearable
-            emptyMessage="이 나라 관직 사전에 해당 직함이 없습니다"
-          />
-          {choice === CUSTOM_TITLE ? (
-            <Input
-              value={title}
-              onChange={(event) => set(isState ? 'headOfStateTitle' : 'headOfGovernmentTitle', event.target.value)}
-              placeholder={isState ? '연합회의 의장 · 국가주석' : '임시정부 수반 · 국무원 총리'}
-              aria-label={`${label} 직함 직접 입력`}
-            />
+          <HeadSelectRow>
+            <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+              <SearchableSelect
+                options={headOptions(axisKey)}
+                value={isLegacyUnlinked ? '' : choice}
+                onChange={(nextValue) => {
+                  if (nextValue === CREATE_POSITION_SENTINEL) {
+                    openQuickPositionCreator(axisKey)
+                    return
+                  }
+                  if (isState) {
+                    userTouchedHosRef.current = true
+                    setForm((prev) => ({
+                      ...prev,
+                      headOfStateChoice: nextValue,
+                      headOfStateTitle: '',
+                    }))
+                  } else {
+                    userTouchedHogRef.current = true
+                    setForm((prev) => ({
+                      ...prev,
+                      headOfGovernmentChoice: nextValue,
+                      headOfGovernmentTitle: '',
+                    }))
+                  }
+                }}
+                placeholder={
+                  isLegacyUnlinked
+                    ? `수기 저장됨: ${title} (카탈로그 직위로 변경 권장)`
+                    : placeholder
+                }
+                searchPlaceholder="등록된 수반 직위 검색..."
+                ariaLabel={`${label} 직함`}
+                clearable
+                emptyMessage="등록된 수반 카테고리가 없습니다. 우측 버튼으로 새 직위를 추가하세요."
+              />
+            </div>
+            {!isCreatingThisAxis ? (
+              <>
+                <InlineQuickAddBtn
+                  type="button"
+                  onClick={() =>
+                    openQuickPositionCreator(
+                      axisKey,
+                      isLegacyUnlinked ? title : '',
+                    )
+                  }
+                >
+                  <FiPlus size={12} aria-hidden />새 직위 등록
+                </InlineQuickAddBtn>
+                <InlineQuickAddBtn
+                  as="a"
+                  href="/government/positions"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ textDecoration: 'none' }}
+                  title="관직·직책 정본 관리 페이지 새 탭에서 열기"
+                >
+                  정본 관리 ↗
+                </InlineQuickAddBtn>
+              </>
+            ) : null}
+          </HeadSelectRow>
+
+          {isLegacyUnlinked && !isCreatingThisAxis ? (
+            <LegacyPromoteNotice>
+              <span>
+                현재 수기 문자열 <strong>「{title}」</strong>로 저장되어 있어 행정부·수반 등록 시 정본 FK로 연결되지 않습니다.
+              </span>
+              <InlineQuickAddBtn
+                type="button"
+                onClick={() => openQuickPositionCreator(axisKey, title)}
+              >
+                「{title}」 카탈로그 정식 등록·연결
+              </InlineQuickAddBtn>
+            </LegacyPromoteNotice>
           ) : null}
-          {choice && (isDualExecutive || !isState) ? (
+
+          {isCreatingThisAxis && quickPosCreator ? (
+            <InlineCreatorCard>
+              <SubFieldPair $cols={2}>
+                <SubField>
+                  <SubFieldLabel>{label} 직위명 *</SubFieldLabel>
+                  <Input
+                    value={quickPosCreator.title}
+                    onChange={(ev) => {
+                      const nextVal = ev.target.value
+                      setQuickPosCreator((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              title: nextVal,
+                              scoped:
+                                Boolean(
+                                  effectiveCountryIdForDefs ||
+                                    effectiveHistoricalCountryId,
+                                ) && !UNIVERSAL_HEAD_TITLES.has(nextVal.trim()),
+                            }
+                          : null,
+                      )
+                    }}
+                    placeholder={
+                      isState
+                        ? '예: 국가주석 · 연방대통령 · 최고회의 의장'
+                        : '예: 내각총리대신 · 연방총리 · 국무원 총리'
+                    }
+                  />
+                </SubField>
+                <SubField>
+                  <SubFieldLabel>원어·영문 표기 (선택)</SubFieldLabel>
+                  <Input
+                    value={quickPosCreator.titleLocal}
+                    onChange={(ev) =>
+                      setQuickPosCreator((prev) =>
+                        prev ? { ...prev, titleLocal: ev.target.value } : null,
+                      )
+                    }
+                    placeholder="예: Bundeskanzler · 内閣総理大臣"
+                  />
+                </SubField>
+              </SubFieldPair>
+              <InlineCreatorChecks>
+                {isState ? (
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={quickPosCreator.isMonarchical}
+                      onChange={(ev) =>
+                        setQuickPosCreator((prev) =>
+                          prev
+                            ? { ...prev, isMonarchical: ev.target.checked }
+                            : null,
+                        )
+                      }
+                    />
+                    <span>군주·왕실 칭호 (재위로 분류)</span>
+                  </label>
+                ) : null}
+                {effectiveCountryIdForDefs || effectiveHistoricalCountryId ? (
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={quickPosCreator.scoped}
+                      onChange={(ev) =>
+                        setQuickPosCreator((prev) =>
+                          prev ? { ...prev, scoped: ev.target.checked } : null,
+                        )
+                      }
+                    />
+                    <span>이 국가·시대 전용 직위로 등록</span>
+                  </label>
+                ) : null}
+              </InlineCreatorChecks>
+              <InlineCreatorFooter>
+                <SplitToggleBtn
+                  type="button"
+                  onClick={() => setQuickPosCreator(null)}
+                >
+                  취소
+                </SplitToggleBtn>
+                <InlineSaveMiniBtn
+                  type="button"
+                  disabled={quickPosCreator.saving}
+                  onClick={() => void submitQuickPositionCreator()}
+                >
+                  <FiCheck size={12} aria-hidden />
+                  {quickPosCreator.saving
+                    ? '등록 중...'
+                    : '카탈로그 등록 후 선택'}
+                </InlineSaveMiniBtn>
+              </InlineCreatorFooter>
+            </InlineCreatorCard>
+          ) : null}
+
+          {choice && choice !== CREATE_POSITION_SENTINEL && (isDualExecutive || !isState) ? (
             <ChoiceChips
               ariaLabel={`${label} 실권`}
               options={POWER_OPTIONS}
@@ -837,7 +1851,54 @@ export function PoliticalSystemFormModal({
                     ariaLabel="소속 시대 및 국가"
                     options={polityOptions}
                     value={form.historicalCountryId || '__MODERN__'}
-                    onChange={(next) => set('historicalCountryId', next === '__MODERN__' ? '' : next)}
+                    onChange={(next) => {
+                      const nextHcId = next === '__MODERN__' ? '' : next
+                      setForm((prev) => {
+                        let updated: FormState = {
+                          ...prev,
+                          historicalCountryId: nextHcId,
+                        }
+                        if (!editing && nextHcId) {
+                          const hc = linkedHistoricalCountries.find(
+                            (item) => item.id === nextHcId,
+                          ) as
+                            | {
+                                id: string
+                                stateType?: string | null
+                                startEra?: 'BC' | 'AD' | null
+                                startYear?: number | null
+                                endEra?: 'BC' | 'AD' | null
+                                endYear?: number | null
+                              }
+                            | undefined
+                          if (hc) {
+                            if (!updated.startYear && hc.startYear != null) {
+                              updated.startEra = hc.startEra === 'BC' ? 'BC' : 'AD'
+                              updated.startYear = String(Math.abs(hc.startYear))
+                            }
+                            if (!updated.endYear && hc.endYear != null) {
+                              updated.endEra = hc.endEra === 'BC' ? 'BC' : 'AD'
+                              updated.endYear = String(Math.abs(hc.endYear))
+                              updated.isCurrent = false
+                            }
+                            const preset = presetFromHistoricalStateType(
+                              hc.stateType,
+                            )
+                            if (!updated.stateStructure && preset.stateStructure) {
+                              updated.stateStructure = preset.stateStructure
+                            }
+                            if (!updated.governmentForm && preset.governmentForm) {
+                              updated = applyGovernmentFormDefaults(
+                                preset.governmentForm,
+                                updated,
+                                definitions,
+                              )
+                            }
+                          }
+                        }
+                        return updated
+                      })
+                    }}
                   />
                 </FieldControl>
               </FieldRow>
@@ -930,13 +1991,67 @@ export function PoliticalSystemFormModal({
                   groups={GOVERNMENT_FORM_GROUPS}
                   value={form.governmentForm as GovernmentForm | ''}
                   allowDeselect
-                  onChange={(next) => setForm((prev) => applyGovernmentFormDefaults(next, prev))}
+                  onChange={(next) =>
+                    setForm((prev) =>
+                      applyGovernmentFormDefaults(next, prev, definitions, {
+                        preserveManualHos: userTouchedHosRef.current,
+                        preserveManualHog: userTouchedHogRef.current,
+                      }),
+                    )
+                  }
                 />
               </FieldControl>
             </FieldRow>
 
             {renderHead('headOfState')}
             {isDualExecutive ? renderHead('headOfGovernment') : null}
+
+            <FieldRow>
+              <FieldLabel as="div">
+                원수 선출·계승 <OptionalTag>(선택)</OptionalTag>
+              </FieldLabel>
+              <FieldControl>
+                <ChoiceChips
+                  ariaLabel="국가원수 선출·계승 방식"
+                  options={HEAD_SELECTION_OPTIONS}
+                  value={form.headSelectionMethod as HeadSelectionMethod | ''}
+                  allowDeselect
+                  onChange={(next) => set('headSelectionMethod', next)}
+                />
+                {form.headSelectionMethod !== 'HEREDITARY' ? (
+                  <SubFieldPair $cols={2}>
+                    <SubField>
+                      <SubFieldLabel>법정 임기(년)</SubFieldLabel>
+                      <Input
+                        inputMode="numeric"
+                        value={form.headOfStateTermYears}
+                        onChange={(event) =>
+                          set(
+                            'headOfStateTermYears',
+                            event.target.value.replace(/[^0-9]/g, ''),
+                          )
+                        }
+                        placeholder="예: 5 (5년) · 4 (4년)"
+                      />
+                    </SubField>
+                    <SubField>
+                      <SubFieldLabel>중임 상한(회)</SubFieldLabel>
+                      <Input
+                        inputMode="numeric"
+                        value={form.headOfStateTermLimit}
+                        onChange={(event) =>
+                          set(
+                            'headOfStateTermLimit',
+                            event.target.value.replace(/[^0-9]/g, ''),
+                          )
+                        }
+                        placeholder="1=단임 · 2=중임1회 · 비움=무제한"
+                      />
+                    </SubField>
+                  </SubFieldPair>
+                ) : null}
+              </FieldControl>
+            </FieldRow>
 
             <FieldRow>
               <span aria-hidden />
@@ -987,11 +2102,90 @@ export function PoliticalSystemFormModal({
             </FieldRow>
             {hasLegislature && form.legislatureType ? renderHouse('lower') : null}
             {isBicameral ? renderHouse('upper') : null}
+            {hasLegislature && form.legislatureType ? (
+              <>
+                <FieldRow>
+                  <FieldLabel as="div">
+                    의원 법정 임기 <OptionalTag>(선택)</OptionalTag>
+                  </FieldLabel>
+                  <FieldControl>
+                    <SubFieldPair
+                      style={
+                        isBicameral ? undefined : { gridTemplateColumns: '1fr' }
+                      }
+                    >
+                      <SubField>
+                        <SubFieldLabel>
+                          {primaryHouseLabel(legislature)} 임기(년)
+                        </SubFieldLabel>
+                        <Input
+                          inputMode="numeric"
+                          value={form.lowerHouseTermYears}
+                          onChange={(event) =>
+                            set(
+                              'lowerHouseTermYears',
+                              event.target.value.replace(/[^0-9]/g, ''),
+                            )
+                          }
+                          placeholder="예: 4 (4년) · 2 (미국 하원)"
+                        />
+                      </SubField>
+                      {isBicameral ? (
+                        <SubField>
+                          <SubFieldLabel>상원 임기(년)</SubFieldLabel>
+                          <Input
+                            inputMode="numeric"
+                            value={form.upperHouseTermYears}
+                            onChange={(event) =>
+                              set(
+                                'upperHouseTermYears',
+                                event.target.value.replace(/[^0-9]/g, ''),
+                              )
+                            }
+                            placeholder="예: 6 (참의원·미국 상원)"
+                          />
+                        </SubField>
+                      ) : null}
+                    </SubFieldPair>
+                  </FieldControl>
+                </FieldRow>
+                <FieldRow>
+                  <FieldLabel as="div">
+                    선거제도·봉쇄조항 <OptionalTag>(선택)</OptionalTag>
+                  </FieldLabel>
+                  <FieldControl>
+                    <ChoiceChips
+                      ariaLabel="주 선거제도"
+                      options={ELECTORAL_SYSTEM_OPTIONS}
+                      value={form.electoralSystem as ElectoralSystemType | ''}
+                      allowDeselect
+                      onChange={(next) => set('electoralSystem', next)}
+                    />
+                    <SubFieldPair $cols={2}>
+                      <SubField>
+                        <SubFieldLabel>봉쇄조항 기준 득표율(%)</SubFieldLabel>
+                        <Input
+                          inputMode="decimal"
+                          value={form.electoralThresholdPercent}
+                          onChange={(event) =>
+                            set(
+                              'electoralThresholdPercent',
+                              event.target.value.replace(/[^0-9.]/g, ''),
+                            )
+                          }
+                          placeholder="예: 3 (대한민국 3%) · 5 (독일 5%)"
+                        />
+                      </SubField>
+                    </SubFieldPair>
+                  </FieldControl>
+                </FieldRow>
+              </>
+            ) : null}
           </FormGroup>
 
-          {/* ④ 국가 구조 · 정당제 · 설명 */}
+          {/* ④ 국가 구조 · 정당제 · 헌정 근거 · 설명 */}
           <FormGroup>
-            <FormGroupTitle>국가 구조 · 정당제 · 설명</FormGroupTitle>
+            <FormGroupTitle>국가 구조 · 정당제 · 헌정 근거</FormGroupTitle>
             <FieldRow>
               <FieldLabel as="div">
                 국가 구조 <OptionalTag>(선택)</OptionalTag>
@@ -1018,6 +2212,122 @@ export function PoliticalSystemFormModal({
                   allowDeselect
                   onChange={(next) => set('partySystem', next)}
                 />
+              </FieldControl>
+            </FieldRow>
+            <FieldRow>
+              <FieldLabel as="div">
+                개전·통수권 <OptionalTag>(헌법 규칙)</OptionalTag>
+              </FieldLabel>
+              <FieldControl>
+                <ChoiceChips
+                  ariaLabel="개전·선전포고권 소재"
+                  options={WAR_POWER_AUTHORITY_OPTIONS}
+                  value={form.warPowerAuthority as WarPowerAuthority | ''}
+                  allowDeselect
+                  onChange={(next) => set('warPowerAuthority', next)}
+                />
+                <SubFieldPair $cols={2}>
+                  <SubField>
+                    <SubFieldLabel>군 최고통수권자 직위 (선택)</SubFieldLabel>
+                    <SearchableSelect
+                      options={definitions
+                        .filter(
+                          (def) =>
+                            !def.isGeneric &&
+                            (def.positionType === 'HEAD_OF_STATE' ||
+                              def.positionType === 'HEAD_OF_GOVERNMENT' ||
+                              def.positionType === 'MILITARY_COMMANDER'),
+                        )
+                        .map((def) => ({
+                          value: def.id,
+                          label: def.title,
+                          meta: def.titleLocal ?? def.titleEn ?? undefined,
+                          group: isDefinitionScopedToCountry(def)
+                            ? '이 국가 전용 직위'
+                            : '보편 통수·수반 직위',
+                        }))}
+                      value={form.commanderInChiefPositionId}
+                      onChange={(next) => set('commanderInChiefPositionId', next)}
+                      placeholder="예: 대통령 · 황제 · 천황 · 최고사령관"
+                      searchPlaceholder="통수권자 직위 검색..."
+                      ariaLabel="군 최고통수권자 직위"
+                      clearable
+                    />
+                  </SubField>
+                  {hasLegislature &&
+                  (form.warPowerAuthority === 'MONARCH_WITH_UPPER_HOUSE' ||
+                    form.warPowerAuthority === 'LEGISLATURE_EXCLUSIVE' ||
+                    form.warPowerAuthority ===
+                      'EXECUTIVE_WITH_LEGISLATURE_CONSENT' ||
+                    form.warConsentChamberId) ? (
+                    <SubField>
+                      <SubFieldLabel>선전포고 의결·동의 의회 원 (선택)</SubFieldLabel>
+                      <SearchableSelect
+                        options={chambers.map((ch) => ({
+                          value: ch.id,
+                          label: chamberLabel(ch),
+                        }))}
+                        value={form.warConsentChamberId}
+                        onChange={(next) => set('warConsentChamberId', next)}
+                        placeholder="예: 연방참의원 · 국회 · 상·하원"
+                        searchPlaceholder="의회 원 검색..."
+                        ariaLabel="선전포고 의결·동의 의회 원"
+                        clearable
+                      />
+                    </SubField>
+                  ) : null}
+                </SubFieldPair>
+                <Input
+                  value={form.warPowerNotes}
+                  onChange={(event) => set('warPowerNotes', event.target.value)}
+                  placeholder="예외·단서 조항 (예: 제국 영토·해안 피침 시 연방참의원 동의 면제, 국왕 제청으로 의회 의결)"
+                />
+                <FieldHint>
+                  이 헌정 체제에서 선전포고와 군 통수권이 누구에게 있는지 설정하면 국가 군사 탭의 개전 원장과 대조됩니다.
+                </FieldHint>
+              </FieldControl>
+            </FieldRow>
+            <FieldRow>
+              <FieldLabel as="div">
+                근거 헌법·기본법 <OptionalTag>(선택)</OptionalTag>
+              </FieldLabel>
+              <FieldControl>
+                <SearchableSelect
+                  options={constitutionLawOptions}
+                  value={form.constitutionLawId}
+                  onChange={(next) => set('constitutionLawId', next)}
+                  placeholder="제헌헌법 · 바이마르 헌법 · 경국대전 · 대일본제국헌법"
+                  searchPlaceholder="법령명으로 검색..."
+                  ariaLabel="근거 헌법·기본법"
+                  clearable
+                  emptyMessage="이 국가에 등록된 법령이 아직 없습니다 (법령 탭에서 등록 가능)"
+                />
+                <FieldHint>
+                  이 헌정 체제의 법적 토대가 된 헌법·기본법·장전을 연결하면 정체와 법령 탭에서 양방향으로 이어집니다.
+                </FieldHint>
+              </FieldControl>
+            </FieldRow>
+            <FieldRow>
+              <FieldLabel htmlFor="political-system-founding-event">
+                출범 계기 사건 <OptionalTag>(선택)</OptionalTag>
+              </FieldLabel>
+              <FieldControl>
+                <LinkedEventPickerField
+                  inputId="political-system-founding-event"
+                  value={form.foundingEventId}
+                  initialTitle={editing?.foundingEvent?.title ?? null}
+                  nearYear={
+                    numberOrNull(form.startYear) != null
+                      ? form.startEra === 'BC'
+                        ? -(numberOrNull(form.startYear) ?? 0)
+                        : numberOrNull(form.startYear)
+                      : null
+                  }
+                  onChange={(next) => set('foundingEventId', next)}
+                />
+                <FieldHint>
+                  혁명·개헌·독립·정변 등 이 헌정 체제가 수립된 역사적 사건을 연결합니다.
+                </FieldHint>
               </FieldControl>
             </FieldRow>
             <FieldRow>
@@ -1121,4 +2431,107 @@ const SplitToggleBtn = styled.button`
     text-decoration: underline;
     text-underline-offset: 3px;
   }
+`
+
+const HeadSelectRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
+const InlineCatalogBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
+const InlineQuickAddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.active};
+    color: ${({ theme }) => theme.colors.active};
+  }
+`
+
+const InlineCreatorCard = styled.div`
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const InlineCreatorChecks = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+`
+
+const InlineCreatorFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+`
+
+const InlineSaveMiniBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: none;
+  background: ${({ theme }) => theme.colors.active};
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`
+
+const LegacyPromoteNotice = styled.div`
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `

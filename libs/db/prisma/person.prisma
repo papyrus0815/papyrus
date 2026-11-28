@@ -392,6 +392,7 @@ model Person {
   GovernmentTenures        GovernmentPositionTenure[] @relation("PersonGovernmentTenure")
   lifeEvents               PersonLifeEvent[]          @relation("PersonLifeEvents")
   treatySignatories        TreatySignatory[]          @relation("TreatySignatoryPerson")
+  warDeclarationsDecided   WarDeclaration[]           @relation("WarDeclarationDecidedByPerson")
   /// 전기(생애 서술) 다중 섹션. EventSection 패턴 미러 — 업데이트 시 통째 delete-and-recreate.
   biographySections        PersonSection[]            @relation("PersonBiographySections")
   /// 소속 묶음(세대·계파·동기 등) 멤버십

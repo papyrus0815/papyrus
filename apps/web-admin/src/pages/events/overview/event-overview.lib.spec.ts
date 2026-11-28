@@ -633,6 +633,75 @@ describe('buildWarDeclarationFlow — 선전포고 하위 사건 + 가담·이�
     expect(flow.milestones[1].reason).toBe('브레스트-리토프스크 조약')
   })
 
+  it('국가 정본 WarDeclaration(보조 사건 미연결 포함)을 시간순으로 병합하고 narrativeEventId 연결 하위 사건의 중복을 제거한다', () => {
+    const warRoot = node({ id: 'ww1', title: '제1차 세계대전', type: 'WAR' })
+    const linkedChild = node({
+      id: 'ev-ah-serbia',
+      title: '오스트리아-헝가리의 대세르비아 선전포고',
+      type: 'WAR_DECLARATION',
+      domain: 'DIPLOMACY',
+      startDate: '1914-07-28T00:00:00.000Z',
+      startDatePrecision: 'day',
+      countries: [
+        { key: 'h:ah', id: 'ah', kind: 'historical', name: '오스트리아-헝가리', flagEmoji: null, role: 'INITIATOR', sideId: null },
+        { key: 'h:sb', id: 'sb', kind: 'historical', name: '세르비아', flagEmoji: null, role: 'TARGET', sideId: null },
+      ],
+    })
+
+    const flow = buildWarDeclarationFlow(warRoot, [linkedChild], [
+      {
+        id: 'wd-siam',
+        kind: 'FORMAL_DECLARATION',
+        displayTitle: '시암 왕국의 대(對)독일 제국 선전포고',
+        casusBelli: '연합국 측 참전 결정',
+        declaredEra: 'AD',
+        declaredYear: 1917,
+        declaredMonth: 7,
+        declaredDay: 22,
+        declaredPrecision: 'day',
+        declaringCountry: { key: 'h:siam', id: 'siam', kind: 'historical', name: '시암 왕국', flagEmoji: null },
+        targetCountry: { key: 'h:de', id: 'de', kind: 'historical', name: '독일 제국', flagEmoji: null },
+        approvedChamberName: null,
+        yeas: null,
+        nays: null,
+        warEventId: 'ww1',
+        narrativeEventId: null,
+      },
+      {
+        id: 'wd-ah-sb',
+        kind: 'FORMAL_DECLARATION',
+        displayTitle: '오스트리아-헝가리 제국의 대(對)세르비아 왕국 선전포고',
+        casusBelli: '최후통첩 일부 거부',
+        declaredEra: 'AD',
+        declaredYear: 1914,
+        declaredMonth: 7,
+        declaredDay: 28,
+        declaredPrecision: 'day',
+        declaringCountry: { key: 'h:ah', id: 'ah', kind: 'historical', name: '오스트리아-헝가리 제국', flagEmoji: null },
+        targetCountry: { key: 'h:sb', id: 'sb', kind: 'historical', name: '세르비아 왕국', flagEmoji: null },
+        approvedChamberName: null,
+        yeas: null,
+        nays: null,
+        warEventId: 'ww1',
+        narrativeEventId: 'ev-ah-serbia',
+      },
+    ])
+
+    expect(flow.declarations).toHaveLength(2)
+    expect(flow.declarations[0]).toMatchObject({
+      rowKey: 'wd:wd-ah-sb',
+      eventId: 'ev-ah-serbia',
+      dateLabel: '1914.7.28',
+      casusBelli: '최후통첩 일부 거부',
+    })
+    expect(flow.declarations[1]).toMatchObject({
+      rowKey: 'wd:wd-siam',
+      eventId: '',
+      dateLabel: '1917.7.22',
+      title: '시암 왕국의 대(對)독일 제국 선전포고',
+    })
+  })
+
   it('aggregateMilitaryUnits는 하위 사건에 참전한 군사 부대를 출현 사건 수 순으로 집계한다', () => {
     const firstBattle = node({
       id: 'minsk',

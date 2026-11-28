@@ -28,6 +28,7 @@ import { AdministrationDepartmentModule } from '../../../libs/administration-dep
 import { EthnicityModule } from '../../../libs/ethnicity/ethnicity.module'
 import { GlossaryModule } from '../../../libs/glossary/glossary.module'
 import { TreatyModule } from '../../../libs/treaty/treaty.module'
+import { WarDeclarationModule } from '../../../libs/war-declaration/war-declaration.module'
 import { ElectionModule } from '../../../libs/election/election.module'
 import { IdeologyModule } from '../../../libs/ideology/ideology.module'
 import { PoliticalSystemModule } from '../../../libs/political-system/political-system.module'
@@ -87,6 +88,7 @@ import {
     EthnicityModule,
     GlossaryModule,
     TreatyModule,
+    WarDeclarationModule,
     ElectionModule,
     IdeologyModule,
     PoliticalSystemModule,

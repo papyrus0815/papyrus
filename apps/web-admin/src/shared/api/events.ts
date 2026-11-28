@@ -92,6 +92,8 @@ export interface GetAllEventsParams {
   includeSubEvents?: boolean
   /** 정기 시리즈(EventSeries) ID 필터 */
   seriesId?: string
+  /** domain=MILITARY 조회 시 외교·정치 분야에 걸린 선전포고·전쟁·전투·동원 사건도 합류 */
+  includeMilitaryTypes?: boolean
 }
 
 export interface ContemporaryLeaderCandidate {
@@ -186,6 +188,9 @@ export async function getAllEvents(
     set('century', params?.century)
     set('seriesId', params?.seriesId)
     if (params?.includeSubEvents) url.searchParams.set('includeSubEvents', 'true')
+    if (params?.includeMilitaryTypes) {
+      url.searchParams.set('includeMilitaryTypes', 'true')
+    }
     if (params?.hasNoDescription) url.searchParams.set('hasNoDescription', 'true')
     if (params?.hasNoCountries) url.searchParams.set('hasNoCountries', 'true')
     if (params?.hasNoKeywords) url.searchParams.set('hasNoKeywords', 'true')
@@ -227,6 +232,7 @@ export async function getEventsCount(
     | 'hasNoCountries'
     | 'hasNoKeywords'
     | 'includeSubEvents'
+    | 'includeMilitaryTypes'
     | 'seriesId'
   >,
 ): Promise<number> {
@@ -254,6 +260,9 @@ export async function getEventsCount(
     set('createdSinceDays', params?.createdSinceDays)
     set('seriesId', params?.seriesId)
     if (params?.includeSubEvents) url.searchParams.set('includeSubEvents', 'true')
+    if (params?.includeMilitaryTypes) {
+      url.searchParams.set('includeMilitaryTypes', 'true')
+    }
     if (params?.hasNoDescription) url.searchParams.set('hasNoDescription', 'true')
     if (params?.hasNoCountries) url.searchParams.set('hasNoCountries', 'true')
     if (params?.hasNoKeywords) url.searchParams.set('hasNoKeywords', 'true')

@@ -5,10 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { PoliticalSystemController } from './political-system.controller'
+import { ChamberController } from './chamber.controller'
 import { HistoricalCountryPrismaRepository } from '../../historical-country/infrastructure/historical-country.prisma.repository'
 import { CountryPrismaRepository } from '../../country/infrastructure/country.prisma.repository'
 import { PersonPrismaRepository } from '../../person/infrastructure/person.prisma.repository'
 import { TreatyController } from '../../treaty/presentation/treaty.controller'
+import { LawController } from '../../election/presentation/law.controller'
 import { MilitaryUnitRepository } from '../../military/military-unit/infrastructure/military-unit.repository'
 import { OrganizationPrismaRepository } from '../../organization/infrastructure/organization.prisma.repository'
 import { PersonGroupService } from '../../person/application/person-group.service'
@@ -244,6 +246,65 @@ describe('PoliticalSystemController & Country Deletion Guards (Round 6)', () => 
         }),
       )
       expect(list.map((row) => row.id)).toEqual(['ps-ah-dual', 'ps-hu-1867'])
+    })
+
+    it('auto-promotes free-text headOfStateTitle to matching non-generic GovernmentPositionDefinition ID on create', async () => {
+      const prisma = createMockPrisma()
+      prisma.country.findUnique.mockResolvedValue({ id: 'country-kr' })
+      prisma.governmentPositionDefinition.findMany.mockResolvedValue([
+        {
+          id: 'def-president',
+          title: '대통령',
+          isGeneric: false,
+          positionType: 'HEAD_OF_STATE',
+          administrationDepartment: null,
+          scopes: [],
+        },
+      ])
+      prisma.politicalSystem.create.mockImplementation(async ({ data }: any) => ({
+        id: 'ps-kr-6',
+        ...data,
+      }))
+      const controller = new PoliticalSystemController(prisma)
+
+      const created = await controller.create(
+        {
+          countryId: 'country-kr',
+          name: '제6공화국',
+          governmentForm: 'PRESIDENTIAL',
+          headOfStateTitle: '대통령',
+        },
+        { user: { id: 'acc-1' } },
+      )
+
+      expect(created.headOfStatePositionId).toBe('def-president')
+      expect(created.headOfStateTitle).toBeNull()
+    })
+
+    it('rejects generic dummy category definitions (isGeneric: true) as headOfStatePositionId', async () => {
+      const prisma = createMockPrisma()
+      prisma.country.findUnique.mockResolvedValue({ id: 'country-kr' })
+      prisma.governmentPositionDefinition.findMany.mockResolvedValue([
+        {
+          id: 'def-generic-head',
+          title: '국가원수 (일반)',
+          isGeneric: true,
+          positionType: 'HEAD_OF_STATE',
+          administrationDepartment: null,
+          scopes: [],
+        },
+      ])
+      const controller = new PoliticalSystemController(prisma)
+
+      await expect(
+        controller.create(
+          {
+            countryId: 'country-kr',
+            headOfStatePositionId: 'def-generic-head',
+          },
+          { user: { id: 'acc-1' } },
+        ),
+      ).rejects.toThrow(BadRequestException)
     })
   })
 
@@ -743,6 +804,575 @@ describe('PoliticalSystemController & Country Deletion Guards (Round 6)', () => 
       })
       expect(term.countryId).toBe('c-kr')
       expect(term.historicalCountryId).toBe('hc-joseon')
+    })
+  })
+
+  describe('Round 12: PoliticalSystem integration (constitutionLaw, foundingEvent, isCurrent, Chamber sync)', () => {
+    it('validates constitutionLaw jurisdiction, sanitizes soft-deleted foundingEvent, and auto-unsets sibling isCurrent rows', async () => {
+      const updateMany = jest.fn().mockResolvedValue({ count: 1 })
+      const prisma: any = {
+        country: { findUnique: jest.fn().mockResolvedValue({ id: 'c-kr' }) },
+        historicalCountryModernCountry: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        law: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValueOnce({
+              id: 'law-fr',
+              name: '프랑스 제5공화국 헌법',
+              countryId: 'c-fr',
+              historicalCountryId: null,
+            })
+            .mockResolvedValueOnce({
+              id: 'law-kr',
+              name: '대한민국 헌법 제10호',
+              countryId: 'c-kr',
+              historicalCountryId: null,
+            }),
+        },
+        event: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'ev-june',
+            title: '6월 민주항쟁',
+          }),
+        },
+        politicalSystem: {
+          updateMany,
+          create: jest.fn().mockImplementation(async ({ data }: any) => ({
+            id: 'ps-6th',
+            ...data,
+            constitutionLaw: {
+              id: 'law-kr',
+              name: '대한민국 헌법 제10호',
+              lawType: { id: 'lt-1', name: '헌법' },
+            },
+            foundingEvent: {
+              id: 'ev-june',
+              title: '6월 민주항쟁',
+              deletedAt: new Date(),
+            },
+          })),
+        },
+      }
+      prisma.$transaction = jest.fn(async (cb: any) => cb(prisma))
+
+      const controller = new PoliticalSystemController(prisma)
+
+      // 1) 타국 헌법 연결 차단
+      await expect(
+        controller.create(
+          {
+            countryId: 'c-kr',
+            name: '제6공화국',
+            constitutionLawId: 'law-fr',
+          },
+          { user: { id: 'acc-1' } },
+        ),
+      ).rejects.toThrow(BadRequestException)
+
+      // 2) 호환 헌법·사건 연결 + isCurrent: true 저장 시 동일 축 기존 isCurrent 해제 + 삭제 사건 sanitize
+      const created = await controller.create(
+        {
+          countryId: 'c-kr',
+          name: '제6공화국',
+          isCurrent: true,
+          constitutionLawId: 'law-kr',
+          foundingEventId: 'ev-june',
+        },
+        { user: { id: 'acc-1' } },
+      )
+
+      expect(updateMany).toHaveBeenCalledWith({
+        where: {
+          countryId: 'c-kr',
+          historicalCountryId: null,
+          isCurrent: true,
+          id: { not: 'ps-6th' },
+        },
+        data: { isCurrent: false },
+      })
+      expect(created.constitutionLawId).toBe('law-kr')
+      expect(created.foundingEvent).toBeNull()
+    })
+
+    it('ChamberController.update syncs PoliticalSystem lowerHouseName and upperHouseName display caches', async () => {
+      const psUpdateMany = jest.fn().mockResolvedValue({ count: 1 })
+      const prisma: any = {
+        chamber: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'ch-1',
+            name: '민의원',
+            localName: null,
+            shortName: null,
+            role: 'LOWER',
+            composition: 'DIRECTLY_ELECTED',
+            countryId: 'c-kr',
+            historicalCountryId: null,
+            foundedEra: null,
+            foundedYear: null,
+            foundedMonth: null,
+            foundedDay: null,
+            dissolvedEra: null,
+            dissolvedYear: null,
+            dissolvedMonth: null,
+            dissolvedDay: null,
+            description: null,
+          }),
+          update: jest.fn().mockResolvedValue({
+            id: 'ch-1',
+            name: '국회',
+            localName: null,
+          }),
+        },
+        politicalSystem: {
+          updateMany: psUpdateMany,
+        },
+      }
+      prisma.$transaction = jest.fn(async (cb: any) => cb(prisma))
+
+      const controller = new ChamberController(prisma)
+      await controller.update('ch-1', { name: '국회' })
+
+      expect(psUpdateMany).toHaveBeenCalledWith({
+        where: { lowerChamberId: 'ch-1' },
+        data: { lowerHouseName: '국회' },
+      })
+      expect(psUpdateMany).toHaveBeenCalledWith({
+        where: { upperChamberId: 'ch-1' },
+        data: { upperHouseName: '국회' },
+      })
+    })
+  })
+
+  describe('Round 13 — Constitutional Term/Electoral Rules & Chamber Passage/Ratification', () => {
+    it('PoliticalSystemController validates term/threshold ranges and clears upper/legislature electoral fields on UNICAMERAL/NONE', async () => {
+      const createdPayloads: any[] = []
+      const prisma: any = {
+        country: { findUnique: jest.fn().mockResolvedValue({ id: 'c-kr' }) },
+        historicalCountry: { findUnique: jest.fn() },
+        historicalCountryModernCountry: { findFirst: jest.fn() },
+        governmentPositionDefinition: { findMany: jest.fn().mockResolvedValue([]) },
+        politicalSystem: {
+          create: jest.fn().mockImplementation(async ({ data }: any) => {
+            createdPayloads.push(data)
+            return { id: 'ps-new', ...data }
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
+      }
+      const controller = new PoliticalSystemController(prisma)
+
+      await expect(
+        controller.create(
+          {
+            countryId: 'c-kr',
+            name: '잘못된 임기',
+            headOfStateTermYears: 0,
+          },
+          { user: { id: 'acc-1' } },
+        ),
+      ).rejects.toThrow(BadRequestException)
+
+      await expect(
+        controller.create(
+          {
+            countryId: 'c-kr',
+            name: '잘못된 봉쇄조항',
+            electoralThresholdPercent: 120,
+          },
+          { user: { id: 'acc-1' } },
+        ),
+      ).rejects.toThrow(BadRequestException)
+
+      // 단원제는 upperHouseTermYears 자동 제거
+      await controller.create(
+        {
+          countryId: 'c-kr',
+          name: '제6공화국',
+          governmentForm: 'PRESIDENTIAL',
+          legislatureType: 'UNICAMERAL',
+          headSelectionMethod: 'DIRECT',
+          headOfStateTermYears: 5,
+          headOfStateTermLimit: 1,
+          lowerHouseTermYears: 4,
+          upperHouseTermYears: 6,
+          electoralSystem: 'PARALLEL',
+          electoralThresholdPercent: 3.0,
+        },
+        { user: { id: 'acc-1' } },
+      )
+      expect(createdPayloads[0]).toMatchObject({
+        headSelectionMethod: 'DIRECT',
+        headOfStateTermYears: 5,
+        headOfStateTermLimit: 1,
+        lowerHouseTermYears: 4,
+        upperHouseTermYears: null,
+        electoralSystem: 'PARALLEL',
+        electoralThresholdPercent: 3.0,
+      })
+
+      // 의회 없음(NONE)은 의회 임기·선거제도·봉쇄조항 모두 초기화
+      await controller.create(
+        {
+          countryId: 'c-kr',
+          name: '전제군주정',
+          governmentForm: 'ABSOLUTE_MONARCHY',
+          legislatureType: 'NONE',
+          headSelectionMethod: 'HEREDITARY',
+          lowerHouseTermYears: 4,
+          electoralSystem: 'FPTP',
+          electoralThresholdPercent: 5,
+        },
+        { user: { id: 'acc-1' } },
+      )
+      expect(createdPayloads[1]).toMatchObject({
+        headSelectionMethod: 'HEREDITARY',
+        lowerHouseTermYears: null,
+        upperHouseTermYears: null,
+        electoralSystem: null,
+        electoralThresholdPercent: null,
+      })
+    })
+
+    it('LawController validates passedChamber jurisdiction and persists vote tallies', async () => {
+      const prisma: any = {
+        chamber: {
+          findUnique: jest.fn().mockImplementation(async ({ where }: any) => {
+            if (where.id === 'ch-kr') {
+              return { id: 'ch-kr', name: '제헌국회', countryId: 'c-kr', historicalCountryId: null }
+            }
+            if (where.id === 'ch-us') {
+              return { id: 'ch-us', name: '미국 상원', countryId: 'c-us', historicalCountryId: null }
+            }
+            return null
+          }),
+        },
+        historicalCountryModernCountry: { findFirst: jest.fn().mockResolvedValue(null) },
+        law: {
+          create: jest.fn().mockImplementation(async ({ data }: any) => ({ id: 'law-1', ...data })),
+        },
+      }
+      const controller = new LawController(prisma)
+
+      await expect(
+        controller.create({
+          name: '제헌헌법',
+          countryId: 'c-kr',
+          passedChamberId: 'ch-us',
+        }),
+      ).rejects.toThrow(BadRequestException)
+
+      const created = await controller.create({
+        name: '제헌헌법',
+        countryId: 'c-kr',
+        passedChamberId: 'ch-kr',
+        yeas: 198,
+        nays: 0,
+        abstentions: 0,
+      })
+      expect(created).toMatchObject({
+        passedChamberId: 'ch-kr',
+        yeas: 198,
+        nays: 0,
+        abstentions: 0,
+      })
+    })
+
+    it('TreatyController persists chamber ratification fields on signatories', async () => {
+      const createSignatory = jest.fn().mockImplementation(async ({ data }: any) => ({
+        id: 'sig-us',
+        ...data,
+      }))
+      const prisma: any = {
+        treaty: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 't-versailles',
+            signDate: new Date('1919-06-28'),
+          }),
+        },
+        country: { findUnique: jest.fn().mockResolvedValue({ id: 'c-us' }) },
+        treatySignatory: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: createSignatory,
+        },
+      }
+      const controller = new TreatyController(prisma)
+      const res = await controller.addSignatory({
+        treatyId: 't-versailles',
+        countryId: 'c-us',
+        ratifiedChamberId: 'ch-us-senate',
+        ratificationStatus: 'REJECTED',
+        ratifiedAt: '1920-03-19',
+        ratificationYeas: 49,
+        ratificationNays: 35,
+      })
+      expect(res).toMatchObject({
+        ratifiedChamberId: 'ch-us-senate',
+        ratificationStatus: 'REJECTED',
+        ratificationYeas: 49,
+        ratificationNays: 35,
+      })
+    })
+  })
+
+  describe('Round 13 (Round 5 Constitutional Catalog & Cabinet Regime Persistence)', () => {
+    it('PoliticalSystemController.promoteHeadPositions links existing catalog definitions and creates country-scoped definitions when missing', async () => {
+      const updatePoliticalSystem = jest.fn().mockResolvedValue({})
+      const createPosDef = jest
+        .fn()
+        .mockResolvedValue({ id: 'pos-junta-created' })
+      const prisma: any = {
+        historicalCountryModernCountry: {
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+        politicalSystem: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'ps-1st-rep',
+              accountId: null,
+              countryId: 'c-kr',
+              historicalCountryId: null,
+              governmentForm: 'PRESIDENTIAL',
+              headOfStatePositionId: null,
+              headOfStateTitle: '대통령',
+              headOfGovernmentPositionId: null,
+              headOfGovernmentTitle: null,
+            },
+            {
+              id: 'ps-junta',
+              accountId: 'acc-1',
+              countryId: 'c-kr',
+              historicalCountryId: null,
+              governmentForm: 'MILITARY',
+              headOfStatePositionId: null,
+              headOfStateTitle: '국가재건최고회의 의장',
+              headOfGovernmentPositionId: null,
+              headOfGovernmentTitle: null,
+            },
+            {
+              id: 'ps-other-user',
+              accountId: 'acc-other',
+              countryId: 'c-kr',
+              historicalCountryId: null,
+              governmentForm: 'PRESIDENTIAL',
+              headOfStatePositionId: null,
+              headOfStateTitle: '대통령',
+              headOfGovernmentPositionId: null,
+              headOfGovernmentTitle: null,
+            },
+          ]),
+          update: updatePoliticalSystem,
+        },
+        governmentPositionDefinition: {
+          findMany: jest.fn().mockImplementation(async ({ where }: any) => {
+            if (where.title === '대통령') {
+              return [
+                {
+                  id: 'pos-global-pres',
+                  administrationDepartment: null,
+                  scopes: [],
+                },
+              ]
+            }
+            return []
+          }),
+          create: createPosDef,
+        },
+      }
+
+      const controller = new PoliticalSystemController(prisma)
+      const result = await controller.promoteHeadPositions(
+        { countryId: 'c-kr', createMissingDefinitions: true },
+        { user: { id: 'acc-1' } },
+      )
+
+      expect(result).toEqual({
+        updatedSystemCount: 2,
+        createdDefinitionCount: 1,
+        updatedSystemIds: ['ps-1st-rep', 'ps-junta'],
+      })
+      expect(createPosDef).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            title: '국가재건최고회의 의장',
+            positionType: 'HEAD_OF_STATE',
+            isGeneric: false,
+            scopes: {
+              create: { countryId: 'c-kr', historicalCountryId: null },
+            },
+          }),
+        }),
+      )
+      expect(updatePoliticalSystem).toHaveBeenCalledTimes(2)
+      expect(updatePoliticalSystem).toHaveBeenNthCalledWith(1, {
+        where: { id: 'ps-1st-rep' },
+        data: {
+          headOfStatePositionId: 'pos-global-pres',
+          headOfStateTitle: null,
+        },
+      })
+      expect(updatePoliticalSystem).toHaveBeenNthCalledWith(2, {
+        where: { id: 'ps-junta' },
+        data: {
+          headOfStatePositionId: 'pos-junta-created',
+          headOfStateTitle: null,
+        },
+      })
+    })
+
+    it('PersonPrismaRepository: prioritizes country-scoped position over global in resolveDefinitionForWrite, auto-binds unambiguous politicalSystemId on createCabinet, and clears stale PoliticalSystem title caches on updatePositionDefinition', async () => {
+      const createdCabinetSpy = jest.fn().mockImplementation(async ({ data }: any) => ({
+        id: 'cab-created',
+        ...data,
+        headTenure: null,
+      }))
+      const updateManyPoliticalSystem = jest.fn().mockResolvedValue({ count: 1 })
+
+      const prisma: any = {
+        country: { findUnique: jest.fn().mockResolvedValue({ id: 'c-jp' }) },
+        historicalCountry: { findUnique: jest.fn().mockResolvedValue(null) },
+        historicalCountryModernCountry: {
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+        governmentPositionDefinition: {
+          findMany: jest.fn().mockResolvedValue([
+            // 전역 '총리'가 배열 앞쪽에 먼저 반환되더라도 국가 전용 스코프 정의가 우선 선택되어야 함
+            {
+              id: 'pos-global-pm',
+              positionType: 'HEAD_OF_GOVERNMENT',
+              title: '총리',
+              isMonarchical: false,
+              isGeneric: false,
+              administrationDepartmentId: null,
+              militaryUnitId: null,
+              scopes: [],
+            },
+            {
+              id: 'pos-jp-pm',
+              positionType: 'HEAD_OF_GOVERNMENT',
+              title: '총리',
+              isMonarchical: false,
+              isGeneric: false,
+              administrationDepartmentId: null,
+              militaryUnitId: null,
+              scopes: [{ id: 'sc-jp' }],
+            },
+          ]),
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'pos-jp-pm',
+            title: '총리',
+            isGeneric: false,
+            positionType: 'HEAD_OF_GOVERNMENT',
+            isMonarchical: false,
+            categoryId: null,
+            administrationDepartmentId: null,
+            organizationId: null,
+            establishedDate: null,
+            abolishedDate: null,
+            administrationDepartment: null,
+            organization: null,
+            scopes: [],
+          }),
+          update: jest.fn().mockResolvedValue({
+            id: 'pos-jp-pm',
+            title: '내각총리대신',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            scopes: [],
+          }),
+        },
+        governmentPositionTenure: {
+          create: jest.fn().mockResolvedValue({ id: 'ten-1' }),
+          findUnique: jest.fn().mockImplementation(async ({ where }: any) => {
+            if (where.id === 'ten-1') {
+              return {
+                id: 'ten-1',
+                personId: 'p-ito',
+                countryId: 'c-jp',
+                historicalCountryId: null,
+                positionType: 'HEAD_OF_GOVERNMENT',
+                positionDefinitionId: 'pos-jp-pm',
+                startEra: 'AD',
+                startYear: 1960,
+                startMonth: 7,
+                startDay: 19,
+                positionDefinition: {
+                  id: 'pos-jp-pm',
+                  title: '총리',
+                  positionType: 'HEAD_OF_GOVERNMENT',
+                  isMonarchical: false,
+                },
+              }
+            }
+            return null
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
+        politicalSystem: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'ps-postwar-jp',
+              startEra: 'AD',
+              startYear: 1947,
+              startMonth: 5,
+              startDay: 3,
+              endEra: null,
+              endYear: null,
+              endMonth: null,
+              endDay: null,
+              isCurrent: true,
+            },
+          ]),
+          updateMany: updateManyPoliticalSystem,
+        },
+        cabinet: {
+          findMany: jest.fn().mockResolvedValue([]),
+          create: createdCabinetSpy,
+        },
+      }
+
+      const repo = new PersonPrismaRepository(prisma)
+
+      // 1) positionDefinitionId 없이 title='총리'만 보내도 일본 스코프 정의(pos-jp-pm)가 전역 정의보다 우선 매칭됨
+      await repo.addGovernmentPositionTenure({
+        personId: 'p-ito',
+        countryId: 'c-jp',
+        positionType: 'HEAD_OF_GOVERNMENT' as any,
+        title: '총리',
+        startDateInfo: { era: 'AD', year: 1960, month: 7, day: 19 },
+      } as any)
+      expect(prisma.governmentPositionTenure.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            positionDefinitionId: 'pos-jp-pm',
+          }),
+        }),
+      )
+
+      // 2) createCabinet 호출 시 politicalSystemId 미전달이면 출범일이 속한 단일 정체(ps-postwar-jp)가 자동 귀속됨
+      await repo.createCabinet(
+        {
+          headTenureId: 'ten-1',
+          name: '제1차 이케다 내각',
+        },
+        'acc-1',
+      )
+      expect(createdCabinetSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            politicalSystemId: 'ps-postwar-jp',
+          }),
+        }),
+      )
+
+      // 3) 관직 정의 명칭 변경 시 PoliticalSystem의 잔존 구 직함 캐시 정리
+      await repo.updatePositionDefinition('pos-jp-pm', {
+        title: '내각총리대신',
+      } as any)
+      expect(updateManyPoliticalSystem).toHaveBeenCalledTimes(2)
     })
   })
 })

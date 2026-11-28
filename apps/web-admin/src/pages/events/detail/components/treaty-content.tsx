@@ -1,13 +1,15 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiPlus, FiX } from 'react-icons/fi'
+import { FiArrowUpRight, FiPlus, FiX } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { ledgerAccent, ledgerHairlineStrong } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type TreatyTermDto, treatyApi } from '@/shared/api/treaty'
 import { richTextToMultilineText } from '@/shared/lib/rich-text-plain'
+import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { InlineText } from '@/shared/ui/inline-edit'
 import { notify } from '@/shared/ui/toast'
@@ -176,6 +178,46 @@ export function TreatyContent({ treatyId, summary, onChanged }: TreatyContentPro
           </AddButton>
         )}
       </Block>
+
+      {(treaty?.endedWarDeclarations?.length ?? 0) > 0 && (
+        <Block>
+          <BlockLabel>
+            종결한 교전 · 선전포고
+            <Count>{treaty!.endedWarDeclarations!.length}</Count>
+          </BlockLabel>
+          <EndedWarList>
+            {treaty!.endedWarDeclarations!.map((wd) => {
+              const decl =
+                wd.declaringHistoricalCountry ?? wd.declaringCountry
+              const targ = wd.targetHistoricalCountry ?? wd.targetCountry
+              const declId =
+                wd.declaringHistoricalCountryId ?? wd.declaringCountryId
+              const yr =
+                wd.declaredYear != null
+                  ? `${wd.declaredEra === 'BC' ? 'BC ' : ''}${wd.declaredYear}${wd.endedYear != null ? `~${wd.endedYear}` : ''}`
+                  : null
+              return (
+                <EndedWarChip
+                  key={wd.id}
+                  to={
+                    declId
+                      ? `${pathKeys.countryMilitary(declId)}?sub=declarations`
+                      : wd.warEvent && wd.warEvent.deletedAt == null
+                        ? pathKeys.events.detail(wd.warEvent.id)
+                        : '#'
+                  }
+                >
+                  <span>
+                    {decl?.name ?? '미상'} ──▶ {targ?.name ?? '미상'}
+                    {yr ? ` (${yr})` : ''}
+                  </span>
+                  <FiArrowUpRight size={12} aria-hidden />
+                </EndedWarChip>
+              )
+            })}
+          </EndedWarList>
+        </Block>
+      )}
     </Content>
   )
 }
@@ -495,5 +537,28 @@ const SaveButton = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
+  }
+`
+
+const EndedWarList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const EndedWarChip = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  text-decoration: none;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `

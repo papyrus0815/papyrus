@@ -849,9 +849,9 @@ export function WarDeclarationFlowPanel({
   if (declarations.length === 0 && milestones.length === 0) return null
 
   const summaryParts = [
-    declarations.length > 0 ? `선전포고 하위 사건 ${declarations.length}건` : null,
+    declarations.length > 0 ? `선전포고·개전 정본 ${declarations.length}건` : null,
     milestones.length > 0 ? `참전·이탈 시점 ${milestones.length}건` : null,
-    '나라를 누르면 그 나라로 거르고, 사건을 누르면 상세를 연다',
+    '나라를 누르면 그 나라로 거르고, 연결된 보조 사건이 있으면 상세를 연다',
   ].filter(Boolean)
 
   return (
@@ -863,29 +863,40 @@ export function WarDeclarationFlowPanel({
 
       {declarations.length > 0 && (
         <S.Scroll>
-          <S.Table aria-label="선전포고 하위 사건 시간순 목록">
+          <S.Table aria-label="선전포고·개전 시간순 목록">
             <thead>
               <tr>
                 <th scope="col">#</th>
                 <th scope="col">시점</th>
                 <th scope="col">선포국 ──▶ 대상국</th>
-                <th scope="col">선전포고 사건</th>
+                <th scope="col">개전 명분 · 보조 사건</th>
               </tr>
             </thead>
             <tbody>
-              {declarations.map((item) => {
-                const dimmed = isDimmed(visibleIds, item.eventId)
+              {declarations.map((item, idx) => {
+                const hasLinkedEvent = Boolean(item.eventId)
+                const dimmed = hasLinkedEvent && isDimmed(visibleIds, item.eventId)
                 return (
                   <S.ChecklistRow
-                    key={item.eventId}
-                    $hot={hotId === item.eventId}
+                    key={item.rowKey ?? `${item.eventId || idx}`}
+                    $hot={hasLinkedEvent && hotId === item.eventId}
                     style={dimmed ? { opacity: 0.42 } : undefined}
-                    onMouseEnter={() => onHover(item.eventId)}
-                    onMouseLeave={() => onHover(null)}
-                    onClick={() => onOpen(item.eventId)}
+                    onMouseEnter={() => {
+                      if (hasLinkedEvent) onHover(item.eventId)
+                    }}
+                    onMouseLeave={() => {
+                      if (hasLinkedEvent) onHover(null)
+                    }}
+                    onClick={() => {
+                      if (hasLinkedEvent) onOpen(item.eventId)
+                    }}
                   >
                     <td>
-                      <S.Muted>{numberById.get(item.eventId) ?? '—'}</S.Muted>
+                      <S.Muted>
+                        {hasLinkedEvent
+                          ? (numberById.get(item.eventId) ?? idx + 1)
+                          : idx + 1}
+                      </S.Muted>
                     </td>
                     <td style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                       {item.dateLabel}
@@ -975,16 +986,29 @@ export function WarDeclarationFlowPanel({
                       </span>
                     </td>
                     <td>
-                      <S.RowTitleButton
-                        type="button"
-                        style={{ whiteSpace: 'normal' }}
-                        onClick={(clickEvent) => {
-                          clickEvent.stopPropagation()
-                          onOpen(item.eventId)
-                        }}
-                      >
-                        {item.title}
-                      </S.RowTitleButton>
+                      {item.eventId ? (
+                        <S.RowTitleButton
+                          type="button"
+                          style={{ whiteSpace: 'normal' }}
+                          onClick={(clickEvent) => {
+                            clickEvent.stopPropagation()
+                            onOpen(item.eventId)
+                          }}
+                        >
+                          {item.title}
+                        </S.RowTitleButton>
+                      ) : (
+                        <span style={{ fontWeight: 600 }}>{item.title}</span>
+                      )}
+                      {(item.casusBelli || item.chamberVoteLabel) && (
+                        <div style={{ marginTop: 2, fontSize: 11.5 }}>
+                          <S.Muted>
+                            {[item.chamberVoteLabel, item.casusBelli]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </S.Muted>
+                        </div>
+                      )}
                     </td>
                   </S.ChecklistRow>
                 )

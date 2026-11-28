@@ -186,9 +186,10 @@ model GovernmentPositionDefinition {
   tenures             GovernmentPositionTenure[]
   treatySignatories TreatySignatory[]
 
-  /// 이 직함을 국가원수/정부수반으로 지정한 정체(政體)들
+  /// 이 직함을 국가원수/정부수반/군통수권자로 지정한 정체(政體)들
   politicalSystemsAsHeadOfState      PoliticalSystem[] @relation("PoliticalSystemHeadOfStatePosition")
   politicalSystemsAsHeadOfGovernment PoliticalSystem[] @relation("PoliticalSystemHeadOfGovernmentPosition")
+  politicalSystemsAsCommanderInChief PoliticalSystem[] @relation("PoliticalSystemCommanderInChiefPosition")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -333,6 +334,7 @@ model Cabinet {
   memberTenures     GovernmentPositionTenure[] @relation("CabinetMembers")
   account           Account?                  @relation("AccountCabinets", fields: [accountId], references: [id], onDelete: SetNull)
   treatySignatories TreatySignatory[]         @relation("TreatySignatoryCabinet")
+  warDeclarations   WarDeclaration[]          @relation("WarDeclarationCabinet")
   /// 연정·여당 등 이 행정부를 지지한 정당(행정부 단위 기록)
   politicalParties  CabinetPoliticalParty[]   @relation("CabinetPoliticalParties")
   /// 이 행정부가 관여한 사건들 (N:M)
@@ -342,6 +344,10 @@ model Cabinet {
   linkageGroupId String?              @map("linkage_group_id") @db.Char(36)
   linkageGroup   CabinetLinkageGroup? @relation(fields: [linkageGroupId], references: [id], onDelete: SetNull)
 
+  /// 명시적으로 귀속 지정한 정체·헌정 체제 (비어 있으면 출범일·국가로 자동 판정, 과도내각·개헌기 오버라이드용)
+  politicalSystemId String?          @map("political_system_id") @db.Char(36)
+  politicalSystem   PoliticalSystem? @relation("CabinetPoliticalSystem", fields: [politicalSystemId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -350,6 +356,7 @@ model Cabinet {
   @@index([historicalCountryId], name: "idx_cabinet_historicalCountryId")
   @@index([accountId], name: "idx_cabinet_accountId")
   @@index([linkageGroupId], name: "idx_cabinet_linkageGroupId")
+  @@index([politicalSystemId], name: "idx_cabinet_politicalSystemId")
   @@map("cabinet")
 }
 
@@ -571,11 +578,16 @@ model GovernmentPositionTenure {
   militaryUnit             MilitaryUnit?                @relation("TenureMilitaryUnit", fields: [militaryUnitId], references: [id], onDelete: SetNull)
   party                    PoliticalParty?              @relation("TenurePoliticalParty", fields: [partyId], references: [id], onDelete: SetNull)
   treatySignatories        TreatySignatory[]            @relation("TreatySignatoryTenure")
+  warDeclarations          WarDeclaration[]             @relation("WarDeclarationDecidedByTenure")
 
 
   /// 이 공직 임기가 특정 선거의 당선으로 시작된 경우(대통령·국회의원 등). 1:1.
   electionCandidacyId String? @unique @map("election_candidacy_id") @db.Char(36)
   electionCandidacy   ElectionCandidacy? @relation("TenureFromElectionCandidacy", fields: [electionCandidacyId], references: [id], onDelete: SetNull)
+
+  /// 의회의원(LEGISLATOR)일 때 어느 원(상원·하원·단원) 소속인가
+  chamberId String?  @map("chamber_id") @db.Char(36)
+  chamber   Chamber? @relation("TenureChamber", fields: [chamberId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -592,6 +604,7 @@ model GovernmentPositionTenure {
   @@index([militaryUnitId], name: "idx_gov_tenure_militaryUnitId")
   @@index([partyId], name: "idx_gov_tenure_partyId")
   @@index([accessionEventId], name: "idx_gov_tenure_accessionEventId")
+  @@index([chamberId], name: "idx_gov_tenure_chamberId")
   @@index([startKey, endKey], name: "idx_gov_tenure_period_key")
   @@index([polityId], name: "idx_gov_tenure_polityId")
   @@unique([polityId, scopeEntityKey, positionDefinitionId, ordinal, subTermKey], map: "uq_gov_tenure_polity_def_ordinal")

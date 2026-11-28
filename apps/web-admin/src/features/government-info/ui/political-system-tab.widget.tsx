@@ -2,34 +2,49 @@ import { useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  FiAlertTriangle,
   FiArrowRight,
   FiBookOpen,
+  FiCheckSquare,
+  FiChevronDown,
+  FiChevronUp,
   FiEdit2,
+  FiFileText,
+  FiFlag,
+  FiLink,
   FiPlus,
   FiTrash2,
   FiUserPlus,
   FiUsers,
 } from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
   usePoliticalSystems,
   useCreatePoliticalSystem,
   useDeletePoliticalSystem,
+  usePromotePoliticalSystemHeadPositions,
   useUpdatePoliticalSystem,
   type PoliticalSystem,
 } from '@/entities/political-system/api'
 import {
   comparePoliticalSystems,
+  diagnosePoliticalSystemsIntegrity,
+  ELECTORAL_SYSTEM_TYPE_LABEL,
+  findPoliticalSystemAtDate,
   formatPeriod,
   GOVERNMENT_FORM_LABEL,
+  HEAD_SELECTION_METHOD_LABEL,
   headOfGovernmentTitleOf,
   headOfStateTitleOf,
   LEGISLATURE_TYPE_LABEL,
   PARTY_SYSTEM_LABEL,
   primaryHouseLabel,
   STATE_STRUCTURE_LABEL,
+  WAR_POWER_AUTHORITY_LABEL,
 } from '@/entities/political-system/model/political-system'
+import { getElections } from '@/shared/api/election'
 import {
   DIGIT_DISPLAY,
   ledgerHairline,
@@ -48,9 +63,10 @@ import {
   shouldHideCabinetFromExecutiveTimeline,
 } from '@/shared/lib/ministry-department/department-cabinet-matcher'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { pathKeys } from '@/shared/router'
 import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import { getSignedDateChronologyKey } from '@/shared/lib/tenure-person-utils'
-import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
@@ -73,11 +89,45 @@ function yearLabelOf(era: 'BC' | 'AD' | null, year: number | null): string | nul
   return era === 'BC' ? `기원전 ${year}` : String(year)
 }
 
+function buildSystemStartDateHint(system: PoliticalSystem): string | null {
+  if (system.startYear == null) return null
+  const prefix = system.startEra === 'BC' ? '-' : ''
+  const yearPart =
+    system.startEra === 'BC'
+      ? String(system.startYear)
+      : String(system.startYear).padStart(4, '0')
+  const monthPart =
+    system.startMonth != null
+      ? `-${String(system.startMonth).padStart(2, '0')}`
+      : ''
+  const dayPart =
+    system.startMonth != null && system.startDay != null
+      ? `-${String(system.startDay).padStart(2, '0')}`
+      : ''
+  return `${prefix}${yearPart}${monthPart}${dayPart}`
+}
+
+function isMonarchicalStateSlot(system: PoliticalSystem, title: string): boolean {
+  if (system.headOfStatePosition?.isMonarchical === true) return true
+  if (system.headOfStatePosition?.isMonarchical === false) return false
+  if (
+    system.governmentForm === 'ABSOLUTE_MONARCHY' ||
+    system.governmentForm === 'CONSTITUTIONAL_MONARCHY'
+  ) {
+    return true
+  }
+  return /국왕|여왕|황제|천황|대공|술탄|차르|샤|파라오|칸|군주|태왕|가한/i.test(
+    title,
+  )
+}
+
 interface HeadRegisterTarget {
   positionId: string | null
   positionTitle: string
   positionType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
   historicalCountryId: string | null
+  isMonarchical?: boolean
+  initialStartDate?: string | null
 }
 
 interface Props {
@@ -89,6 +139,8 @@ interface Props {
   countryName?: string
   /** 해당 헌정 체제 시기의 역대 내각 목록으로 이동 */
   onOpenCabinetsByRegime?: (regimeId: string) => void
+  /** 해당 헌정 체제 소속으로 행정부·내각 등록 모달 열기 */
+  onRegisterCabinetForRegime?: (regimeId: string) => void
 }
 
 /**
@@ -99,8 +151,11 @@ export function PoliticalSystemTab({
   historicalCountryId,
   countryName,
   onOpenCabinetsByRegime,
+  onRegisterCabinetForRegime,
 }: Props) {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const routeCountryId = countryId ?? historicalCountryId ?? ''
   const isHistoricalPolity = Boolean(historicalCountryId)
   const scope = {
     countryId,
@@ -111,14 +166,33 @@ export function PoliticalSystemTab({
   const createMutation = useCreatePoliticalSystem()
   const updateMutation = useUpdatePoliticalSystem()
   const deleteMutation = useDeletePoliticalSystem()
+  const promoteHeadsMutation = usePromotePoliticalSystemHeadPositions()
 
   const [editing, setEditing] = useState<PoliticalSystem | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [polityFilterId, setPolityFilterId] = useState<string>('ALL')
+  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false)
   const [headRegisterTarget, setHeadRegisterTarget] =
     useState<HeadRegisterTarget | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [registerPersonId, setRegisterPersonId] = useState<string | null>(null)
+
+  const electionsQuery = useQuery({
+    queryKey: [
+      'elections-for-system-diagnostics',
+      countryId ?? '',
+      historicalCountryId ?? '',
+    ],
+    queryFn: () =>
+      typeof getElections === 'function'
+        ? getElections({
+            countryId: countryId || undefined,
+            historicalCountryId: historicalCountryId || undefined,
+          })
+        : Promise.resolve([]),
+    enabled: Boolean(countryId || historicalCountryId),
+    staleTime: 60_000,
+  })
 
   const tenuresQuery = useQuery({
     queryKey: [
@@ -249,6 +323,59 @@ export function PoliticalSystemTab({
     return resultMap
   }, [allSystems, cabinetsQuery.data])
 
+  const matchedElectionsBySystemId = useMemo(() => {
+    const resultMap = new Map<
+      string,
+      { count: number; previewTitles: string[]; extraCount: number }
+    >()
+    const rawElections = electionsQuery.data ?? []
+    if (rawElections.length === 0 || allSystems.length === 0) return resultMap
+
+    const sortedElections = [...rawElections].sort((left, right) =>
+      String(left.pollDate ?? '').localeCompare(String(right.pollDate ?? '')),
+    )
+
+    const grouped = new Map<string, string[]>()
+    for (const elItem of sortedElections) {
+      const matchedSys = findPoliticalSystemAtDate(allSystems, {
+        countryId: elItem.countryId,
+        historicalCountryId: elItem.historicalCountryId,
+        isoDate: elItem.pollDate,
+        fallbackToCurrent: false,
+      })
+      if (!matchedSys) continue
+      const titles = grouped.get(matchedSys.id) ?? []
+      const label = (elItem.shortName ?? elItem.name ?? '').trim()
+      if (label && !titles.includes(label)) {
+        titles.push(label)
+      } else if (!label) {
+        titles.push(elItem.id)
+      }
+      grouped.set(matchedSys.id, titles)
+    }
+
+    for (const sysItem of allSystems) {
+      const matchingCount = sortedElections.filter((elItem) => {
+        const matchedSys = findPoliticalSystemAtDate(allSystems, {
+          countryId: elItem.countryId,
+          historicalCountryId: elItem.historicalCountryId,
+          isoDate: elItem.pollDate,
+          fallbackToCurrent: false,
+        })
+        return matchedSys?.id === sysItem.id
+      }).length
+      if (matchingCount === 0) continue
+      const distinctTitles = grouped.get(sysItem.id) ?? []
+      resultMap.set(sysItem.id, {
+        count: matchingCount,
+        previewTitles: distinctTitles.slice(0, 2),
+        extraCount: Math.max(0, matchingCount - Math.min(distinctTitles.length, 2)),
+      })
+    }
+
+    return resultMap
+  }, [allSystems, electionsQuery.data])
+
   const systems = useMemo(() => {
     if (polityFilterId === 'ALL') return allSystems
     if (polityFilterId === '__MODERN__') {
@@ -263,6 +390,64 @@ export function PoliticalSystemTab({
     () => allSystems.find((sysItem) => sysItem.isCurrent) ?? null,
     [allSystems],
   )
+
+  const integrityIssues = useMemo(
+    () =>
+      diagnosePoliticalSystemsIntegrity({
+        systems: allSystems,
+        electionDates: (electionsQuery.data ?? []).map((el) => ({
+          id: el.id,
+          name: el.name,
+          pollDate: el.pollDate,
+          countryId: el.countryId,
+          historicalCountryId: el.historicalCountryId,
+        })),
+        cabinetDates: (cabinetsQuery.data ?? [])
+          .filter(
+            (cab) =>
+              !shouldHideCabinetFromExecutiveTimeline(cab.headTenure, cab),
+          )
+          .map((cab) => ({
+            id: cab.id,
+            name: cab.name,
+            politicalSystemId: (cab as { politicalSystemId?: string | null })
+              .politicalSystemId,
+            startDate: resolveCabinetEffectiveDates(cab).startDate,
+            countryId: cab.countryId,
+            historicalCountryId:
+              cab.historicalCountryId ?? cab.headTenure?.historicalCountryId,
+          })),
+      }),
+    [allSystems, electionsQuery.data, cabinetsQuery.data],
+  )
+
+  const hasUnlinkedHeadPositions = useMemo(
+    () => integrityIssues.some((issue) => issue.kind === 'UNLINKED_HEAD_POSITION'),
+    [integrityIssues],
+  )
+
+  const handleBatchPromoteHeadPositions = async () => {
+    try {
+      const result = await promoteHeadsMutation.mutateAsync({
+        countryId: countryId ?? null,
+        historicalCountryId: historicalCountryId ?? null,
+        createMissingDefinitions: true,
+      })
+      if (result.updatedSystemCount > 0) {
+        notify.success(
+          `수기 수반 직함 ${result.updatedSystemCount}개 체제를 관직 카탈로그 정본에 연결했습니다.${
+            result.createdDefinitionCount > 0
+              ? ` (신규 직위 ${result.createdDefinitionCount}건 생성)`
+              : ''
+          }`,
+        )
+      } else {
+        notify.info('연결할 미연결 수기 수반 직함이 없습니다.')
+      }
+    } catch {
+      notify.error('수기 수반 직함 일괄 연결에 실패했습니다.')
+    }
+  }
 
   const openCreate = () => {
     setEditing(null)
@@ -336,8 +521,99 @@ export function PoliticalSystemTab({
         </PrimaryActionButton>
       </ToolbarSurface>
 
+      {integrityIssues.length > 0 ? (
+        <DiagnosticsSurface aria-label="헌정 연표 정합성 진단">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <DiagnosticsHeaderBtn
+              type="button"
+              onClick={() => setDiagnosticsExpanded((prev) => !prev)}
+              aria-expanded={diagnosticsExpanded}
+              style={{ flex: 1, minWidth: 220 }}
+            >
+              <span className="title-group">
+                <FiAlertTriangle size={13.5} aria-hidden />
+                <strong>헌정 연표 점검 {integrityIssues.length}건</strong>
+                <span className="sub">
+                  {integrityIssues[0]?.title}
+                  {integrityIssues.length > 1
+                    ? ` 외 ${integrityIssues.length - 1}건`
+                    : ''}
+                </span>
+              </span>
+              {diagnosticsExpanded ? (
+                <FiChevronUp size={14} aria-hidden />
+              ) : (
+                <FiChevronDown size={14} aria-hidden />
+              )}
+            </DiagnosticsHeaderBtn>
+            {hasUnlinkedHeadPositions ? (
+              <DiagnosticsFixBtn
+                type="button"
+                disabled={promoteHeadsMutation.isPending}
+                onClick={() => void handleBatchPromoteHeadPositions()}
+                style={{ marginRight: 10 }}
+              >
+                <FiLink size={12} aria-hidden style={{ marginRight: 4 }} />
+                {promoteHeadsMutation.isPending
+                  ? '카탈로그 연결 중…'
+                  : '미연결 수반 직함 일괄 연결'}
+              </DiagnosticsFixBtn>
+            ) : null}
+          </div>
+          {diagnosticsExpanded ? (
+            <DiagnosticsList>
+              {integrityIssues.map((issue, idx) => {
+                const targetSys = issue.systemIds?.[0]
+                  ? allSystems.find((sys) => sys.id === issue.systemIds![0])
+                  : null
+                return (
+                  <DiagnosticsItem key={`${issue.kind}-${idx}`} $severity={issue.severity}>
+                    <div className="body">
+                      <strong>{issue.title}</strong>
+                      <span>{issue.detail}</span>
+                    </div>
+                    <div style={{ display: 'inline-flex', gap: 6, flexShrink: 0 }}>
+                      {issue.kind === 'UNLINKED_HEAD_POSITION' ? (
+                        <DiagnosticsFixBtn
+                          type="button"
+                          disabled={promoteHeadsMutation.isPending}
+                          onClick={() => void handleBatchPromoteHeadPositions()}
+                        >
+                          일괄 카탈로그 연결
+                        </DiagnosticsFixBtn>
+                      ) : null}
+                      {targetSys ? (
+                        <DiagnosticsFixBtn
+                          type="button"
+                          onClick={() => openEdit(targetSys)}
+                        >
+                          체제 수정
+                        </DiagnosticsFixBtn>
+                      ) : null}
+                    </div>
+                  </DiagnosticsItem>
+                )
+              })}
+            </DiagnosticsList>
+          ) : null}
+        </DiagnosticsSurface>
+      ) : null}
+
       {query.isLoading ? (
-        <ChartSkeleton variant="bars" rows={4} />
+        <LedgerTableSkeleton
+          rows={5}
+          columns={4}
+          showToolbar={false}
+          label="정체·헌정 체제를 불러오는 중"
+        />
       ) : systems.length === 0 ? (
         <EmptyCard>
           <EmptyIconCircle>
@@ -375,6 +651,7 @@ export function PoliticalSystemTab({
               : '헌정 체제'
             const displayName = system.name || fallbackTitle
             const matchedInfo = matchedCabinetsBySystemId.get(system.id)
+            const matchedElections = matchedElectionsBySystemId.get(system.id)
             const startLabel = yearLabelOf(system.startEra, system.startYear)
             const endLabel =
               yearLabelOf(system.endEra, system.endYear) ??
@@ -382,11 +659,30 @@ export function PoliticalSystemTab({
             /* muted = 값 뒤 옅은 꼬리(' (상징)' · ' · 466석') — 구분 기호까지 담는다 */
             const facts: Array<{ key: string; label: string; value: string; muted?: string }> = []
             if (hos) {
+              const hosMutedParts: string[] = []
+              if (system.headOfStateHasPower === false) hosMutedParts.push('상징')
+              if (system.headSelectionMethod) {
+                hosMutedParts.push(
+                  HEAD_SELECTION_METHOD_LABEL[system.headSelectionMethod],
+                )
+              }
+              if (system.headOfStateTermYears != null) {
+                const limitStr =
+                  system.headOfStateTermLimit === 1
+                    ? ' 단임'
+                    : system.headOfStateTermLimit != null
+                      ? ` 최대 ${system.headOfStateTermLimit}임`
+                      : ''
+                hosMutedParts.push(`${system.headOfStateTermYears}년${limitStr}`)
+              }
               facts.push({
                 key: 'hos',
                 label: isDistinctDual ? '국가원수' : '국가원수 · 정부수반',
                 value: hos,
-                muted: system.headOfStateHasPower === false ? ' (상징)' : undefined,
+                muted:
+                  hosMutedParts.length > 0
+                    ? ` (${hosMutedParts.join(' · ')})`
+                    : undefined,
               })
             }
             if (hog && (!hos || isDistinctDual)) {
@@ -398,25 +694,84 @@ export function PoliticalSystemTab({
               })
             }
             if (system.lowerHouseName) {
+              const lowerMetaParts: string[] = []
+              if (system.lowerHouseSeats != null) {
+                lowerMetaParts.push(
+                  `${system.lowerHouseSeats.toLocaleString()}석`,
+                )
+              }
+              if (system.lowerHouseTermYears != null) {
+                lowerMetaParts.push(`임기 ${system.lowerHouseTermYears}년`)
+              }
+              if (system.electoralSystem) {
+                lowerMetaParts.push(
+                  ELECTORAL_SYSTEM_TYPE_LABEL[system.electoralSystem],
+                )
+              }
+              if (system.electoralThresholdPercent != null) {
+                lowerMetaParts.push(
+                  `봉쇄 ${system.electoralThresholdPercent}%`,
+                )
+              }
               facts.push({
                 key: 'lower',
                 label: primaryHouseLabel(system.legislatureType),
                 value: system.lowerHouseName,
                 muted:
-                  system.lowerHouseSeats != null
-                    ? ` · ${system.lowerHouseSeats.toLocaleString()}석`
+                  lowerMetaParts.length > 0
+                    ? ` · ${lowerMetaParts.join(' · ')}`
                     : undefined,
               })
             }
             if (system.legislatureType === 'BICAMERAL' && system.upperHouseName) {
+              const upperMetaParts: string[] = []
+              if (system.upperHouseSeats != null) {
+                upperMetaParts.push(
+                  `${system.upperHouseSeats.toLocaleString()}석`,
+                )
+              }
+              if (system.upperHouseTermYears != null) {
+                upperMetaParts.push(`임기 ${system.upperHouseTermYears}년`)
+              }
               facts.push({
                 key: 'upper',
                 label: '상원',
                 value: system.upperHouseName,
                 muted:
-                  system.upperHouseSeats != null
-                    ? ` · ${system.upperHouseSeats.toLocaleString()}석`
+                  upperMetaParts.length > 0
+                    ? ` · ${upperMetaParts.join(' · ')}`
                     : undefined,
+              })
+            }
+            if (
+              system.warPowerAuthority ||
+              system.commanderInChiefPosition ||
+              system.warPowerNotes
+            ) {
+              const primaryWarLabel = system.warPowerAuthority
+                ? WAR_POWER_AUTHORITY_LABEL[system.warPowerAuthority]
+                : system.commanderInChiefPosition
+                  ? `통수권: ${system.commanderInChiefPosition.title}`
+                  : '헌법 단서'
+              const warTail: string[] = []
+              if (
+                system.warPowerAuthority &&
+                system.commanderInChiefPosition?.title
+              ) {
+                warTail.push(`통수권 ${system.commanderInChiefPosition.title}`)
+              }
+              if (system.warConsentChamber?.name) {
+                warTail.push(`${system.warConsentChamber.name} 동의`)
+              }
+              if (system.warPowerNotes?.trim()) {
+                warTail.push(system.warPowerNotes.trim())
+              }
+              facts.push({
+                key: 'warPower',
+                label: '개전 · 통수권',
+                value: primaryWarLabel,
+                muted:
+                  warTail.length > 0 ? ` (${warTail.join(' · ')})` : undefined,
               })
             }
             const tags = [
@@ -434,7 +789,17 @@ export function PoliticalSystemTab({
                 : null,
             ].filter((tagItem): tagItem is NonNullable<typeof tagItem> => tagItem != null)
             const hasCabinets = Boolean(matchedInfo && matchedInfo.count > 0)
-            const hasProse = Boolean(system.notes) || hasCabinets
+            const hasElections = Boolean(
+              matchedElections && matchedElections.count > 0,
+            )
+            const hasBasisLinks = Boolean(
+              system.constitutionLaw || system.foundingEvent,
+            )
+            const hasProse =
+              Boolean(system.notes) ||
+              hasCabinets ||
+              hasElections ||
+              hasBasisLinks
             const showPolity =
               (historicalCountryId == null ||
                 system.historicalCountryId !== historicalCountryId) &&
@@ -494,6 +859,46 @@ export function PoliticalSystemTab({
 
                   {hasProse ? (
                     <RegimeProse>
+                      {hasBasisLinks ? (
+                        <BasisLinkRow aria-label="헌정 근거 및 출범 사건">
+                          {system.constitutionLaw ? (
+                            <BasisLinkChip
+                              type="button"
+                              onClick={() => {
+                                const targetCountryId =
+                                  system.historicalCountryId ??
+                                  routeCountryId
+                                if (!targetCountryId) return
+                                navigate(
+                                  `${pathKeys.countryLaws(targetCountryId)}?lawId=${encodeURIComponent(system.constitutionLaw!.id)}`,
+                                )
+                              }}
+                              title="법령 탭에서 이 근거 헌법 보기"
+                            >
+                              <FiFileText size={12} aria-hidden />
+                              <span className="kicker">근거 헌법</span>
+                              <strong>{system.constitutionLaw.name}</strong>
+                            </BasisLinkChip>
+                          ) : null}
+                          {system.foundingEvent ? (
+                            <BasisLinkChip
+                              type="button"
+                              onClick={() =>
+                                navigate(
+                                  pathKeys.events.detail(
+                                    system.foundingEvent!.id,
+                                  ),
+                                )
+                              }
+                              title="출범 계기 사건 상세 보기"
+                            >
+                              <FiFlag size={12} aria-hidden />
+                              <span className="kicker">출범 사건</span>
+                              <strong>{system.foundingEvent.title}</strong>
+                            </BasisLinkChip>
+                          ) : null}
+                        </BasisLinkRow>
+                      ) : null}
                       {system.notes ? <Notes>{system.notes}</Notes> : null}
                       {matchedInfo && hasCabinets ? (
                         <CabinetLine>
@@ -521,6 +926,42 @@ export function PoliticalSystemTab({
                           ) : null}
                         </CabinetLine>
                       ) : null}
+                      {matchedElections && hasElections ? (
+                        <CabinetLine>
+                          <FiCheckSquare size={12.5} aria-hidden />
+                          <span className="names">
+                            {matchedElections.previewTitles.length > 0 ? (
+                              <>
+                                <strong>
+                                  {matchedElections.previewTitles.join(' · ')}
+                                </strong>
+                                {matchedElections.extraCount > 0
+                                  ? ` 외 ${matchedElections.extraCount}건`
+                                  : ''}
+                              </>
+                            ) : (
+                              `치러진 선거 ${matchedElections.count}건`
+                            )}
+                          </span>
+                          <CabinetLinkBtn
+                            type="button"
+                            onClick={() => {
+                              const targetCountryId =
+                                system.historicalCountryId &&
+                                !countryId
+                                  ? system.historicalCountryId
+                                  : routeCountryId
+                              if (!targetCountryId) return
+                              navigate(
+                                `${pathKeys.countryElections(targetCountryId)}?regimeId=${encodeURIComponent(system.id)}`,
+                              )
+                            }}
+                          >
+                            치러진 선거 {matchedElections.count}건
+                            <FiArrowRight size={12} aria-hidden />
+                          </CabinetLinkBtn>
+                        </CabinetLine>
+                      ) : null}
                     </RegimeProse>
                   ) : null}
 
@@ -528,7 +969,7 @@ export function PoliticalSystemTab({
                     <GovMorePopover
                       triggerSize="sm"
                       ariaLabel={`${displayName} 관리 메뉴`}
-                      title="체제 수정 · 수장 등록 · 삭제"
+                      title="체제 수정 · 수장·내각 등록 · 삭제"
                       actions={[
                         {
                           key: 'edit-system',
@@ -536,6 +977,25 @@ export function PoliticalSystemTab({
                           icon: <FiEdit2 size={13.5} />,
                           onClick: () => openEdit(system),
                         },
+                        ...(system.governmentForm !== 'ABSOLUTE_MONARCHY'
+                          ? [
+                              {
+                                key: 'register-cabinet',
+                                label: '이 체제 행정부·내각 등록',
+                                icon: <FiUsers size={13.5} />,
+                                onClick: () => {
+                                  if (onRegisterCabinetForRegime) {
+                                    onRegisterCabinetForRegime(system.id)
+                                    return
+                                  }
+                                  if (!routeCountryId) return
+                                  navigate(
+                                    `${pathKeys.countryGovernment(routeCountryId)}?regimeId=${encodeURIComponent(system.id)}&createCabinet=1`,
+                                  )
+                                },
+                              },
+                            ]
+                          : []),
                         ...(hos
                           ? [
                               {
@@ -548,6 +1008,12 @@ export function PoliticalSystemTab({
                                     positionTitle: hos,
                                     positionType: 'HEAD_OF_STATE' as const,
                                     historicalCountryId: system.historicalCountryId ?? null,
+                                    isMonarchical: isMonarchicalStateSlot(
+                                      system,
+                                      hos,
+                                    ),
+                                    initialStartDate:
+                                      buildSystemStartDateHint(system),
                                   }),
                               },
                             ]
@@ -564,6 +1030,9 @@ export function PoliticalSystemTab({
                                     positionTitle: hog,
                                     positionType: 'HEAD_OF_GOVERNMENT' as const,
                                     historicalCountryId: system.historicalCountryId ?? null,
+                                    isMonarchical: false,
+                                    initialStartDate:
+                                      buildSystemStartDateHint(system),
                                   }),
                               },
                             ]
@@ -587,7 +1056,12 @@ export function PoliticalSystemTab({
         </RegimeList>
       )}
 
-      <ChamberCatalogSection countryId={countryId} historicalCountryId={historicalCountryId} />
+      <ChamberCatalogSection
+        countryId={countryId}
+        historicalCountryId={historicalCountryId}
+        countryName={countryName}
+        defaultLegislatureType={currentSystem?.legislatureType ?? null}
+      />
 
       <PoliticalSystemFormModal
         open={formOpen}
@@ -655,6 +1129,8 @@ export function PoliticalSystemTab({
               positionTitle: hog,
               positionType: 'HEAD_OF_GOVERNMENT',
               historicalCountryId: saved.historicalCountryId ?? null,
+              isMonarchical: false,
+              initialStartDate: buildSystemStartDateHint(saved),
             })
           } else if (
             hos &&
@@ -668,6 +1144,8 @@ export function PoliticalSystemTab({
               positionTitle: hos,
               positionType: 'HEAD_OF_STATE',
               historicalCountryId: saved.historicalCountryId ?? null,
+              isMonarchical: isMonarchicalStateSlot(saved, hos),
+              initialStartDate: buildSystemStartDateHint(saved),
             })
           } else {
             notify.success(
@@ -722,6 +1200,13 @@ export function PoliticalSystemTab({
           initialPositionDefinitionId={headRegisterTarget.positionId}
           initialPositionTitle={headRegisterTarget.positionTitle}
           initialPositionType={headRegisterTarget.positionType}
+          initialStartDate={headRegisterTarget.initialStartDate ?? null}
+          defaultMonarchical={Boolean(headRegisterTarget.isMonarchical)}
+          defaultDefinitionTitle={
+            headRegisterTarget.isMonarchical
+              ? headRegisterTarget.positionTitle
+              : undefined
+          }
         />
       )}
     </TabWrap>
@@ -1199,5 +1684,145 @@ const CabinetLinkBtn = styled.button`
     outline: 2px solid ${({ theme }) => theme.colors.primary};
     outline-offset: 2px;
     border-radius: 4px;
+  }
+`
+
+const BasisLinkRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+const BasisLinkChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.035)' : '#f8fafc'};
+  font: inherit;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    color 0.14s ease;
+
+  .kicker {
+    font-size: 11px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+  }
+`
+
+const DiagnosticsSurface = styled.div`
+  border-radius: 10px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.35)'
+        : 'rgba(217, 119, 6, 0.3)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(245, 158, 11, 0.08)'
+      : 'rgba(254, 243, 199, 0.5)'};
+  overflow: hidden;
+`
+
+const DiagnosticsHeaderBtn = styled.button`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#fbbf24' : '#92400e'};
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+
+  .title-group {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .sub {
+    color: ${({ theme }) => theme.colors.text.secondary};
+    font-size: 12px;
+  }
+`
+
+const DiagnosticsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px 10px;
+`
+
+const DiagnosticsItem = styled.div<{ $severity: 'warning' | 'info' }>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.78)'};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 12px;
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  strong {
+    font-weight: 700;
+    color: ${({ theme, $severity }) =>
+      $severity === 'warning'
+        ? theme.mode === 'dark'
+          ? '#fbbf24'
+          : '#b45309'
+        : theme.colors.text.primary};
+  }
+  span {
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const DiagnosticsFixBtn = styled.button`
+  flex-shrink: 0;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
   }
 `

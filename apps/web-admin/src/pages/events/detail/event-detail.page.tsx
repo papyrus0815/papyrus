@@ -433,8 +433,13 @@ function EventDetailContent({
    */
   const features = eventTypeFeatures(event.type, event.domain)
   const promoteTreaties = features.promoteTreaties
-  /* 선전포고 — 선전포고(WAR_DECLARATION) 사건이면 선포국·대상국 구도 보드를 세운다 */
-  const showWarDeclaration = features.expectWarDeclaration
+  /* 선전포고 — 선전포고(WAR_DECLARATION)·전쟁(WAR) 사건이거나 국가 정본 선전포고/최후통첩 결과가 걸려 있으면 보드를 세운다 */
+  const showWarDeclaration =
+    features.expectWarDeclaration ||
+    event.type === 'WAR' ||
+    (event.warDeclarations?.length ?? 0) > 0 ||
+    (event.warDeclarationsInWar?.length ?? 0) > 0 ||
+    (event.warDeclarationsFromUltimatum?.length ?? 0) > 0
   /* 국가 성립·소멸 — 역할(건국·멸망)이 있으면 늘, 건국/멸망 사건이면 비어 있어도 보인다 */
   const showStatehood = features.expectStatehood || statehoodEntries(event).length > 0
   /* 영토 이전 — 줄이 있으면 늘, 영토 변경 사건이면 비어 있어도 보인다(같은 캐시를 섹션도 읽는다) */
@@ -478,7 +483,10 @@ function EventDetailContent({
     ((event.treaties?.length ?? 0) > 0 || overviewTreatyOpened || pinned.has('treaties'))
   const hasWarDeclarationParticipants =
     showWarDeclaration &&
-    ((event.relatedCountries?.length ?? 0) > 0 ||
+    ((event.warDeclarations?.length ?? 0) > 0 ||
+      (event.warDeclarationsInWar?.length ?? 0) > 0 ||
+      (event.warDeclarationsFromUltimatum?.length ?? 0) > 0 ||
+      (event.relatedCountries?.length ?? 0) > 0 ||
       (event.relatedHistoricalCountries?.length ?? 0) > 0)
   /** 개요 탭이 통째로 비어 있을 때 — 여러 빈 섹션 대신 단일 Empty State만 세운다 */
   const isOverviewTabEmpty =
@@ -838,7 +846,7 @@ function EventDetailContent({
         items.push({ id: 'module-cabinets', label: '관련 행정부' })
       if (showStatehood) items.push({ id: 'statehood', label: '성립·소멸' })
       if (showTerritory) items.push({ id: 'territory', label: '영토 이전' })
-      if (showPower) items.push({ id: 'power', label: '권력 교체·선거' })
+      if (showPower) items.push({ id: 'power', label: '권력 교체·헌정·선거' })
     }
 
     if (!isModulesTabEmpty) {

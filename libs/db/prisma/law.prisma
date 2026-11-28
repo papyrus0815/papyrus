@@ -82,23 +82,34 @@ model Law {
   lawTypeId           String? @map("law_type_id") @db.Char(36)
   countryId           String? @map("country_id") @db.Char(36)
   historicalCountryId String? @map("historical_country_id") @db.Char(36)
+  /// 의결·가결한 의회 원 (Chamber, 선택 — 제헌국회·하원·상원 등)
+  passedChamberId     String? @map("passed_chamber_id") @db.Char(36)
+
+  /// 표결 기록 (선택 — 찬성·반대·기권 의석 수)
+  yeas        Int? @map("yeas")
+  nays        Int? @map("nays")
+  abstentions Int? @map("abstentions")
 
   //--- 관계 필드
-  facilities CompanyFacilityLaw[]
-  lawType    LawType?             @relation(fields: [lawTypeId], references: [id], onDelete: SetNull)
-  country    Country?             @relation(fields: [countryId], references: [id], onDelete: SetNull)
-  historicalCountry HistoricalCountry? @relation("LawHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  facilities        CompanyFacilityLaw[]
+  lawType           LawType?             @relation(fields: [lawTypeId], references: [id], onDelete: SetNull)
+  country           Country?             @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry HistoricalCountry?   @relation("LawHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  passedChamber     Chamber?             @relation("LawPassedChamber", fields: [passedChamberId], references: [id], onDelete: SetNull)
   /// 정당과의 연결 (`politics.prisma` PoliticalPartyLaw)
   politicalPartyLaws PoliticalPartyLaw[] @relation("PoliticalPartyLawLink")
   /// 정당 법적 지위의 근거 법령
   politicalPartyLegalStatuses PoliticalPartyLegalStatus[] @relation("PoliticalPartyLegalStatusLaw")
   /// 이 법령·명령이 제정·적용·위반된 역사적 사건 연결
   eventContextLinks  EventContextLink[]  @relation("EventContextLaw")
+  /// 이 법령(헌법·기본법)을 기본 규범으로 삼는 정체·헌정 체제들
+  politicalSystemsAsConstitution PoliticalSystem[] @relation("PoliticalSystemConstitutionLaw")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([historicalCountryId], name: "idx_law_historicalCountryId")
+  @@index([passedChamberId], name: "idx_law_passedChamberId")
   @@map("law")
 }

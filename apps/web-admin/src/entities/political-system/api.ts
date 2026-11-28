@@ -5,10 +5,12 @@ import {
   createPoliticalSystem,
   deletePoliticalSystem,
   listPoliticalSystems,
+  promotePoliticalSystemHeadPositions,
   updatePoliticalSystem,
   type CreatePoliticalSystemInput,
   type PoliticalSystem,
   type PoliticalSystemScope,
+  type PromotePoliticalSystemHeadPositionsInput,
   type UpdatePoliticalSystemInput,
 } from '@/shared/api/political-system'
 
@@ -17,6 +19,7 @@ export type {
   PoliticalSystemScope,
   CreatePoliticalSystemInput,
   UpdatePoliticalSystemInput,
+  PromotePoliticalSystemHeadPositionsInput,
 }
 
 export const politicalSystemKeys = {
@@ -66,5 +69,23 @@ export function useDeletePoliticalSystem() {
     mutationFn: (id: string) => deletePoliticalSystem(id),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: politicalSystemKeys.all }),
+  })
+}
+
+export function usePromotePoliticalSystemHeadPositions() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (dto: PromotePoliticalSystemHeadPositionsInput) =>
+      promotePoliticalSystemHeadPositions(dto),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: politicalSystemKeys.all })
+      void queryClient.invalidateQueries({ queryKey: ['position-definitions'] })
+      void queryClient.invalidateQueries({
+        queryKey: ['government-position-definitions'],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['position-definitions-picker'],
+      })
+    },
   })
 }

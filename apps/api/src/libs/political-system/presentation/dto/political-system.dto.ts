@@ -27,6 +27,34 @@ export type PartySystemDto =
   | 'NON_PARTISAN'
   | 'OTHER'
 
+export type HeadSelectionMethodDto =
+  | 'DIRECT'
+  | 'INDIRECT'
+  | 'HEREDITARY'
+  | 'APPOINTED'
+  | 'COUP_OR_JUNTA'
+  | 'OTHER'
+
+export type ElectoralSystemTypeDto =
+  | 'FPTP'
+  | 'TWO_ROUND'
+  | 'PARALLEL'
+  | 'MMP'
+  | 'PARTY_LIST_PR'
+  | 'SNTV_MMDP'
+  | 'STV'
+  | 'INDIRECT_ELECTORAL'
+  | 'OTHER'
+
+export type WarPowerAuthorityDto =
+  | 'MONARCH_PREROGATIVE'
+  | 'MONARCH_WITH_UPPER_HOUSE'
+  | 'LEGISLATURE_EXCLUSIVE'
+  | 'EXECUTIVE_WITH_LEGISLATURE_CONSENT'
+  | 'EXECUTIVE_EXCLUSIVE'
+  | 'RENOUNCED'
+  | 'OTHER'
+
 export type EraDto = 'BC' | 'AD'
 
 /**
@@ -38,6 +66,7 @@ export interface PoliticalSystemPositionRefDto {
   title: string
   titleLocal: string | null
   positionType: string
+  isMonarchical?: boolean
 }
 
 /** 소속 국가 요약 — 어느 FK가 찼는지로 현대/역사를 가른다 (선거 목록 선례 동형) */
@@ -51,6 +80,22 @@ export interface PoliticalSystemChamberRefDto {
 export interface PoliticalSystemCountryRefDto {
   id: string
   name: string
+}
+
+export interface PoliticalSystemLawRefDto {
+  id: string
+  name: string
+  startDate: Date | null
+  endDate: Date | null
+}
+
+export interface PoliticalSystemEventRefDto {
+  id: string
+  title: string
+  startEra: EraDto | null
+  startYear: number | null
+  startMonth: number | null
+  startDay: number | null
 }
 
 export interface PoliticalSystemResponseDto {
@@ -100,6 +145,31 @@ export interface PoliticalSystemResponseDto {
 
   stateStructure: StateStructureDto | null
   partySystem: PartySystemDto | null
+
+  /** 헌법상 선출·임기·선거제도 규칙 */
+  headSelectionMethod: HeadSelectionMethodDto | null
+  headOfStateTermYears: number | null
+  headOfStateTermLimit: number | null
+  lowerHouseTermYears: number | null
+  upperHouseTermYears: number | null
+  electoralSystem: ElectoralSystemTypeDto | null
+  electoralThresholdPercent: number | null
+
+  /** 헌법상 군 통수권 · 개전·선전포고 규칙 */
+  warPowerAuthority: WarPowerAuthorityDto | null
+  warConsentChamberId: string | null
+  warConsentChamber: PoliticalSystemChamberRefDto | null
+  commanderInChiefPositionId: string | null
+  commanderInChiefPosition: PoliticalSystemPositionRefDto | null
+  warPowerNotes: string | null
+
+  /** 기본 헌법·헌장·기본법(Law) 연결 */
+  constitutionLawId: string | null
+  constitutionLaw: PoliticalSystemLawRefDto | null
+
+  /** 체제 출범 계기 사건(Event) 연결 */
+  foundingEventId: string | null
+  foundingEvent: PoliticalSystemEventRefDto | null
 
   notes: string | null
 
@@ -154,8 +224,42 @@ export interface CreatePoliticalSystemDto {
   stateStructure?: StateStructureDto | null
   partySystem?: PartySystemDto | null
 
+  headSelectionMethod?: HeadSelectionMethodDto | null
+  headOfStateTermYears?: number | null
+  headOfStateTermLimit?: number | null
+  lowerHouseTermYears?: number | null
+  upperHouseTermYears?: number | null
+  electoralSystem?: ElectoralSystemTypeDto | null
+  electoralThresholdPercent?: number | null
+
+  warPowerAuthority?: WarPowerAuthorityDto | null
+  warConsentChamberId?: string | null
+  commanderInChiefPositionId?: string | null
+  warPowerNotes?: string | null
+
+  constitutionLawId?: string | null
+  foundingEventId?: string | null
+
   notes?: string | null
 }
 
 /** 수정 입력 — 전 필드 선택. 보내지 않은 키는 그대로 둔다. */
 export type UpdatePoliticalSystemDto = Partial<CreatePoliticalSystemDto>
+
+/**
+ * 자유입력 수반 직함(`headOfStateTitle` / `headOfGovernmentTitle`)을
+ * 관직 정의 카탈로그(`GovernmentPositionDefinition`) FK로 일괄 승격하는 요청 DTO.
+ */
+export interface PromotePoliticalSystemHeadPositionsDto {
+  countryId?: string | null
+  historicalCountryId?: string | null
+  /** 카탈로그에 일치 직위가 없을 때 국가 전용 직위 정의를 자동 신설할지 여부 (기본 true) */
+  createMissingDefinitions?: boolean
+}
+
+export interface PromotePoliticalSystemHeadPositionsResponseDto {
+  updatedSystemCount: number
+  createdDefinitionCount: number
+  updatedSystemIds: string[]
+}
+

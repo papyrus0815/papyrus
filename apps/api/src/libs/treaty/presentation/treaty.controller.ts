@@ -106,6 +106,15 @@ const TREATY_SIGNATORY_INCLUDE = {
       },
     },
   },
+  ratifiedChamber: {
+    select: {
+      id: true,
+      name: true,
+      shortName: true,
+      localName: true,
+      role: true,
+    },
+  },
 } as const satisfies Prisma.TreatySignatoryInclude
 
 /**
@@ -154,6 +163,20 @@ const TREATY_INCLUDE = {
     where: { event: { deletedAt: null } },
     include: TREATY_EVENT_LINK_INCLUDE,
     orderBy: { createdAt: 'asc' as const },
+  },
+  endedWarDeclarations: {
+    include: {
+      declaringCountry: { select: { id: true, name: true, flagEmoji: true } },
+      declaringHistoricalCountry: { select: { id: true, name: true } },
+      targetCountry: { select: { id: true, name: true, flagEmoji: true } },
+      targetHistoricalCountry: { select: { id: true, name: true } },
+      warEvent: { select: { id: true, title: true, deletedAt: true } },
+    },
+    orderBy: [
+      { endedYear: 'asc' as const },
+      { declaredYear: 'asc' as const },
+      { createdAt: 'asc' as const },
+    ],
   },
 } satisfies Prisma.TreatyInclude
 
@@ -677,6 +700,12 @@ export class TreatyController {
       participationType: (sigInput.participationType ??
         'SIGNATORY') as Prisma.TreatySignatoryUncheckedCreateInput['participationType'],
       signedAt: sigInput.signedAt ? new Date(sigInput.signedAt) : null,
+      ratifiedChamberId: sigInput.ratifiedChamberId?.trim() || null,
+      ratificationStatus: (sigInput.ratificationStatus ??
+        null) as Prisma.TreatySignatoryUncheckedCreateInput['ratificationStatus'],
+      ratifiedAt: sigInput.ratifiedAt ? new Date(sigInput.ratifiedAt) : null,
+      ratificationYeas: sigInput.ratificationYeas ?? null,
+      ratificationNays: sigInput.ratificationNays ?? null,
       note: sigInput.note ?? null,
     } as Prisma.TreatySignatoryUncheckedCreateInput
   }
@@ -1117,6 +1146,11 @@ export class TreatyController {
         positionDefinitionId: resolvedTenure.positionDefinitionId ?? undefined,
         participationType: (dto.participationType ?? 'SIGNATORY') as any,
         signedAt: dto.signedAt ? new Date(dto.signedAt) : undefined,
+        ratifiedChamberId: dto.ratifiedChamberId?.trim() || undefined,
+        ratificationStatus: (dto.ratificationStatus ?? undefined) as any,
+        ratifiedAt: dto.ratifiedAt ? new Date(dto.ratifiedAt) : undefined,
+        ratificationYeas: dto.ratificationYeas ?? undefined,
+        ratificationNays: dto.ratificationNays ?? undefined,
         note: dto.note ?? undefined,
       } as Prisma.TreatySignatoryUncheckedCreateInput,
       include: TREATY_SIGNATORY_INCLUDE,
@@ -1231,6 +1265,21 @@ export class TreatyController {
             : {}),
         ...(dto.participationType !== undefined && { participationType: dto.participationType as any }),
         ...(dto.signedAt !== undefined && { signedAt: dto.signedAt ? new Date(dto.signedAt) : null }),
+        ...(dto.ratifiedChamberId !== undefined && {
+          ratifiedChamberId: dto.ratifiedChamberId?.trim() || null,
+        }),
+        ...(dto.ratificationStatus !== undefined && {
+          ratificationStatus: (dto.ratificationStatus ?? null) as any,
+        }),
+        ...(dto.ratifiedAt !== undefined && {
+          ratifiedAt: dto.ratifiedAt ? new Date(dto.ratifiedAt) : null,
+        }),
+        ...(dto.ratificationYeas !== undefined && {
+          ratificationYeas: dto.ratificationYeas ?? null,
+        }),
+        ...(dto.ratificationNays !== undefined && {
+          ratificationNays: dto.ratificationNays ?? null,
+        }),
         ...(dto.note !== undefined && { note: dto.note }),
       },
       include: TREATY_SIGNATORY_INCLUDE,

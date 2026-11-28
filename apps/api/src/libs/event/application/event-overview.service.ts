@@ -197,12 +197,45 @@ export interface EventOverviewRelation {
   external: { id: string; title: string; startDate: string | null; side: 'from' | 'to' } | null
 }
 
+export interface EventOverviewWarDeclaration {
+  id: string
+  kind: string
+  displayTitle: string
+  casusBelli: string | null
+  declaredEra: 'BC' | 'AD' | null
+  declaredYear: number | null
+  declaredMonth: number | null
+  declaredDay: number | null
+  declaredPrecision: string | null
+  declaringCountry: {
+    key: string
+    id: string
+    kind: 'modern' | 'historical'
+    name: string
+    flagEmoji: string | null
+  } | null
+  targetCountry: {
+    key: string
+    id: string
+    kind: 'modern' | 'historical'
+    name: string
+    flagEmoji: string | null
+  } | null
+  approvedChamberName: string | null
+  yeas: number | null
+  nays: number | null
+  warEventId: string | null
+  narrativeEventId: string | null
+}
+
 export interface EventOverviewResponse {
   root: EventOverviewNode
   /** 루트를 뺀 하위 전부 — 시작 시점 순 */
   descendants: EventOverviewNode[]
   /** 트리 안 사건이 낀 관련 사건 연결 전부 — 루트 상세의 연관 탭은 루트 자신의 연결만 보여서 하위끼리의 인과가 안 보였다 */
   relations: EventOverviewRelation[]
+  /** 이 전쟁(또는 하위 사건)에 귀속된 국가 선전포고·개전 정본 목록 */
+  warDeclarations?: EventOverviewWarDeclaration[]
   /** 노드 상한에 걸려 잘렸는가 */
   truncated: boolean
 }
@@ -457,8 +490,11 @@ export class EventOverviewService {
           (left.startDate ?? '').localeCompare(right.startDate ?? '') ||
           left.title.localeCompare(right.title),
       )
-    const relations = await this.loadRelations(ids)
-    return { root, descendants, relations, truncated }
+    const [relations, warDeclarations] = await Promise.all([
+      this.loadRelations(ids),
+      this.loadWarDeclarations(ids),
+    ])
+    return { root, descendants, relations, warDeclarations, truncated }
   }
 
   /**
@@ -577,6 +613,102 @@ export class EventOverviewService {
       })
     }
     return result
+  }
+
+  private async loadWarDeclarations(
+    ids: string[],
+  ): Promise<EventOverviewWarDeclaration[]> {
+    if (!this.prisma.warDeclaration?.findMany || ids.length === 0) return []
+    const rows = await this.prisma.warDeclaration.findMany({
+      where: {
+        OR: [{ warEventId: { in: ids } }, { narrativeEventId: { in: ids } }],
+      },
+      include: {
+        declaringCountry: { select: { id: true, name: true, flagEmoji: true } },
+        declaringHistoricalCountry: { select: { id: true, name: true } },
+        targetCountry: { select: { id: true, name: true, flagEmoji: true } },
+        targetHistoricalCountry: { select: { id: true, name: true } },
+        approvedChamber: { select: { name: true } },
+        narrativeEvent: { select: { id: true, deletedAt: true } },
+      },
+      orderBy: [
+        { declaredYear: 'asc' },
+        { declaredMonth: 'asc' },
+        { declaredDay: 'asc' },
+        { createdAt: 'asc' },
+      ],
+    })
+    return rows.map((row) => {
+      const declaring = row.declaringHistoricalCountry
+        ? {
+            key: `h:${row.declaringHistoricalCountry.id}`,
+            id: row.declaringHistoricalCountry.id,
+            kind: 'historical' as const,
+            name: row.declaringHistoricalCountry.name,
+            flagEmoji: null,
+          }
+        : row.declaringCountry
+          ? {
+              key: `c:${row.declaringCountry.id}`,
+              id: row.declaringCountry.id,
+              kind: 'modern' as const,
+              name: row.declaringCountry.name,
+              flagEmoji: row.declaringCountry.flagEmoji ?? null,
+            }
+          : null
+      const target = row.targetHistoricalCountry
+        ? {
+            key: `h:${row.targetHistoricalCountry.id}`,
+            id: row.targetHistoricalCountry.id,
+            kind: 'historical' as const,
+            name: row.targetHistoricalCountry.name,
+            flagEmoji: null,
+          }
+        : row.targetCountry
+          ? {
+              key: `c:${row.targetCountry.id}`,
+              id: row.targetCountry.id,
+              kind: 'modern' as const,
+              name: row.targetCountry.name,
+              flagEmoji: row.targetCountry.flagEmoji ?? null,
+            }
+          : null
+      const declName = declaring?.name ?? '미상 국가'
+      const tgtName = target?.name ?? '미상 국가'
+      const suffix =
+        row.kind === 'ULTIMATUM_EXPIRY'
+          ? '최후통첩 및 개전'
+          : row.kind === 'ALLIANCE_ENTRY'
+            ? '참전 선언'
+            : row.kind === 'UNDECLARED_HOSTILITIES'
+              ? '무선전 개전'
+              : row.kind === 'CO_BELLIGERENCY'
+                ? '재참전·공동교전 선언'
+                : row.kind === 'DIPLOMATIC_SEVERANCE'
+                  ? '국교 단절'
+                  : '선전포고'
+      return {
+        id: row.id,
+        kind: row.kind,
+        displayTitle: row.title?.trim() || `${declName}의 대(對)${tgtName} ${suffix}`,
+        casusBelli: row.casusBelli ?? null,
+        declaredEra: (row.declaredEra as 'BC' | 'AD' | null) ?? null,
+        declaredYear: row.declaredYear ?? null,
+        declaredMonth: row.declaredMonth ?? null,
+        declaredDay: row.declaredDay ?? null,
+        declaredPrecision: row.declaredPrecision ?? null,
+        declaringCountry: declaring,
+        targetCountry: target,
+        approvedChamberName: row.approvedChamber?.name ?? null,
+        yeas: row.yeas ?? null,
+        nays: row.nays ?? null,
+        warEventId: row.warEventId ?? null,
+        narrativeEventId:
+          row.narrativeEvent && row.narrativeEvent.deletedAt == null
+            ? row.narrativeEvent.id
+            : null,
+      }
+    })
   }
 
   private toNode(

@@ -47,7 +47,7 @@ import {
 import { formatDateRange, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import { pathKeys } from '@/shared/router'
-import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { LedgerTableSkeleton } from '@/shared/ui/ledger-skeleton'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
 import {
@@ -447,6 +447,7 @@ export function CountryMilitaryWarsPanel({
         return getAllEvents({
           historicalCountryIds: targetIds,
           domain: 'MILITARY',
+          includeMilitaryTypes: true,
           includeSubEvents: true,
           limit: EVENTS_LIMIT_ALL,
         })
@@ -455,6 +456,7 @@ export function CountryMilitaryWarsPanel({
       return getAllEvents({
         countryId: country.id,
         domain: 'MILITARY',
+        includeMilitaryTypes: true,
         includeSubEvents: true,
         limit: EVENTS_LIMIT_ALL,
       })
@@ -1248,7 +1250,12 @@ export function CountryMilitaryWarsPanel({
 
       <ConflictsCanvas aria-label="참전 전쟁 및 군사 사건 원장">
         {militaryEventsQuery.isLoading ? (
-          <ChartSkeleton variant="bars" rows={5} />
+          <LedgerTableSkeleton
+            rows={6}
+            columns={4}
+            showToolbar={false}
+            label="참전 전쟁·군사 사건을 불러오는 중"
+          />
         ) : rawEvents.length === 0 ? (
           <EmptyStateSpotlight
             flat
@@ -1458,6 +1465,20 @@ export function CountryMilitaryWarsPanel({
                     <FiArrowUp size={12} />
                   )}
                   <span>{sortDir === 'desc' ? '최신순' : '연대순'}</span>
+                </ToolbarGhostBtn>
+
+                <ToolbarGhostBtn
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      `${pathKeys.countryMilitary(country.id)}?sub=declarations`,
+                    )
+                  }
+                  title="국가 정본 선전포고·개전 원장 열기"
+                >
+                  <FiShield size={12} />
+                  <span>선전포고 원장</span>
+                  <FiArrowRight size={11} />
                 </ToolbarGhostBtn>
 
                 <PrimaryActionButton
