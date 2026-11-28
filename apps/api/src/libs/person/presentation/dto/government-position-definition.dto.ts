@@ -8,7 +8,7 @@ import {
   IsUUID,
   Min,
 } from 'class-validator'
-import { GovernmentPositionType } from '@prisma/client'
+import { Era, GovernmentPositionType } from '@prisma/client'
 
 export class CreateGovernmentPositionDefinitionDto {
   @IsString()
@@ -90,8 +90,59 @@ export class CreateGovernmentPositionDefinitionScopeDto {
   localTitle?: string | null
 
   @IsOptional()
+  @IsEnum(Era)
+  startEra?: Era | null
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  startYear?: number | null
+
+  @IsOptional()
+  @IsEnum(Era)
+  endEra?: Era | null
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  endYear?: number | null
+
+  @IsOptional()
   @IsString()
   note?: string | null
+}
+
+export class UpdateGovernmentPositionDefinitionScopeDto {
+  @IsOptional()
+  @IsString()
+  localTitle?: string | null
+
+  @IsOptional()
+  @IsEnum(Era)
+  startEra?: Era | null
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  startYear?: number | null
+
+  @IsOptional()
+  @IsEnum(Era)
+  endEra?: Era | null
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  endYear?: number | null
+
+  @IsOptional()
+  @IsString()
+  note?: string | null
+}
+
+export class MergeGovernmentPositionDefinitionDto {
+  @IsUUID()
+  targetDefinitionId!: string
 }
 
 export class UpdateGovernmentPositionDefinitionDto {

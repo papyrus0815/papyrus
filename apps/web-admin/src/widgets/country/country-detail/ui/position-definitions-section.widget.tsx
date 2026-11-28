@@ -627,6 +627,40 @@ const ScopeAddBtn = styled.button`
   }
 `
 
+const ConstitutionalHeadBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.18)' : '#eef2ff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(129, 140, 248, 0.36)'
+        : 'rgba(99, 102, 241, 0.25)'};
+`
+
+const UsageStatBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0'};
+`
+
 const CardDesc = styled.p`
   margin: 8px 0 0;
   font-size: 13px;
@@ -1087,9 +1121,7 @@ export function PositionDefinitionsSection({
       notify.success('적용 범위가 추가되었습니다.')
       refetch()
     } catch (err) {
-      notify.error(
-        err instanceof Error ? err.message : '적용 범위 추가에 실패했습니다.',
-      )
+      notify.error(getApiErrorMessage(err, '적용 범위 추가에 실패했습니다.'))
     }
   }
 
@@ -1099,9 +1131,7 @@ export function PositionDefinitionsSection({
       notify.success('적용 범위가 해제되었습니다.')
       refetch()
     } catch (err) {
-      notify.error(
-        err instanceof Error ? err.message : '적용 범위 해제에 실패했습니다.',
-      )
+      notify.error(getApiErrorMessage(err, '적용 범위 해제에 실패했습니다.'))
     }
   }
 
@@ -1219,9 +1249,7 @@ export function PositionDefinitionsSection({
       refetch()
       setView('list')
     } catch (err: unknown) {
-      notify.error(
-        err instanceof Error ? err.message : '저장에 실패했습니다.',
-      )
+      notify.error(getApiErrorMessage(err, '저장에 실패했습니다.'))
     }
   }
 
@@ -1239,9 +1267,7 @@ export function PositionDefinitionsSection({
       notify.success('삭제되었습니다.')
       refetch()
     } catch (err: unknown) {
-      notify.error(
-        err instanceof Error ? err.message : '삭제에 실패했습니다.',
-      )
+      notify.error(getApiErrorMessage(err, '삭제에 실패했습니다.'))
     }
   }
 
@@ -1497,6 +1523,57 @@ export function PositionDefinitionsSection({
                 const fallbackParentLabel =
                   def.category?.name ?? def.organization?.name ?? null
                 const scopeLabels = describeScopes(def)
+                const hosSystems = def.politicalSystemsAsHeadOfState ?? []
+                const hogSystems = def.politicalSystemsAsHeadOfGovernment ?? []
+                const allRefSystems = [
+                  ...hosSystems.map((sys) => ({ ...sys, roleKind: '원수' as const })),
+                  ...hogSystems.map((sys) => ({ ...sys, roleKind: '수반' as const })),
+                ]
+                const matchesCurrentCountry = (sys: {
+                  countryId?: string | null
+                  historicalCountryId?: string | null
+                }) => {
+                  if (!country) return true
+                  return Boolean(
+                    (sys.countryId &&
+                      matchingCountryIds.modernIds.has(sys.countryId)) ||
+                      (sys.historicalCountryId &&
+                        matchingCountryIds.historicalIds.has(
+                          sys.historicalCountryId,
+                        )),
+                  )
+                }
+                const localRefSystems = allRefSystems.filter(matchesCurrentCountry)
+                const otherRefSystemCount =
+                  allRefSystems.length - localRefSystems.length
+                const displayRefSystems =
+                  localRefSystems.length > 0 ? localRefSystems : allRefSystems
+                const uniqueDisplaySystemLabels = Array.from(
+                  new Set(
+                    displayRefSystems.map((sys) => {
+                      const sysName =
+                        sys.name?.trim() ||
+                        sys.historicalCountry?.name?.trim() ||
+                        sys.country?.name?.trim() ||
+                        '정체'
+                      return `${sys.roleKind}: ${sysName}`
+                    }),
+                  ),
+                )
+                const tenureCount = def.tenureCount ?? 0
+                const treatySignatoryCount = def.treatySignatoryCount ?? 0
+                const totalRefCount =
+                  tenureCount + allRefSystems.length + treatySignatoryCount
+                const deleteTooltipParts: string[] = []
+                if (allRefSystems.length > 0) {
+                  deleteTooltipParts.push(`헌정 체제 ${allRefSystems.length}건`)
+                }
+                if (tenureCount > 0) {
+                  deleteTooltipParts.push(`재임 ${tenureCount}건`)
+                }
+                if (treatySignatoryCount > 0) {
+                  deleteTooltipParts.push(`조약 서명 ${treatySignatoryCount}건`)
+                }
 
                 return (
                   <PositionLedgerRow key={def.id}>
@@ -1552,6 +1629,34 @@ export function PositionDefinitionsSection({
                                   : ''
                               } 전용`}
                         </ScopeChip>
+                        {uniqueDisplaySystemLabels.length > 0 ? (
+                          <ConstitutionalHeadBadge
+                            title={`헌정 공식 수반 지정 체제: ${uniqueDisplaySystemLabels.join(', ')}${
+                              localRefSystems.length > 0 && otherRefSystemCount > 0
+                                ? ` (외 타국 정체 ${otherRefSystemCount}건)`
+                                : ''
+                            }`}
+                          >
+                            <FiAward size={11} />
+                            <span>
+                              헌정{' '}
+                              {uniqueDisplaySystemLabels.slice(0, 2).join(' · ')}
+                              {uniqueDisplaySystemLabels.length > 2
+                                ? ` +${uniqueDisplaySystemLabels.length - 2}`
+                                : ''}
+                              {localRefSystems.length > 0 && otherRefSystemCount > 0
+                                ? ` · 타국 ${otherRefSystemCount}`
+                                : ''}
+                            </span>
+                          </ConstitutionalHeadBadge>
+                        ) : null}
+                        {tenureCount > 0 ? (
+                          <UsageStatBadge
+                            title={`공직 재임 기록 ${tenureCount}건에서 이 직위를 참조 중입니다`}
+                          >
+                            재임 {tenureCount.toLocaleString()}건
+                          </UsageStatBadge>
+                        ) : null}
                       </CardMeta>
                       {def.description && (
                         <CardDesc>{def.description}</CardDesc>
@@ -1569,7 +1674,14 @@ export function PositionDefinitionsSection({
                         $danger
                         type="button"
                         onClick={() => handleDelete(def.id, def.title)}
-                        title="삭제"
+                        title={
+                          totalRefCount > 0
+                            ? `참조 중(${deleteTooltipParts.join(' · ')}) — 연결 해제 후 삭제 가능`
+                            : '삭제'
+                        }
+                        style={
+                          totalRefCount > 0 ? { opacity: 0.45 } : undefined
+                        }
                       >
                         <FiTrash2 size={15} />
                       </IconBtn>
@@ -2101,14 +2213,15 @@ export function PositionDefinitionsSection({
                                     {opt.label}
                                   </ScopeAddBtn>
                                 ))}
-                                <SubmitButton
+                                <PrimaryActionButton
                                   type="button"
+                                  $size="sm"
                                   disabled={inlineDeptSaving || !inlineDeptName.trim()}
                                   onClick={() => void handleCreateInlineDept()}
-                                  style={{ marginLeft: 'auto', padding: '7px 14px', fontSize: 12.5 }}
+                                  style={{ marginLeft: 'auto' }}
                                 >
                                   {inlineDeptSaving ? '생성 중…' : '부처 생성 후 선택'}
-                                </SubmitButton>
+                                </PrimaryActionButton>
                               </div>
                             </div>
                           )}

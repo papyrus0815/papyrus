@@ -637,10 +637,30 @@ export interface IPersonRepository {
     countryId?: string | null
     historicalCountryId?: string | null
     localTitle?: string | null
+    startEra?: 'BC' | 'AD' | null
+    startYear?: number | null
+    endEra?: 'BC' | 'AD' | null
+    endYear?: number | null
     note?: string | null
   }): Promise<any>
+  updatePositionDefinitionScope(
+    scopeId: string,
+    dto: {
+      localTitle?: string | null
+      startEra?: 'BC' | 'AD' | null
+      startYear?: number | null
+      endEra?: 'BC' | 'AD' | null
+      endYear?: number | null
+      note?: string | null
+    },
+  ): Promise<any>
   removePositionDefinitionScope(scopeId: string): Promise<void>
   findPositionDefinitionById(id: string): Promise<any | null>
+  findUnnormalizedPositionTenures(): Promise<any[]>
+  mergePositionDefinition(
+    sourceId: string,
+    targetDefinitionId: string,
+  ): Promise<any>
   createPositionDefinition(
     dto: CreateGovernmentPositionDefinitionDto,
   ): Promise<any>

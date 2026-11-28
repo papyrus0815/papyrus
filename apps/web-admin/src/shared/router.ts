@@ -83,6 +83,26 @@ export const pathKeys = {
       `/${ROUTES.GOVERNMENT}/cabinets/${encodeURIComponent(cabinetId)}`,
     departmentDetail: (departmentId: string) =>
       `/${ROUTES.GOVERNMENT}/departments/${encodeURIComponent(departmentId)}`,
+    positions: (params?: {
+      id?: string
+      catalog?: 'positions' | 'ranks'
+      type?: string
+      scope?: 'all' | 'universal' | 'polity' | 'institution' | 'unnormalized'
+      polity?: string
+      q?: string
+    }) => {
+      const qs = new URLSearchParams()
+      if (params?.catalog && params.catalog !== 'positions') {
+        qs.set('catalog', params.catalog)
+      }
+      if (params?.id) qs.set('id', params.id)
+      if (params?.type) qs.set('type', params.type)
+      if (params?.scope && params.scope !== 'all') qs.set('scope', params.scope)
+      if (params?.polity?.trim()) qs.set('polity', params.polity.trim())
+      if (params?.q?.trim()) qs.set('q', params.q.trim())
+      const queryString = qs.toString()
+      return `/${ROUTES.GOVERNMENT}/positions${queryString ? `?${queryString}` : ''}`
+    },
   },
 
   /** 전 국가 정당 편람 — 모든 현대·역사 국가 정당 통합 탐색·계보·관련 사건 */

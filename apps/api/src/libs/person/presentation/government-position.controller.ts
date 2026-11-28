@@ -19,6 +19,7 @@ import { AuthGuard } from '@nestjs/passport'
 import { Request } from 'express'
 import { ApiTags } from '@nestjs/swagger'
 import { PersonService } from '../application/person.service'
+import { Public } from '../../shared/auth'
 import { requireActorId } from '../../shared/actor-context'
 import { parseIncludeConstituentsFlag } from '../../shared/historical-constituent-rollup'
 import { PrismaClient } from '@prisma/client'
@@ -28,6 +29,8 @@ import {
   CreateGovernmentPositionDefinitionScopeDto,
   CreateTenureAchievementDto,
   CreateRegnalEraDto,
+  MergeGovernmentPositionDefinitionDto,
+  UpdateGovernmentPositionDefinitionScopeDto,
   UpdateRegnalEraDto,
   UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
@@ -71,6 +74,7 @@ export interface CreateCabinetBody {
   description?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
+  politicalSystemId?: string | null
   startDateInfo?: any
   endDateInfo?: any
   allowReshuffle?: boolean
@@ -83,6 +87,7 @@ export interface UpdateCabinetBody {
   headTenureId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
+  politicalSystemId?: string | null
   startDateInfo?: any
   endDateInfo?: any
 }
@@ -285,6 +290,7 @@ export class GovernmentPositionController {
   /**
    * 관직 정의 목록 조회 (전역 단일 레벨)
    */
+  @Public()
   @Get('definitions')
   async getDefinitions(
     @Query('countryId') countryId?: string,
@@ -308,6 +314,7 @@ export class GovernmentPositionController {
    * ⚠️ 반드시 `@Get('definitions/:id')`보다 **위에** 선언할 것. 아래에 두면 id='picker'로 잡혀
    *    "관직 정의를 찾을 수 없습니다"가 난다.
    */
+  @Public()
   @Get('definitions/picker')
   async getDefinitionsForPicker(
     @Query('countryId') countryId?: string,
@@ -320,6 +327,17 @@ export class GovernmentPositionController {
       includeIds: includeId ? [includeId] : undefined,
     })
     return serializeBigInt(result)
+  }
+
+  /**
+   * 일반 정의(isGeneric=true)에 머물러 있는 미정규화 재임 목록 조회.
+   * ⚠️ 반드시 `@Get('definitions/:id')`보다 위에 선언할 것.
+   */
+  @Public()
+  @Get('definitions/unnormalized-tenures')
+  async getUnnormalizedTenures(): Promise<any[]> {
+    const list = await this.personService.findUnnormalizedPositionTenures()
+    return list.map(serializeBigInt)
   }
 
   /**
@@ -338,9 +356,27 @@ export class GovernmentPositionController {
       countryId: dto.countryId ?? null,
       historicalCountryId: dto.historicalCountryId ?? null,
       localTitle: dto.localTitle ?? null,
+      startEra: dto.startEra ?? null,
+      startYear: dto.startYear ?? null,
+      endEra: dto.endEra ?? null,
+      endYear: dto.endYear ?? null,
       note: dto.note ?? null,
     })
     return serializeBigInt(scope)
+  }
+
+  /** 관직 정의 적용 범위 수정 (현지 표기·시대 창·비고) */
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('definitions/scopes/:scopeId')
+  async updateDefinitionScope(
+    @Param('scopeId') scopeId: string,
+    @Body() dto: UpdateGovernmentPositionDefinitionScopeDto,
+  ): Promise<any> {
+    const updated = await this.personService.updatePositionDefinitionScope(
+      scopeId,
+      dto,
+    )
+    return serializeBigInt(updated)
   }
 
   /** 관직 정의 적용 범위 삭제 — 전부 지우면 그 정의는 다시 전역이 된다. */
@@ -351,8 +387,25 @@ export class GovernmentPositionController {
   }
 
   /**
+   * 중복 관직 정의를 대상 정본으로 통합 (재임·정체·조약 서명자·누락 스코프 일괄 이관 후 원본 삭제)
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post('definitions/:id/merge')
+  async mergeDefinition(
+    @Param('id') id: string,
+    @Body() dto: MergeGovernmentPositionDefinitionDto,
+  ): Promise<any> {
+    const merged = await this.personService.mergePositionDefinition(
+      id,
+      dto.targetDefinitionId,
+    )
+    return serializeBigInt(merged)
+  }
+
+  /**
    * 관직 정의 단건 조회
    */
+  @Public()
   @Get('definitions/:id')
   async getDefinitionById(@Param('id') id: string): Promise<any> {
     const def = await this.personService.findPositionDefinitionById(id)

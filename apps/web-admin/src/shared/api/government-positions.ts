@@ -72,6 +72,28 @@ export interface GovernmentPositionDefinition {
     historicalCountry?: { id: string; name?: string | null } | null
     localTitle?: string | null
   }> | null
+  tenureCount?: number
+  treatySignatoryCount?: number
+  politicalSystemsAsHeadOfState?: Array<{
+    id: string
+    name?: string | null
+    governmentForm?: string | null
+    isCurrent?: boolean
+    countryId?: string | null
+    historicalCountryId?: string | null
+    country?: { id: string; name?: string | null } | null
+    historicalCountry?: { id: string; name?: string | null } | null
+  }>
+  politicalSystemsAsHeadOfGovernment?: Array<{
+    id: string
+    name?: string | null
+    governmentForm?: string | null
+    isCurrent?: boolean
+    countryId?: string | null
+    historicalCountryId?: string | null
+    country?: { id: string; name?: string | null } | null
+    historicalCountry?: { id: string; name?: string | null } | null
+  }>
 }
 
 /**

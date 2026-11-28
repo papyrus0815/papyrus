@@ -16,7 +16,27 @@ import { useHistoricalCountries } from '@/features/historical-country/use-histor
 import {
   personCareerApi,
   type CreateGovernmentPositionTenureDto,
+  type ElectionCandidacyOptionForTenure,
 } from '@/shared/api/person-career'
+import { usePoliticalSystems } from '@/entities/political-system/api'
+import {
+  addTermYearsToIsoDate,
+  defaultAppointmentMethodFromSystem,
+  defaultChamberIdForLegislator,
+  findPoliticalSystemAtDate,
+  GOVERNMENT_FORM_LABEL,
+  HEAD_SELECTION_METHOD_LABEL,
+  headOfGovernmentTitleOf,
+  headOfStateTitleOf,
+  resolveSystemHeadPositionSlots,
+} from '@/entities/political-system/model/political-system'
+import {
+  chamberApi,
+  chamberKeys,
+  chamberLabel,
+  labelChamberRole,
+} from '@/shared/api/chamber'
+import { labelElectionType } from '@/shared/api/election'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import {
   militaryUnitApi,
@@ -1368,6 +1388,14 @@ interface EditingTenureRecord {
     branch?: string | null
     historicalCountry?: { id: string; name: string } | null
   } | null
+  chamberId?: string | null
+  chamber?: {
+    id: string
+    name: string
+    localName?: string | null
+    role: string
+  } | null
+  electionCandidacyId?: string | null
 }
 
 interface CabinetListItem {
@@ -1600,6 +1628,18 @@ export interface TenureRegisterPanelProps {
   initialPositionTitle?: string | null
   /** 정의에 없는 자유입력 직함으로 열 때 기본 직위 유형 (예: HEAD_OF_STATE, HEAD_OF_GOVERNMENT, CABINET_MINISTER) */
   initialPositionType?: string | null
+  /** 선거 상세 등에서 당선자를 바로 재임 등록할 때 미리 채우는 시작일(YYYY-MM-DD 또는 ISO) */
+  initialStartDate?: string | null
+  /** 초기 정당 ID */
+  initialPartyId?: string | null
+  /** 초기 취임 방식 (예: DIRECT_ELECTION) */
+  initialAppointmentMethod?: CreateGovernmentPositionTenureDto['appointmentMethod'] | null
+  /** 초기 당선 선거 후보 ID */
+  initialElectionCandidacyId?: string | null
+  /** 초기 소속 의회 원 ID (LEGISLATOR) */
+  initialChamberId?: string | null
+  /** 초기 대수(ordinal) */
+  initialOrdinal?: number | null
   /**
    * 재위로 연다 — '재위 추가' 진입점. 직위 피커를 군주 칭호 우선으로 놓고, 아무것도 안 고르면
    * '국왕' 정의를 미리 고른다. 재위·재임은 한 기록(직위 보유)이라 폼도 하나다 —
@@ -1648,6 +1688,12 @@ export function TenureRegisterPanel({
   initialPositionDefinitionId,
   initialPositionTitle,
   initialPositionType,
+  initialStartDate,
+  initialPartyId,
+  initialAppointmentMethod,
+  initialElectionCandidacyId,
+  initialChamberId,
+  initialOrdinal,
   defaultMonarchical = false,
   defaultDefinitionTitle = '국왕',
   countryOptional = false,
@@ -1760,6 +1806,8 @@ export function TenureRegisterPanel({
   const [showOnEvents, setShowOnEvents] = useState(true)
   const cabinetId = selectedCabinetIds[0] ?? null
   const [administrationDepartmentId, setAdministrationDepartmentId] = useState<string | null>(null)
+  const [chamberId, setChamberId] = useState<string | null>(null)
+  const [electionCandidacyId, setElectionCandidacyId] = useState<string | null>(null)
   const [eventAttachModalOpen, setEventAttachModalOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -1769,6 +1817,9 @@ export function TenureRegisterPanel({
   const [positionGroupToggles, setPositionGroupToggles] = useState<Record<string, boolean>>({})
   const positionDropdownRef = useRef<HTMLDivElement>(null)
   const positionSearchInputRef = useRef<HTMLInputElement>(null)
+  const userTouchedPositionRef = useRef(false)
+  const userTouchedAppointmentRef = useRef(false)
+  const userTouchedChamberRef = useRef(false)
   const [personImageError, setPersonImageError] = useState(false)
 
   useEffect(() => {
@@ -2017,6 +2068,109 @@ export function TenureRegisterPanel({
     enabled: open && (!!countryId || !!historicalCountryId),
   })
 
+  const { data: politicalSystems = [] } = usePoliticalSystems(
+    open && (countryId || historicalCountryId)
+      ? {
+          countryId: countryId || undefined,
+          historicalCountryId: historicalCountryId || undefined,
+        }
+      : {},
+  )
+
+  const activePoliticalSystem = useMemo(
+    () =>
+      findPoliticalSystemAtDate(politicalSystems, {
+        countryId: countryId || null,
+        historicalCountryId: historicalCountryId || null,
+        era: start.era,
+        year: start.year.trim() ? Number(start.year) : null,
+        month: start.month.trim() ? Number(start.month) : null,
+        day: start.day.trim() ? Number(start.day) : null,
+        fallbackToCurrent: !start.year.trim(),
+      }),
+    [politicalSystems, countryId, historicalCountryId, start],
+  )
+
+  const chamberScope = useMemo(
+    () => ({
+      countryId: historicalCountryId ? null : (countryId || null),
+      historicalCountryId: historicalCountryId || null,
+    }),
+    [countryId, historicalCountryId],
+  )
+  const { data: chambers = [] } = useQuery({
+    queryKey: chamberKeys.list(chamberScope),
+    queryFn: () => chamberApi.list(chamberScope),
+    enabled: open && Boolean(chamberScope.countryId || chamberScope.historicalCountryId),
+    staleTime: 60_000,
+  })
+
+  const { data: candidacyOptionsRaw = [] } = useQuery<ElectionCandidacyOptionForTenure[]>({
+    queryKey: ['tenure-election-candidacy-options', personId],
+    queryFn: () =>
+      typeof personCareerApi.getElectionCandidacyOptionsForTenure === 'function'
+        ? personCareerApi.getElectionCandidacyOptionsForTenure(personId)
+        : Promise.resolve([]),
+    enabled: open && Boolean(personId),
+    staleTime: 30_000,
+  })
+
+  const chamberOptions: CustomDropboxOption[] = useMemo(() => {
+    const activeIds = new Set(
+      [activePoliticalSystem?.lowerChamberId, activePoliticalSystem?.upperChamberId].filter(
+        (id): id is string => Boolean(id),
+      ),
+    )
+    const sorted = [...chambers].sort((left, right) => {
+      const leftActive = activeIds.has(left.id) ? 0 : 1
+      const rightActive = activeIds.has(right.id) ? 0 : 1
+      if (leftActive !== rightActive) return leftActive - rightActive
+      return left.name.localeCompare(right.name, 'ko')
+    })
+    const opts: CustomDropboxOption[] = sorted.map((ch) => ({
+      value: ch.id,
+      label: chamberLabel(ch),
+      description: `${labelChamberRole(ch.role)}${activeIds.has(ch.id) ? ' · 당시 정체 활성 의회' : ''}`,
+    }))
+    const pinned = editingTenure?.chamber
+    if (pinned?.id && !opts.some((o) => o.value === pinned.id)) {
+      opts.push({
+        value: pinned.id,
+        label: pinned.localName ? `${pinned.name} (${pinned.localName})` : pinned.name,
+      })
+    }
+    return opts
+  }, [chambers, activePoliticalSystem, editingTenure])
+
+  const electionCandidacyOptions: CustomDropboxOption[] = useMemo(() => {
+    return candidacyOptionsRaw
+      .filter((opt) => {
+        if (opt.id === electionCandidacyId) return true
+        // 이미 다른 재임에 연결된 후보는 제외 (수정 중인 본인 재임은 허용)
+        if (opt.resultingTenure && opt.resultingTenure.id !== tenureId) {
+          return false
+        }
+        return true
+      })
+      .map((opt) => {
+        const yearStr = opt.election.pollDate ? opt.election.pollDate.slice(0, 4) : ''
+        const electedTag = opt.result?.elected ? '당선' : '출마'
+        const partyText = opt.party?.shortName || opt.party?.name || '무소속'
+        const districtText = opt.electoralDistrict?.name
+          ? ` · ${opt.electoralDistrict.name}`
+          : ''
+        const typeLabel =
+          typeof labelElectionType === 'function'
+            ? labelElectionType(opt.election.electionType)
+            : opt.election.electionType
+        return {
+          value: opt.id,
+          label: `${yearStr ? `[${yearStr}] ` : ''}${opt.election.name} (${electedTag})`,
+          description: `${typeLabel} · ${partyText}${districtText}`,
+        }
+      })
+  }, [candidacyOptionsRaw, electionCandidacyId, tenureId])
+
   const departmentOptions: SelectOption<string>[] = useMemo(() => {
     const formatDeptLabel = (dept: {
       name: string
@@ -2160,12 +2314,39 @@ export function TenureRegisterPanel({
     editingTenure?.positionDefinition ?? null
 
   const definitionPool = useMemo(() => {
-    const pool = positionDefinitions as PositionDefinitionLike[]
-    if (!pinnedDefinition?.id || pool.some((def) => def.id === pinnedDefinition.id)) {
-      return pool
+    const pool = [...(positionDefinitions as PositionDefinitionLike[])]
+    const extras: Array<PositionDefinitionLike | null | undefined> = [
+      pinnedDefinition,
+      activePoliticalSystem?.headOfStatePosition
+        ? {
+            id: activePoliticalSystem.headOfStatePosition.id,
+            title: activePoliticalSystem.headOfStatePosition.title,
+            positionType: activePoliticalSystem.headOfStatePosition.positionType,
+            isMonarchical:
+              activePoliticalSystem.headOfStatePosition.isMonarchical ?? false,
+            isGeneric: false,
+          }
+        : null,
+      activePoliticalSystem?.headOfGovernmentPosition
+        ? {
+            id: activePoliticalSystem.headOfGovernmentPosition.id,
+            title: activePoliticalSystem.headOfGovernmentPosition.title,
+            positionType:
+              activePoliticalSystem.headOfGovernmentPosition.positionType,
+            isMonarchical:
+              activePoliticalSystem.headOfGovernmentPosition.isMonarchical ??
+              false,
+            isGeneric: false,
+          }
+        : null,
+    ]
+    for (const extra of extras) {
+      if (extra?.id && !pool.some((def) => def.id === extra.id)) {
+        pool.push(extra)
+      }
     }
-    return [...pool, pinnedDefinition]
-  }, [positionDefinitions, pinnedDefinition])
+    return pool
+  }, [positionDefinitions, pinnedDefinition, activePoliticalSystem])
 
   const selectedDef = positionDefinitionId
     ? definitionPool.find((def) => def.id === positionDefinitionId)
@@ -2520,7 +2701,12 @@ export function TenureRegisterPanel({
     if (nextTrack === 'DEPARTMENT') {
       setMonarchicalMode(false)
       setMilitaryUnitId(null)
-      if (selectedDef?.isMonarchical) {
+      if (
+        selectedDef?.isMonarchical ||
+        (!userTouchedPositionRef.current &&
+          (selectedDef?.positionType === 'HEAD_OF_STATE' ||
+            selectedDef?.positionType === 'HEAD_OF_GOVERNMENT'))
+      ) {
         setPositionDefinitionId(null)
       }
       if (presetPositionType === 'MILITARY_COMMANDER') {
@@ -2538,7 +2724,12 @@ export function TenureRegisterPanel({
     }
     setMonarchicalMode(false)
     setMilitaryUnitId(null)
-    if (selectedDef?.isMonarchical) {
+    if (
+      selectedDef?.isMonarchical ||
+      (!userTouchedPositionRef.current &&
+        (selectedDef?.positionType === 'HEAD_OF_STATE' ||
+          selectedDef?.positionType === 'HEAD_OF_GOVERNMENT'))
+    ) {
       setPositionDefinitionId(null)
     }
   }
@@ -2601,6 +2792,7 @@ export function TenureRegisterPanel({
   }
 
   const handlePositionSelect = (value: string) => {
+    userTouchedPositionRef.current = true
     setPositionModalOpen(false)
     // 다른 직책을 고르면 열어 둔 '이 나라 명칭'·'새 직책 생성' 입력은 닫는다
     setLocalTitleOpen(false)
@@ -2727,6 +2919,10 @@ export function TenureRegisterPanel({
    */
   const releasePositionOnCountryChange = () => {
     const derivedFromCatalog = !!positionDefinitionId || !!presetPositionType
+    userTouchedPositionRef.current = false
+    userTouchedAppointmentRef.current = false
+    userTouchedChamberRef.current = false
+    defaultReignAppliedRef.current = false
     setPositionDefinitionId(null)
     if (derivedFromCatalog) {
       setTitle('')
@@ -2739,9 +2935,15 @@ export function TenureRegisterPanel({
     setAdministrationDepartmentId(null)
     setMilitaryUnitId(null)
     setPartyId(null)
+    setChamberId(null)
+    setAppointmentMethod('')
   }
 
   const resetForm = () => {
+    userTouchedPositionRef.current = false
+    userTouchedAppointmentRef.current = false
+    userTouchedChamberRef.current = false
+    defaultReignAppliedRef.current = false
     setAffiliationTrack(
       deriveAffiliationTrack({
         militaryUnitId: initialMilitaryUnitId,
@@ -2790,6 +2992,8 @@ export function TenureRegisterPanel({
     setNotes('')
     setShowOnEvents(true)
     setAdministrationDepartmentId(null)
+    setChamberId(null)
+    setElectionCandidacyId(null)
   }
 
   /**
@@ -2797,6 +3001,7 @@ export function TenureRegisterPanel({
    * 정체만, 연속 관직은 국가가 같고 직책만 바뀌는 게 대부분) 기간·왕호·서수·경위·비고는 비운다.
    */
   const prepareNextRecord = () => {
+    userTouchedAppointmentRef.current = false
     setStart(emptyPartialDateParts())
     setEnd(emptyPartialDateParts())
     setDatePickerSide(null)
@@ -2811,6 +3016,7 @@ export function TenureRegisterPanel({
     setEndReasonDetail('')
     setNotes('')
     setShowOnEvents(true)
+    setElectionCandidacyId(null)
     dirtyBaselineRef.current = null
     setActiveSectionId(TENURE_SECTION_LINKS[0].id)
     scrollContainerRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
@@ -2881,6 +3087,18 @@ export function TenureRegisterPanel({
         setAdministrationDepartmentId(initialAdministrationDepartmentId ?? null)
       if (initialMilitaryUnitId !== undefined)
         setMilitaryUnitId(initialMilitaryUnitId ?? null)
+      if (initialPartyId !== undefined) setPartyId(initialPartyId ?? null)
+      if (initialAppointmentMethod !== undefined)
+        setAppointmentMethod(initialAppointmentMethod ?? '')
+      if (initialElectionCandidacyId !== undefined)
+        setElectionCandidacyId(initialElectionCandidacyId ?? null)
+      if (initialChamberId !== undefined)
+        setChamberId(initialChamberId ?? null)
+      if (initialOrdinal != null) setOrdinalNumber(String(initialOrdinal))
+      if (initialStartDate) {
+        const ymd = initialStartDate.slice(0, 10)
+        if (ymd) setStart(parsePartialDateString(ymd))
+      }
     }
   }, [
     open,
@@ -2891,21 +3109,56 @@ export function TenureRegisterPanel({
     defaultCabinetId,
     initialAdministrationDepartmentId,
     initialMilitaryUnitId,
+    initialPartyId,
+    initialAppointmentMethod,
+    initialElectionCandidacyId,
+    initialChamberId,
+    initialOrdinal,
+    initialStartDate,
   ])
 
   useEffect(() => {
     setPersonImageError(false)
   }, [personDetail?.id])
 
-  /** 재위로 열었는데 직위를 아직 안 골랐으면 기본 직위('국왕' 등)를 미리 고른다 — 한 번만(사용자가 비우면 다시 채우지 않음) */
+  /** 재위로 열었을 때: 활성 정체(PoliticalSystem)의 군주·원수 직함(황제·천황·술탄·국왕 등)을 최우선 선택하고, 없으면 기본 직위('국왕' 등)로 폴백 */
   const defaultReignAppliedRef = useRef(false)
   useEffect(() => {
     if (!open) {
       defaultReignAppliedRef.current = false
       return
     }
-    if (isEdit || !monarchicalMode || defaultReignAppliedRef.current) return
-    const defaultDefinition = (positionDefinitions as PositionDefinitionLike[]).find(
+    if (isEdit || !monarchicalMode || userTouchedPositionRef.current) return
+    const systemSlots = resolveSystemHeadPositionSlots(activePoliticalSystem)
+    const isMonarchicalRegime =
+      activePoliticalSystem?.governmentForm === 'CONSTITUTIONAL_MONARCHY' ||
+      activePoliticalSystem?.governmentForm === 'ABSOLUTE_MONARCHY'
+    const systemMonarchSlot =
+      systemSlots.monarchSlot ??
+      (isMonarchicalRegime ? systemSlots.stateSlot : null)
+
+    if (systemMonarchSlot) {
+      const matchedMonarchDef =
+        (systemMonarchSlot.positionId
+          ? definitionPool.find((d) => d.id === systemMonarchSlot.positionId)
+          : undefined) ??
+        definitionPool.find(
+          (d) =>
+            !d.isGeneric &&
+            (d.title ?? '').trim() === systemMonarchSlot.title.trim(),
+        )
+      if (matchedMonarchDef && positionDefinitionId !== matchedMonarchDef.id) {
+        defaultReignAppliedRef.current = true
+        setPositionDefinitionId(matchedMonarchDef.id)
+        setTitle('')
+        setTitleEn(matchedMonarchDef.titleEn ?? '')
+        setPresetPositionType(null)
+        return
+      }
+    }
+
+    if (defaultReignAppliedRef.current) return
+    const defaultDefinition = definitionPool.find(
       (definition) => definition.title === defaultDefinitionTitle,
     )
     if (!defaultDefinition) return
@@ -2915,7 +3168,146 @@ export function TenureRegisterPanel({
     setTitle('')
     setTitleEn(defaultDefinition.titleEn ?? '')
     setPresetPositionType(null)
-  }, [open, isEdit, monarchicalMode, defaultDefinitionTitle, positionDefinitions, positionDefinitionId, title])
+  }, [
+    open,
+    isEdit,
+    monarchicalMode,
+    activePoliticalSystem,
+    defaultDefinitionTitle,
+    definitionPool,
+    positionDefinitionId,
+    title,
+  ])
+
+  /** 수반·원수 트랙(비군주) 진입 시 활성 정체(PoliticalSystem)에 등록된 공식 수반 직위 카탈로그를 기본 세팅 */
+  useEffect(() => {
+    if (
+      !open ||
+      isEdit ||
+      monarchicalMode ||
+      affiliationTrack !== 'HEAD' ||
+      userTouchedPositionRef.current ||
+      Boolean(initialPositionDefinitionId?.trim()) ||
+      Boolean(initialPositionTitle?.trim()) ||
+      !activePoliticalSystem
+    ) {
+      return
+    }
+    const slots = resolveSystemHeadPositionSlots(activePoliticalSystem)
+    const preferredSlot =
+      initialPositionType === 'HEAD_OF_STATE' &&
+      slots.stateSlot &&
+      !slots.stateSlot.isMonarchical
+        ? slots.stateSlot
+        : initialPositionType === 'HEAD_OF_GOVERNMENT' && slots.governmentSlot
+          ? slots.governmentSlot
+          : slots.primaryCabinetSlot && !slots.primaryCabinetSlot.isMonarchical
+            ? slots.primaryCabinetSlot
+            : slots.governmentSlot ??
+              (slots.stateSlot && !slots.stateSlot.isMonarchical
+                ? slots.stateSlot
+                : null)
+    if (!preferredSlot) return
+    const matchedDef =
+      (preferredSlot.positionId
+        ? definitionPool.find((d) => d.id === preferredSlot.positionId)
+        : undefined) ??
+      definitionPool.find(
+        (d) =>
+          !d.isGeneric && (d.title ?? '').trim() === preferredSlot.title.trim(),
+      )
+    if (matchedDef && positionDefinitionId !== matchedDef.id) {
+      setPositionDefinitionId(matchedDef.id)
+      setTitle('')
+      setTitleEn(matchedDef.titleEn ?? '')
+      setPresetPositionType(null)
+    }
+  }, [
+    open,
+    isEdit,
+    monarchicalMode,
+    affiliationTrack,
+    initialPositionDefinitionId,
+    initialPositionTitle,
+    initialPositionType,
+    activePoliticalSystem,
+    definitionPool,
+    positionDefinitionId,
+  ])
+
+  /** 활성 정체(PoliticalSystem)에 기반해 취임·선출 방식 및 의원 소속 원(Chamber)을 자동 기본 세팅 */
+  useEffect(() => {
+    if (
+      !open ||
+      isEdit ||
+      userTouchedAppointmentRef.current ||
+      initialAppointmentMethod !== undefined ||
+      !activePoliticalSystem
+    ) {
+      return
+    }
+    let nextMethod = ''
+    if (isReign) {
+      nextMethod =
+        defaultAppointmentMethodFromSystem(
+          activePoliticalSystem,
+          'HEAD_OF_STATE',
+        ) || 'HEREDITARY'
+    } else if (
+      positionType === 'HEAD_OF_STATE' ||
+      positionType === 'HEAD_OF_GOVERNMENT'
+    ) {
+      nextMethod = defaultAppointmentMethodFromSystem(
+        activePoliticalSystem,
+        positionType,
+      )
+    } else if (positionType === 'LEGISLATOR') {
+      nextMethod = 'DIRECT_ELECTION'
+    }
+    if (nextMethod && appointmentMethod !== nextMethod) {
+      setAppointmentMethod(nextMethod)
+    }
+  }, [
+    open,
+    isEdit,
+    isReign,
+    positionType,
+    initialAppointmentMethod,
+    activePoliticalSystem,
+    appointmentMethod,
+  ])
+
+  useEffect(() => {
+    if (
+      !open ||
+      isEdit ||
+      isReign ||
+      positionType !== 'LEGISLATOR' ||
+      userTouchedChamberRef.current ||
+      initialChamberId !== undefined ||
+      chamberId ||
+      !activePoliticalSystem
+    ) {
+      return
+    }
+    const suggestedChamber = defaultChamberIdForLegislator(
+      activePoliticalSystem,
+      selectedDef?.title ?? title,
+    )
+    if (suggestedChamber) {
+      setChamberId(suggestedChamber)
+    }
+  }, [
+    open,
+    isEdit,
+    isReign,
+    positionType,
+    initialChamberId,
+    chamberId,
+    activePoliticalSystem,
+    selectedDef,
+    title,
+  ])
 
   /** 마인드맵·정체 직책 슬롯에서 열었을 때 해당 직책 정의(대통령·국왕·외무장관 등)를 자동으로 미리 선택한다 */
   const initialPositionAppliedRef = useRef(false)
@@ -3113,7 +3505,20 @@ export function TenureRegisterPanel({
     setShowOnEvents(tenureRow.showPositionInfo !== false)
     setSelectedCabinetIds(hydratedCabinetIds)
     setAdministrationDepartmentId(hydratedDeptId)
+    setChamberId(tenureRow.chamberId ?? tenureRow.chamber?.id ?? null)
+    setElectionCandidacyId(tenureRow.electionCandidacyId ?? null)
   }, [open, editingTenure])
+
+  // 단원제 정체 시기의 의원(LEGISLATOR) 신규 등록 시 의회 원 자동 선택
+  useEffect(() => {
+    if (!open || isEdit || positionType !== 'LEGISLATOR' || chamberId) return
+    if (
+      activePoliticalSystem?.legislatureType === 'UNICAMERAL' &&
+      activePoliticalSystem.lowerChamberId
+    ) {
+      setChamberId(activePoliticalSystem.lowerChamberId)
+    }
+  }, [open, isEdit, positionType, chamberId, activePoliticalSystem])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -3231,6 +3636,13 @@ export function TenureRegisterPanel({
           : undefined,
       administrationDepartmentId: effectiveDepartmentId || emptyAs,
       militaryUnitId: effectiveMilitaryUnitId || emptyAs,
+      chamberId:
+        !isReign && effectivePositionType === 'LEGISLATOR'
+          ? (chamberId || emptyAs)
+          : emptyAs,
+      electionCandidacyId: !isReign
+        ? (electionCandidacyId || emptyAs)
+        : emptyAs,
     }
     setSubmitting(true)
     try {
@@ -3560,6 +3972,8 @@ export function TenureRegisterPanel({
     showOnEvents,
     selectedCabinetIds,
     administrationDepartmentId,
+    chamberId,
+    electionCandidacyId,
   ])
   latestSnapshotRef.current = formSnapshot
   const isDirty = dirtyBaselineRef.current !== null && dirtyBaselineRef.current !== formSnapshot
@@ -4280,6 +4694,7 @@ export function TenureRegisterPanel({
                               title="직책 선택 해제"
                               onClick={(event) => {
                                 event.stopPropagation()
+                                userTouchedPositionRef.current = true
                                 setPositionDefinitionId(null)
                                 setPresetPositionType(null)
                                 setTitle('')
@@ -4414,6 +4829,104 @@ export function TenureRegisterPanel({
                         )}
                       </PositionSelectWrap>
 
+                      {/* 활성 정체(PoliticalSystem)에 지정된 공식 국가원수·정부수반 직책 추천 */}
+                      {affiliationTrack === 'HEAD' &&
+                        activePoliticalSystem &&
+                        (() => {
+                          const hosTitle = headOfStateTitleOf(activePoliticalSystem)
+                          const hogTitle = headOfGovernmentTitleOf(activePoliticalSystem)
+                          const suggestions: Array<{
+                            key: string
+                            label: string
+                            posId: string | null
+                            posType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+                          }> = []
+                          if (hosTitle) {
+                            suggestions.push({
+                              key: 'hos',
+                              label: hosTitle,
+                              posId: activePoliticalSystem.headOfStatePositionId ?? null,
+                              posType: 'HEAD_OF_STATE',
+                            })
+                          }
+                          if (hogTitle && hogTitle !== hosTitle && !isReign) {
+                            suggestions.push({
+                              key: 'hog',
+                              label: hogTitle,
+                              posId:
+                                activePoliticalSystem.headOfGovernmentPositionId ?? null,
+                              posType: 'HEAD_OF_GOVERNMENT',
+                            })
+                          }
+                          if (suggestions.length === 0) return null
+                          const regimeLabel =
+                            activePoliticalSystem.name?.trim() ||
+                            (activePoliticalSystem.governmentForm
+                              ? GOVERNMENT_FORM_LABEL[activePoliticalSystem.governmentForm]
+                              : '당시 헌정 체제')
+                          return (
+                            <AffiliatedPolityBar>
+                              <AffiliatedPolityLabel>
+                                {regimeLabel} 공식 수반:
+                              </AffiliatedPolityLabel>
+                              {suggestions.map((sug) => {
+                                const isPicked =
+                                  (sug.posId && positionDefinitionId === sug.posId) ||
+                                  (!sug.posId && title.trim() === sug.label)
+                                return (
+                                  <AffiliatedPolityChip
+                                    key={sug.key}
+                                    type="button"
+                                    $active={Boolean(isPicked)}
+                                    onClick={() => {
+                                      if (sug.posId) {
+                                        handlePositionSelect(sug.posId)
+                                      } else {
+                                        const byTitle = definitionPool.find(
+                                          (d) =>
+                                            !d.isGeneric &&
+                                            (d.title ?? '').trim() === sug.label,
+                                        )
+                                        if (byTitle) {
+                                          handlePositionSelect(byTitle.id)
+                                        } else {
+                                          openNewPositionCreator({
+                                            title: sug.label,
+                                            positionType: sug.posType,
+                                          })
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    {sug.label}
+                                  </AffiliatedPolityChip>
+                                )
+                              })}
+                            </AffiliatedPolityBar>
+                          )
+                        })()}
+
+                      {/* 의원(LEGISLATOR)일 때 소속 의회 원(Chamber) 선택 */}
+                      {!isReign &&
+                        positionType === 'LEGISLATOR' &&
+                        chamberOptions.length > 0 && (
+                          <div style={{ marginTop: 8 }}>
+                            <CustomDropbox
+                              ariaLabel="소속 의회 원"
+                              value={chamberId ?? ''}
+                              placeholder="소속 의회 원 선택 (예: 하원·상원·국회)"
+                              options={[
+                                { value: '', label: '원 미지정' },
+                                ...chamberOptions,
+                              ]}
+                              onChange={(next) => {
+                                userTouchedChamberRef.current = true
+                                setChamberId(next || null)
+                              }}
+                            />
+                          </div>
+                        )}
+
                       {!newPosOpen &&
                         ((positionDefinitionId &&
                           !localTitleOpen &&
@@ -4479,8 +4992,17 @@ export function TenureRegisterPanel({
                                 type="button"
                                 onClick={() => openNewPositionCreator()}
                               >
-                                + 새 직책 등록 (직위 구분·서열 지정)
+                                + 새 직책 DB 정본 등록
                               </LocalTitleLink>
+                              {' · '}
+                              <a
+                                href="/government/positions"
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ color: 'inherit', textDecoration: 'underline' }}
+                              >
+                                관직·직책 정본 관리 ↗
+                              </a>
                             </>
                           )}
                         </FieldHint>
@@ -4814,6 +5336,74 @@ export function TenureRegisterPanel({
 
                       <FieldHint>
                         연도만 알면 연도만 입력해도 됩니다.
+                        {!isReign &&
+                          !end.year.trim() &&
+                          start.era === 'AD' &&
+                          start.year.trim() &&
+                          (() => {
+                            const constitutionalTermYears =
+                              positionType === 'HEAD_OF_STATE'
+                                ? (activePoliticalSystem?.headOfStateTermYears ??
+                                  null)
+                                : positionType === 'LEGISLATOR'
+                                  ? chamberId &&
+                                    chamberId ===
+                                      activePoliticalSystem?.upperChamberId
+                                    ? (activePoliticalSystem?.upperHouseTermYears ??
+                                      null)
+                                    : (activePoliticalSystem?.lowerHouseTermYears ??
+                                      null)
+                                  : null
+                            if (!constitutionalTermYears) return null
+                            return (
+                              <>
+                                {' · '}
+                                <LocalTitleLink
+                                  type="button"
+                                  onClick={() => {
+                                    const sYear = Number(start.year.trim())
+                                    if (!Number.isFinite(sYear) || sYear < 1)
+                                      return
+                                    if (
+                                      start.month.trim() &&
+                                      start.day.trim()
+                                    ) {
+                                      const isoStart = `${String(sYear).padStart(4, '0')}-${start.month.trim().padStart(2, '0')}-${start.day.trim().padStart(2, '0')}`
+                                      const computed = addTermYearsToIsoDate(
+                                        isoStart,
+                                        constitutionalTermYears,
+                                      )
+                                      if (computed) {
+                                        const [ey, em, ed] = computed.split('-')
+                                        setEnd({
+                                          era: 'AD',
+                                          year: String(Number(ey)),
+                                          month: em ?? '',
+                                          day: ed ?? '',
+                                        })
+                                        if (!endReason)
+                                          setEndReason('TERM_COMPLETED')
+                                        return
+                                      }
+                                    }
+                                    setEnd({
+                                      era: 'AD',
+                                      year: String(
+                                        sYear + constitutionalTermYears,
+                                      ),
+                                      month: start.month.trim(),
+                                      day: '',
+                                    })
+                                    if (!endReason)
+                                      setEndReason('TERM_COMPLETED')
+                                  }}
+                                >
+                                  헌법 법정 임기({constitutionalTermYears}년)
+                                  만료일로 채우기
+                                </LocalTitleLink>
+                              </>
+                            )
+                          })()}
                         {personLifespanRef?.deathParts && !end.year.trim() && (
                           <>
                             {' · '}
@@ -4937,8 +5527,106 @@ export function TenureRegisterPanel({
                         value={appointmentMethod}
                         placeholder={isReign ? '즉위 방식 선택' : '취임 방식 선택'}
                         options={APPOINTMENT_METHOD_OPTIONS}
-                        onChange={setAppointmentMethod}
+                        onChange={(nextMethod) => {
+                          userTouchedAppointmentRef.current = true
+                          setAppointmentMethod(nextMethod)
+                        }}
                       />
+                      {!appointmentMethod &&
+                        activePoliticalSystem?.governmentForm &&
+                        (() => {
+                          const gf = activePoliticalSystem.governmentForm
+                          let recommended:
+                            | { code: string; label: string; reason: string }
+                            | null = null
+                          if (isReign || gf === 'ABSOLUTE_MONARCHY') {
+                            recommended = {
+                              code: 'HEREDITARY',
+                              label: '세습 즉위',
+                              reason: `${GOVERNMENT_FORM_LABEL[gf]} 기본`,
+                            }
+                          } else if (positionType === 'LEGISLATOR') {
+                            recommended = {
+                              code: 'DIRECT_ELECTION',
+                              label: '직접 선거',
+                              reason: '의회 선출직 기본',
+                            }
+                          } else if (
+                            positionType === 'HEAD_OF_STATE' &&
+                            activePoliticalSystem.headSelectionMethod
+                          ) {
+                            const sel = activePoliticalSystem.headSelectionMethod
+                            if (sel === 'INDIRECT') {
+                              recommended = {
+                                code: 'INDIRECT_ELECTION',
+                                label: '간접 선거',
+                                reason: `헌정 체제 원수 ${HEAD_SELECTION_METHOD_LABEL[sel]}`,
+                              }
+                            } else if (sel === 'DIRECT') {
+                              recommended = {
+                                code: 'DIRECT_ELECTION',
+                                label: '직접 선거',
+                                reason: `헌정 체제 원수 ${HEAD_SELECTION_METHOD_LABEL[sel]}`,
+                              }
+                            } else if (sel === 'HEREDITARY') {
+                              recommended = {
+                                code: 'HEREDITARY',
+                                label: '세습 즉위',
+                                reason: `헌정 체제 원수 ${HEAD_SELECTION_METHOD_LABEL[sel]}`,
+                              }
+                            } else if (sel === 'APPOINTED') {
+                              recommended = {
+                                code: 'APPOINTMENT',
+                                label: '임명·지명',
+                                reason: `헌정 체제 원수 ${HEAD_SELECTION_METHOD_LABEL[sel]}`,
+                              }
+                            } else if (sel === 'COUP_OR_JUNTA') {
+                              recommended = {
+                                code: 'COUP',
+                                label: '쿠데타·정변',
+                                reason: `헌정 체제 원수 ${HEAD_SELECTION_METHOD_LABEL[sel]}`,
+                              }
+                            }
+                          } else if (
+                            positionType === 'HEAD_OF_STATE' &&
+                            (gf === 'PRESIDENTIAL' || gf === 'SEMI_PRESIDENTIAL')
+                          ) {
+                            recommended = {
+                              code: 'DIRECT_ELECTION',
+                              label: '직접 선거',
+                              reason: `${GOVERNMENT_FORM_LABEL[gf]} 국가원수`,
+                            }
+                          } else if (
+                            positionType === 'HEAD_OF_GOVERNMENT' &&
+                            (gf === 'PARLIAMENTARY' || gf === 'CONSTITUTIONAL_MONARCHY')
+                          ) {
+                            recommended = {
+                              code: 'PARLIAMENTARY_ELECTION',
+                              label: '의회 선출',
+                              reason: `${GOVERNMENT_FORM_LABEL[gf]} 내각 수반`,
+                            }
+                          } else if (gf === 'MILITARY') {
+                            recommended = {
+                              code: 'COUP',
+                              label: '쿠데타·정변',
+                              reason: '군사정권 집권',
+                            }
+                          }
+                          if (!recommended) return null
+                          return (
+                            <AffiliatedPolityBar>
+                              <AffiliatedPolityLabel>
+                                정체 기반 추천 ({recommended.reason}):
+                              </AffiliatedPolityLabel>
+                              <AffiliatedPolityChip
+                                type="button"
+                                onClick={() => setAppointmentMethod(recommended!.code)}
+                              >
+                                {recommended.label} 적용
+                              </AffiliatedPolityChip>
+                            </AffiliatedPolityBar>
+                          )
+                        })()}
                       <Textarea
                         id="tenure-appointment-detail"
                         aria-label={isReign ? '즉위 상세' : '취임 상세'}
@@ -5125,6 +5813,61 @@ export function TenureRegisterPanel({
                       </FieldControl>
                     </FieldRow>
                   )}
+
+                  {/* 당선 선거 연결 — 인물의 출마·당선 기록이 있을 때 1:1 매칭 */}
+                  {!isReign &&
+                    (electionCandidacyOptions.length > 0 || Boolean(electionCandidacyId)) && (
+                      <FieldRow>
+                        <FieldLabel as="span">
+                          당선 선거 연결<OptionalTag>(선택)</OptionalTag>
+                        </FieldLabel>
+                        <FieldControl>
+                          <CustomDropbox
+                            ariaLabel="당선 선거 연결"
+                            value={electionCandidacyId ?? ''}
+                            placeholder="이 재임으로 이어진 선거 출마·당선 기록 선택"
+                            options={[
+                              { value: '', label: '연결 안 함' },
+                              ...electionCandidacyOptions,
+                            ]}
+                            onChange={(nextValue) => {
+                              const nextId = nextValue || null
+                              setElectionCandidacyId(nextId)
+                              if (!nextId) return
+                              const picked = candidacyOptionsRaw.find(
+                                (item) => item.id === nextId,
+                              )
+                              if (!picked) return
+                              if (!partyId && picked.partyId) {
+                                setPartyId(picked.partyId)
+                              }
+                              if (!appointmentMethod) {
+                                setAppointmentMethod('DIRECT_ELECTION')
+                              }
+                              if (
+                                !chamberId &&
+                                picked.election.chamberId &&
+                                positionType === 'LEGISLATOR'
+                              ) {
+                                setChamberId(picked.election.chamberId)
+                              }
+                              if (!start.year.trim() && picked.election.pollDate) {
+                                setStart(
+                                  parsePartialDateString(
+                                    picked.election.pollDate.slice(0, 10),
+                                  ),
+                                )
+                              }
+                            }}
+                            searchable={electionCandidacyOptions.length >= 6}
+                            searchPlaceholder="선거명·연도 검색..."
+                          />
+                          <FieldHint>
+                            선거 당선 기록과 연결하면 선거 상세의 당선자 행과 정당 배출 수반 목록에 이 재임이 함께 표시됩니다.
+                          </FieldHint>
+                        </FieldControl>
+                      </FieldRow>
+                    )}
 
                   {/* 재임 당시 소속 정당 — 연립내각·당적 변천 기록 */}
                   {showPartyField && (

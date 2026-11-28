@@ -3,7 +3,7 @@ import React from 'react'
 import '@testing-library/jest-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import type { AdministrationDepartment } from '@/shared/api/administration-department'
 import type { CabinetListItemDto } from '@/shared/api/person-career'
@@ -236,7 +236,13 @@ function renderCatalog(initialEntry = '/government') {
   return renderWithTheme(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialEntry]}>
-        <GovernmentCatalogPage />
+        <Routes>
+          <Route path="/government" element={<GovernmentCatalogPage />} />
+          <Route
+            path="/government/positions"
+            element={<div>관직 정본 관리 전용 지면</div>}
+          />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -310,18 +316,14 @@ describe('GovernmentCatalogPage — 행정 리스트 페이지 디자인 개선'
     })
   })
 
-  it('관직 사전 버튼 클릭 시 우측 사이드바 대신 중앙 모달(RegisterModal)로 열린다', async () => {
+  it('관직·직책 정본 탭 또는 관리 버튼 클릭 시 전용 관리 지면(/government/positions)으로 이동한다', async () => {
     renderCatalog()
     await screen.findByText('아데나워 제1차 내각')
 
-    fireEvent.click(screen.getByRole('button', { name: /관직 사전/ }))
+    fireEvent.click(screen.getByRole('tab', { name: '관직 · 직책 정본' }))
 
-    const modalDialog = await screen.findByRole('dialog', {
-      name: '전 국가 표준 관직 사전',
-    })
-    expect(modalDialog).toBeInTheDocument()
     expect(
-      within(modalDialog).getByText('관직 사전 본문 (모달 내장)'),
+      await screen.findByText('관직 정본 관리 전용 지면'),
     ).toBeInTheDocument()
   })
 })

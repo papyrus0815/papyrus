@@ -83,8 +83,6 @@ import { pathKeys } from '@/shared/router'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { InstitutionAppointmentModal } from '@/shared/ui/institution-appointment-modal'
 import { PrimaryActionButton } from '@/shared/ui/primary-action-button'
-import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
-import { PersonRegisterModalFormScroll } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import {
   SearchableSelect,
   type SearchableSelectOption,
@@ -95,7 +93,6 @@ import {
   type EditableCabinetRecord,
 } from '@/widgets/country/country-detail/ui/cabinet-form-modal.widget'
 import { APPOINTMENT_METHOD_LABEL } from '@/widgets/country/country-detail/ui/cabinets-section.helpers'
-import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
 import {
   CountryInlineModal,
   type CountryInlineModalTarget,
@@ -285,7 +282,6 @@ export function GovernmentCatalogPage() {
   const isSearchPending = searchDraft.trim() !== debouncedSearch.trim()
   const [yearInputDraft, setYearInputDraft] = useState<string>(rawYearParam)
 
-  const [positionDictOpen, setPositionDictOpen] = useState<boolean>(false)
   const [filterPopoverOpen, setFilterPopoverOpen] = useState<boolean>(false)
   const [displayPopoverOpen, setDisplayPopoverOpen] = useState<boolean>(false)
   const [collapsedChapters, setCollapsedChapters] = useState<
@@ -1324,8 +1320,7 @@ export function GovernmentCatalogPage() {
         Boolean(appointingCabinet) ||
         Boolean(appointingDepartment) ||
         Boolean(personModalId) ||
-        Boolean(countryModalTarget) ||
-        positionDictOpen
+        Boolean(countryModalTarget)
       ) {
         return
       }
@@ -1377,7 +1372,6 @@ export function GovernmentCatalogPage() {
     appointingDepartment,
     personModalId,
     countryModalTarget,
-    positionDictOpen,
     displayPopoverOpen,
     selectedId,
     stepSelection,
@@ -2737,12 +2731,18 @@ export function GovernmentCatalogPage() {
 
             <UtilityBtn
               type="button"
-              $active={positionDictOpen}
-              onClick={() => setPositionDictOpen(true)}
-              title="전 국가 표준 관직 사전 열기"
+              onClick={() =>
+                navigate(
+                  pathKeys.government.positions({
+                    polity: selectedPolityToken || undefined,
+                  }),
+                )
+              }
+              title="관직·직책·계급 정본 관리 전용 페이지로 이동"
             >
               <FiBookOpen size={13} />
-              <span className="btn-label">관직 사전</span>
+              <span className="btn-label">관직·직책 관리</span>
+              <FiArrowUpRight size={11} />
             </UtilityBtn>
 
             <DesktopRegisterWrap>
@@ -2797,6 +2797,21 @@ export function GovernmentCatalogPage() {
                   <SegmentCount $active={activeTab === 'departments'}>
                     {allDepartments.length}
                   </SegmentCount>
+                </SegmentBtn>
+                <SegmentBtn
+                  type="button"
+                  role="tab"
+                  aria-selected={false}
+                  $active={false}
+                  onClick={() =>
+                    navigate(
+                      pathKeys.government.positions({
+                        polity: selectedPolityToken || undefined,
+                      }),
+                    )
+                  }
+                >
+                  <span>관직 · 직책 정본</span>
                 </SegmentBtn>
               </DomainSegment>
 
@@ -4160,25 +4175,6 @@ export function GovernmentCatalogPage() {
         onClose={() => setCountryModalTarget(null)}
         onSwitch={(nextTarget) => setCountryModalTarget(nextTarget)}
       />
-
-      <RegisterModal
-        isOpen={positionDictOpen}
-        onClose={() => setPositionDictOpen(false)}
-        title="전 국가 표준 관직 사전"
-        maxWidth="min(1040px, 95vw)"
-        height="86vh"
-        fullBleedOnMobile
-      >
-        <PersonRegisterModalFormScroll>
-          <PositionDefinitionsSection
-            embeddedInModal
-            onOpenDepartmentDetail={(targetDeptId) => {
-              setPositionDictOpen(false)
-              updateParams({ tab: 'departments', selected: targetDeptId })
-            }}
-          />
-        </PersonRegisterModalFormScroll>
-      </RegisterModal>
     </PageScene>
   )
 }

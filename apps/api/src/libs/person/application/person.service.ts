@@ -1319,6 +1319,35 @@ export class PersonService {
   }
 
   /**
+   * 역사국가에만 소속된 인물(현대 국가 없음)의 이름 표시 순서를 연결된 현대 국가에서 끌어온다.
+   *
+   * 표시 순서는 개인값 → `person.country`(현대 국가 FK) 기본값 → 동양식 순으로 정해지는데,
+   * 현대 국가가 없는 인물은 둘째 칸이 비어 화면마다 성-우선으로 떨어진다(이탈리아 왕국·영국 연합왕국 총리 등).
+   * 화면 수십 곳의 조회마다 역사국가→현대국가를 잇는 대신 저장 시점에 개인값으로 굳힌다 —
+   * 시드가 서양 인물에 개인값 western을 넣는 것과 같은 규약.
+   *
+   * 개인값이 이미 있거나 현대 국가가 있으면 손대지 않는다(null 반환). 연결된 현대 국가들의 기본값이
+   * 하나로 모이지 않으면(서로 다르거나 비어 있음) 추측하지 않고 null.
+   */
+  private async deriveNameDisplayOrderForHistoricalOnly(input: {
+    countryId?: string | null
+    historicalCountryId?: string | null
+    nameDisplayOrder?: 'korean' | 'western' | null
+  }): Promise<'korean' | 'western' | null> {
+    if (input.nameDisplayOrder) return null
+    if (input.countryId) return null
+    if (!input.historicalCountryId) return null
+    const links = await this.prisma.historicalCountryModernCountry.findMany({
+      where: { historicalCountryId: input.historicalCountryId },
+      select: { modernCountry: { select: { defaultNameDisplayOrder: true } } },
+    })
+    const orders = new Set(links.map((link) => link.modernCountry.defaultNameDisplayOrder))
+    if (orders.size !== 1) return null
+    const [onlyOrder] = [...orders]
+    return onlyOrder === 'western' || onlyOrder === 'korean' ? onlyOrder : null
+  }
+
+  /**
    * 인물 생성 (accountId 있으면 소유자로 저장)
    */
   async create(data: CreatePersonData, accountId?: string): Promise<PersonResponseDto> {
@@ -1357,7 +1386,13 @@ export class PersonService {
       ],
       { birthSigned, deathSigned },
     )
-    const createData = accountId != null ? { ...data, accountId } : data
+    const derivedOrder = await this.deriveNameDisplayOrderForHistoricalOnly({
+      countryId: data.countryId,
+      historicalCountryId: data.historicalCountryId,
+      nameDisplayOrder: data.nameDisplayOrder,
+    })
+    const orderedData = derivedOrder ? { ...data, nameDisplayOrder: derivedOrder } : data
+    const createData = accountId != null ? { ...orderedData, accountId } : orderedData
     const person = await this.personRepository.create(createData)
     // 커밋 이후 부수효과(알림)는 저장 성공과 독립 — 예외가 나도 저장 성공을 실패로
     // 오보하지 않게 격리(로깅만). 클라의 dirty 기준선·중복 저장 오염 방지.
@@ -1504,6 +1539,28 @@ export class PersonService {
           ? data.spouseRelations.map((r) => r.spouseId)
           : undefined,
       )
+    }
+    /* 소속이나 표시 순서를 건드린 저장만 다시 계산 — 다른 칸만 고친 저장은 기존 값을 그대로 둔다 */
+    if (
+      data.countryId !== undefined ||
+      data.historicalCountryId !== undefined ||
+      data.nameDisplayOrder !== undefined
+    ) {
+      /* existing.countryId는 응답용 '유효' 값이라 역사국가 인물이면 역사국가 PK가 담긴다 — 원본 FK를 따로 읽는다 */
+      const storedRow = await this.prisma.person.findUnique({
+        where: { id },
+        select: { countryId: true, historicalCountryId: true, nameDisplayOrder: true },
+      })
+      const derivedOrder = await this.deriveNameDisplayOrderForHistoricalOnly({
+        countryId: data.countryId !== undefined ? data.countryId : storedRow?.countryId,
+        historicalCountryId:
+          data.historicalCountryId !== undefined
+            ? data.historicalCountryId
+            : storedRow?.historicalCountryId,
+        nameDisplayOrder:
+          data.nameDisplayOrder !== undefined ? data.nameDisplayOrder : storedRow?.nameDisplayOrder,
+      })
+      if (derivedOrder) data = { ...data, nameDisplayOrder: derivedOrder }
     }
     const person = await this.personRepository.update(id, data)
     const change = describePersonUpdate(existing, data)
@@ -3037,6 +3094,7 @@ export class PersonService {
       description?: string | null
       countryId?: string | null
       historicalCountryId?: string | null
+      politicalSystemId?: string | null
       startDateInfo?: any
       endDateInfo?: any
       allowReshuffle?: boolean
@@ -3069,6 +3127,7 @@ export class PersonService {
       headTenureId?: string | null
       countryId?: string | null
       historicalCountryId?: string | null
+      politicalSystemId?: string | null
       startDateInfo?: any
       endDateInfo?: any
     },
@@ -3282,6 +3341,10 @@ export class PersonService {
     countryId?: string | null
     historicalCountryId?: string | null
     localTitle?: string | null
+    startEra?: 'BC' | 'AD' | null
+    startYear?: number | null
+    endEra?: 'BC' | 'AD' | null
+    endYear?: number | null
     note?: string | null
   }): Promise<any> {
     if (!dto.countryId && !dto.historicalCountryId) {
@@ -3308,9 +3371,40 @@ export class PersonService {
     return this.personRepository.addPositionDefinitionScope(dto)
   }
 
+  /** 관직 정의 적용 범위 수정 (현지 표기·시대 창·비고) */
+  async updatePositionDefinitionScope(
+    scopeId: string,
+    dto: {
+      localTitle?: string | null
+      startEra?: 'BC' | 'AD' | null
+      startYear?: number | null
+      endEra?: 'BC' | 'AD' | null
+      endYear?: number | null
+      note?: string | null
+    },
+  ): Promise<any> {
+    return this.personRepository.updatePositionDefinitionScope(scopeId, dto)
+  }
+
   /** 관직 정의 적용 범위 삭제 — 전부 지우면 다시 전역 */
   async removePositionDefinitionScope(scopeId: string): Promise<void> {
     return this.personRepository.removePositionDefinitionScope(scopeId)
+  }
+
+  /** 일반 정의(isGeneric=true)에 머물러 있는 미정규화 재임 목록 조회 */
+  async findUnnormalizedPositionTenures(): Promise<any[]> {
+    return this.personRepository.findUnnormalizedPositionTenures()
+  }
+
+  /** 중복 관직 정의를 대상 정본으로 통합 */
+  async mergePositionDefinition(
+    sourceId: string,
+    targetDefinitionId: string,
+  ): Promise<any> {
+    return this.personRepository.mergePositionDefinition(
+      sourceId,
+      targetDefinitionId,
+    )
   }
 
   /**

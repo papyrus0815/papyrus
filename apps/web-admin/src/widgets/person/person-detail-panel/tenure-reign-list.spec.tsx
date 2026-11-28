@@ -607,4 +607,56 @@ describe('TenureReignList', () => {
       screen.getByRole('button', { name: '같은 행정부 · 제2차 내각' }),
     ).toBeInTheDocument()
   })
+
+  it('소속 의회 원(chamber) 배지 클릭과 당선 선거 딥링크 콜백이 동작한다', () => {
+    const onChamberClick = jest.fn()
+    const onElectionClick = jest.fn()
+
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        onChamberClick={onChamberClick}
+        onElectionClick={onElectionClick}
+        items={[
+          makeItem({
+            kind: 'tenure',
+            record: {
+              id: 't-legislator',
+              title: '참의원 의원',
+              country: { id: 'jp', name: '일본' },
+              chamber: {
+                id: 'ch-sangiin',
+                name: '참의원',
+                role: 'UPPER',
+              },
+              electionCandidacy: {
+                id: 'cand-jp-1',
+                election: {
+                  id: 'el-jp-26',
+                  name: '제26회 참의원 의원 통상선거',
+                  countryId: 'jp',
+                },
+              },
+            },
+          }),
+        ]}
+      />,
+    )
+
+    const chamberBtn = screen.getByRole('button', { name: '참의원 (상원)' })
+    fireEvent.click(chamberBtn)
+    expect(onChamberClick).toHaveBeenCalledWith({
+      chamberId: 'ch-sangiin',
+      countryId: 'jp',
+    })
+
+    const electionBtn = screen.getByRole('button', {
+      name: '제26회 참의원 의원 통상선거',
+    })
+    fireEvent.click(electionBtn)
+    expect(onElectionClick).toHaveBeenCalledWith({
+      electionId: 'el-jp-26',
+      countryId: 'jp',
+    })
+  })
 })

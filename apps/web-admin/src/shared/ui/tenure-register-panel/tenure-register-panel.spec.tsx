@@ -11,6 +11,23 @@ jest.mock('@/shared/hooks/use-click-sound.hook', () => ({
   useClickSound: () => jest.fn(),
 }))
 
+jest.mock('@/shared/api/client', () => ({
+  getApiConnection: () => ({ host: 'http://localhost:8000' }),
+  apiConnection: { host: 'http://localhost:8000' },
+}))
+
+const mockUsePoliticalSystems = jest.fn(() => ({ data: [] as unknown[] }))
+jest.mock('@/entities/political-system/api', () => ({
+  usePoliticalSystems: () => mockUsePoliticalSystems(),
+}))
+
+jest.mock('@/shared/api/chamber', () => ({
+  chamberApi: { list: jest.fn().mockResolvedValue([]) },
+  chamberKeys: { list: () => ['chambers'] },
+  chamberLabel: (c: { name: string }) => c.name,
+  labelChamberRole: (r: string) => r,
+}))
+
 jest.mock('@/shared/lib/government-position/derive-scoped-definition', () => ({
   deriveCountryScopedPositionDefinition: jest.fn(),
   ScopedDefinitionError: class ScopedDefinitionError extends Error {},
@@ -88,6 +105,7 @@ jest.mock('@/shared/api/person-career', () => ({
     }),
     getCabinets: jest.fn().mockResolvedValue([]),
     getTenuresByPersonId: jest.fn().mockResolvedValue([]),
+    getElectionCandidacyOptionsForTenure: jest.fn().mockResolvedValue([]),
     addGovernmentPositionTenure: jest.fn().mockResolvedValue({ id: 'new-tenure' }),
   },
 }))
@@ -135,6 +153,7 @@ jest.mock('@/shared/api/election', () => ({
   getPoliticalParties: jest.fn().mockResolvedValue([
     { id: 'party-1', name: '한국독립당', shortName: '한독당' },
   ]),
+  labelElectionType: (v: string) => v,
 }))
 
 jest.mock('@/shared/api/persons-detail', () => ({
@@ -288,6 +307,7 @@ describe('TenureRegisterPanel 사건등록 모달(EventRegisterModal) 레이아�
 describe('TenureRegisterPanel 셸 — 사건 등록 모달과 같은 닫기 확인·필수 입력 이동·등록 후 계속', () => {
   beforeEach(() => {
     mockConfirm.mockReset()
+    mockUsePoliticalSystems.mockReturnValue({ data: [] })
     jest.requireMock('@/shared/api/person-career').personCareerApi.addGovernmentPositionTenure.mockClear()
   })
 
@@ -396,5 +416,41 @@ describe('TenureRegisterPanel 셸 — 사건 등록 모달과 같은 닫기 확�
       }),
     )
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
+  })
+
+  it('정체(PoliticalSystem)가 등록된 국가로 수반 등록 시 공식 수반 직위 카탈로그와 취임 방식이 자동으로 기본 세팅된다', async () => {
+    mockUsePoliticalSystems.mockReturnValue({
+      data: [
+        {
+          id: 'ps-kr-6',
+          name: '제6공화국',
+          countryId: 'kr',
+          historicalCountryId: null,
+          isCurrent: true,
+          governmentForm: 'PRESIDENTIAL',
+          headSelectionMethod: 'DIRECT',
+          headOfStatePositionId: 'def-president',
+          headOfStatePosition: {
+            id: 'def-president',
+            title: '대통령',
+            positionType: 'HEAD_OF_STATE',
+            isMonarchical: false,
+          },
+          headOfStateHasPower: true,
+        },
+      ],
+    })
+
+    renderPanel({ initialCountryId: 'kr' })
+
+    await waitFor(() => {
+      expect(document.getElementById('tenure-field-position')).toHaveTextContent(
+        '대통령',
+      )
+    })
+    expect(screen.getByLabelText('취임 방식')).toHaveAttribute(
+      'data-value',
+      'DIRECT_ELECTION',
+    )
   })
 })

@@ -10,7 +10,10 @@ import {
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import type { AdministrationDepartment } from '@/shared/api/administration-department'
+import {
+  administrationDepartmentApi,
+  type AdministrationDepartment,
+} from '@/shared/api/administration-department'
 import {
   getPartyMemberships,
   getScopedPoliticalParties,
@@ -18,6 +21,10 @@ import {
   type PoliticalPartyRow,
 } from '@/shared/api/election'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
+import {
+  type MilitaryRankDto,
+  militaryRankApi,
+} from '@/shared/api/military-rank'
 import {
   type CabinetListItemDto,
   type CreateGovernmentPositionTenureDto,
@@ -110,6 +117,7 @@ export interface EditableInstitutionTenure {
   positionType?: CreateGovernmentPositionTenureDto['positionType'] | string | null
   positionDefinitionId?: string | null
   title?: string | null
+  militaryRankId?: string | null
   rankTitle?: string | null
   ordinal?: number | null
   partyId?: string | null
@@ -600,6 +608,7 @@ export const InstitutionAppointmentModal: React.FC<
   /** 직책 칸에서 고른 DB 정의 — 방금 등록한 정의는 목록 재조회 전이라 여기서 들고 있는다 */
   const [selectedDefinitionMeta, setSelectedDefinitionMeta] =
     useState<SelectedPositionDefinition | null>(null)
+  const [militaryRankId, setMilitaryRankId] = useState<string>('')
   const [rankTitle, setRankTitle] = useState<string>('')
   const [ordinalInput, setOrdinalInput] = useState<string>('')
   const [partyId, setPartyId] = useState<string>('')
@@ -703,6 +712,7 @@ export const InstitutionAppointmentModal: React.FC<
     setSelectedDeptId(departmentId ?? '')
     setSelectedPositionDefinitionId('')
     setRoleTitle('')
+    setMilitaryRankId('')
     setRankTitle('')
     setOrdinalInput('')
     setPartyId('')
@@ -784,6 +794,7 @@ export const InstitutionAppointmentModal: React.FC<
       )
       setSelectedPositionDefinitionId(editingTenure.positionDefinitionId ?? '')
       setRoleTitle(editingTenure.title ?? '')
+      setMilitaryRankId(editingTenure.militaryRankId ?? '')
       setRankTitle(editingTenure.rankTitle ?? '')
       setOrdinalInput(
         editingTenure.ordinal != null ? String(editingTenure.ordinal) : '',
@@ -852,6 +863,18 @@ export const InstitutionAppointmentModal: React.FC<
       : selectedDeptId || departmentId || ''
   const effectiveDepartmentName = activeDepartment?.name ?? departmentName
   const effectiveDepartmentKind = activeDepartment?.kind ?? departmentKind
+
+  const { data: fetchedDepartmentDetail } = useQuery({
+    queryKey: ['institution-appointment-dept-meta', effectiveActiveDeptId],
+    queryFn: () => administrationDepartmentApi.getById(effectiveActiveDeptId),
+    enabled:
+      isOpen &&
+      Boolean(effectiveActiveDeptId) &&
+      !activeDepartment?.categoryId,
+    staleTime: 120_000,
+  })
+  const effectiveDepartmentCategoryId =
+    activeDepartment?.categoryId ?? fetchedDepartmentDetail?.categoryId ?? null
 
   const { data: allPositionDefinitions = [] } = useQuery<
     PickerPositionDefinition[]
@@ -976,6 +999,24 @@ export const InstitutionAppointmentModal: React.FC<
       }),
     enabled: isOpen && Boolean(countryId || historicalCountryId),
     staleTime: 60_000,
+  })
+
+  const { data: militaryRanks = [] } = useQuery<MilitaryRankDto[]>({
+    queryKey: [
+      'military-ranks',
+      countryId ?? '',
+      historicalCountryId ?? '',
+      'appointment-modal',
+    ],
+    queryFn: () =>
+      militaryRankApi.list({
+        countryId: countryId || null,
+        historicalCountryId: historicalCountryId || null,
+        includeUniversal: true,
+        limit: 200,
+      }),
+    enabled: isOpen && contextType === 'MILITARY_UNIT',
+    staleTime: 120_000,
   })
 
   const { data: selectedPersonMemberships = [] } = useQuery({
@@ -1370,6 +1411,33 @@ export const InstitutionAppointmentModal: React.FC<
       const primaryCabinetId =
         selectedCabinetIds.length > 0 ? selectedCabinetIds[0] : null
 
+      let resolvedRankId = militaryRankId.trim() || null
+      if (
+        contextType === 'MILITARY_UNIT' &&
+        !resolvedRankId &&
+        rankTitle.trim()
+      ) {
+        const exactMatch = militaryRanks.find(
+          (rk) =>
+            rk.name === rankTitle.trim() || rk.nameLocal === rankTitle.trim(),
+        )
+        if (exactMatch) {
+          resolvedRankId = exactMatch.id
+        } else {
+          try {
+            const createdRank = await militaryRankApi.createOrResolve({
+              name: rankTitle.trim(),
+              countryId: historicalCountryId ? null : (countryId ?? null),
+              historicalCountryId: historicalCountryId ?? null,
+              isUniversal: !countryId && !historicalCountryId,
+            })
+            resolvedRankId = createdRank.id
+          } catch {
+            // 계급 자동 승격 실패 시 문자열 캐시로 저장
+          }
+        }
+      }
+
       if (isEditing && editingTenure?.id) {
         return personCareerApi.updateGovernmentPositionTenure(editingTenure.id, {
           ...(matchedDefinition
@@ -1378,6 +1446,9 @@ export const InstitutionAppointmentModal: React.FC<
                 positionDefinitionId: matchedDefinition.id,
                 title: matchedDefinition.title,
               }
+            : {}),
+          ...(contextType === 'MILITARY_UNIT'
+            ? { militaryRankId: resolvedRankId }
             : {}),
           rankTitle: rankTitle.trim() || null,
           partyId: partyId || null,
@@ -1403,6 +1474,9 @@ export const InstitutionAppointmentModal: React.FC<
         title: trimmedTitle,
         ...(matchedDefinition
           ? { positionDefinitionId: matchedDefinition.id }
+          : {}),
+        ...(contextType === 'MILITARY_UNIT' && resolvedRankId
+          ? { militaryRankId: resolvedRankId }
           : {}),
         ...(rankTitle.trim() ? { rankTitle: rankTitle.trim() } : {}),
         ...(partyId ? { partyId } : {}),
@@ -1965,6 +2039,7 @@ export const InstitutionAppointmentModal: React.FC<
                   id={positionFieldId}
                   contextType={contextType}
                   departmentId={effectiveActiveDeptId || null}
+                  departmentCategoryId={effectiveDepartmentCategoryId}
                   departmentName={effectiveDepartmentName}
                   militaryUnitId={militaryUnitId}
                   militaryUnitName={militaryUnitName}
@@ -2157,39 +2232,112 @@ export const InstitutionAppointmentModal: React.FC<
                   <SubField>
                     <SubFieldLabel>
                       {contextType === 'MILITARY_UNIT'
-                        ? '군 계급 · 칭호'
+                        ? '군 계급 정본 (DB 선택 · 직접 입력 시 자동 등록)'
                         : '계급 · 품계 · 칭호'}
                     </SubFieldLabel>
-                    <Input
-                      value={rankTitle}
-                      onChange={(changeEvent) =>
-                        setRankTitle(changeEvent.target.value)
-                      }
-                      placeholder={
-                        contextType === 'MILITARY_UNIT'
-                          ? '예: 원수, 상급대장, 육군 중장'
-                          : '예: 백작, 정1품, 육군 대장(겸임)'
-                      }
-                    />
+                    {contextType === 'MILITARY_UNIT' &&
+                    militaryRanks.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <NativeSelect
+                          aria-label="군 계급 정본 선택"
+                          value={militaryRankId}
+                          onChange={(
+                            e: React.ChangeEvent<HTMLSelectElement>,
+                          ) => {
+                            const nextId = e.target.value
+                            setMilitaryRankId(nextId)
+                            const found = militaryRanks.find(
+                              (rk) => rk.id === nextId,
+                            )
+                            if (found) {
+                              setRankTitle(found.name)
+                            } else if (!nextId) {
+                              setRankTitle('')
+                            }
+                          }}
+                        >
+                          <option value="">— 계급 카탈로그에서 선택 —</option>
+                          {militaryRanks.map((rk) => (
+                            <option key={rk.id} value={rk.id}>
+                              {rk.name}
+                              {rk.nameLocal && rk.nameLocal !== rk.name
+                                ? ` (${rk.nameLocal})`
+                                : ''}
+                              {rk.natoCode ? ` · ${rk.natoCode}` : ''}
+                            </option>
+                          ))}
+                        </NativeSelect>
+                        <Input
+                          value={rankTitle}
+                          onChange={(changeEvent) => {
+                            const val = changeEvent.target.value
+                            setRankTitle(val)
+                            const matched = militaryRanks.find(
+                              (rk) => rk.name === val.trim(),
+                            )
+                            setMilitaryRankId(matched?.id ?? '')
+                          }}
+                          placeholder="또는 새 계급명 직접 입력 (저장 시 계급 정본에 자동 등록)"
+                        />
+                      </div>
+                    ) : (
+                      <Input
+                        value={rankTitle}
+                        onChange={(changeEvent) =>
+                          setRankTitle(changeEvent.target.value)
+                        }
+                        placeholder={
+                          contextType === 'MILITARY_UNIT'
+                            ? '예: 원수, 상급대장, 육군 중장'
+                            : '예: 백작, 정1품, 육군 대장(겸임)'
+                        }
+                      />
+                    )}
                   </SubField>
                 </SubFieldPair>
 
                 {contextType === 'MILITARY_UNIT' ? (
                   <PresetChipWrap>
-                    {MILITARY_RANK_PRESETS.map((rankPreset) => (
-                      <RolePresetChip
-                        key={rankPreset}
-                        type="button"
-                        $active={rankTitle.trim() === rankPreset}
-                        onClick={() =>
-                          setRankTitle((prevRank) =>
-                            prevRank === rankPreset ? '' : rankPreset,
+                    {(militaryRanks.length > 0
+                      ? militaryRanks
+                          .filter(
+                            (rk) =>
+                              !rk.isUniversal ||
+                              MILITARY_RANK_PRESETS.includes(rk.name),
                           )
-                        }
-                      >
-                        {rankPreset}
-                      </RolePresetChip>
-                    ))}
+                          .slice(0, 10)
+                          .map((rk) => ({
+                            id: rk.id,
+                            label: rk.name,
+                          }))
+                      : MILITARY_RANK_PRESETS.map((p) => ({
+                          id: '',
+                          label: p,
+                        }))
+                    ).map((presetItem) => {
+                      const isActiveChip = presetItem.id
+                        ? militaryRankId === presetItem.id ||
+                          rankTitle.trim() === presetItem.label
+                        : rankTitle.trim() === presetItem.label
+                      return (
+                        <RolePresetChip
+                          key={presetItem.id || presetItem.label}
+                          type="button"
+                          $active={isActiveChip}
+                          onClick={() => {
+                            if (isActiveChip) {
+                              setMilitaryRankId('')
+                              setRankTitle('')
+                            } else {
+                              setMilitaryRankId(presetItem.id)
+                              setRankTitle(presetItem.label)
+                            }
+                          }}
+                        >
+                          {presetItem.label}
+                        </RolePresetChip>
+                      )
+                    })}
                   </PresetChipWrap>
                 ) : null}
               </FieldControl>

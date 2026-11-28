@@ -107,6 +107,25 @@ describe('buildPositionDefinitionOptions — 직책은 DB 정의만', () => {
     })
     expect(withGeneric.options.some((option) => option.group === '현재 직책')).toBe(false)
   })
+
+  it('부처의 표준 기능 분류(departmentCategoryId)가 일치하는 직책은 "이 분야 표준 직책" 묶음과 categoryDefinitions로 상단에 배치한다', () => {
+    const finWithCat: PositionDefinitionLike = {
+      ...FINANCE_MINISTER,
+      categoryId: 'cat-finance',
+    }
+    const { options, categoryDefinitions } = buildPositionDefinitionOptions({
+      all: [CHAIR, FOREIGN_MINISTER, finWithCat],
+      picker: [FOREIGN_MINISTER, finWithCat],
+      contextType: 'DEPARTMENT',
+      departmentId: 'dept-new-treasury',
+      departmentCategoryId: 'cat-finance',
+    })
+    expect(categoryDefinitions.map((d) => d.id)).toEqual(['def-finance'])
+    expect(options[0]).toMatchObject({
+      group: '이 분야 표준 직책',
+      label: '재무장관',
+    })
+  })
 })
 
 describe('isAppointableDefinition · findDefinitionByTitle', () => {

@@ -2407,7 +2407,15 @@ export class PersonPrismaRepository implements IPersonRepository {
             electionCandidacy: {
               select: {
                 id: true,
-                election: { select: { id: true, name: true, pollDate: true } },
+                election: {
+                select: {
+                  id: true,
+                  name: true,
+                  pollDate: true,
+                  countryId: true,
+                  historicalCountryId: true,
+                },
+              },
               },
             },
             chamber: {
@@ -3884,7 +3892,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       if (!explicitDef) {
         throw new BadRequestException(`직위 정의를 찾을 수 없습니다: ${positionDefinitionId}`)
       }
-      if (explicitDef.isGeneric && explicitDef.id !== context?.keepDefinitionId) {
+      if (explicitDef.isGeneric) {
         throw new BadRequestException(
           `'${explicitDef.title}'은(는) 이름 없는 일반 정의라 직책으로 고를 수 없습니다. DB에서 구체 직책을 고르거나 먼저 등록해 주세요.`,
         )
@@ -3935,10 +3943,19 @@ export class PersonPrismaRepository implements IPersonRepository {
           ...(scopeOr.length > 0 ? [{ scopes: { some: { OR: scopeOr } } }] : []),
         ],
       },
-      select,
+      select: {
+        ...select,
+        scopes: { select: { id: true } },
+      },
     })
-    const catalog = pickSameTypeFirst(catalogMatches)
-    if (catalog) return catalog
+    const prioritizedCatalogMatches = [...catalogMatches].sort(
+      (left, right) => (right.scopes?.length ?? 0) - (left.scopes?.length ?? 0),
+    )
+    const catalog = pickSameTypeFirst(prioritizedCatalogMatches)
+    if (catalog) {
+      const { scopes: _scopes, ...cleanCatalog } = catalog
+      return cleanCatalog
+    }
 
     throw new BadRequestException(
       `직책 '${trimmedTitle}'이(가) DB에 없습니다. 직책을 DB에 먼저 등록한 뒤 골라 주세요.`,
@@ -4370,6 +4387,15 @@ export class PersonPrismaRepository implements IPersonRepository {
       countryFields.historicalCountryId,
     )
     await this.assertAccessionEventExists(dto.accessionEventId)
+    if (dto.chamberId && this.prisma.chamber?.findUnique) {
+      const chRow = await this.prisma.chamber.findUnique({
+        where: { id: dto.chamberId },
+        select: { id: true },
+      })
+      if (!chRow) {
+        throw new NotFoundException(`소속 의회 원(Chamber)을 찾을 수 없습니다: ${dto.chamberId}`)
+      }
+    }
 
     // 직위 정의에 특정 국가 기관(administrationDepartmentId)이나 군 부대(militaryUnitId)가 지정되어 있고 호출자가 비웠다면 호환 시 자동 매핑
     let effectiveDepartmentId = dto.administrationDepartmentId || undefined
@@ -4417,6 +4443,21 @@ export class PersonPrismaRepository implements IPersonRepository {
       startEdge,
       edgeFromInput(dto.endDateInfo, dto.endDate, dto.endDatePrecision ?? dto.startDatePrecision),
     )
+    let resolvedRankId: string | undefined = dto.militaryRankId || undefined
+    let resolvedRankTitle: string | undefined = dto.rankTitle?.trim() || undefined
+    if (resolvedRankId && this.prisma.militaryRank?.findUnique) {
+      const rankRow = await this.prisma.militaryRank.findUnique({
+        where: { id: resolvedRankId },
+        select: { id: true, name: true },
+      })
+      if (!rankRow) {
+        throw new NotFoundException(`군 계급을 찾을 수 없습니다: ${resolvedRankId}`)
+      }
+      if (!resolvedRankTitle) {
+        resolvedRankTitle = rankRow.name
+      }
+    }
+
     const createdTenure = await this.prisma.governmentPositionTenure.create({
       data: {
         ...period,
@@ -4427,7 +4468,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         positionType: definition.positionType,
         title: resolvedSpecificTitle,
         titleEn: dto.titleEn ?? undefined,
-        rankTitle: dto.rankTitle?.trim() || undefined,
+        militaryRankId: resolvedRankId,
+        militaryRoleKind: (dto.militaryRoleKind as any) ?? undefined,
+        rankTitle: resolvedRankTitle,
         partyId: dto.partyId || undefined,
         showPositionInfo: dto.showPositionInfo !== false, // 기본값 true
         ...(countryFields.countryId != null && { countryId: countryFields.countryId }),
@@ -4448,6 +4491,10 @@ export class PersonPrismaRepository implements IPersonRepository {
         militaryUnitId: effectiveMilitaryUnitId,
         scopeEntityKey: effectiveDepartmentId ?? effectiveMilitaryUnitId ?? '',
         electionCandidacyId: dto.electionCandidacyId ?? undefined,
+        chamberId:
+          definition.positionType === 'LEGISLATOR'
+            ? (dto.chamberId || undefined)
+            : undefined,
       },
       select: { id: true },
     }).catch(translateTenureWriteError)
@@ -4471,6 +4518,19 @@ export class PersonPrismaRepository implements IPersonRepository {
         militaryUnit: {
           select: { id: true, name: true, abbreviation: true, unitType: true, branch: true },
         },
+        militaryRank: {
+          select: {
+            id: true,
+            name: true,
+            nameLocal: true,
+            nameEn: true,
+            abbreviation: true,
+            category: true,
+            rankOrder: true,
+            natoCode: true,
+            branch: true,
+          },
+        },
         party: { select: { id: true, name: true, shortName: true, brandColor: true } },
         country: true,
         historicalCountry: true,
@@ -4491,9 +4551,20 @@ export class PersonPrismaRepository implements IPersonRepository {
         electionCandidacy: {
           select: {
             id: true,
-            election: { select: { id: true, name: true, pollDate: true } },
+            election: {
+              select: {
+                id: true,
+                name: true,
+                pollDate: true,
+                countryId: true,
+                historicalCountryId: true,
+              },
+            },
             party: { select: { id: true, name: true } },
           },
+        },
+        chamber: {
+          select: { id: true, name: true, localName: true, role: true },
         },
       },
     })
@@ -4534,18 +4605,12 @@ export class PersonPrismaRepository implements IPersonRepository {
       })
       if (!current) throw new NotFoundException('재임 기록을 찾을 수 없습니다')
       let definition = current.positionDefinition
-      const renamesGenericRecord =
-        definition.isGeneric &&
-        dto.title !== undefined &&
-        (dto.title?.trim() || '') !== (current.title?.trim() || '')
       if (dto.positionDefinitionId) {
-        definition = await this.resolveDefinitionForWrite(dto.positionDefinitionId, undefined, {
-          keepDefinitionId: current.positionDefinition.id,
-        })
+        definition = await this.resolveDefinitionForWrite(dto.positionDefinitionId, undefined)
       } else if (
         dto.positionDefinitionId === null ||
         (dto.positionType && dto.positionType !== definition.positionType) ||
-        renamesGenericRecord
+        definition.isGeneric
       ) {
         definition = await this.resolveDefinitionForWrite(
           undefined,
@@ -4571,7 +4636,35 @@ export class PersonPrismaRepository implements IPersonRepository {
       updateData.title = specificTitle(dto.title !== undefined ? dto.title : current.title, definition.title)
     }
     if (dto.titleEn !== undefined) updateData.titleEn = dto.titleEn
-    if (dto.rankTitle !== undefined) updateData.rankTitle = dto.rankTitle?.trim() || null
+    if (dto.militaryRoleKind !== undefined) {
+      updateData.militaryRoleKind = (dto.militaryRoleKind as any) || null
+    }
+    if (dto.militaryRankId !== undefined) {
+      if (dto.militaryRankId) {
+        const rankRow = this.prisma.militaryRank?.findUnique
+          ? await this.prisma.militaryRank.findUnique({
+              where: { id: dto.militaryRankId },
+              select: { id: true, name: true },
+            })
+          : { id: dto.militaryRankId, name: dto.rankTitle?.trim() || '' }
+        if (!rankRow) {
+          throw new NotFoundException(`군 계급을 찾을 수 없습니다: ${dto.militaryRankId}`)
+        }
+        updateData.militaryRankId = rankRow.id
+        if (dto.rankTitle === undefined || !dto.rankTitle?.trim()) {
+          updateData.rankTitle = rankRow.name || null
+        } else {
+          updateData.rankTitle = dto.rankTitle.trim()
+        }
+      } else {
+        updateData.militaryRankId = null
+        if (dto.rankTitle !== undefined) {
+          updateData.rankTitle = dto.rankTitle?.trim() || null
+        }
+      }
+    } else if (dto.rankTitle !== undefined) {
+      updateData.rankTitle = dto.rankTitle?.trim() || null
+    }
     if (dto.partyId !== undefined) {
       if (dto.partyId && this.prisma.politicalParty?.findUnique) {
         const partyRow = await this.prisma.politicalParty.findUnique({
@@ -4630,6 +4723,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       updateData.militaryUnitId = dto.militaryUnitId || null
     if (dto.electionCandidacyId !== undefined)
       updateData.electionCandidacyId = dto.electionCandidacyId || null
+    if (dto.chamberId !== undefined)
+      updateData.chamberId = dto.chamberId || null
 
     if (
       updateData.administrationDepartmentId !== undefined ||
@@ -4640,6 +4735,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       updateData.countryId !== undefined ||
       updateData.historicalCountryId !== undefined ||
       updateData.electionCandidacyId !== undefined ||
+      updateData.chamberId !== undefined ||
       updateData.accessionEventId !== undefined
     ) {
       const existingForScope = await this.prisma.governmentPositionTenure.findUnique({
@@ -4651,6 +4747,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           militaryUnitId: true,
           cabinetId: true,
           electionCandidacyId: true,
+          chamberId: true,
           accessionEventId: true,
           countryId: true,
           historicalCountryId: true,
@@ -4881,6 +4978,19 @@ export class PersonPrismaRepository implements IPersonRepository {
       if (updateData.accessionEventId) {
         await this.assertAccessionEventExists(updateData.accessionEventId)
       }
+      if (effectivePositionType && effectivePositionType !== 'LEGISLATOR') {
+        if (updateData.chamberId || existingForScope?.chamberId) {
+          updateData.chamberId = null
+        }
+      } else if (updateData.chamberId && this.prisma.chamber?.findUnique) {
+        const chRow = await this.prisma.chamber.findUnique({
+          where: { id: updateData.chamberId },
+          select: { id: true },
+        })
+        if (!chRow) {
+          throw new NotFoundException(`소속 의회 원(Chamber)을 찾을 수 없습니다: ${updateData.chamberId}`)
+        }
+      }
     }
 
     // 기간 — 한쪽 끝만 바뀌어도 키·DATETIME·정밀도를 한 덩어리로 다시 계산(안 보낸 끝은 저장값).
@@ -4959,6 +5069,19 @@ export class PersonPrismaRepository implements IPersonRepository {
         militaryUnit: {
           select: { id: true, name: true, abbreviation: true, unitType: true, branch: true },
         },
+        militaryRank: {
+          select: {
+            id: true,
+            name: true,
+            nameLocal: true,
+            nameEn: true,
+            abbreviation: true,
+            category: true,
+            rankOrder: true,
+            natoCode: true,
+            branch: true,
+          },
+        },
         party: { select: { id: true, name: true, shortName: true, brandColor: true } },
         country: true,
         historicalCountry: true,
@@ -4979,9 +5102,20 @@ export class PersonPrismaRepository implements IPersonRepository {
         electionCandidacy: {
           select: {
             id: true,
-            election: { select: { id: true, name: true, pollDate: true } },
+            election: {
+              select: {
+                id: true,
+                name: true,
+                pollDate: true,
+                countryId: true,
+                historicalCountryId: true,
+              },
+            },
             party: { select: { id: true, name: true } },
           },
+        },
+        chamber: {
+          select: { id: true, name: true, localName: true, role: true },
         },
       },
     })
@@ -5080,7 +5214,10 @@ export class PersonPrismaRepository implements IPersonRepository {
         linkageGroup: { select: { eventId: true } },
         headTenure: {
           include: {
-            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            chamber: {
+            select: { id: true, name: true, localName: true, role: true },
+          },
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
           },
         },
       },
@@ -5135,6 +5272,19 @@ export class PersonPrismaRepository implements IPersonRepository {
         linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
         country: { select: { id: true, name: true, flagEmoji: true } },
         historicalCountry: { select: { id: true, name: true } },
+        politicalSystem: {
+          select: {
+            id: true,
+            name: true,
+            governmentForm: true,
+            legislatureType: true,
+            startEra: true,
+            startYear: true,
+            endEra: true,
+            endYear: true,
+            isCurrent: true,
+          },
+        },
         politicalParties: {
           orderBy: [{ createdAt: 'asc' }],
           select: {
@@ -5172,7 +5322,10 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
             country: { select: { id: true, name: true, flagEmoji: true } },
             historicalCountry: { select: { id: true, name: true } },
-            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            chamber: {
+            select: { id: true, name: true, localName: true, role: true },
+          },
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
             regnalEras: REGNAL_ERAS_ORDER,
           },
         },
@@ -5195,7 +5348,10 @@ export class PersonPrismaRepository implements IPersonRepository {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
-            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            chamber: {
+            select: { id: true, name: true, localName: true, role: true },
+          },
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
             regnalEras: REGNAL_ERAS_ORDER,
           },
         },
@@ -5606,6 +5762,19 @@ export class PersonPrismaRepository implements IPersonRepository {
             endDay: true,
           },
         },
+        politicalSystem: {
+          select: {
+            id: true,
+            name: true,
+            governmentForm: true,
+            legislatureType: true,
+            startEra: true,
+            startYear: true,
+            endEra: true,
+            endYear: true,
+            isCurrent: true,
+          },
+        },
         politicalParties: {
           orderBy: [{ createdAt: 'asc' }],
           select: {
@@ -5652,7 +5821,10 @@ export class PersonPrismaRepository implements IPersonRepository {
                 endDay: true,
               },
             },
-            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            chamber: {
+            select: { id: true, name: true, localName: true, role: true },
+          },
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
             regnalEras: REGNAL_ERAS_ORDER,
           },
         },
@@ -5831,6 +6003,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       description?: string | null
       countryId?: string | null
       historicalCountryId?: string | null
+      politicalSystemId?: string | null
       startDateInfo?: any
       endDateInfo?: any
       allowReshuffle?: boolean
@@ -5841,6 +6014,19 @@ export class PersonPrismaRepository implements IPersonRepository {
     const cabinetInclude = {
       country: { select: { id: true, name: true } },
       historicalCountry: { select: { id: true, name: true } },
+      politicalSystem: {
+        select: {
+          id: true,
+          name: true,
+          governmentForm: true,
+          legislatureType: true,
+          startEra: true,
+          startYear: true,
+          endEra: true,
+          endYear: true,
+          isCurrent: true,
+        },
+      },
       _count: { select: { members: true, memberTenures: true } },
       headTenure: {
         include: {
@@ -5848,6 +6034,9 @@ export class PersonPrismaRepository implements IPersonRepository {
           positionDefinition: true,
           country: { select: { id: true, name: true } },
           historicalCountry: { select: { id: true, name: true } },
+          chamber: {
+            select: { id: true, name: true, localName: true, role: true },
+          },
           achievements: TENURE_ACHIEVEMENTS_INCLUDE,
           regnalEras: REGNAL_ERAS_ORDER,
         },
@@ -5870,6 +6059,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         const shouldPatchExisting =
           (trimmedName && exactMatch.name !== trimmedName) ||
           dto.description !== undefined ||
+          dto.politicalSystemId !== undefined ||
           dto.startDateInfo !== undefined ||
           dto.endDateInfo !== undefined
         const resolvedCabinet = shouldPatchExisting
@@ -5881,6 +6071,9 @@ export class PersonPrismaRepository implements IPersonRepository {
                   : {}),
                 ...(dto.description !== undefined && {
                   description: dto.description?.trim() || null,
+                }),
+                ...(dto.politicalSystemId !== undefined && {
+                  politicalSystemId: dto.politicalSystemId?.trim() || null,
                 }),
                 ...this.cabinetPeriodColumns(dto.startDateInfo, dto.endDateInfo),
               },
@@ -5968,6 +6161,68 @@ export class PersonPrismaRepository implements IPersonRepository {
       resolvedHistoricalId = axis.historicalCountryId ?? null
     }
 
+    const periodCols = this.cabinetPeriodColumns(dto.startDateInfo, dto.endDateInfo)
+    const mergedPeriod = { ...defaultPeriod, ...periodCols }
+
+    let resolvedPoliticalSystemId: string | null = null
+    if (dto.politicalSystemId !== undefined) {
+      resolvedPoliticalSystemId = dto.politicalSystemId?.trim() || null
+    } else if (
+      (resolvedCountryId || resolvedHistoricalId) &&
+      mergedPeriod.startYear != null &&
+      this.prisma.politicalSystem?.findMany
+    ) {
+      const cabSign = mergedPeriod.startEra === 'BC' ? -1 : 1
+      const cabStartKey =
+        cabSign * Number(mergedPeriod.startYear) * 10000 +
+        (mergedPeriod.startMonth ?? 1) * 100 +
+        (mergedPeriod.startDay ?? 1)
+      const cabEndJudgeKey =
+        cabSign * Number(mergedPeriod.startYear) * 10000 +
+        (mergedPeriod.startMonth ?? 12) * 100 +
+        (mergedPeriod.startDay ?? 31)
+
+      const candidateSystems = await this.prisma.politicalSystem.findMany({
+        where: resolvedHistoricalId
+          ? { historicalCountryId: resolvedHistoricalId }
+          : { countryId: resolvedCountryId, historicalCountryId: null },
+        select: {
+          id: true,
+          startEra: true,
+          startYear: true,
+          startMonth: true,
+          startDay: true,
+          endEra: true,
+          endYear: true,
+          endMonth: true,
+          endDay: true,
+          isCurrent: true,
+        },
+      })
+      const covering = (candidateSystems ?? []).filter((sys) => {
+        const sKey =
+          sys.startYear != null
+            ? (sys.startEra === 'BC' ? -1 : 1) * sys.startYear * 10000 +
+              (sys.startMonth ?? 1) * 100 +
+              (sys.startDay ?? 1)
+            : Number.NEGATIVE_INFINITY
+        const eKey =
+          sys.endYear != null
+            ? (sys.endEra === 'BC' ? -1 : 1) * sys.endYear * 10000 +
+              (sys.endMonth ?? 12) * 100 +
+              (sys.endDay ?? 31)
+            : sys.isCurrent
+              ? Number.POSITIVE_INFINITY
+              : sys.startYear != null
+                ? Number.POSITIVE_INFINITY
+                : Number.NEGATIVE_INFINITY
+        return cabEndJudgeKey >= sKey && cabStartKey <= eKey
+      })
+      if (covering.length === 1) {
+        resolvedPoliticalSystemId = covering[0].id
+      }
+    }
+
     const cabinet = await this.prisma.cabinet.create({
       data: {
         headTenureId,
@@ -5975,8 +6230,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         description: dto.description?.trim() || null,
         countryId: resolvedCountryId,
         historicalCountryId: resolvedHistoricalId,
-        ...defaultPeriod,
-        ...this.cabinetPeriodColumns(dto.startDateInfo, dto.endDateInfo),
+        politicalSystemId: resolvedPoliticalSystemId,
+        ...mergedPeriod,
         accountId,
       },
       include: cabinetInclude,
@@ -6001,6 +6256,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       headTenureId?: string | null
       countryId?: string | null
       historicalCountryId?: string | null
+      politicalSystemId?: string | null
       startDateInfo?: any
       endDateInfo?: any
     },
@@ -6026,11 +6282,27 @@ export class PersonPrismaRepository implements IPersonRepository {
         ...(dto.historicalCountryId !== undefined && {
           historicalCountryId: dto.historicalCountryId || null,
         }),
+        ...(dto.politicalSystemId !== undefined && {
+          politicalSystemId: dto.politicalSystemId?.trim() || null,
+        }),
         ...this.cabinetPeriodColumns(dto.startDateInfo, dto.endDateInfo),
       },
       include: {
         country: { select: { id: true, name: true } },
         historicalCountry: { select: { id: true, name: true } },
+        politicalSystem: {
+          select: {
+            id: true,
+            name: true,
+            governmentForm: true,
+            legislatureType: true,
+            startEra: true,
+            startYear: true,
+            endEra: true,
+            endYear: true,
+            isCurrent: true,
+          },
+        },
         _count: { select: { members: true, memberTenures: true } },
         headTenure: {
           include: {
@@ -6038,7 +6310,10 @@ export class PersonPrismaRepository implements IPersonRepository {
             positionDefinition: true,
             country: { select: { id: true, name: true } },
             historicalCountry: { select: { id: true, name: true } },
-            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            chamber: {
+            select: { id: true, name: true, localName: true, role: true },
+          },
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
             regnalEras: REGNAL_ERAS_ORDER,
           },
         },
@@ -6484,7 +6759,10 @@ export class PersonPrismaRepository implements IPersonRepository {
               positionDefinition: true,
               country: { select: { id: true, name: true } },
               historicalCountry: { select: { id: true, name: true } },
-              achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+              chamber: {
+            select: { id: true, name: true, localName: true, role: true },
+          },
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
               regnalEras: REGNAL_ERAS_ORDER,
             },
           },
@@ -7313,8 +7591,9 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const where =
       scopeOr.length === 0
-        ? undefined
+        ? { isGeneric: false }
         : {
+            isGeneric: false,
             OR: [
               // 스코프가 하나도 없고 특정 국가 부처·부대에도 귀속되지 않은 정의 = 어느 나라에서나 쓰는 보편 칭호(총리·대통령·국왕·사령관…)
               { scopes: { none: {} }, administrationDepartmentId: null, militaryUnitId: null },
@@ -7324,6 +7603,19 @@ export class PersonPrismaRepository implements IPersonRepository {
               ...(includeIds.length > 0 ? [{ id: { in: includeIds } }] : []),
             ],
           }
+
+    const systemSummarySelect = {
+      select: {
+        id: true,
+        name: true,
+        governmentForm: true,
+        isCurrent: true,
+        countryId: true,
+        historicalCountryId: true,
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+      },
+    } as const
 
     const list = await this.prisma.governmentPositionDefinition.findMany({
       where,
@@ -7344,6 +7636,14 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
           orderBy: { createdAt: 'asc' },
         },
+        _count: {
+          select: {
+            tenures: true,
+            treatySignatories: true,
+          },
+        },
+        politicalSystemsAsHeadOfState: systemSummarySelect,
+        politicalSystemsAsHeadOfGovernment: systemSummarySelect,
       },
       orderBy: [{ rank: 'asc' }, { title: 'asc' }],
     })
@@ -7423,12 +7723,27 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 관직 정의 단건 조회
    */
   async findPositionDefinitionById(id: string): Promise<any | null> {
+    const systemSummarySelect = {
+      select: {
+        id: true,
+        name: true,
+        governmentForm: true,
+        isCurrent: true,
+        countryId: true,
+        historicalCountryId: true,
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+      },
+    } as const
     const row = await this.prisma.governmentPositionDefinition.findUnique({
       where: { id },
       include: {
         category: { select: { id: true, name: true, nameEn: true } },
         administrationDepartment: {
           select: { id: true, name: true, categoryId: true, countryId: true, historicalCountryId: true },
+        },
+        militaryUnit: {
+          select: { id: true, name: true, abbreviation: true, unitType: true, countryId: true, historicalCountryId: true },
         },
         organization: { select: { id: true, name: true, shortName: true } },
         // 적용 범위 칩·편집용 — 빈 배열이면 "전역"이라는 뜻이다(별도 플래그 없음)
@@ -7438,6 +7753,59 @@ export class PersonPrismaRepository implements IPersonRepository {
             historicalCountry: { select: { id: true, name: true } },
           },
           orderBy: { createdAt: 'asc' },
+        },
+        _count: {
+          select: {
+            tenures: true,
+            treatySignatories: true,
+          },
+        },
+        politicalSystemsAsHeadOfState: systemSummarySelect,
+        politicalSystemsAsHeadOfGovernment: systemSummarySelect,
+        tenures: {
+          take: 150,
+          orderBy: [
+            { startYear: 'desc' },
+            { startMonth: 'desc' },
+            { startDay: 'desc' },
+            { ordinal: 'desc' },
+          ],
+          select: {
+            id: true,
+            title: true,
+            positionType: true,
+            ordinal: true,
+            subTermNumber: true,
+            regnalName: true,
+            rankTitle: true,
+            startEra: true,
+            startYear: true,
+            startMonth: true,
+            startDay: true,
+            startDate: true,
+            endEra: true,
+            endYear: true,
+            endMonth: true,
+            endDay: true,
+            endDate: true,
+            countryId: true,
+            historicalCountryId: true,
+            person: {
+              select: {
+                id: true,
+                name: true,
+                surname: true,
+                originalName: true,
+                nameDisplayOrder: true,
+                profileImageUrl: true,
+              },
+            },
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+            administrationDepartment: { select: { id: true, name: true } },
+            militaryUnit: { select: { id: true, name: true } },
+            cabinet: { select: { id: true, name: true } },
+          },
         },
       },
     })
@@ -7897,6 +8265,29 @@ export class PersonPrismaRepository implements IPersonRepository {
       })
     }
 
+    if (
+      dto.title !== undefined &&
+      dto.title.trim() !== existing.title &&
+      this.prisma.politicalSystem?.updateMany
+    ) {
+      await Promise.all([
+        this.prisma.politicalSystem.updateMany({
+          where: {
+            headOfStatePositionId: id,
+            headOfStateTitle: { not: null },
+          },
+          data: { headOfStateTitle: null },
+        }),
+        this.prisma.politicalSystem.updateMany({
+          where: {
+            headOfGovernmentPositionId: id,
+            headOfGovernmentTitle: { not: null },
+          },
+          data: { headOfGovernmentTitle: null },
+        }),
+      ])
+    }
+
     return this.serializeDefinition(row)
   }
 
@@ -7922,7 +8313,11 @@ export class PersonPrismaRepository implements IPersonRepository {
       }),
       this.prisma.politicalSystem.count({
         where: {
-          OR: [{ headOfStatePositionId: id }, { headOfGovernmentPositionId: id }, { commanderInChiefPositionId: id }],
+          OR: [
+            { headOfStatePositionId: id },
+            { headOfGovernmentPositionId: id },
+            { commanderInChiefPositionId: id },
+          ],
         },
       }),
       this.prisma.treatySignatory.count({
@@ -7951,11 +8346,34 @@ export class PersonPrismaRepository implements IPersonRepository {
    *
    * 멱등: @@unique를 안 걸었으므로(MySQL NULL 유니크는 반쪽 보증) 앱에서 findFirst→create.
    */
+  private assertScopeEraWindow(params: {
+    startEra?: 'BC' | 'AD' | null
+    startYear?: number | null
+    endEra?: 'BC' | 'AD' | null
+    endYear?: number | null
+  }): void {
+    if (params.startYear != null && params.endYear != null) {
+      const signedStart =
+        (params.startEra ?? 'AD') === 'BC' ? -params.startYear : params.startYear
+      const signedEnd =
+        (params.endEra ?? 'AD') === 'BC' ? -params.endYear : params.endYear
+      if (signedStart > signedEnd) {
+        throw new BadRequestException(
+          '적용 범위 종료 연도는 시작 연도 이후여야 합니다.',
+        )
+      }
+    }
+  }
+
   async addPositionDefinitionScope(dto: {
     definitionId: string
     countryId?: string | null
     historicalCountryId?: string | null
     localTitle?: string | null
+    startEra?: 'BC' | 'AD' | null
+    startYear?: number | null
+    endEra?: 'BC' | 'AD' | null
+    endYear?: number | null
     note?: string | null
   }): Promise<any> {
     const rawCid = dto.countryId && dto.countryId.trim() !== '' ? dto.countryId.trim() : null
@@ -7968,6 +8386,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         '관직 정의 적용 범위에는 국가(countryId) 또는 역사적 국가(historicalCountryId) 중 하나 이상이 필요합니다.',
       )
     }
+    this.assertScopeEraWindow(dto)
     if (this.prisma.governmentPositionDefinition?.findUnique) {
       const def = await this.prisma.governmentPositionDefinition.findUnique({
         where: { id: dto.definitionId },
@@ -7992,7 +8411,34 @@ export class PersonPrismaRepository implements IPersonRepository {
     const existing = await this.prisma.governmentPositionDefinitionScope.findFirst({
       where: { definitionId: dto.definitionId, countryId, historicalCountryId },
     })
-    if (existing) return serializeBigInt(existing)
+    if (existing) {
+      if (
+        dto.localTitle !== undefined ||
+        dto.startEra !== undefined ||
+        dto.startYear !== undefined ||
+        dto.endEra !== undefined ||
+        dto.endYear !== undefined ||
+        dto.note !== undefined
+      ) {
+        const updated = await this.prisma.governmentPositionDefinitionScope.update({
+          where: { id: existing.id },
+          data: {
+            ...(dto.localTitle !== undefined ? { localTitle: dto.localTitle } : {}),
+            ...(dto.startEra !== undefined ? { startEra: dto.startEra as any } : {}),
+            ...(dto.startYear !== undefined ? { startYear: dto.startYear } : {}),
+            ...(dto.endEra !== undefined ? { endEra: dto.endEra as any } : {}),
+            ...(dto.endYear !== undefined ? { endYear: dto.endYear } : {}),
+            ...(dto.note !== undefined ? { note: dto.note } : {}),
+          },
+          include: {
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+        })
+        return serializeBigInt(updated)
+      }
+      return serializeBigInt(existing)
+    }
 
     const usage = await this.countPositionDefinitionUsageContexts(dto.definitionId)
     if (usage.scopeCount === 0 && usage.contextCount > 0) {
@@ -8016,10 +8462,222 @@ export class PersonPrismaRepository implements IPersonRepository {
         countryId,
         historicalCountryId,
         localTitle: dto.localTitle ?? null,
+        startEra: (dto.startEra ?? (dto.startYear != null ? 'AD' : null)) as any,
+        startYear: dto.startYear ?? null,
+        endEra: (dto.endEra ?? (dto.endYear != null ? 'AD' : null)) as any,
+        endYear: dto.endYear ?? null,
         note: dto.note ?? null,
+      },
+      include: {
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
       },
     })
     return serializeBigInt(row)
+  }
+
+  async updatePositionDefinitionScope(
+    scopeId: string,
+    dto: {
+      localTitle?: string | null
+      startEra?: 'BC' | 'AD' | null
+      startYear?: number | null
+      endEra?: 'BC' | 'AD' | null
+      endYear?: number | null
+      note?: string | null
+    },
+  ): Promise<any> {
+    const existing = await this.prisma.governmentPositionDefinitionScope.findUnique({
+      where: { id: scopeId },
+    })
+    if (!existing) {
+      throw new NotFoundException('수정할 직위 적용 범위를 찾을 수 없습니다.')
+    }
+    const nextStartYear =
+      dto.startYear !== undefined ? dto.startYear : existing.startYear
+    const nextStartEra =
+      dto.startEra !== undefined
+        ? dto.startEra
+        : ((existing.startEra as 'BC' | 'AD' | null) ?? null)
+    const nextEndYear =
+      dto.endYear !== undefined ? dto.endYear : existing.endYear
+    const nextEndEra =
+      dto.endEra !== undefined
+        ? dto.endEra
+        : ((existing.endEra as 'BC' | 'AD' | null) ?? null)
+    this.assertScopeEraWindow({
+      startEra: nextStartEra,
+      startYear: nextStartYear,
+      endEra: nextEndEra,
+      endYear: nextEndYear,
+    })
+
+    const updated = await this.prisma.governmentPositionDefinitionScope.update({
+      where: { id: scopeId },
+      data: {
+        ...(dto.localTitle !== undefined
+          ? { localTitle: dto.localTitle?.trim() || null }
+          : {}),
+        ...(dto.startYear !== undefined
+          ? {
+              startYear: dto.startYear,
+              startEra:
+                dto.startYear == null
+                  ? null
+                  : ((dto.startEra ?? nextStartEra ?? 'AD') as any),
+            }
+          : dto.startEra !== undefined
+            ? { startEra: dto.startEra as any }
+            : {}),
+        ...(dto.endYear !== undefined
+          ? {
+              endYear: dto.endYear,
+              endEra:
+                dto.endYear == null
+                  ? null
+                  : ((dto.endEra ?? nextEndEra ?? 'AD') as any),
+            }
+          : dto.endEra !== undefined
+            ? { endEra: dto.endEra as any }
+            : {}),
+        ...(dto.note !== undefined
+          ? { note: dto.note?.trim() || null }
+          : {}),
+      },
+      include: {
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+      },
+    })
+    return serializeBigInt(updated)
+  }
+
+  async findUnnormalizedPositionTenures(): Promise<any[]> {
+    const rows = await this.prisma.governmentPositionTenure.findMany({
+      where: {
+        positionDefinition: { is: { isGeneric: true } },
+      },
+      orderBy: [{ startYear: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        title: true,
+        positionType: true,
+        ordinal: true,
+        startEra: true,
+        startYear: true,
+        endEra: true,
+        endYear: true,
+        countryId: true,
+        historicalCountryId: true,
+        administrationDepartmentId: true,
+        militaryUnitId: true,
+        positionDefinition: {
+          select: { id: true, title: true, positionType: true, isGeneric: true },
+        },
+        person: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            originalName: true,
+            nameDisplayOrder: true,
+          },
+        },
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+        administrationDepartment: { select: { id: true, name: true } },
+        militaryUnit: { select: { id: true, name: true } },
+      },
+    })
+    return rows.map(serializeBigInt)
+  }
+
+  async mergePositionDefinition(
+    sourceId: string,
+    targetDefinitionId: string,
+  ): Promise<any> {
+    if (!sourceId || !targetDefinitionId || sourceId === targetDefinitionId) {
+      throw new BadRequestException('서로 다른 두 직책 정본을 선택해야 통합할 수 있습니다.')
+    }
+    const [source, target] = await Promise.all([
+      this.prisma.governmentPositionDefinition.findUnique({
+        where: { id: sourceId },
+        include: { scopes: true },
+      }),
+      this.prisma.governmentPositionDefinition.findUnique({
+        where: { id: targetDefinitionId },
+        include: { scopes: true },
+      }),
+    ])
+    if (!source) {
+      throw new NotFoundException(`통합 원본 직책 정의를 찾을 수 없습니다 (ID: ${sourceId})`)
+    }
+    if (!target) {
+      throw new NotFoundException(`통합 대상 직책 정의를 찾을 수 없습니다 (ID: ${targetDefinitionId})`)
+    }
+    if (source.isGeneric || target.isGeneric) {
+      throw new BadRequestException('시스템 기본(일반) 직위 정의는 통합 원본이나 대상으로 사용할 수 없습니다.')
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.governmentPositionTenure.updateMany({
+        where: { positionDefinitionId: sourceId },
+        data: {
+          positionDefinitionId: targetDefinitionId,
+          positionType: target.positionType,
+        },
+      })
+      await tx.politicalSystem.updateMany({
+        where: { headOfStatePositionId: sourceId },
+        data: { headOfStatePositionId: targetDefinitionId },
+      })
+      await tx.politicalSystem.updateMany({
+        where: { headOfGovernmentPositionId: sourceId },
+        data: { headOfGovernmentPositionId: targetDefinitionId },
+      })
+      await tx.politicalSystem.updateMany({
+        where: { commanderInChiefPositionId: sourceId },
+        data: { commanderInChiefPositionId: targetDefinitionId },
+      })
+      await tx.treatySignatory.updateMany({
+        where: { positionDefinitionId: sourceId },
+        data: { positionDefinitionId: targetDefinitionId },
+      })
+
+      // 대상 정본이 이미 특정 국가 스코프 직책인 경우, 누락된 원본 스코프를 합집합으로 보강
+      if (target.scopes.length > 0 && source.scopes.length > 0) {
+        const targetScopeKeys = new Set(
+          target.scopes.map(
+            (sc) => `${sc.countryId ?? ''}:${sc.historicalCountryId ?? ''}`,
+          ),
+        )
+        for (const srcScope of source.scopes) {
+          const key = `${srcScope.countryId ?? ''}:${srcScope.historicalCountryId ?? ''}`
+          if (!targetScopeKeys.has(key)) {
+            targetScopeKeys.add(key)
+            await tx.governmentPositionDefinitionScope.create({
+              data: {
+                definitionId: targetDefinitionId,
+                countryId: srcScope.countryId,
+                historicalCountryId: srcScope.historicalCountryId,
+                localTitle: srcScope.localTitle,
+                startEra: srcScope.startEra,
+                startYear: srcScope.startYear,
+                endEra: srcScope.endEra,
+                endYear: srcScope.endYear,
+                note: srcScope.note,
+              },
+            })
+          }
+        }
+      }
+
+      await tx.governmentPositionDefinition.delete({
+        where: { id: sourceId },
+      })
+    })
+
+    return this.findPositionDefinitionById(targetDefinitionId)
   }
 
   /**
@@ -8120,7 +8778,29 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   private serializeDefinition(row: any): any {
-    return serializeBigInt(row)
+    const serialized = serializeBigInt(row)
+    if (!serialized || typeof serialized !== 'object') return serialized
+    return {
+      ...serialized,
+      tenureCount:
+        typeof serialized._count?.tenures === 'number'
+          ? serialized._count.tenures
+          : (serialized.tenureCount ?? 0),
+      treatySignatoryCount:
+        typeof serialized._count?.treatySignatories === 'number'
+          ? serialized._count.treatySignatories
+          : (serialized.treatySignatoryCount ?? 0),
+      politicalSystemsAsHeadOfState: Array.isArray(
+        serialized.politicalSystemsAsHeadOfState,
+      )
+        ? serialized.politicalSystemsAsHeadOfState
+        : [],
+      politicalSystemsAsHeadOfGovernment: Array.isArray(
+        serialized.politicalSystemsAsHeadOfGovernment,
+      )
+        ? serialized.politicalSystemsAsHeadOfGovernment
+        : [],
+    }
   }
 
   /**
@@ -8471,9 +9151,20 @@ export class PersonPrismaRepository implements IPersonRepository {
       electionCandidacy: {
         select: {
           id: true,
-          election: { select: { id: true, name: true, pollDate: true } },
+          election: {
+            select: {
+              id: true,
+              name: true,
+              pollDate: true,
+              countryId: true,
+              historicalCountryId: true,
+            },
+          },
           party: { select: { id: true, name: true } },
         },
+      },
+      chamber: {
+        select: { id: true, name: true, localName: true, role: true },
       },
     } as const
 
@@ -8496,8 +9187,29 @@ export class PersonPrismaRepository implements IPersonRepository {
     const rows = await this.prisma.electionCandidacy.findMany({
       where: { personId },
       include: {
-        election: { select: { id: true, name: true, pollDate: true } },
-        party: { select: { id: true, name: true } },
+        election: {
+          select: {
+            id: true,
+            name: true,
+            pollDate: true,
+            electionType: true,
+            countryId: true,
+            historicalCountryId: true,
+            chamberId: true,
+          },
+        },
+        party: { select: { id: true, name: true, shortName: true } },
+        result: {
+          select: {
+            elected: true,
+            voteSharePercent: true,
+            resultRank: true,
+            seatsWon: true,
+          },
+        },
+        resultingTenure: {
+          select: { id: true, title: true },
+        },
       },
       orderBy: [{ election: { pollDate: 'desc' } }, { id: 'desc' }],
     })
@@ -8643,9 +9355,20 @@ export class PersonPrismaRepository implements IPersonRepository {
       electionCandidacy: {
         select: {
           id: true,
-          election: { select: { id: true, name: true, pollDate: true } },
+          election: {
+            select: {
+              id: true,
+              name: true,
+              pollDate: true,
+              countryId: true,
+              historicalCountryId: true,
+            },
+          },
           party: { select: { id: true, name: true } },
         },
+      },
+      chamber: {
+        select: { id: true, name: true, localName: true, role: true },
       },
       achievements: TENURE_ACHIEVEMENTS_INCLUDE,
       regnalEras: REGNAL_ERAS_ORDER,
@@ -8969,9 +9692,20 @@ export class PersonPrismaRepository implements IPersonRepository {
           electionCandidacy: {
             select: {
               id: true,
-              election: { select: { id: true, name: true, pollDate: true } },
+              election: {
+                select: {
+                  id: true,
+                  name: true,
+                  pollDate: true,
+                  countryId: true,
+                  historicalCountryId: true,
+                },
+              },
               party: { select: { id: true, name: true } },
             },
+          },
+          chamber: {
+            select: { id: true, name: true, localName: true, role: true },
           },
           achievements: TENURE_ACHIEVEMENTS_INCLUDE,
         },

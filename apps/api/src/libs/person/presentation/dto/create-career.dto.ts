@@ -809,7 +809,31 @@ export class CreateGovernmentPositionTenureDto {
   @IsString()
   militaryUnitId?: string | null
 
-  /** 재임 당시 계급·품계 (예: 상급대장, 원수, 정1품) */
+  /** 재임 당시 정규화 군 계급 정본 ID (MilitaryRank) */
+  @IsOptional()
+  @IsString()
+  militaryRankId?: string | null
+
+  /** 사령부·부대 내 구조적 역할 구분 */
+  @IsOptional()
+  @IsIn([
+    'COMMANDER',
+    'DEPUTY_COMMANDER',
+    'CHIEF_OF_STAFF',
+    'STAFF',
+    'COMMISSAR',
+    'FOUNDER_MEMBER',
+  ])
+  militaryRoleKind?:
+    | 'COMMANDER'
+    | 'DEPUTY_COMMANDER'
+    | 'CHIEF_OF_STAFF'
+    | 'STAFF'
+    | 'COMMISSAR'
+    | 'FOUNDER_MEMBER'
+    | null
+
+  /** 재임 당시 계급·품계 표시 캐시 (예: 상급대장, 원수, 정1품) */
   @IsOptional()
   @IsString()
   rankTitle?: string | null
@@ -823,6 +847,11 @@ export class CreateGovernmentPositionTenureDto {
   @IsOptional()
   @IsString()
   electionCandidacyId?: string | null
+
+  /** 의회의원(LEGISLATOR)일 때 소속 의회 원(Chamber) ID */
+  @IsOptional()
+  @IsString()
+  chamberId?: string | null
 
   // ── 직위 보유 단일 모델 이행 3단계 — 재위만 받던 칸을 재임도 받는다(재위 = 군주직 재임) ──
 

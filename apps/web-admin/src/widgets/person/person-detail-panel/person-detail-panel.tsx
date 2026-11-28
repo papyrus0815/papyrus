@@ -3705,6 +3705,28 @@ export function PersonDetailPanel({
                             navigate(pathKeys.militaryUnitDetail(militaryUnitId))
                           }
                         }}
+                        onChamberClick={({ countryId: chamberCountryId }) => {
+                          const jumpId =
+                            chamberCountryId ??
+                            person.historicalCountryId ??
+                            person.countryId ??
+                            null
+                          if (jumpId) {
+                            navigate(pathKeys.countryPoliticalSystem(jumpId))
+                          }
+                        }}
+                        onElectionClick={({ electionId, countryId: electionCountryId }) => {
+                          const jumpId =
+                            electionCountryId ??
+                            person.historicalCountryId ??
+                            person.countryId ??
+                            null
+                          if (jumpId) {
+                            navigate(
+                              `${pathKeys.countryElections(jumpId)}?electionId=${encodeURIComponent(electionId)}`,
+                            )
+                          }
+                        }}
                         onAddTenure={() => {
                           setEditingTenureId(null)
                           setEditingReignId(null)

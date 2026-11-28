@@ -237,7 +237,18 @@ export interface CreateGovernmentPositionTenureDto {
   cabinetId?: string | null
   /** 복수 행정부(연임·개각 내각) 소속 ID 배열 */
   cabinetIds?: string[] | null
-  /** 계급·칭호 — 예: 원수, 상급대장, 육군 중장 */
+  /** 정규화 군 계급 정본 ID (MilitaryRank) */
+  militaryRankId?: string | null
+  /** 사령부·부대 내 구조적 보직 역할 구분 */
+  militaryRoleKind?:
+    | 'COMMANDER'
+    | 'DEPUTY_COMMANDER'
+    | 'CHIEF_OF_STAFF'
+    | 'STAFF'
+    | 'COMMISSAR'
+    | 'FOUNDER_MEMBER'
+    | null
+  /** 계급·칭호 표시 캐시 — 예: 원수, 상급대장, 육군 중장 */
   rankTitle?: string | null
   /** 재임 당시 소속 정당 ID */
   partyId?: string | null
@@ -274,8 +285,58 @@ export interface CreateGovernmentPositionTenureDto {
   priority?: number
   /** 소속 중앙부처 ID — 이 재임이 실제 속한 국가별 부처 인스턴스 */
   administrationDepartmentId?: string | null
+  /** 소속 의회 원(Chamber) ID — 의원(LEGISLATOR)일 때 하원·상원 구분 */
+  chamberId?: string | null
   /** 당선된 선거 후보와 1:1 연결 */
   electionCandidacyId?: string | null
+}
+
+/** 인물별 재임 연결용 선거 출마 옵션 */
+export interface ElectionCandidacyOptionForTenure {
+  id: string
+  electionId: string
+  nominationType: string
+  partyId?: string | null
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  } | null
+  electoralDistrict?: {
+    id: string
+    name: string
+    code?: string | null
+  } | null
+  result?: {
+    elected: boolean
+    votes?: string | null
+    voteSharePercent?: string | null
+    seatsWon?: number | null
+  } | null
+  resultingTenure?: {
+    id: string
+    title?: string | null
+    positionType: string
+    ordinal?: number | null
+  } | null
+  election: {
+    id: string
+    name: string
+    shortName?: string | null
+    pollDate: string
+    electionType: string
+    convocationOrdinal?: number | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+    chamberId?: string | null
+    chamber?: {
+      id: string
+      name: string
+      localName?: string | null
+      role: string
+    } | null
+  }
 }
 
 /**
@@ -322,6 +383,10 @@ export interface GovernmentPositionDefinitionScope {
   country?: { id: string; name?: string | null } | null
   historicalCountry?: { id: string; name?: string | null } | null
   localTitle?: string | null
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
   note?: string | null
 }
 
@@ -1178,6 +1243,7 @@ export const personCareerApi = {
     description?: string | null
     countryId?: string | null
     historicalCountryId?: string | null
+    politicalSystemId?: string | null
     startDate?: string | null
     endDate?: string | null
     startDateInfo?: {
@@ -1211,6 +1277,7 @@ export const personCareerApi = {
       headTenureId?: string | null
       countryId?: string | null
       historicalCountryId?: string | null
+      politicalSystemId?: string | null
       startDate?: string | null
       endDate?: string | null
       startDateInfo?: {
@@ -1541,6 +1608,26 @@ export const personCareerApi = {
   },
 
   /**
+   * 인물별 공직 재임에 연결 가능한 선거 출마 후보 목록 조회
+   * GET /government-positions/tenures/election-candidacy-options?personId=...
+   */
+  getElectionCandidacyOptionsForTenure: async (
+    personId: string,
+  ): Promise<ElectionCandidacyOptionForTenure[]> => {
+    if (!personId) return []
+    const response = await apiClient.get(
+      `/government-positions/tenures/election-candidacy-options`,
+      { params: { personId } },
+    )
+    const raw = response.data
+    if (Array.isArray(raw)) return raw
+    if (raw && typeof raw === 'object' && Array.isArray((raw as any).data)) {
+      return (raw as any).data
+    }
+    return []
+  },
+
+  /**
    * 직책 피커 전용 조회 — 정의(적용 범위 하드컷 + 이 국가에서의 사용 실적) + 자유입력 직책명.
    *
    * 목록 API와 달리 "이 국가에서 실제로 쓰인 직책"을 표시할 수 있고, 카탈로그에 없어
@@ -1572,6 +1659,10 @@ export const personCareerApi = {
       countryId?: string | null
       historicalCountryId?: string | null
       localTitle?: string | null
+      startEra?: 'BC' | 'AD' | null
+      startYear?: number | null
+      endEra?: 'BC' | 'AD' | null
+      endYear?: number | null
       note?: string | null
     },
   ) => {
@@ -1582,9 +1673,48 @@ export const personCareerApi = {
     return response.data
   },
 
+  /** 관직 정의 적용 범위 수정 (현지 표기 · 시대 창 · 비고) */
+  updatePositionDefinitionScope: async (
+    scopeId: string,
+    dto: {
+      localTitle?: string | null
+      startEra?: 'BC' | 'AD' | null
+      startYear?: number | null
+      endEra?: 'BC' | 'AD' | null
+      endYear?: number | null
+      note?: string | null
+    },
+  ) => {
+    const response = await apiClient.patch(
+      `/government-positions/definitions/scopes/${encodeURIComponent(scopeId)}`,
+      dto,
+    )
+    return response.data
+  },
+
   /** 관직 정의 적용 범위 삭제 — 전부 지우면 그 정의는 다시 전역이 된다 */
   removePositionDefinitionScope: async (scopeId: string) => {
     await apiClient.delete(`/government-positions/definitions/scopes/${scopeId}`)
+  },
+
+  /** 일반 정의(isGeneric=true)에 머물러 있는 미정규화 재임 목록 조회 */
+  getUnnormalizedPositionTenures: async (): Promise<any[]> => {
+    const response = await apiClient.get(
+      '/government-positions/definitions/unnormalized-tenures',
+    )
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  /** 중복 관직 정의를 대상 정본으로 통합 */
+  mergePositionDefinition: async (
+    sourceId: string,
+    targetDefinitionId: string,
+  ) => {
+    const response = await apiClient.post(
+      `/government-positions/definitions/${encodeURIComponent(sourceId)}/merge`,
+      { targetDefinitionId },
+    )
+    return response.data
   },
 
   /**

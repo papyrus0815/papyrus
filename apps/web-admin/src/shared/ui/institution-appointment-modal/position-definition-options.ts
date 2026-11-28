@@ -142,6 +142,7 @@ export interface BuildPositionOptionsParams {
   picker: ReadonlyArray<PositionDefinitionLike>
   contextType: AppointmentContextType
   departmentId?: string | null
+  departmentCategoryId?: string | null
   militaryUnitId?: string | null
   /** 지금 고른 정의 — 어느 묶음에도 없으면 '현재 직책'으로 맨 앞에 붙인다 */
   selectedId?: string | null
@@ -151,6 +152,8 @@ export interface BuildPositionOptionsResult {
   options: SearchOption[]
   /** 이 기관·부대의 전용 정의(빠른 선택 칩) */
   ownDefinitions: PositionDefinitionLike[]
+  /** 이 부처의 표준 기능 분류(외교·국방·재정 등)에 매핑된 추천 직책 */
+  categoryDefinitions: PositionDefinitionLike[]
   byId: Map<string, PositionDefinitionLike>
 }
 
@@ -163,6 +166,7 @@ export function buildPositionDefinitionOptions({
   picker,
   contextType,
   departmentId,
+  departmentCategoryId,
   militaryUnitId,
   selectedId,
 }: BuildPositionOptionsParams): BuildPositionOptionsResult {
@@ -186,22 +190,39 @@ export function buildPositionDefinitionOptions({
     .map((definition) => byId.get(definition.id) ?? definition)
     .filter((definition) => !ownIds.has(definition.id) && isAppointableDefinition(definition, contextType))
 
+  const categoryDefinitions =
+    contextType !== 'MILITARY_UNIT' && departmentCategoryId
+      ? pickerAppointable
+          .filter((definition) => definition.categoryId === departmentCategoryId)
+          .sort(
+            (left, right) =>
+              (right.usedCount ?? 0) - (left.usedCount ?? 0) ||
+              compareByRankThenTitle(left, right),
+          )
+      : []
+  const categoryIds = new Set(categoryDefinitions.map((definition) => definition.id))
+
   const usedHere = pickerAppointable
-    .filter((definition) => definition.usedInThisCountry)
+    .filter((definition) => !categoryIds.has(definition.id) && definition.usedInThisCountry)
     .sort(
       (left, right) =>
         (right.usedCount ?? 0) - (left.usedCount ?? 0) || compareByRankThenTitle(left, right),
     )
   const usedIds = new Set(usedHere.map((definition) => definition.id))
   const catalog = pickerAppointable
-    .filter((definition) => !usedIds.has(definition.id))
+    .filter((definition) => !categoryIds.has(definition.id) && !usedIds.has(definition.id))
     .sort(
       (left, right) =>
         typeOrder(left.positionType) - typeOrder(right.positionType) || compareByRankThenTitle(left, right),
     )
 
   const options: SearchOption[] = []
-  if (selectedId && !ownIds.has(selectedId) && !usedIds.has(selectedId)) {
+  if (
+    selectedId &&
+    !ownIds.has(selectedId) &&
+    !categoryIds.has(selectedId) &&
+    !usedIds.has(selectedId)
+  ) {
     const selected = byId.get(selectedId)
     const inCatalog = catalog.some((definition) => definition.id === selectedId)
     if (selected && !inCatalog && !isGenericDefinition(selected) && hasTitle(selected)) {
@@ -209,10 +230,11 @@ export function buildPositionDefinitionOptions({
     }
   }
   for (const definition of ownDefinitions) options.push(toOption(definition, ownGroupLabel(contextType)))
+  for (const definition of categoryDefinitions) options.push(toOption(definition, '이 분야 표준 직책'))
   for (const definition of usedHere) options.push(toOption(definition, '이 나라에서 쓰인 직책'))
   for (const definition of catalog) options.push(toOption(definition, '관직 카탈로그'))
 
-  return { options, ownDefinitions, byId }
+  return { options, ownDefinitions, categoryDefinitions, byId }
 }
 
 /** 같은 이름(공백 무시)의 정의를 찾는다 — 새로 등록하기 전에 중복을 막는다 */

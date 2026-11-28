@@ -86,9 +86,23 @@ export interface TenureLikeRecord {
   } | null
   country?: { id?: string; name?: string | null } | null
   historicalCountry?: { id?: string; name?: string | null } | null
+  /** 소속 의회 원(Chamber) — 의원 재임(LEGISLATOR) 시 연결 */
+  chamberId?: string | null
+  chamber?: {
+    id: string
+    name: string
+    localName?: string | null
+    role?: string | null
+  } | null
   electionCandidacy?: {
     id?: string
-    election?: { id?: string; name?: string | null; pollDate?: string | null } | null
+    election?: {
+      id?: string
+      name?: string | null
+      pollDate?: string | null
+      countryId?: string | null
+      historicalCountryId?: string | null
+    } | null
   } | null
   achievements?: TenureAchievementItem[] | null
   /** 각료로 소속된 행정부(같은 행정부 동료 표시용). 재임에만 존재. */

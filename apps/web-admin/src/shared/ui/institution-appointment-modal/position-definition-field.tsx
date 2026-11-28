@@ -11,11 +11,12 @@
 import React, { useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiAlertCircle, FiDatabase, FiPlus } from 'react-icons/fi'
+import { FiAlertCircle, FiArrowUpRight, FiDatabase, FiPlus } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { personCareerApi } from '@/shared/api/person-career'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
+import { pathKeys } from '@/shared/router'
 import { InlineSearchSelect } from '@/shared/ui/person-register-modal/sections/inline-search-select'
 import { notify } from '@/shared/ui/toast'
 
@@ -40,6 +41,7 @@ export interface PositionDefinitionFieldProps {
   id?: string
   contextType: AppointmentContextType
   departmentId?: string | null
+  departmentCategoryId?: string | null
   departmentName?: string | null
   militaryUnitId?: string | null
   militaryUnitName?: string | null
@@ -63,6 +65,7 @@ export function PositionDefinitionField({
   id,
   contextType,
   departmentId,
+  departmentCategoryId,
   departmentName,
   militaryUnitId,
   militaryUnitName,
@@ -82,6 +85,9 @@ export function PositionDefinitionField({
   const [draftTitle, setDraftTitle] = useState('')
   const [draftType, setDraftType] = useState('CABINET_MINISTER')
   const [draftLocal, setDraftLocal] = useState('')
+  const [draftScopeKind, setDraftScopeKind] = useState<
+    'institution' | 'polity' | 'universal'
+  >('polity')
   const [saving, setSaving] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -105,17 +111,26 @@ export function PositionDefinitionField({
     [pickerResponse],
   )
 
-  const { options, ownDefinitions, byId } = useMemo(
+  const { options, ownDefinitions, categoryDefinitions, byId } = useMemo(
     () =>
       buildPositionDefinitionOptions({
         all: allDefinitions,
         picker: pickerDefinitions,
         contextType,
         departmentId,
+        departmentCategoryId,
         militaryUnitId,
         selectedId: value || null,
       }),
-    [allDefinitions, pickerDefinitions, contextType, departmentId, militaryUnitId, value],
+    [
+      allDefinitions,
+      pickerDefinitions,
+      contextType,
+      departmentId,
+      departmentCategoryId,
+      militaryUnitId,
+      value,
+    ],
   )
 
   const ownerName = contextType === 'MILITARY_UNIT' ? militaryUnitName : departmentName
@@ -139,6 +154,9 @@ export function PositionDefinitionField({
     setDraftTitle(title)
     setDraftType(isMilitary ? 'MILITARY_COMMANDER' : (inferPositionType?.(title) ?? 'CABINET_MINISTER'))
     setDraftLocal('')
+    setDraftScopeKind(
+      hasOwner ? 'institution' : countryId || historicalCountryId ? 'polity' : 'universal',
+    )
     setCreateError(null)
     setCreating(true)
   }
@@ -161,29 +179,42 @@ export function PositionDefinitionField({
       notify.info(`이미 DB에 있는 ‘${existing.title}’ 직책을 골랐습니다.`)
       return
     }
-    if (!hasOwner && !countryId && !historicalCountryId) {
-      setCreateError('기관이나 국가가 정해져야 그 소속 직책으로 등록할 수 있습니다.')
+    if (
+      draftScopeKind === 'polity' &&
+      !countryId &&
+      !historicalCountryId
+    ) {
+      setCreateError('국가 정보가 없어 국가 전용 직책으로 등록할 수 없습니다. 「전역 보편」을 선택해 주세요.')
       return
     }
 
     setSaving(true)
     setCreateError(null)
     try {
+      const bindToInstitution = draftScopeKind === 'institution' && hasOwner
       const created = (await personCareerApi.createPositionDefinition({
         title,
         titleLocal: draftLocal.trim() || null,
         positionType: isMilitary ? 'MILITARY_COMMANDER' : draftType,
         isMonarchical: false,
-        administrationDepartmentId: !isMilitary && departmentId ? departmentId : null,
-        militaryUnitId: isMilitary && militaryUnitId ? militaryUnitId : null,
+        categoryId: !isMilitary && departmentCategoryId ? departmentCategoryId : null,
+        administrationDepartmentId:
+          bindToInstitution && !isMilitary && departmentId ? departmentId : null,
+        militaryUnitId:
+          bindToInstitution && isMilitary && militaryUnitId ? militaryUnitId : null,
       })) as PositionDefinitionLike | null
       if (!created?.id) throw new Error('직책을 만들지 못했습니다.')
 
-      /* 기관·부대에 묶이지 않은 정의는 스코프가 없으면 전역 — 모든 나라 피커에 뜬다. 이 나라에 묶는다. */
-      if (!created.administrationDepartmentId && !created.militaryUnitId) {
+      /* 국가·시대 공통 직책을 고른 경우 해당 국가 스코프를 붙인다. 전역 보편('universal')이면 무스코프로 둔다. */
+      if (
+        draftScopeKind === 'polity' &&
+        !created.administrationDepartmentId &&
+        !created.militaryUnitId &&
+        (countryId || historicalCountryId)
+      ) {
         try {
           await personCareerApi.addPositionDefinitionScope(created.id, {
-            countryId: countryId ?? null,
+            countryId: historicalCountryId ? null : (countryId ?? null),
             historicalCountryId: historicalCountryId ?? null,
             localTitle: draftLocal.trim() || null,
             note: '임명 모달에서 등록',
@@ -197,7 +228,7 @@ export function PositionDefinitionField({
       await queryClient.invalidateQueries({ queryKey: ['position-definitions'] })
       select({ ...created, title })
       setCreating(false)
-      notify.success(`‘${title}’ 직책을 DB에 등록했습니다.`)
+      notify.success(`‘${title}’ 직책을 DB 정본에 등록했습니다.`)
     } catch (createErr) {
       setCreateError(getApiErrorMessage(createErr, '직책을 등록하지 못했습니다.'))
     } finally {
@@ -205,8 +236,19 @@ export function PositionDefinitionField({
     }
   }
 
-  const quickChips = ownDefinitions.slice(0, QUICK_CHIP_LIMIT)
+  const quickChips = [...ownDefinitions, ...categoryDefinitions].slice(
+    0,
+    QUICK_CHIP_LIMIT,
+  )
   const typedQuery = query.trim()
+  const catalogManageHref = pathKeys.government.positions({
+    catalog: isMilitary ? 'positions' : undefined,
+    polity: historicalCountryId
+      ? `h:${historicalCountryId}`
+      : countryId
+        ? `m:${countryId}`
+        : undefined,
+  })
 
   return (
     <Stack>
@@ -253,6 +295,14 @@ export function PositionDefinitionField({
         selectedLabelFallback={value ? (byId.get(value)?.title ?? undefined) : undefined}
       />
 
+      <ManageRow>
+        <span>DB 관직·직책 정본에서 선택하거나 새 직책을 정본에 등록합니다.</span>
+        <ManageLink href={catalogManageHref} target="_blank" rel="noreferrer">
+          <span>관직·직책 정본 관리</span>
+          <FiArrowUpRight size={11} aria-hidden />
+        </ManageLink>
+      </ManageRow>
+
       {legacyTitle && !value && !creating && (
         <LegacyNotice role="note">
           <FiAlertCircle size={13} aria-hidden />
@@ -270,12 +320,7 @@ export function PositionDefinitionField({
           <CreatorHead>
             <FiDatabase size={13} aria-hidden />
             <span>
-              새 {isMilitary ? '보직' : '직책'} DB 등록
-              {hasOwner && ownerName ? (
-                <em> · {ownerName} 소속</em>
-              ) : (
-                <em> · 이 나라 전용</em>
-              )}
+              새 {isMilitary ? '보직' : '직책'} DB 정본 등록
             </span>
           </CreatorHead>
           <CreatorRow>
@@ -300,6 +345,39 @@ export function PositionDefinitionField({
               $narrow
             />
           </CreatorRow>
+          <TypeChips role="radiogroup" aria-label="적용 범위">
+            {hasOwner ? (
+              <TypeChip
+                type="button"
+                role="radio"
+                aria-checked={draftScopeKind === 'institution'}
+                $active={draftScopeKind === 'institution'}
+                onClick={() => setDraftScopeKind('institution')}
+              >
+                {ownerName ? `${ownerName} 전용` : '이 기관 전용'}
+              </TypeChip>
+            ) : null}
+            {countryId || historicalCountryId ? (
+              <TypeChip
+                type="button"
+                role="radio"
+                aria-checked={draftScopeKind === 'polity'}
+                $active={draftScopeKind === 'polity'}
+                onClick={() => setDraftScopeKind('polity')}
+              >
+                이 국가·시대 공통
+              </TypeChip>
+            ) : null}
+            <TypeChip
+              type="button"
+              role="radio"
+              aria-checked={draftScopeKind === 'universal'}
+              $active={draftScopeKind === 'universal'}
+              onClick={() => setDraftScopeKind('universal')}
+            >
+              전역 보편 칭호 (모든 국가)
+            </TypeChip>
+          </TypeChips>
           {!isMilitary && (
             <TypeChips role="radiogroup" aria-label="직책 유형">
               {CREATABLE_POSITION_TYPES.map((positionType) => (
@@ -338,6 +416,30 @@ export function PositionDefinitionField({
 }
 
 /* ───────────────────────── 조판 ───────────────────────── */
+
+const ManageRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-wrap: wrap;
+`
+
+const ManageLink = styled.a`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.primary};
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
 
 const Stack = styled.div`
   display: flex;

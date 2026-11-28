@@ -94,6 +94,16 @@ interface TenureReignListProps {
     militaryUnitId: string
     countryId?: string | null
   }) => void
+  /** 소속 의회 원(Chamber) 클릭 → 국가 정체·헌정(의회 원) 탭 이동 */
+  onChamberClick?: (params: {
+    chamberId: string
+    countryId?: string | null
+  }) => void
+  /** 당선 선거 클릭 → 국가 선거·개표 원장 상세 이동 */
+  onElectionClick?: (params: {
+    electionId: string
+    countryId?: string | null
+  }) => void
   /** 빈 상태에서 바로 공직·군직·재위 추가 모달 열기 */
   onAddTenure?: () => void
   onEditTenure: (id: string) => void
@@ -125,6 +135,8 @@ export function TenureReignList({
   onEventClick,
   onDepartmentClick,
   onMilitaryUnitClick,
+  onChamberClick,
+  onElectionClick,
   onAddTenure,
   onEditTenure,
   onEditReign,
@@ -309,9 +321,25 @@ export function TenureReignList({
           record.positionDefinition.organization.name !== countryName
             ? record.positionDefinition.organization.name
             : null
-        const electionName = record.electionCandidacy?.election?.name ?? null
+        const chamberInfo = !isReign ? record.chamber ?? null : null
+        const chamberDisplay = chamberInfo
+          ? chamberInfo.role === 'LOWER' && !chamberInfo.name.includes('하원')
+            ? `${chamberInfo.name} (하원)`
+            : chamberInfo.role === 'UPPER' && !chamberInfo.name.includes('상원')
+              ? `${chamberInfo.name} (상원)`
+              : chamberInfo.name
+          : null
+        const electionObj = record.electionCandidacy?.election ?? null
+        const electionName = electionObj?.name ?? null
+        const electionCountryId =
+          electionObj?.historicalCountryId ??
+          electionObj?.countryId ??
+          record.historicalCountry?.id ??
+          record.country?.id ??
+          null
         const hasFacts =
           !!countryName ||
+          !!chamberDisplay ||
           !!deptDisplay ||
           !!unitDisplay ||
           !!orgName ||
@@ -477,6 +505,30 @@ export function TenureReignList({
                       )}
                     </UnifiedFact>
                   )}
+                  {chamberInfo && chamberDisplay && (
+                    <UnifiedFact>
+                      <VisuallyHidden>소속 원 </VisuallyHidden>
+                      {onChamberClick && !embedInModal ? (
+                        <UnifiedFactLink
+                          type="button"
+                          onClick={() => {
+                            onPlayClick()
+                            onChamberClick({
+                              chamberId: chamberInfo.id,
+                              countryId:
+                                record.historicalCountry?.id ??
+                                record.country?.id ??
+                                null,
+                            })
+                          }}
+                        >
+                          {chamberDisplay}
+                        </UnifiedFactLink>
+                      ) : (
+                        chamberDisplay
+                      )}
+                    </UnifiedFact>
+                  )}
                   {orgName && (
                     <UnifiedFact>
                       <VisuallyHidden>소속 기관 </VisuallyHidden>
@@ -563,7 +615,22 @@ export function TenureReignList({
                     <>
                       <UnifiedDetailLabel>선거</UnifiedDetailLabel>
                       <UnifiedDetailValue $token>
-                        {electionName}
+                        {onElectionClick && !embedInModal && electionObj?.id ? (
+                          <AccessionEventLink
+                            type="button"
+                            onClick={() => {
+                              onPlayClick()
+                              onElectionClick({
+                                electionId: electionObj.id!,
+                                countryId: electionCountryId,
+                              })
+                            }}
+                          >
+                            {electionName}
+                          </AccessionEventLink>
+                        ) : (
+                          electionName
+                        )}
                       </UnifiedDetailValue>
                     </>
                   )}
