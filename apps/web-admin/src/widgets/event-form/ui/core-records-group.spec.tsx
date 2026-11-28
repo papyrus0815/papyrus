@@ -602,7 +602,8 @@ describe('CoreRecordsGroup — 2열 진영 보드(SidesField) 및 성립·소멸
     })
     fireEvent.focus(personInput)
     fireEvent.change(personInput, { target: { value: '당통' } })
-    await screen.findByText(/\+ 👤.*당통/)
+    // 결과 행 = 작은 얼굴(이니셜) + 이름 — 예전 '+ 👤' 글자 아이콘은 없어졌다
+    await screen.findByRole('button', { name: /^조르주 당통/ })
     fireEvent.keyDown(personInput, { key: 'Enter' })
 
     expect(onDraftsChange).toHaveBeenLastCalledWith(

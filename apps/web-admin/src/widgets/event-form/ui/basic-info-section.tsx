@@ -64,6 +64,7 @@ import {
   matchesHintYearRange,
 } from '@/shared/lib/country-picker-filter'
 import { isoPeriodEnd } from '@/shared/lib/iso-date'
+import { formatSignedYear } from '@/shared/lib/lifespan-text'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { type DatePickerPrecision } from '@/shared/ui/date-picker/date-picker-modal'
@@ -73,6 +74,7 @@ import { notify } from '@/shared/ui/toast'
 import { shouldEndFollowStart } from '../lib/event-date-parts'
 
 import { EventCoverField } from './event-cover-field'
+import { CountryTile, IdentityMeta, IdentityText } from './participant-identity'
 import { EventDateField } from './event-date-field'
 import { PlaceMiniMap } from './place-mini-map'
 
@@ -2262,7 +2264,50 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                                   ⠿
                                 </ParticipantDragHandle>
                               )}
-                              <ParticipantName>{country.name}</ParticipantName>
+                              <CountryTile
+                                flagEmoji={
+                                  isHistorical
+                                    ? null
+                                    : (country as CountryResponseDto).flagEmoji
+                                }
+                                name={country.name}
+                                historical={isHistorical}
+                              />
+                              <IdentityText>
+                                <ParticipantName>{country.name}</ParticipantName>
+                                <IdentityMeta>
+                                  <span>{isHistorical ? '역사 국가' : '현대 국가'}</span>
+                                  {isHistorical &&
+                                    (() => {
+                                      const historicalCountry =
+                                        country as HistoricalCountryResponseDto
+                                      const toSigned = (
+                                        era: string | null | undefined,
+                                        year: number | null | undefined,
+                                      ) =>
+                                        year == null
+                                          ? null
+                                          : era === 'BC'
+                                            ? -Math.abs(year)
+                                            : Math.abs(year)
+                                      const from = toSigned(
+                                        historicalCountry.startEra,
+                                        historicalCountry.startYear,
+                                      )
+                                      const to = toSigned(
+                                        historicalCountry.endEra,
+                                        historicalCountry.endYear,
+                                      )
+                                      if (from == null && to == null) return null
+                                      return (
+                                        <span>
+                                          {from != null ? formatSignedYear(from) : '?'}–
+                                          {to != null ? formatSignedYear(to) : ''}
+                                        </span>
+                                      )
+                                    })()}
+                                </IdentityMeta>
+                              </IdentityText>
                             </ParticipantNameWrap>
                             <ParticipantHeaderRight>
                               {participantSidesSlot && (
@@ -5017,7 +5062,7 @@ const ParticipantRow = styled.div<{
 const ParticipantNameWrap = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 `
 

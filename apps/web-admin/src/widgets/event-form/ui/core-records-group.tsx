@@ -65,6 +65,7 @@ import { nestiaApiService } from '@/shared/api/api.service'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { personLifespanLabel } from '@/shared/ui/person-register-modal/relation-search-options'
 import {
   KitAddButton,
   KitChipGroup,
@@ -87,6 +88,8 @@ import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-
 import { notify } from '@/shared/ui/toast'
 import { OrganizationQuickCreateModal } from '@/widgets/organization/organization-quick-create-modal'
 import { PersonGroupCreateModal } from '@/widgets/person/person-group-create-modal/person-group-create-modal'
+
+import { IdentityMeta, IdentityText, PersonFace } from './participant-identity'
 
 const LazyCompanyRegisterModal = lazy(() =>
   import('@/widgets/company-form').then((m) => ({
@@ -4077,9 +4080,18 @@ function PersonListField({
     queryKey: ['persons', 'all'],
     queryFn: getAllPersons,
     enabled:
-      personContext?.fromYear != null || quickQuery.trim().length >= 1,
+      personContext?.fromYear != null ||
+      quickQuery.trim().length >= 1 ||
+      people.length > 0,
     staleTime: 5 * 60_000,
   })
+
+  /* 고른 인물의 얼굴·생몰·국적 — 행 머리에 신원 한 줄(동명이인을 행 안에서 가른다) */
+  const personById = useMemo(() => {
+    const map = new Map<string, PersonResponseDto>()
+    for (const person of personsQuery.data ?? []) map.set(person.id, person)
+    return map
+  }, [personsQuery.data])
 
   const contextualPersonSuggestions = useMemo<PersonResponseDto[]>(() => {
     if (!personContext) return []
@@ -4182,7 +4194,36 @@ function PersonListField({
                         ⠿
                       </PersonDragHandle>
                     )}
-                    <RowName>{person.name}</RowName>
+                    {(() => {
+                      const record = personById.get(person.personId)
+                      const lifespan = record ? personLifespanLabel(record) : ''
+                      const countryName = record?.country?.name ?? ''
+                      const flag =
+                        (record?.country as { flagEmoji?: string | null } | null | undefined)
+                          ?.flagEmoji ?? ''
+                      return (
+                        <>
+                          <PersonFace
+                            src={record?.profileImageUrl ?? null}
+                            name={person.name}
+                          />
+                          <IdentityText>
+                            <RowName>{person.name}</RowName>
+                            {(lifespan || countryName) && (
+                              <IdentityMeta>
+                                {lifespan && <span>{lifespan}</span>}
+                                {countryName && (
+                                  <span>
+                                    {flag ? `${flag} ` : ''}
+                                    {countryName}
+                                  </span>
+                                )}
+                              </IdentityMeta>
+                            )}
+                          </IdentityText>
+                        </>
+                      )
+                    })()}
                   </RowNameWrap>
                   <PersonRowActions>
                     {sideAssignment && (
@@ -4423,7 +4464,14 @@ function PersonListField({
                         onMouseEnter={() => setActiveResultIndex(personIdx)}
                         onClick={() => addQuickPerson(personMatch)}
                       >
-                        <QuickResultName>+ 👤 {displayName}</QuickResultName>
+                        <QuickResultIdentity>
+                          <PersonFace
+                            size={24}
+                            src={personMatch.profileImageUrl ?? null}
+                            name={displayName}
+                          />
+                          <QuickResultName>{displayName}</QuickResultName>
+                        </QuickResultIdentity>
                         {metaText && (
                           <QuickResultMeta>{metaText}</QuickResultMeta>
                         )}
@@ -4899,7 +4947,7 @@ const Row = styled.div<{ $role?: string; $dragOver?: boolean }>`
 const RowNameWrap = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   min-width: 0;
 `
 
@@ -5227,6 +5275,14 @@ const QuickResultButton = styled.button<{ $active: boolean }>`
   font: inherit;
   text-align: left;
   cursor: pointer;
+`
+
+/** 빠른 검색 결과 머리 — 작은 얼굴 + 이름(예전 '+ 👤' 글자 아이콘 대신) */
+const QuickResultIdentity = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 `
 
 const QuickResultName = styled.span`

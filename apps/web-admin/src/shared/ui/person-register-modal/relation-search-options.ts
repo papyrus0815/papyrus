@@ -122,6 +122,11 @@ export function estimateBirthAnchor(
   return null
 }
 
+/** 생몰 표기('1769–1821', 생존이면 '1950–') — 인물 행·후보의 신원 한 줄 */
+export function personLifespanLabel(person: PersonResponseDto): string {
+  return personLifespanText(person as PersonLike)
+}
+
 function personLifespanText(person: PersonLike): string {
   const birth = personBirthSignedYear(person)
   const death = signedYear(person.deathEra, person.deathYear, person.deathDate)
